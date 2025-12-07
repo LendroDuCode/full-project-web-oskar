@@ -1,26 +1,25 @@
-@import "tailwindcss";
+/* app/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+    --oskar-orange: #ff6b35; /* Exemple de couleur orange */
+    --oskar-black: #1a1a1a; /* Exemple de couleur noire */
+    --oskar-grey: #666666; /* Exemple de couleur grise */
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Ou définissez directement les classes */
+.text-oskar-black {
+    color: var(--oskar-black);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.text-oskar-grey {
+    color: var(--oskar-grey);
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.bg-oskar-orange {
+    background-color: var(--oskar-orange);
 }
+
+/* Ou si vous utilisez Tailwind, ajoutez dans tailwind.config.js */
