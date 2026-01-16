@@ -1,42 +1,28 @@
-// app/layout.tsx
+import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import Header from "./shared/components/layout/Header";
-import "bootstrap/dist/css/bootstrap.min.css"; // Gardez seulement ici
-import Footer from "./shared/components/layout/Footer";
+import "bootstrap/dist/css/bootstrap.min.css";
+import "@fortawesome/fontawesome-free/css/all.min.css";
+import ClientLayout from "./ClientLayout"; // Importez ClientLayout
 
-const inter = Inter({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700", "800"],
-  variable: "--font-inter",
-});
+const inter = Inter({ subsets: ["latin"] });
 
-export const metadata = {
-  title: "Parcourir les Annonces",
-  description: "Plateforme Oskar pour les annonces",
+export const metadata: Metadata = {
+  title: "OSKAR - Plateforme de dons et d'échanges",
+  description:
+    "Rejoignez la communauté OSKAR pour donner, échanger et partager",
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
     <html lang="fr">
-      <head>
-        <meta charSet="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        {/* Font Awesome CDN */}
-        <link
-          rel="stylesheet"
-          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
-          crossOrigin="anonymous"
-        />
-      </head>
       <body className={inter.className}>
-        <Header />
-        <main>{children}</main>
-        <Footer />
+        {/* Enveloppez tout avec ClientLayout */}
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   );

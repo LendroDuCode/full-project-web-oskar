@@ -1,38 +1,32 @@
-// app/ads/components/PublishAdModal.tsx
+// components/PublishAdModal/PublishAdModal.tsx
+
 "use client";
 
-import { useState } from "react";
-import { Dialog } from "primereact/dialog";
-import { InputText } from "primereact/inputtext";
-import { InputTextarea } from "primereact/inputtextarea";
-import { Dropdown } from "primereact/dropdown";
-import { InputNumber } from "primereact/inputnumber";
-import { Button } from "primereact/button";
+import { useState, ChangeEvent } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faImage,
-  faTag,
-  faMoneyBill,
-  faMapMarkerAlt,
-  faAlignLeft,
+  faStore,
+  faHandHoldingHeart,
+  faArrowsRotate,
+  faTag as faSaleTag,
+  faCheckCircle,
+  faArrowRight,
+  faArrowLeft,
+  faInfoCircle,
+  faExclamationCircle,
+  faTimes,
 } from "@fortawesome/free-solid-svg-icons";
 import colors from "../../shared/constants/colors";
-
-interface PublishAdModalProps {
-  visible: boolean;
-  onHide: () => void;
-  isLoggedIn: boolean;
-  onLoginRequired: () => void;
-}
-
-interface AdData {
-  title: string;
-  description: string;
-  category: string;
-  price: number | null;
-  location: string;
-  images: File[];
-}
+import { API_ENDPOINTS } from "@/config/api-endpoints";
+import {
+  AdTypeOption,
+  Category,
+  DonData,
+  EchangeData,
+} from "./components/constantes/types";
+import DonForm from "./components/DonForm";
+import EchangeForm from "./components/ExchangeForm";
+import VenteForm from "./components/SaleForm";
 
 const PublishAdModal: React.FC<PublishAdModalProps> = ({
   visible,
@@ -40,446 +34,809 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
   isLoggedIn,
   onLoginRequired,
 }) => {
-  const [adData, setAdData] = useState<AdData>({
-    title: "",
-    description: "",
-    category: "",
-    price: null,
-    location: "",
-    images: [],
-  });
-
+  const [adType, setAdType] = useState<"don" | "exchange" | "sale" | null>(
+    null,
+  );
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
-  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const categories = [
-    { label: "Don & Échange", value: "dons-echanges" },
-    { label: "Vêtements & Chaussures", value: "vetements-chaussures" },
-    { label: "Électronique", value: "electroniques" },
-    { label: "Éducation & Culture", value: "education-culture" },
-    { label: "Services de proximité", value: "services-proximite" },
-    { label: "Maison & Jardin", value: "maison-jardin" },
-    { label: "Véhicules", value: "vehicules" },
-    { label: "Emploi & Services", value: "emploi-services" },
+  // ✅ États initiaux COMPLETS – évite le warning React
+  const [donData, setDonData] = useState<DonData>({
+    description: "",
+    type_don: "",
+    localisation: "",
+    lieu_retrait: "",
+    image: null,
+    categorie_uuid: "",
+    numero: "",
+    quantite: "1",
+    nom_donataire: "",
+    titre: "",
+    condition: "bon",
+    disponibilite: "immediate",
+  });
+
+  const [echangeData, setEchangeData] = useState<EchangeData>({
+    nomElementEchange: "",
+    numero: "",
+    nom_initiateur: "vendeur",
+    typeEchange: "produit",
+    objetPropose: "",
+    objetDemande: "",
+    message: "",
+    prix: "",
+    categorie_uuid: "",
+    image: null,
+    quantite: "1",
+    type_destinataire: "autre",
+  });
+
+  const [venteData, setVenteData] = useState<VenteData>({
+    boutiqueUuid: "728a280c-f65b-4e38-8187-4d826c78dc0b",
+    libelle: "",
+    type: "",
+    disponible: true,
+    categorie_uuid: "",
+    statut: "publie",
+    etoile: "5",
+    image: null,
+    prix: "",
+    quantite: "1",
+    description: "",
+    lieu: "",
+    condition: "neuf",
+    garantie: "non",
+  });
+
+  const adTypeOptions: AdTypeOption[] = [
+    {
+      id: "don",
+      title: "Faire un Don",
+      description: "Offrez gratuitement à votre communauté",
+      icon: faHandHoldingHeart,
+      color: "warning",
+      gradient: "linear-gradient(135deg, #ff9500 0%, #ff5e3a 100%)",
+      iconBg: "#fff4e6",
+    },
+    {
+      id: "exchange",
+      title: "Proposer un Échange",
+      description: "Trouvez ce dont vous avez besoin",
+      icon: faArrowsRotate,
+      color: "primary",
+      gradient: "linear-gradient(135deg, #007aff 0%, #5856d6 100%)",
+      iconBg: "#e6f2ff",
+    },
+    {
+      id: "sale",
+      title: "Vendre un Produit",
+      description: "Gagnez de l'argent localement",
+      icon: faSaleTag,
+      color: "success",
+      gradient: "linear-gradient(135deg, #34c759 0%, #30b0c7 100%)",
+      iconBg: "#e6f7ec",
+    },
   ];
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files) {
-      const newImages = Array.from(files);
-      setAdData({
-        ...adData,
-        images: [...adData.images, ...newImages],
-      });
+  const categories: Category[] = [
+    {
+      label: "Don & Échange",
+      value: "dons-echanges",
+      uuid: "6b1c309e-e2ae-44c9-bcc3-e11bdf077d1f",
+      icon: faHandHoldingHeart,
+    },
+    {
+      label: "Vêtements & Chaussures",
+      value: "vetements-chaussures",
+      uuid: "vetements-chaussures-uuid",
+      icon: faHandHoldingHeart,
+    },
+    {
+      label: "Électronique",
+      value: "electroniques",
+      uuid: "electroniques-uuid",
+      icon: faHandHoldingHeart,
+    },
+    {
+      label: "Éducation & Culture",
+      value: "education-culture",
+      uuid: "education-culture-uuid",
+      icon: faHandHoldingHeart,
+    },
+    {
+      label: "Services de proximité",
+      value: "services-proximite",
+      uuid: "services-proximite-uuid",
+      icon: faHandHoldingHeart,
+    },
+    {
+      label: "Maison & Jardin",
+      value: "maison-jardin",
+      uuid: "maison-jardin-uuid",
+      icon: faHandHoldingHeart,
+    },
+    {
+      label: "Véhicules",
+      value: "vehicules",
+      uuid: "vehicules-uuid",
+      icon: faHandHoldingHeart,
+    },
+    {
+      label: "Emploi & Services",
+      value: "emploi-services",
+      uuid: "emploi-services-uuid",
+      icon: faHandHoldingHeart,
+    },
+  ];
 
-      // Créer des aperçus d'images
-      const newPreviews = newImages.map((file) => URL.createObjectURL(file));
-      setImagePreviews([...imagePreviews, ...newPreviews]);
+  const conditions = [
+    { value: "neuf", label: "Neuf (jamais utilisé)" },
+    { value: "tresbon", label: "Très bon état" },
+    { value: "bon", label: "Bon état" },
+    { value: "moyen", label: "État moyen" },
+    { value: "areparer", label: "À réparer" },
+  ];
+
+  const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const preview = URL.createObjectURL(file);
+      setImagePreview(preview);
+      switch (adType) {
+        case "don":
+          setDonData({ ...donData, image: file });
+          break;
+        case "exchange":
+          setEchangeData({ ...echangeData, image: file });
+          break;
+        case "sale":
+          setVenteData({ ...venteData, image: file });
+          break;
+      }
     }
   };
 
-  const removeImage = (index: number) => {
-    const newImages = [...adData.images];
-    const newPreviews = [...imagePreviews];
-
-    newImages.splice(index, 1);
-    newPreviews.splice(index, 1);
-
-    setAdData({ ...adData, images: newImages });
-    setImagePreviews(newPreviews);
+  const removeImage = () => {
+    setImagePreview(null);
+    switch (adType) {
+      case "don":
+        setDonData({ ...donData, image: null });
+        break;
+      case "exchange":
+        setEchangeData({ ...echangeData, image: null });
+        break;
+      case "sale":
+        setVenteData({ ...venteData, image: null });
+        break;
+    }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const showSuccessNotification = (message: string) => {
+    setSuccessMessage(message);
+    setTimeout(() => setSuccessMessage(null), 5000);
+  };
 
-    if (!isLoggedIn) {
-      onLoginRequired();
-      return;
-    }
+  // ✅ Soumission DON
+  const submitDon = async (): Promise<void> => {
+    const formData = new FormData();
+    formData.append("nom", donData.titre.trim());
+    formData.append("type_don", donData.type_don.trim());
+    formData.append("localisation", donData.localisation.trim());
+    formData.append("description", donData.description.trim());
+    formData.append("lieu_retrait", donData.lieu_retrait.trim());
+    formData.append("categorie_uuid", donData.categorie_uuid);
+    formData.append("quantite", donData.quantite);
+    formData.append("numero", donData.numero.trim());
+    formData.append("nom_donataire", donData.nom_donataire.trim());
+    formData.append("condition", donData.condition);
+    formData.append("disponibilite", donData.disponibilite);
+    if (donData.image) formData.append("image", donData.image);
 
+    await sendFormData(formData, API_ENDPOINTS.DONS.CREATE, "don");
+  };
+
+  // ✅ Soumission ÉCHANGE
+  const submitEchange = async (): Promise<void> => {
+    const formData = new FormData();
+    formData.append("nomElementEchange", echangeData.nomElementEchange.trim());
+    formData.append("numero", echangeData.numero.trim());
+    formData.append("nom_initiateur", echangeData.nom_initiateur);
+    formData.append("typeEchange", echangeData.typeEchange);
+    formData.append("objetPropose", echangeData.objetPropose.trim());
+    formData.append("objetDemande", echangeData.objetDemande.trim());
+    formData.append("message", echangeData.message.trim());
+    formData.append("prix", echangeData.prix);
+    formData.append("categorie_uuid", echangeData.categorie_uuid);
+    formData.append("quantite", echangeData.quantite);
+    formData.append("type_destinataire", echangeData.type_destinataire);
+    if (echangeData.image) formData.append("image", echangeData.image);
+
+    await sendFormData(formData, API_ENDPOINTS.ECHANGES.CREATE, "échange");
+  };
+
+  // ✅ ✨ Soumission VENTE – API /produits/creer
+  const submitVente = async (): Promise<void> => {
+    const formData = new FormData();
+    formData.append("boutiqueUuid", venteData.boutiqueUuid);
+    formData.append("libelle", venteData.libelle.trim());
+    formData.append("type", venteData.type.trim());
+    formData.append("disponible", String(venteData.disponible));
+    formData.append("categorie_uuid", venteData.categorie_uuid);
+    formData.append("statut", venteData.statut);
+    formData.append("etoile", venteData.etoile);
+    formData.append("prix", venteData.prix.trim());
+    formData.append("quantite", venteData.quantite);
+    formData.append("description", venteData.description.trim());
+    formData.append("lieu", venteData.lieu.trim());
+    formData.append("condition", venteData.condition);
+    formData.append("garantie", venteData.garantie);
+    if (venteData.image) formData.append("image", venteData.image);
+
+    await sendFormData(formData, API_ENDPOINTS.PRODUCTS.CREATE, "vente");
+  };
+
+  // ✅ Fonction générique pour envoyer FormData
+  const sendFormData = async (
+    formData: FormData,
+    endpoint: string,
+    type: "don" | "échange" | "vente",
+  ) => {
     setLoading(true);
     try {
-      // Simuler l'envoi des données
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-
-      console.log("Annonce publiée:", adData);
-
-      // Réinitialiser le formulaire
-      setAdData({
-        title: "",
-        description: "",
-        category: "",
-        price: null,
-        location: "",
-        images: [],
+      const token =
+        typeof window !== "undefined"
+          ? localStorage.getItem("oskar_token")
+          : null;
+      const res = await fetch(`http://localhost:3005${endpoint}`, {
+        method: "POST",
+        body: formData,
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      setImagePreviews([]);
-      setStep(1);
+      if (!res.ok) throw new Error(await res.text());
 
-      onHide();
-
-      // Afficher un message de succès
-      alert("Votre annonce a été publiée avec succès !");
-    } catch (error) {
-      console.error("Erreur lors de la publication:", error);
-      alert("Une erreur est survenue. Veuillez réessayer.");
+      resetForm();
+      showSuccessNotification(
+        `Votre ${type === "don" ? "don" : type === "échange" ? "échange" : "annonce de vente"} a été publiée !`,
+      );
+      setTimeout(onHide, 1500);
+    } catch (err: any) {
+      setSubmitError(err.message || `Erreur lors de la publication du ${type}`);
+      throw err;
     } finally {
       setLoading(false);
     }
   };
 
-  const nextStep = () => {
-    if (step < 3) setStep(step + 1);
-  };
-
-  const prevStep = () => {
-    if (step > 1) setStep(step - 1);
-  };
-
-  const renderStep1 = () => (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-gray-800 mb-4">
-        Informations principales
-      </h3>
-
-      <div className="space-y-4">
-        <div className="relative">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Titre de l'annonce *
-          </label>
-          <span className="p-input-icon-left w-full">
-            <FontAwesomeIcon
-              icon={faTag}
-              className="text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2"
-            />
-            <InputText
-              placeholder="Ex: iPhone 12 Pro Max en excellent état"
-              className="w-full pl-10 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-oskar-green focus:border-transparent"
-              value={adData.title}
-              onChange={(e) => setAdData({ ...adData, title: e.target.value })}
-              required
-            />
-          </span>
-        </div>
-
-        <div className="relative">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Catégorie *
-          </label>
-          <span className="p-input-icon-left w-full">
-            <FontAwesomeIcon
-              icon={faTag}
-              className="text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2"
-            />
-            <Dropdown
-              value={adData.category}
-              options={categories}
-              onChange={(e) => setAdData({ ...adData, category: e.value })}
-              placeholder="Sélectionnez une catégorie"
-              className="w-full pl-10 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-oskar-green focus:border-transparent"
-              required
-            />
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="relative">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Prix (FCFA)
-            </label>
-            <span className="p-input-icon-left w-full">
-              <FontAwesomeIcon
-                icon={faMoneyBill}
-                className="text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2"
-              />
-              <InputNumber
-                placeholder="Ex: 150000"
-                className="w-full pl-10 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-oskar-green focus:border-transparent"
-                value={adData.price}
-                onValueChange={(e) => setAdData({ ...adData, price: e.value })}
-                mode="decimal"
-                min={0}
-              />
-            </span>
-          </div>
-
-          <div className="relative">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Localisation *
-            </label>
-            <span className="p-input-icon-left w-full">
-              <FontAwesomeIcon
-                icon={faMapMarkerAlt}
-                className="text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2"
-              />
-              <InputText
-                placeholder="Ex: Cocody, Abidjan"
-                className="w-full pl-10 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-oskar-green focus:border-transparent"
-                value={adData.location}
-                onChange={(e) =>
-                  setAdData({ ...adData, location: e.target.value })
-                }
-                required
-              />
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderStep2 = () => (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-gray-800 mb-4">
-        Description et photos
-      </h3>
-
-      <div className="space-y-4">
-        <div className="relative">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Description détaillée *
-          </label>
-          <span className="p-input-icon-left w-full">
-            <FontAwesomeIcon
-              icon={faAlignLeft}
-              className="text-gray-400 absolute left-3 top-3"
-            />
-            <InputTextarea
-              placeholder="Décrivez votre article en détail (état, raisons de la vente, accessoires inclus, etc.)"
-              className="w-full pl-10 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-oskar-green focus:border-transparent"
-              rows={5}
-              value={adData.description}
-              onChange={(e) =>
-                setAdData({ ...adData, description: e.target.value })
-              }
-              required
-            />
-          </span>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-3">
-            Photos (jusqu'à 10 images)
-          </label>
-
-          <div className="grid grid-cols-3 gap-3 mb-4">
-            {imagePreviews.map((preview, index) => (
-              <div key={index} className="relative group">
-                <img
-                  src={preview}
-                  alt={`Preview ${index + 1}`}
-                  className="w-full h-24 object-cover rounded-lg border border-gray-300"
-                />
-                <button
-                  type="button"
-                  onClick={() => removeImage(index)}
-                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <i className="fa-solid fa-times text-xs"></i>
-                </button>
-              </div>
-            ))}
-
-            {imagePreviews.length < 10 && (
-              <label className="cursor-pointer">
-                <div className="w-full h-24 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center hover:border-green-500 transition-colors">
-                  <FontAwesomeIcon
-                    icon={faImage}
-                    className="text-gray-400 text-xl mb-2"
-                  />
-                  <span className="text-sm text-gray-600">
-                    Ajouter une photo
-                  </span>
-                </div>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={handleImageUpload}
-                />
-              </label>
-            )}
-          </div>
-
-          <p className="text-xs text-gray-500">
-            Les premières photos sont les plus importantes. Utilisez des photos
-            de bonne qualité.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderStep3 = () => (
-    <div className="space-y-4">
-      <h3 className="text-lg font-semibold text-gray-800 mb-4">
-        Récapitulatif
-      </h3>
-
-      <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-        <div className="flex justify-between">
-          <span className="text-gray-600">Titre :</span>
-          <span className="font-medium">{adData.title || "Non renseigné"}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-gray-600">Catégorie :</span>
-          <span className="font-medium">
-            {categories.find((c) => c.value === adData.category)?.label ||
-              "Non renseigné"}
-          </span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-gray-600">Prix :</span>
-          <span className="font-medium">
-            {adData.price
-              ? `${adData.price.toLocaleString()} FCFA`
-              : "Non renseigné"}
-          </span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-gray-600">Localisation :</span>
-          <span className="font-medium">
-            {adData.location || "Non renseigné"}
-          </span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-gray-600">Photos :</span>
-          <span className="font-medium">{adData.images.length} image(s)</span>
-        </div>
-      </div>
-
-      <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-100">
-        <h4 className="font-medium text-blue-800 mb-2">
-          <i className="fa-solid fa-lightbulb mr-2"></i>
-          Conseils pour une bonne annonce
-        </h4>
-        <ul className="text-sm text-blue-700 space-y-1">
-          <li>• Soyez précis dans votre description</li>
-          <li>• Utilisez des photos de bonne qualité</li>
-          <li>• Fixez un prix raisonnable</li>
-          <li>• Répondez rapidement aux messages</li>
-        </ul>
-      </div>
-    </div>
-  );
-
-  const renderCurrentStep = () => {
-    switch (step) {
-      case 1:
-        return renderStep1();
-      case 2:
-        return renderStep2();
-      case 3:
-        return renderStep3();
-      default:
-        return renderStep1();
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isLoggedIn) {
+      onLoginRequired();
+      return;
+    }
+    try {
+      switch (adType) {
+        case "don":
+          await submitDon();
+          break;
+        case "exchange":
+          await submitEchange();
+          break;
+        case "sale":
+          await submitVente();
+          break;
+      }
+    } catch (error) {
+      // Erreur déjà gérée dans sendFormData
     }
   };
 
-  return (
-    <Dialog
-      header={
-        <div className="text-center">
-          <h2 className="text-xl font-bold text-gray-800">
-            Publier une annonce
-          </h2>
-          <div className="flex justify-center mt-4">
-            {[1, 2, 3].map((stepNum) => (
-              <div key={stepNum} className="flex items-center">
+  const resetForm = () => {
+    setAdType(null);
+    setDonData({
+      description: "",
+      type_don: "",
+      localisation: "",
+      lieu_retrait: "",
+      image: null,
+      categorie_uuid: "",
+      numero: "",
+      quantite: "1",
+      nom_donataire: "",
+      titre: "",
+      condition: "bon",
+      disponibilite: "immediate",
+    });
+    setEchangeData({
+      nomElementEchange: "",
+      numero: "",
+      nom_initiateur: "vendeur",
+      typeEchange: "produit",
+      objetPropose: "",
+      objetDemande: "",
+      message: "",
+      prix: "",
+      categorie_uuid: "",
+      image: null,
+      quantite: "1",
+      type_destinataire: "autre",
+    });
+    setVenteData({
+      boutiqueUuid: "728a280c-f65b-4e38-8187-4d826c78dc0b",
+      libelle: "",
+      type: "",
+      disponible: true,
+      categorie_uuid: "",
+      statut: "publie",
+      etoile: "5",
+      image: null,
+      prix: "",
+      quantite: "1",
+      description: "",
+      lieu: "",
+      condition: "neuf",
+      garantie: "non",
+    });
+    setImagePreview(null);
+    setStep(1);
+    setSubmitError(null);
+  };
+
+  const nextStep = () => step < 3 && setStep(step + 1);
+  const prevStep = () => step > 1 && setStep(step - 1);
+  const selectAdType = (type: "don" | "exchange" | "sale") => {
+    setAdType(type);
+    setStep(2);
+    setSubmitError(null);
+  };
+
+  const renderStep1 = () => (
+    <div className="p-5">
+      <div className="text-center mb-6">
+        <div className="rounded-circle bg-primary bg-opacity-10 p-4 d-inline-flex align-items-center justify-content-center">
+          <FontAwesomeIcon icon={faStore} className="text-primary fs-1" />
+        </div>
+        <h2 className="fw-bold text-dark mb-3">
+          Comment souhaitez-vous partager ?
+        </h2>
+        <p className="text-muted fs-5">Choisissez le type d'annonce</p>
+      </div>
+      <div className="row g-4">
+        {adTypeOptions.map((option) => (
+          <div key={option.id} className="col-md-4">
+            <div
+              className={`card h-100 border-0 shadow-lg-hover cursor-pointer ${adType === option.id ? "border-3 border-" + option.color : ""}`}
+              onClick={() => selectAdType(option.id)}
+              style={{
+                minHeight: "280px",
+                borderRadius: "20px",
+                background: adType === option.id ? option.gradient : "white",
+              }}
+            >
+              <div className="card-body d-flex flex-column align-items-center justify-content-center text-center p-4">
                 <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                    step === stepNum
-                      ? "bg-oskar-green text-white"
-                      : step > stepNum
-                        ? "bg-green-100 text-green-600"
-                        : "bg-gray-200 text-gray-500"
-                  }`}
+                  className="rounded-circle p-4 mb-4"
+                  style={{
+                    background: adType === option.id ? "white" : option.iconBg,
+                    transform: adType === option.id ? "scale(1.1)" : "scale(1)",
+                  }}
                 >
-                  {step > stepNum ? (
-                    <i className="fa-solid fa-check text-xs"></i>
-                  ) : (
-                    stepNum
+                  <FontAwesomeIcon
+                    icon={option.icon}
+                    className={`fs-1 ${adType === option.id ? "text-" + option.color : "text-" + option.color}`}
+                  />
+                </div>
+                <h4
+                  className={`fw-bold mb-3 ${adType === option.id ? "text-white" : "text-dark"}`}
+                >
+                  {option.title}
+                </h4>
+                <p
+                  className={`mb-4 ${adType === option.id ? "text-white text-opacity-90" : "text-muted"}`}
+                >
+                  {option.description}
+                </p>
+                <div
+                  className={`rounded-circle border-2 d-flex align-items-center justify-content-center ${adType === option.id ? "border-white" : "border-light"}`}
+                  style={{ width: "28px", height: "28px" }}
+                >
+                  {adType === option.id && (
+                    <FontAwesomeIcon
+                      icon={faCheckCircle}
+                      className="text-white"
+                    />
                   )}
                 </div>
-                {stepNum < 3 && (
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  if (!visible) return null;
+
+  return (
+    <>
+      {/* Notification de succès */}
+      {successMessage && (
+        <div
+          className="position-fixed top-0 start-50 translate-middle-x mt-4"
+          style={{ zIndex: 9999, maxWidth: "600px", width: "90%" }}
+        >
+          <div
+            className="alert alert-success border-0 shadow-lg d-flex align-items-center justify-content-between"
+            role="alert"
+            style={{
+              borderRadius: "12px",
+              background: "linear-gradient(135deg, #34c759 0%, #30b0c7 100%)",
+              color: "white",
+              padding: "1rem 1.5rem",
+            }}
+          >
+            <div className="d-flex align-items-center">
+              <div className="rounded-circle bg-white bg-opacity-25 p-2 me-3">
+                <FontAwesomeIcon icon={faCheckCircle} className="fs-4" />
+              </div>
+              <div>
+                <h5 className="fw-bold mb-1">Succès !</h5>
+                <p className="mb-0 opacity-90">{successMessage}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn-close btn-close-white opacity-75"
+              onClick={() => setSuccessMessage(null)}
+              aria-label="Close"
+              style={{ background: "transparent", border: "none" }}
+            >
+              <FontAwesomeIcon icon={faTimes} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div
+        className="modal-backdrop fade show"
+        style={{ zIndex: 1040, backdropFilter: "blur(5px)" }}
+      />
+      <div
+        className="modal fade show d-block"
+        tabIndex={-1}
+        style={{ zIndex: 1050 }}
+      >
+        <div className="modal-dialog modal-dialog-centered modal-xl">
+          <div className="modal-content rounded-4 shadow-lg border-0 overflow-hidden">
+            <div
+              className="modal-header border-bottom-0 pb-0 position-relative"
+              style={{
+                background: adType
+                  ? adType === "don"
+                    ? "linear-gradient(135deg, #fff4e6 0%, #ffffff 100%)"
+                    : adType === "exchange"
+                      ? "linear-gradient(135deg, #e6f2ff 0%, #ffffff 100%)"
+                      : "linear-gradient(135deg, #e6f7ec 0%, #ffffff 100%)"
+                  : "white",
+              }}
+            >
+              <div className="w-100">
+                <div className="d-flex justify-content-between align-items-center mb-4">
+                  <div>
+                    <h2 className="modal-title fw-bold text-dark mb-1">
+                      {step === 1
+                        ? "Publier une annonce"
+                        : adType === "don"
+                          ? "Faire un Don"
+                          : adType === "exchange"
+                            ? "Proposer un Échange"
+                            : "Vendre un Produit"}
+                    </h2>
+                    <p className="text-muted mb-0">
+                      {step === 1
+                        ? "Étape 1/3 : Sélection"
+                        : step === 2
+                          ? "Étape 2/3 : Détails"
+                          : "Étape 3/3 : Récapitulatif"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-close"
+                    onClick={onHide}
+                    disabled={loading}
+                  />
+                </div>
+
+                {submitError && (
+                  <div className="alert alert-danger border-0 mb-3">
+                    <FontAwesomeIcon
+                      icon={faExclamationCircle}
+                      className="me-2"
+                    />{" "}
+                    {submitError}
+                  </div>
+                )}
+
+                <div className="stepper-wrapper">
+                  <div className="stepper-item completed">
+                    <div className="step-counter">1</div>
+                    <div className="step-name">Type</div>
+                  </div>
                   <div
-                    className={`w-12 h-1 mx-2 ${
-                      step > stepNum ? "bg-green-500" : "bg-gray-300"
-                    }`}
+                    className={`stepper-item ${step >= 2 ? "completed" : ""} ${step === 2 ? "active" : ""}`}
+                  >
+                    <div className="step-counter">2</div>
+                    <div className="step-name">Détails</div>
+                  </div>
+                  <div
+                    className={`stepper-item ${step === 3 ? "completed active" : ""}`}
+                  >
+                    <div className="step-counter">3</div>
+                    <div className="step-name">Validation</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div
+              className="modal-body p-4"
+              style={{ maxHeight: "70vh", overflowY: "auto" }}
+            >
+              <form onSubmit={handleSubmit}>
+                {step === 1 && renderStep1()}
+
+                {adType === "don" && (
+                  <DonForm
+                    {...{
+                      donData,
+                      categories,
+                      conditions,
+                      imagePreview,
+                      onChange: setDonData,
+                      onImageUpload: handleImageUpload,
+                      onRemoveImage: removeImage,
+                      step,
+                    }}
                   />
                 )}
-              </div>
-            ))}
+                {adType === "exchange" && (
+                  <EchangeForm
+                    {...{
+                      echangeData,
+                      categories,
+                      conditions,
+                      imagePreview,
+                      onChange: setEchangeData,
+                      onImageUpload: handleImageUpload,
+                      onRemoveImage: removeImage,
+                      step,
+                    }}
+                  />
+                )}
+                {adType === "sale" && (
+                  <VenteForm
+                    {...{
+                      venteData,
+                      categories,
+                      conditions,
+                      imagePreview,
+                      onChange: setVenteData,
+                      onImageUpload: handleImageUpload,
+                      onRemoveImage: removeImage,
+                      step,
+                    }}
+                  />
+                )}
+
+                <div className="d-flex justify-content-between mt-5 pt-4 border-top">
+                  {step > 1 ? (
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary px-4 py-3 rounded-pill fw-semibold"
+                      onClick={prevStep}
+                      disabled={loading}
+                    >
+                      <FontAwesomeIcon icon={faArrowLeft} className="me-2" />{" "}
+                      Retour
+                    </button>
+                  ) : (
+                    <div></div>
+                  )}
+
+                  {step < 3 ? (
+                    <button
+                      type="button"
+                      className="btn btn-primary px-4 py-3 rounded-pill fw-semibold shadow-sm"
+                      style={{
+                        background: adType
+                          ? adType === "don"
+                            ? "linear-gradient(135deg, #ff9500 0%, #ff5e3a 100%)"
+                            : adType === "exchange"
+                              ? "linear-gradient(135deg, #007aff 0%, #5856d6 100%)"
+                              : "linear-gradient(135deg, #34c759 0%, #30b0c7 100%)"
+                          : colors.oskar.green,
+                        border: "none",
+                      }}
+                      onClick={nextStep}
+                      disabled={loading || (step === 1 && !adType)}
+                    >
+                      Continuer{" "}
+                      <FontAwesomeIcon icon={faArrowRight} className="ms-2" />
+                    </button>
+                  ) : (
+                    <div className="text-end">
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary me-3"
+                        onClick={onHide}
+                        disabled={loading}
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        type="submit"
+                        className="btn btn-success px-4 py-3 rounded-pill fw-semibold shadow-sm"
+                        disabled={loading || !isLoggedIn}
+                        style={{
+                          background:
+                            "linear-gradient(135deg, #34c759 0%, #30b0c7 100%)",
+                          border: "none",
+                        }}
+                      >
+                        {loading ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm me-2" />{" "}
+                            Publication...
+                          </>
+                        ) : (
+                          <>
+                            <FontAwesomeIcon
+                              icon={faCheckCircle}
+                              className="me-2"
+                            />
+                            {adType === "don"
+                              ? "Publier le Don"
+                              : adType === "exchange"
+                                ? "Proposer l'Échange"
+                                : "Publier la Vente"}
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {!isLoggedIn && step > 1 && (
+                  <div
+                    className="alert alert-warning border-0 shadow-sm mt-4"
+                    style={{ borderRadius: "15px" }}
+                  >
+                    <div className="d-flex align-items-center">
+                      <FontAwesomeIcon
+                        icon={faInfoCircle}
+                        className="fs-4 me-3"
+                      />
+                      <div>
+                        <strong>Connexion requise</strong>
+                        <div>
+                          Vous devez être connecté pour publier une annonce.{" "}
+                          <button
+                            type="button"
+                            className="btn btn-link p-0 text-decoration-none fw-bold"
+                            onClick={onLoginRequired}
+                            style={{ color: colors.oskar.green }}
+                          >
+                            Se connecter
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </form>
+            </div>
           </div>
         </div>
-      }
-      visible={visible}
-      style={{ width: "90vw", maxWidth: "600px" }}
-      onHide={onHide}
-      className="rounded-xl shadow-2xl border border-gray-100"
-      closeOnEscape={!loading}
-      closable={!loading}
-    >
-      <form onSubmit={handleSubmit} className="px-2 py-4">
-        {renderCurrentStep()}
+      </div>
 
-        <div className="flex justify-between mt-8 pt-4 border-t border-gray-200">
-          {step > 1 ? (
-            <Button
-              type="button"
-              label="Retour"
-              icon="fa-solid fa-arrow-left"
-              className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-              onClick={prevStep}
-              disabled={loading}
-            />
-          ) : (
-            <div></div>
-          )}
-
-          {step < 3 ? (
-            <Button
-              type="button"
-              label="Suivant"
-              icon="fa-solid fa-arrow-right"
-              iconPos="right"
-              className="px-4 py-2 text-white font-semibold rounded-lg"
-              style={{ backgroundColor: colors.oskar.green }}
-              onClick={nextStep}
-              disabled={loading}
-            />
-          ) : (
-            <Button
-              type="submit"
-              label={loading ? "Publication en cours..." : "Publier l'annonce"}
-              icon="fa-solid fa-paper-plane"
-              className="px-4 py-2 text-white font-semibold rounded-lg"
-              style={{ backgroundColor: colors.oskar.green }}
-              loading={loading}
-              disabled={loading}
-            />
-          )}
-        </div>
-
-        {!isLoggedIn && step === 1 && (
-          <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <p className="text-sm text-yellow-800">
-              <i className="fa-solid fa-exclamation-triangle mr-2"></i>
-              Vous devez être connecté pour publier une annonce.
-              <button
-                type="button"
-                className="ml-1 text-oskar-green hover:underline font-medium"
-                onClick={onLoginRequired}
-              >
-                Se connecter
-              </button>
-            </p>
-          </div>
-        )}
-      </form>
-    </Dialog>
+      <style jsx global>{`
+        .modal-content {
+          border: none !important;
+          box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15) !important;
+        }
+        .modal-backdrop {
+          background-color: rgba(0, 0, 0, 0.5) !important;
+        }
+        .stepper-wrapper {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 20px;
+        }
+        .stepper-item {
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          flex: 1;
+        }
+        .stepper-item::before,
+        .stepper-item::after {
+          position: absolute;
+          content: "";
+          border-bottom: 2px solid #dee2e6;
+          width: 100%;
+          top: 12px;
+          z-index: 2;
+        }
+        .stepper-item::before {
+          left: -50%;
+        }
+        .stepper-item::after {
+          left: 50%;
+        }
+        .stepper-item:first-child::before,
+        .stepper-item:last-child::after {
+          content: none;
+        }
+        .stepper-item.completed::before,
+        .stepper-item.completed::after {
+          border-color: ${colors.oskar.green};
+        }
+        .stepper-item.active .step-counter {
+          background: ${colors.oskar.green};
+          color: white;
+          border-color: ${colors.oskar.green};
+          transform: scale(1.1);
+        }
+        .step-counter {
+          position: relative;
+          z-index: 5;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          width: 30px;
+          height: 30px;
+          border-radius: 50%;
+          background: white;
+          border: 2px solid #dee2e6;
+          color: #6c757d;
+          font-weight: bold;
+          transition: all 0.3s ease;
+        }
+        .step-name {
+          margin-top: 10px;
+          color: #6c757d;
+          font-size: 0.875rem;
+          font-weight: 500;
+        }
+        .stepper-item.completed .step-counter {
+          background: ${colors.oskar.green};
+          color: white;
+          border-color: ${colors.oskar.green};
+        }
+        .stepper-item.active .step-name {
+          color: ${colors.oskar.green};
+          font-weight: bold;
+        }
+        .stepper-item.completed .step-name {
+          color: ${colors.oskar.green};
+        }
+        .cursor-pointer {
+          cursor: pointer;
+        }
+        .form-control:focus,
+        .form-select:focus {
+          border-color: ${colors.oskar.green} !important;
+          box-shadow: 0 0 0 0.25rem rgba(25, 135, 84, 0.15) !important;
+        }
+        .card {
+          border-radius: 16px !important;
+        }
+      `}</style>
+    </>
   );
 };
 

@@ -1,7 +1,7 @@
-// FilterStatsBar.tsx
+// components/FilterStatsBar.tsx - Version sans le compteur
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import colors from "../../../shared/constants/colors";
 
 interface FilterType {
@@ -12,11 +12,24 @@ interface FilterType {
   borderColor?: string;
 }
 
-const FilterStatsBar = () => {
-  const [activeFilter, setActiveFilter] = useState<string>("all");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [sortOption, setSortOption] = useState<string>("recent");
+interface FilterStatsBarProps {
+  totalItems: number;
+  activeFilter: string;
+  onFilterChange: (filterId: string) => void;
+  viewMode: "grid" | "list";
+  onViewModeChange: (mode: "grid" | "list") => void;
+  sortOption: string;
+  onSortChange: (sort: string) => void;
+}
 
+const FilterStatsBar: React.FC<FilterStatsBarProps> = ({
+  activeFilter,
+  onFilterChange,
+  viewMode,
+  onViewModeChange,
+  sortOption,
+  onSortChange,
+}) => {
   const filterTypes: FilterType[] = [
     {
       id: "all",
@@ -56,43 +69,29 @@ const FilterStatsBar = () => {
   ];
 
   const handleFilterClick = (filterId: string) => {
-    setActiveFilter(filterId);
-    console.log("Filtre sélectionné:", filterId);
+    onFilterChange(filterId);
   };
 
   const handleViewModeClick = (mode: "grid" | "list") => {
-    setViewMode(mode);
-    console.log("Mode vue:", mode);
+    onViewModeChange(mode);
   };
 
   const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSortOption(e.target.value);
-    console.log("Tri sélectionné:", e.target.value);
+    onSortChange(e.target.value);
   };
 
   return (
     <section
       id="filter-stats-bar"
-      className="bg-white border-bottom"
+      className="bg-white border-bottom py-3"
       style={{ borderColor: colors.oskar.lightGrey }}
     >
       <div className="container">
-        <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 py-3">
-          {/* Partie gauche : Statistiques et filtres */}
-          <div className="d-flex flex-column flex-md-row align-items-start align-items-md-center gap-3">
-            {/* Statistiques */}
-            <p className="mb-0" style={{ fontSize: "0.9375rem" }}>
-              <span className="fw-bold" style={{ color: colors.oskar.black }}>
-                2,847
-              </span>
-              <span style={{ color: colors.oskar.grey }}>
-                {" "}
-                annonces trouvées
-              </span>
-            </p>
-
-            {/* Boutons de filtre */}
-            <div className="d-flex flex-wrap gap-2">
+        <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+          {/* Partie gauche : Filtres seulement - SANS LE COMPTEUR */}
+          <div className="d-flex flex-wrap align-items-center gap-3">
+            {/* Boutons de filtre - TOUS SUR LA MÊME LIGNE */}
+            <div className="d-flex flex-wrap align-items-center gap-2">
               {filterTypes.map((filter) => {
                 const isActive = activeFilter === filter.id;
 
@@ -100,27 +99,32 @@ const FilterStatsBar = () => {
                   <button
                     key={filter.id}
                     onClick={() => handleFilterClick(filter.id)}
-                    className="btn d-flex align-items-center gap-2"
+                    className="btn d-flex align-items-center gap-2 flex-shrink-0"
                     style={{
                       backgroundColor: isActive ? colors.oskar.green : "white",
                       color: isActive ? "white" : colors.oskar.grey,
                       border: `2px solid ${isActive ? colors.oskar.green : colors.oskar.lightGrey}`,
                       borderRadius: "8px",
-                      padding: "8px 16px",
+                      padding: "6px 12px",
                       fontSize: "0.875rem",
                       fontWeight: 500,
                       transition: "all 0.3s",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
                     }}
                     onMouseEnter={(e) => {
                       if (!isActive) {
                         e.currentTarget.style.borderColor =
                           filter.borderColor || colors.oskar.green;
+                        e.currentTarget.style.backgroundColor =
+                          colors.oskar.lightestGreen;
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (!isActive) {
                         e.currentTarget.style.borderColor =
                           colors.oskar.lightGrey;
+                        e.currentTarget.style.backgroundColor = "white";
                       }
                     }}
                   >
@@ -153,9 +157,10 @@ const FilterStatsBar = () => {
                   color: viewMode === "grid" ? "white" : colors.oskar.grey,
                   border: `2px solid ${viewMode === "grid" ? colors.oskar.green : colors.oskar.lightGrey}`,
                   borderRadius: "8px",
-                  width: "40px",
-                  height: "40px",
+                  width: "36px",
+                  height: "36px",
                   transition: "all 0.3s",
+                  cursor: "pointer",
                 }}
                 onMouseEnter={(e) => {
                   if (viewMode !== "grid") {
@@ -181,9 +186,10 @@ const FilterStatsBar = () => {
                   color: viewMode === "list" ? "white" : colors.oskar.grey,
                   border: `2px solid ${viewMode === "list" ? colors.oskar.green : colors.oskar.lightGrey}`,
                   borderRadius: "8px",
-                  width: "40px",
-                  height: "40px",
+                  width: "36px",
+                  height: "36px",
                   transition: "all 0.3s",
+                  cursor: "pointer",
                 }}
                 onMouseEnter={(e) => {
                   if (viewMode !== "list") {
@@ -202,7 +208,7 @@ const FilterStatsBar = () => {
             </div>
 
             {/* Sélecteur de tri */}
-            <div className="position-relative" style={{ minWidth: "200px" }}>
+            <div className="position-relative" style={{ minWidth: "180px" }}>
               <select
                 value={sortOption}
                 onChange={handleSortChange}
@@ -212,10 +218,12 @@ const FilterStatsBar = () => {
                   borderRadius: "8px",
                   color: colors.oskar.black,
                   fontSize: "0.875rem",
-                  padding: "8px 40px 8px 16px",
+                  padding: "6px 36px 6px 12px",
                   appearance: "none",
                   cursor: "pointer",
                   transition: "border-color 0.3s",
+                  backgroundColor: "white",
+                  height: "36px",
                 }}
                 onFocus={(e) =>
                   (e.currentTarget.style.borderColor = colors.oskar.green)

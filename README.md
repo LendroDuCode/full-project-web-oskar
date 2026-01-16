@@ -63,6 +63,9 @@ Voici la structure de fichiers et de dossiers affichée dans l'image, convertie 
 ```
 full-project-web-oskar
 ├── app
+|---|-- (back-office)
+|        |---/
+|            |--pages
 │   ├── (front-office)
 │   │   ├── boutiques
 │   │   ├── contacts
@@ -104,3 +107,11 @@ full-project-web-oskar
 -----
 
 Est-ce que vous souhaiteriez que je recherche quelque chose de spécifique concernant cette structure de projet, comme le contenu de `Footer.tsx` ou de `providers.tsx` ?
+
+
+Police Principale : Inter (avec toutes ses déclinaisons : bold, etc.)
+Couleur Principale : #16a34a
+Couleurs Spécifiques par Type d'Annonce :
+Échange : #2196f3
+Don : #9333ea
+Vente : #ea580c

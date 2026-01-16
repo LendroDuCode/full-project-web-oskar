@@ -17,7 +17,7 @@ const CTABanner = () => {
           className="cta-container-green text-center"
           style={{
             backgroundColor: colors.oskar.green,
-            background: `linear-gradient(135deg, ${colors.oskar.green} 0%, ${colors.oskar.greenDark} 100%)`,
+            background: `linear-gradient(135deg, ${colors.oskar.green} 0%, ${colors.oskar.green} 100%)`,
             borderRadius: "20px",
             padding: "3rem 2rem",
             position: "relative",

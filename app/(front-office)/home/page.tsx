@@ -10,12 +10,14 @@ import WhyOskar from "./components/WhyOskar";
 import CTABanner from "./components/CTABanner";
 import Testimonials from "./components/Testimonials";
 import AppDownload from "./components/AppDownload";
+import HeroCarousel from "./components/HeroCarousel";
 
 const Home: React.FC = () => {
   return (
     <div className="bg-oskar-light-grey min-h-screen">
       {/* Tu peux ajouter d'autres sections au-dessus ou en dessous */}
       <HeroSearch />
+      <HeroCarousel />
       <Breadcrumb />
       <FilterStatsBar />
       <MainContent />

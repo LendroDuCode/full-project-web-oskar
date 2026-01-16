@@ -581,7 +581,7 @@ const FiltersSidebar: React.FC<FiltersSidebarProps> = ({
         }
 
         .filters-apply-btn:hover {
-          background-color: ${colors.oskar.greenDark};
+          background-color: ${colors.oskar.green};
         }
       `}</style>
     </aside>

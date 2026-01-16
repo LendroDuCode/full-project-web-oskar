@@ -23,3 +23,15 @@
 }
 
 /* Ou si vous utilisez Tailwind, ajoutez dans tailwind.config.js */
+/* Styles pour les icônes Font Awesome */
+.btn-link i,
+.dropdown-item i {
+    color: inherit !important;
+    display: inline-block;
+}
+
+.fa-solid,
+.fa-regular,
+.fa-brands {
+    color: inherit !important;
+}

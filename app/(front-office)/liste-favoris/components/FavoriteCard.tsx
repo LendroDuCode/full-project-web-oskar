@@ -1,104 +1,230 @@
-// components/FavoriteCard.tsx
+// app/(front-office)/liste-favoris/components/FavoritesGrid.tsx
 "use client";
 
 import { useState } from "react";
-import colors from "@/utils/colors";
 
-interface FavoriteCardProps {
-  id: string;
+interface FavoriteItem {
+  id: number;
   title: string;
   price: string;
-  priceLabel?: string;
-  type: "sale" | "exchange" | "free" | "negotiable";
+  priceColor: string;
   description: string;
   location: string;
   timeAgo: string;
-  imageUrl: string;
+  imageSrc: string;
+  imageAlt: string;
+  tag: "vente" | "échange" | "don";
+  tagColor: string;
+  buttonText: string;
+  buttonColor: string;
+  buttonHoverColor: string;
   negotiable?: boolean;
 }
 
-const FavoriteCard: React.FC<FavoriteCardProps> = ({
-  id,
-  title,
-  price,
-  priceLabel,
-  type,
-  description,
-  location,
-  timeAgo,
-  imageUrl,
-  negotiable = false,
-}) => {
+interface FavoritesGridProps {
+  displayedCount?: number; // AJOUTEZ CETTE PROP
+}
+
+const favoriteItems: FavoriteItem[] = [
+  {
+    id: 1,
+    title: "Samsung Galaxy S22",
+    price: "245,000 FCFA",
+    priceColor: "text-success",
+    description:
+      "Excellent état, à peine utilisé pendant 6 mois. Livré avec la boîte d'origine et tous les accessoires.",
+    location: "Cocody, Abidjan",
+    timeAgo: "Il y a 2 jours",
+    imageSrc:
+      "https://storage.googleapis.com/uxpilot-auth.appspot.com/fd3c4ff41a-2523f8862d320243aff8.png",
+    imageAlt:
+      "modern smartphone with sleek design on white background, product photography style",
+    tag: "vente",
+    tagColor: "bg-success",
+    buttonText: "Contacter",
+    buttonColor: "btn-primary",
+    buttonHoverColor: "",
+  },
+  {
+    id: 2,
+    title: "Canapé 3 places en cuir",
+    price: "Troc",
+    priceColor: "text-primary",
+    description:
+      "Canapé en cuir marron en excellent état. Cherche à échanger contre un ensemble table à manger ou un bureau.",
+    location: "Marcory, Abidjan",
+    timeAgo: "Il y a 5 jours",
+    imageSrc:
+      "https://storage.googleapis.com/uxpilot-auth.appspot.com/a9bc073f05-ef048e30fc0a1f108ebd.png",
+    imageAlt:
+      "elegant leather sofa in modern living room, interior design photography",
+    tag: "échange",
+    tagColor: "bg-primary",
+    buttonText: "Proposer",
+    buttonColor: "btn-primary",
+    buttonHoverColor: "",
+  },
+  {
+    id: 3,
+    title: "Manuels universitaires",
+    price: "Gratuit",
+    priceColor: "text-purple-600",
+    description:
+      "Collection de manuels d'ingénierie. Parfait pour les étudiants. Gratuit pour toute personne en ayant besoin.",
+    location: "Plateau, Abidjan",
+    timeAgo: "Il y a 1 semaine",
+    imageSrc:
+      "https://storage.googleapis.com/uxpilot-auth.appspot.com/2b93121d55-4377ad53bb19fec29c92.png",
+    imageAlt:
+      "stack of educational textbooks and school supplies, academic setting",
+    tag: "don",
+    tagColor: "bg-purple-600",
+    buttonText: "Intéresser",
+    buttonColor: "btn-purple",
+    buttonHoverColor: "",
+  },
+  {
+    id: 4,
+    title: "Ordinateur Portable HP Pavilion",
+    price: "180,000 FCFA",
+    priceColor: "text-primary",
+    description:
+      "Core i5, 8Go RAM, 256Go SSD. Parfait pour le travail et les études. Prix négociable.",
+    location: "Yopougon, Abidjan",
+    timeAgo: "Il y a 3 jours",
+    imageSrc:
+      "https://storage.googleapis.com/uxpilot-auth.appspot.com/aa8dc22bbb-80025297f788f44ce05a.png",
+    imageAlt:
+      "modern laptop computer with accessories on desk, workspace photography",
+    tag: "vente",
+    tagColor: "bg-success",
+    buttonText: "Contacter",
+    buttonColor: "btn-primary",
+    buttonHoverColor: "",
+    negotiable: true,
+  },
+  {
+    id: 5,
+    title: "Sac à main de créateur",
+    price: "85,000 FCFA",
+    priceColor: "text-primary",
+    description:
+      "Sac à main de créateur authentique, utilisé deux fois. Excellent état avec emballage d'origine.",
+    location: "Cocody, Abidjan",
+    timeAgo: "Il y a 4 jours",
+    imageSrc:
+      "https://storage.googleapis.com/uxpilot-auth.appspot.com/cdb6a94d2a-6c392bfa2015dda9612b.png",
+    imageAlt: "stylish women's designer handbag",
+    tag: "vente",
+    tagColor: "bg-success",
+    buttonText: "Contacter",
+    buttonColor: "btn-primary",
+    buttonHoverColor: "",
+  },
+  {
+    id: 6,
+    title: "Kit Appareil Photo Canon DSLR",
+    price: "Troc",
+    priceColor: "text-primary",
+    description:
+      "Appareil photo professionnel avec 2 objectifs. Cherche à échanger contre du matériel vidéo ou un ordinateur portable.",
+    location: "Adjamé, Abidjan",
+    timeAgo: "Il y a 1 semaine",
+    imageSrc:
+      "https://storage.googleapis.com/uxpilot-auth.appspot.com/ef44a3a5cb-681f9535d543ec2f160c.png",
+    imageAlt:
+      "professional camera equipment and photography gear, studio setup",
+    tag: "échange",
+    tagColor: "bg-primary",
+    buttonText: "Proposer",
+    buttonColor: "btn-primary",
+    buttonHoverColor: "",
+  },
+  {
+    id: 7,
+    title: "Ensemble d'appareils de cuisine",
+    price: "125,000 FCFA",
+    priceColor: "text-primary",
+    description:
+      "Mixeur, grille-pain et batteur. Tous en excellent état de fonctionnement. Parfait pour les nouvelles maisons.",
+    location: "Cocody, Abidjan",
+    timeAgo: "Il y a 6 jours",
+    imageSrc:
+      "https://storage.googleapis.com/uxpilot-auth.appspot.com/d62b8b2257-dbf185d3e81f3c505f72.png",
+    imageAlt:
+      "modern kitchen appliances and cookware set, clean product photography",
+    tag: "vente",
+    tagColor: "bg-success",
+    buttonText: "Contacter",
+    buttonColor: "btn-primary",
+    buttonHoverColor: "",
+  },
+  {
+    id: 8,
+    title: "Lot de jouets pour enfants",
+    price: "gratuit",
+    priceColor: "text-purple-600",
+    description:
+      "Jouets variés pour les 3-8 ans. Propres et en bon état. Gratuits pour les familles dans le besoin.",
+    location: "Marcory, Abidjan",
+    timeAgo: "Il y a 2 semaines",
+    imageSrc:
+      "https://storage.googleapis.com/uxpilot-auth.appspot.com/c8369c86b8-16acab602eae0eb2139c.png",
+    imageAlt: "children's toys collection",
+    tag: "don",
+    tagColor: "bg-purple-600",
+    buttonText: "Intéresser",
+    buttonColor: "btn-purple",
+    buttonHoverColor: "",
+  },
+  {
+    id: 9,
+    title: "VTT",
+    price: "95,000 FCFA",
+    priceColor: "text-primary",
+    description:
+      "VTT 21 vitesses en excellent état. Parfait pour les sentiers et la ville.",
+    location: "Abobo, Abidjan",
+    timeAgo: "Il y a 5 jours",
+    imageSrc:
+      "https://storage.googleapis.com/uxpilot-auth.appspot.com/cdc5284f71-5f6b9c6e82f9ad6a841f.png",
+    imageAlt: "mountain bicycle with modern design, outdoor sports equipment",
+    tag: "vente",
+    tagColor: "bg-success",
+    buttonText: "Contacter",
+    buttonColor: "btn-primary",
+    buttonHoverColor: "",
+  },
+];
+
+const FavoriteCard = ({ item }: { item: FavoriteItem }) => {
   const [isFavorite, setIsFavorite] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
 
-  const getTypeConfig = () => {
-    switch (type) {
-      case "sale":
-        return {
-          color: colors.oskar.green,
-          icon: "fa-tag",
-          text: "vente",
-          buttonText: "Contacter",
-          buttonColor: colors.oskar.green,
-        };
-      case "exchange":
-        return {
-          color: "#2196F3", // Bleu pour échange
-          icon: "fa-exchange-alt",
-          text: "échange",
-          buttonText: "Proposer",
-          buttonColor: "#2196F3",
-        };
-      case "free":
-        return {
-          color: "#9C27B0", // Violet pour don
-          icon: "fa-gift",
-          text: "don",
-          buttonText: "Intéresser",
-          buttonColor: "#9C27B0",
-        };
-      case "negotiable":
-        return {
-          color: colors.oskar.green,
-          icon: "fa-tag",
-          text: "vente",
-          buttonText: "Contacter",
-          buttonColor: colors.oskar.green,
-        };
+  const getTagIcon = (tag: FavoriteItem["tag"]) => {
+    switch (tag) {
+      case "vente":
+        return "fa-tag";
+      case "échange":
+        return "fa-exchange-alt";
+      case "don":
+        return "fa-gift";
       default:
-        return {
-          color: colors.oskar.green,
-          icon: "fa-tag",
-          text: "vente",
-          buttonText: "Contacter",
-          buttonColor: colors.oskar.green,
-        };
+        return "fa-tag";
     }
   };
 
-  const typeConfig = getTypeConfig();
-
   return (
-    <div
-      className="card h-100 border-0 shadow-sm"
-      style={{
-        borderRadius: "16px",
-        overflow: "hidden",
-        transition: "all 0.3s ease",
-        cursor: "pointer",
-      }}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      {/* Image avec badges et actions */}
+    <div className="card h-100 border-0 shadow-sm hover-shadow transition-all">
       <div
         className="position-relative overflow-hidden"
         style={{ height: "256px" }}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
       >
         <img
-          src={imageUrl}
-          alt={title}
+          src={item.imageSrc}
+          alt={item.imageAlt}
           className="w-100 h-100 object-cover"
           style={{
             transform: isHovered ? "scale(1.05)" : "scale(1)",
@@ -106,105 +232,63 @@ const FavoriteCard: React.FC<FavoriteCardProps> = ({
           }}
         />
 
-        {/* Badge type */}
-        <div
-          className="position-absolute top-3 start-3 px-3 py-2 text-white fw-bold rounded-pill d-flex align-items-center gap-2"
-          style={{
-            backgroundColor: typeConfig.color,
-            fontSize: "0.75rem",
-          }}
-        >
-          <i className={`fas ${typeConfig.icon}`}></i>
-          <span>{typeConfig.text}</span>
-        </div>
-
-        {/* Badge négociable (si applicable) */}
-        {negotiable && (
-          <div
-            className="position-absolute bottom-3 start-3 px-3 py-2 text-white fw-bold rounded-pill"
-            style={{
-              backgroundColor: "#EF5350",
-              fontSize: "0.75rem",
-            }}
+        {/* Badge */}
+        <div className="position-absolute top-3 start-3">
+          <span
+            className={`${item.tagColor} text-white px-3 py-2 rounded-pill d-flex align-items-center gap-2`}
+            style={{ fontSize: "0.75rem" }}
           >
-            Négociable
-          </div>
-        )}
+            <i className={`fas ${getTagIcon(item.tag)}`}></i>
+            {item.tag}
+          </span>
+        </div>
 
         {/* Actions */}
         <div className="position-absolute top-3 end-3 d-flex gap-2">
-          {/* Bouton favori */}
           <button
-            className="btn btn-light rounded-circle p-2"
+            className="btn btn-light rounded-circle p-2 shadow-sm"
             onClick={() => setIsFavorite(!isFavorite)}
-            style={{
-              width: "40px",
-              height: "40px",
-              transition: "all 0.3s ease",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = "#FFEBEE";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = "#ffffff";
-            }}
+            style={{ width: "40px", height: "40px" }}
+            aria-label={
+              isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"
+            }
           >
             <i
               className={`${isFavorite ? "fas" : "far"} fa-heart`}
-              style={{ color: isFavorite ? "#EF5350" : colors.oskar.grey }}
+              style={{ color: isFavorite ? "#EF5350" : "#6B7280" }}
             ></i>
           </button>
 
-          {/* Bouton partager */}
           <button
-            className="btn btn-light rounded-circle p-2"
-            style={{
-              width: "40px",
-              height: "40px",
-              transition: "all 0.3s ease",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = colors.oskar.lightGrey;
-            }}
-            onMouseLeave((e) => {
-              e.currentTarget.style.backgroundColor = "#ffffff";
-            })}
+            className="btn btn-light rounded-circle p-2 shadow-sm"
+            style={{ width: "40px", height: "40px" }}
+            aria-label="Partager"
           >
-            <i
-              className="fas fa-share-nodes"
-              style={{ color: colors.oskar.grey }}
-            ></i>
+            <i className="fas fa-share-nodes text-secondary"></i>
           </button>
         </div>
+
+        {/* Badge négociable */}
+        {item.negotiable && (
+          <div className="position-absolute bottom-3 start-3">
+            <span
+              className="bg-danger text-white px-3 py-2 rounded-pill"
+              style={{ fontSize: "0.75rem" }}
+            >
+              Négociable
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* Contenu */}
       <div className="card-body p-4">
         <div className="d-flex justify-content-between align-items-start mb-3">
-          <h3
-            className="card-title h5 fw-bold mb-0"
-            style={{
-              color: isHovered ? colors.oskar.green : colors.oskar.black,
-              transition: "color 0.3s ease",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-              flex: 1,
-            }}
-          >
-            {title}
-          </h3>
+          <h5 className="card-title fw-bold mb-0 text-dark">{item.title}</h5>
           <div
-            className="ms-2 fw-bold"
-            style={{
-              color: typeConfig.color,
-              fontSize: type === "exchange" ? "1.125rem" : "1.5rem",
-            }}
+            className={`fw-bold ${item.priceColor}`}
+            style={{ fontSize: "1.25rem" }}
           >
-            {price}
-            {priceLabel && (
-              <span className="fs-6 ms-1">{priceLabel}</span>
-            )}
+            {item.price}
           </div>
         </div>
 
@@ -217,63 +301,52 @@ const FavoriteCard: React.FC<FavoriteCardProps> = ({
             display: "-webkit-box",
             WebkitLineClamp: 2,
             WebkitBoxOrient: "vertical",
-            minHeight: "42px",
+            lineHeight: "1.4",
           }}
         >
-          {description}
+          {item.description}
         </p>
 
-        {/* Infos location et temps */}
-        <div className="d-flex justify-content-between mb-4">
+        <div className="d-flex justify-content-between text-secondary mb-4">
           <div className="d-flex align-items-center gap-2">
             <i
               className="fas fa-location-dot"
-              style={{ color: colors.oskar.grey, fontSize: "0.875rem" }}
+              style={{ fontSize: "0.875rem" }}
             ></i>
-            <span
-              style={{ color: colors.oskar.grey, fontSize: "0.875rem" }}
-            >
-              {location}
-            </span>
+            <span style={{ fontSize: "0.875rem" }}>{item.location}</span>
           </div>
           <div className="d-flex align-items-center gap-2">
-            <i
-              className="far fa-clock"
-              style={{ color: colors.oskar.grey, fontSize: "0.875rem" }}
-            ></i>
-            <span
-              style={{ color: colors.oskar.grey, fontSize: "0.875rem" }}
-            >
-              {timeAgo}
-            </span>
+            <i className="far fa-clock" style={{ fontSize: "0.875rem" }}></i>
+            <span style={{ fontSize: "0.875rem" }}>{item.timeAgo}</span>
           </div>
         </div>
 
-        {/* Bouton action */}
         <button
-          className="btn w-100 fw-semibold"
-          style={{
-            backgroundColor: typeConfig.buttonColor,
-            color: "white",
-            padding: "0.75rem",
-            borderRadius: "8px",
-            border: "none",
-            transition: "all 0.3s ease",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.opacity = "0.9";
-            e.currentTarget.style.transform = "translateY(-1px)";
-          }}
-          onMouseLeave((e) => {
-            e.currentTarget.style.opacity = "1";
-            e.currentTarget.style.transform = "translateY(0)";
-          })}
+          className={`btn w-100 ${item.buttonColor} text-white fw-semibold py-2`}
+          style={{ borderRadius: "8px" }}
         >
-          {typeConfig.buttonText}
+          {item.buttonText}
         </button>
       </div>
     </div>
   );
 };
 
-export default FavoriteCard;
+export default function FavoritesGrid({
+  displayedCount = 9,
+}: FavoritesGridProps) {
+  // Limiter les éléments affichés selon displayedCount
+  const itemsToShow = favoriteItems.slice(0, displayedCount);
+
+  return (
+    <div className="container py-4">
+      <div className="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+        {itemsToShow.map((item) => (
+          <div key={item.id} className="col">
+            <FavoriteCard item={item} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

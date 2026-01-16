@@ -1,0 +1,1724 @@
+// app/(back-office)/dashboard-admin/agents/liste-agents-supprimes/page.tsx
+"use client";
+
+import { useState, useEffect, useMemo, useCallback } from "react";
+import Link from "next/link";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faPlus,
+  faEdit,
+  faEye,
+  faBan,
+  faCheckCircle,
+  faRefresh,
+  faDownload,
+  faSearch,
+  faFilter,
+  faSort,
+  faSortUp,
+  faSortDown,
+  faUser,
+  faUserCheck,
+  faUserSlash,
+  faEnvelope,
+  faPhone,
+  faCalendar,
+  faTrash,
+  faBriefcase,
+  faBuilding,
+  faIdCard,
+  faUnlock,
+  faExclamationTriangle,
+  faSpinner,
+  faTrashRestore,
+  faHistory,
+  faUserTimes,
+  faCheckSquare,
+  faSquare,
+  faCheck,
+  faTimes,
+  faLock,
+  faLockOpen,
+  faEnvelopeOpen,
+  faUserShield,
+  faUsers,
+  faInfoCircle,
+} from "@fortawesome/free-solid-svg-icons";
+import { api } from "@/lib/api-client";
+import { API_ENDPOINTS } from "@/config/api-endpoints";
+
+// Types
+interface Agent {
+  uuid: string;
+  nom: string;
+  prenoms: string;
+  email: string;
+  telephone: string;
+  civilite_uuid: string;
+  role_uuid: string;
+  est_verifie: boolean;
+  est_bloque: boolean;
+  is_admin: boolean;
+  is_deleted: boolean;
+  deleted_at: string;
+  matricule?: string;
+  date_embauche?: string;
+  departement?: string;
+  fonction?: string;
+  salaire?: string;
+  adresse?: string;
+  ville?: string;
+  code_postal?: string;
+  commentaire?: string;
+  created_at?: string;
+  updated_at?: string;
+  civilite?: {
+    libelle: string;
+  };
+  role?: {
+    name: string;
+  };
+}
+
+// Composant de statut
+const StatusBadge = ({ is_deleted }: { is_deleted: boolean }) => {
+  return (
+    <span className="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 d-inline-flex align-items-center gap-1">
+      <FontAwesomeIcon icon={faUserTimes} className="fs-12" />
+      <span>Supprimé</span>
+    </span>
+  );
+};
+
+// Composant de modal de suppression permanente
+const PermanentDeleteModal = ({
+  show,
+  agent,
+  loading,
+  onClose,
+  onConfirm,
+  type = "single",
+  count = 0,
+}: {
+  show: boolean;
+  agent: Agent | null;
+  loading: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  type?: "single" | "multiple";
+  count?: number;
+}) => {
+  if (!show) return null;
+
+  return (
+    <div
+      className="modal fade show d-block"
+      style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+      tabIndex={-1}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="modal-dialog modal-dialog-centered">
+        <div className="modal-content">
+          <div className="modal-header">
+            <h5 className="modal-title text-danger" id="deleteModalTitle">
+              <FontAwesomeIcon icon={faTrash} className="me-2" />
+              {type === "multiple"
+                ? "Suppression définitive multiple"
+                : "Suppression définitive"}
+            </h5>
+            <button
+              type="button"
+              className="btn-close"
+              onClick={onClose}
+              disabled={loading}
+              aria-label="Fermer"
+            ></button>
+          </div>
+          <div className="modal-body">
+            <div className="alert alert-warning mb-3">
+              <FontAwesomeIcon icon={faExclamationTriangle} className="me-2" />
+              <strong>Attention :</strong> Cette action est irréversible !
+            </div>
+
+            {type === "single" && agent ? (
+              <>
+                <p>
+                  Êtes-vous sûr de vouloir supprimer définitivement l'agent{" "}
+                  <strong>
+                    {agent.nom} {agent.prenoms}
+                  </strong>{" "}
+                  ({agent.email}) ?
+                </p>
+                <ul className="text-danger small">
+                  <li>Toutes les données associées seront perdues</li>
+                  <li>L'agent ne pourra plus être restauré</li>
+                  <li>Cette action est définitive</li>
+                </ul>
+              </>
+            ) : (
+              <>
+                <p>
+                  Êtes-vous sûr de vouloir supprimer définitivement{" "}
+                  <strong>{count}</strong> agent(s) sélectionné(s) ?
+                </p>
+                <ul className="text-danger small">
+                  <li>Toutes les données associées seront perdues</li>
+                  <li>Les agents ne pourront plus être restaurés</li>
+                  <li>Cette action est définitive</li>
+                </ul>
+              </>
+            )}
+          </div>
+          <div className="modal-footer">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onClose}
+              disabled={loading}
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={onConfirm}
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <span
+                    className="spinner-border spinner-border-sm me-2"
+                    role="status"
+                    aria-hidden="true"
+                  ></span>
+                  Suppression...
+                </>
+              ) : (
+                <>
+                  <FontAwesomeIcon icon={faTrash} className="me-2" />
+                  {type === "multiple"
+                    ? `Supprimer ${count} agent(s)`
+                    : "Supprimer définitivement"}
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Composant de pagination
+const Pagination = ({
+  currentPage,
+  totalPages,
+  totalItems,
+  itemsPerPage,
+  indexOfFirstItem,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  itemsPerPage: number;
+  indexOfFirstItem: number;
+  onPageChange: (page: number) => void;
+}) => {
+  const indexOfLastItem = Math.min(currentPage * itemsPerPage, totalItems);
+
+  const renderPageNumbers = () => {
+    const pages = [];
+    const maxVisiblePages = 5;
+
+    if (totalPages <= maxVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      let start = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+      let end = Math.min(totalPages, start + maxVisiblePages - 1);
+
+      if (end - start + 1 < maxVisiblePages) {
+        start = Math.max(1, end - maxVisiblePages + 1);
+      }
+
+      if (start > 1) {
+        pages.push(1);
+        if (start > 2) pages.push("...");
+      }
+
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+
+      if (end < totalPages) {
+        if (end < totalPages - 1) pages.push("...");
+        pages.push(totalPages);
+      }
+    }
+
+    return pages;
+  };
+
+  return (
+    <div className="p-4 border-top">
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+        <div className="text-muted">
+          Affichage de{" "}
+          <span className="fw-semibold">{indexOfFirstItem + 1}</span> à{" "}
+          <span className="fw-semibold">{indexOfLastItem}</span> sur{" "}
+          <span className="fw-semibold">{totalItems}</span> agents
+        </div>
+
+        <nav aria-label="Pagination">
+          <ul className="pagination mb-0">
+            <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
+              <button
+                className="page-link"
+                onClick={() => onPageChange(1)}
+                disabled={currentPage === 1}
+                aria-label="Première page"
+              >
+                «
+              </button>
+            </li>
+
+            <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
+              <button
+                className="page-link"
+                onClick={() => onPageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                aria-label="Page précédente"
+              >
+                ‹
+              </button>
+            </li>
+
+            {renderPageNumbers().map((pageNum, index) => (
+              <li
+                key={index}
+                className={`page-item ${
+                  pageNum === currentPage ? "active" : ""
+                } ${pageNum === "..." ? "disabled" : ""}`}
+              >
+                {pageNum === "..." ? (
+                  <span className="page-link">...</span>
+                ) : (
+                  <button
+                    className="page-link"
+                    onClick={() => onPageChange(pageNum as number)}
+                    aria-label={`Page ${pageNum}`}
+                    aria-current={pageNum === currentPage ? "page" : undefined}
+                  >
+                    {pageNum}
+                  </button>
+                )}
+              </li>
+            ))}
+
+            <li
+              className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}
+            >
+              <button
+                className="page-link"
+                onClick={() => onPageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                aria-label="Page suivante"
+              >
+                ›
+              </button>
+            </li>
+
+            <li
+              className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}
+            >
+              <button
+                className="page-link"
+                onClick={() => onPageChange(totalPages)}
+                disabled={currentPage === totalPages}
+                aria-label="Dernière page"
+              >
+                »
+              </button>
+            </li>
+          </ul>
+        </nav>
+
+        <div className="d-flex align-items-center gap-2">
+          <span className="text-muted">Page :</span>
+          <input
+            type="number"
+            min="1"
+            max={totalPages}
+            value={currentPage}
+            onChange={(e) => {
+              const value = parseInt(e.target.value);
+              if (value >= 1 && value <= totalPages) {
+                onPageChange(value);
+              }
+            }}
+            className="form-control form-control-sm text-center"
+            style={{ width: "70px" }}
+            aria-label="Numéro de page"
+          />
+          <span className="text-muted">sur {totalPages}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default function ListeAgentsSupprimesPage() {
+  // États pour les données
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
+
+  // États pour la pagination
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    pages: 1,
+  });
+
+  // États pour les modals
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showDeleteMultipleModal, setShowDeleteMultipleModal] = useState(false);
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+
+  // États pour les filtres et recherche
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedRole, setSelectedRole] = useState<string>("all");
+  const [sortConfig, setSortConfig] = useState<{
+    key: keyof Agent | "role.name" | "civilite.libelle";
+    direction: "asc" | "desc";
+  } | null>(null);
+
+  // États pour la sélection multiple
+  const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
+  const [selectAll, setSelectAll] = useState(false);
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // Options pour les éléments par page
+  const itemsPerPageOptions = [5, 10, 20, 50];
+
+  // Fonction pour charger les agents supprimés
+  const fetchDeletedAgents = useCallback(
+    async (params?: {
+      page?: number;
+      limit?: number;
+      search?: string;
+      role?: string;
+    }) => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const queryParams = new URLSearchParams();
+        queryParams.append(
+          "page",
+          (params?.page || pagination.page).toString(),
+        );
+        queryParams.append(
+          "limit",
+          (params?.limit || pagination.limit).toString(),
+        );
+        if (params?.search) queryParams.append("search", params.search);
+        if (params?.role && params.role !== "all")
+          queryParams.append("role", params.role);
+
+        // Toujours filtrer par agents supprimés
+        queryParams.append("is_deleted", "true");
+
+        const queryString = queryParams.toString();
+        const endpoint = queryString
+          ? `${API_ENDPOINTS.ADMIN.AGENTS.DELETED}?${queryString}`
+          : `${API_ENDPOINTS.ADMIN.AGENTS.DELETED}?is_deleted=true`;
+
+        console.log("📡 Fetching deleted agents from:", endpoint);
+
+        // Appel à l'API
+        const response = await api.get(endpoint);
+
+        console.log("✅ Deleted agents received:", {
+          count: response?.data?.length || 0,
+          firstAgent: response?.data?.[0],
+        });
+
+        // Gestion des différents formats de réponse
+        let agentsData: Agent[] = [];
+        let totalCount = 0;
+
+        if (Array.isArray(response.data)) {
+          agentsData = response.data;
+          totalCount = response.data.length;
+        } else if (response.data && typeof response.data === "object") {
+          if ("data" in response.data && Array.isArray(response.data.data)) {
+            agentsData = response.data.data;
+            totalCount = response.data.count || response.data.data.length;
+          } else if (
+            "agents" in response.data &&
+            Array.isArray(response.data.agents)
+          ) {
+            agentsData = response.data.agents;
+            totalCount = response.data.count || response.data.agents.length;
+          }
+        }
+
+        if (agentsData.length > 0) {
+          setAgents(agentsData);
+          setPagination((prev) => ({
+            ...prev,
+            page: params?.page || prev.page,
+            limit: params?.limit || prev.limit,
+            total: totalCount,
+            pages: Math.ceil(totalCount / (params?.limit || prev.limit)) || 1,
+          }));
+        } else {
+          console.log("📭 No deleted agents found");
+          setAgents([]);
+          setPagination((prev) => ({
+            ...prev,
+            total: 0,
+            pages: 1,
+          }));
+        }
+      } catch (err: any) {
+        console.error("🚨 Error fetching deleted agents:", {
+          message: err.message,
+          response: err.response?.data,
+          status: err.response?.status,
+        });
+
+        let errorMessage = "Erreur lors du chargement des agents supprimés";
+
+        if (err.response?.data?.message) {
+          errorMessage = err.response.data.message;
+        } else if (err.message) {
+          errorMessage = err.message;
+        }
+
+        setError(errorMessage);
+        setAgents([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [pagination.page, pagination.limit],
+  );
+
+  // Charger les agents au montage
+  useEffect(() => {
+    fetchDeletedAgents();
+  }, []);
+
+  // Gérer les changements de pagination et filtres avec debounce
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      fetchDeletedAgents({
+        page: pagination.page,
+        limit: pagination.limit,
+        search: searchTerm.trim() || undefined,
+        role: selectedRole !== "all" ? selectedRole : undefined,
+      });
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [
+    pagination.page,
+    pagination.limit,
+    searchTerm,
+    selectedRole,
+    fetchDeletedAgents,
+  ]);
+
+  // Fonction pour restaurer un agent
+  const handleRestoreAgent = async (agent: Agent) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      console.log("🔄 Restoring agent:", agent.uuid);
+
+      const response = await api.post(
+        API_ENDPOINTS.ADMIN.AGENTS.RESTORE(agent.uuid),
+      );
+
+      console.log("✅ Restore response:", response);
+
+      if (response.data?.status === "success") {
+        // Retirer de la sélection si sélectionné
+        setSelectedAgents((prev) => prev.filter((id) => id !== agent.uuid));
+
+        // Rafraîchir la liste
+        await fetchDeletedAgents();
+
+        setSuccessMessage(
+          `Agent ${agent.nom} ${agent.prenoms} restauré avec succès`,
+        );
+        setTimeout(() => setSuccessMessage(null), 3000);
+      } else {
+        setError("Erreur lors de la restauration de l'agent");
+      }
+    } catch (err: any) {
+      console.error("❌ Error restoring agent:", err);
+      setError(
+        err.response?.data?.message ||
+          "Erreur lors de la restauration de l'agent",
+      );
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fonction pour restaurer plusieurs agents
+  const handleBulkRestore = async () => {
+    if (selectedAgents.length === 0) {
+      setInfoMessage("Veuillez sélectionner au moins un agent");
+      setTimeout(() => setInfoMessage(null), 3000);
+      return;
+    }
+
+    try {
+      setBulkActionLoading(true);
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const agentId of selectedAgents) {
+        try {
+          const response = await api.post(
+            API_ENDPOINTS.ADMIN.AGENTS.RESTORE(agentId),
+          );
+
+          if (response.data?.status === "success") {
+            successCount++;
+          } else {
+            errorCount++;
+          }
+        } catch (err) {
+          console.error(`Erreur pour l'agent ${agentId}:`, err);
+          errorCount++;
+        }
+      }
+
+      setSuccessMessage(
+        `${successCount} agent(s) restauré(s) avec succès${errorCount > 0 ? ` (${errorCount} échec(s))` : ""}`,
+      );
+      setTimeout(() => setSuccessMessage(null), 3000);
+
+      // Rafraîchir la liste
+      await fetchDeletedAgents();
+
+      // Réinitialiser la sélection
+      setSelectedAgents([]);
+      setSelectAll(false);
+    } catch (err) {
+      console.error("Erreur lors de la restauration en masse:", err);
+      setInfoMessage("Erreur lors de la restauration en masse");
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  // Fonction pour supprimer définitivement un agent
+  const handlePermanentDeleteAgent = async () => {
+    if (!selectedAgent) return;
+
+    try {
+      setDeleteLoading(true);
+      setError(null);
+
+      console.log("🗑️ Permanent delete agent:", selectedAgent.uuid);
+
+      const response = await api.delete(
+        API_ENDPOINTS.ADMIN.AGENTS.DELETE(selectedAgent.uuid),
+      );
+
+      console.log("✅ Permanent delete response:", response);
+
+      setShowDeleteModal(false);
+      setSelectedAgent(null);
+
+      // Rafraîchir la liste
+      await fetchDeletedAgents();
+
+      setSuccessMessage("Agent supprimé définitivement avec succès");
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err: any) {
+      console.error("❌ Error permanently deleting agent:", err);
+      setError(
+        err.response?.data?.message ||
+          "Erreur lors de la suppression définitive de l'agent",
+      );
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  // Fonction pour supprimer définitivement plusieurs agents
+  const handlePermanentDeleteMultipleAgents = async () => {
+    if (selectedAgents.length === 0) return;
+
+    try {
+      setDeleteLoading(true);
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const agentId of selectedAgents) {
+        try {
+          await api.delete(API_ENDPOINTS.ADMIN.AGENTS.DELETE(agentId));
+          successCount++;
+        } catch (err) {
+          console.error(`Erreur pour l'agent ${agentId}:`, err);
+          errorCount++;
+        }
+      }
+
+      setShowDeleteMultipleModal(false);
+      setSuccessMessage(
+        `${successCount} agent(s) supprimé(s) définitivement avec succès${errorCount > 0 ? ` (${errorCount} échec(s))` : ""}`,
+      );
+      setTimeout(() => setSuccessMessage(null), 3000);
+
+      // Réinitialiser la sélection
+      setSelectedAgents([]);
+      setSelectAll(false);
+
+      // Rafraîchir la liste
+      await fetchDeletedAgents();
+    } catch (err) {
+      console.error("Erreur lors de la suppression définitive multiple:", err);
+      setInfoMessage("Erreur lors de la suppression définitive des agents");
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  // Fonction pour ouvrir le modal de suppression permanente
+  const openPermanentDeleteModal = (agent: Agent) => {
+    setSelectedAgent(agent);
+    setShowDeleteModal(true);
+  };
+
+  // Fonction pour exporter les agents supprimés
+  const handleExport = async () => {
+    try {
+      console.log("📄 Exporting deleted agents...");
+
+      const response = await api.get(
+        API_ENDPOINTS.ADMIN.AGENTS.EXPORT_DELETED_PDF,
+        {
+          responseType: "blob",
+        },
+      );
+
+      const url = window.URL.createObjectURL(response);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `agents-supprimes-${new Date().toISOString().split("T")[0]}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      setSuccessMessage("Export PDF réussi");
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err) {
+      console.error("❌ Error exporting PDF:", err);
+      // Fallback CSV export
+      handleCSVExport();
+    }
+  };
+
+  // Fallback CSV export
+  const handleCSVExport = () => {
+    if (agents.length === 0) {
+      setError("Aucun agent à exporter");
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    try {
+      const csvContent = [
+        [
+          "UUID",
+          "Nom",
+          "Prénoms",
+          "Email",
+          "Téléphone",
+          "Civilité",
+          "Rôle",
+          "Créé le",
+          "Supprimé le",
+          "Statut",
+          "Durée depuis suppression",
+        ],
+        ...filteredAgents.map((a) => [
+          a.uuid,
+          a.nom || "",
+          a.prenoms || "",
+          a.email || "",
+          a.telephone || "",
+          a.civilite?.libelle || "Non spécifié",
+          a.role?.name || "Agent",
+          formatDate(a.created_at),
+          formatDate(a.deleted_at),
+          "Supprimé",
+          getTimeSinceDeletion(a.deleted_at),
+        ]),
+      ]
+        .map((row) => row.map((cell) => `"${cell}"`).join(","))
+        .join("\n");
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute(
+        "download",
+        `agents-supprimes-${new Date().toISOString().split("T")[0]}.csv`,
+      );
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setSuccessMessage("Export CSV réussi");
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err) {
+      console.error("❌ Error exporting CSV:", err);
+      setError("Erreur lors de l'export CSV");
+      setTimeout(() => setError(null), 3000);
+    }
+  };
+
+  // Fonction pour formater la date
+  const formatDate = (dateString: string | null | undefined) => {
+    if (!dateString) return "N/A";
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "Date invalide";
+      return new Intl.DateTimeFormat("fr-FR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }).format(date);
+    } catch {
+      return "N/A";
+    }
+  };
+
+  // Fonction pour formater la date avec heure
+  const formatDateTime = (dateString: string | null | undefined) => {
+    if (!dateString) return "N/A";
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "Date invalide";
+      return new Intl.DateTimeFormat("fr-FR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(date);
+    } catch {
+      return "N/A";
+    }
+  };
+
+  // Fonction pour calculer la durée depuis la suppression
+  const getTimeSinceDeletion = (deletedAt: string) => {
+    try {
+      const deletedDate = new Date(deletedAt);
+      const now = new Date();
+      const diffMs = now.getTime() - deletedDate.getTime();
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+      if (diffDays === 0) {
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+        if (diffHours === 0) {
+          const diffMinutes = Math.floor(diffMs / (1000 * 60));
+          return `il y a ${diffMinutes} min`;
+        }
+        return `il y a ${diffHours} h`;
+      } else if (diffDays === 1) {
+        return "hier";
+      } else if (diffDays < 7) {
+        return `il y a ${diffDays} jours`;
+      } else if (diffDays < 30) {
+        const weeks = Math.floor(diffDays / 7);
+        return `il y a ${weeks} semaine${weeks > 1 ? "s" : ""}`;
+      } else {
+        const months = Math.floor(diffDays / 30);
+        return `il y a ${months} mois`;
+      }
+    } catch {
+      return "N/A";
+    }
+  };
+
+  // Fonction de tri
+  const sortAgents = (agentsList: Agent[]) => {
+    if (!sortConfig || !agentsList.length) return agentsList;
+
+    return [...agentsList].sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      if (sortConfig.key === "role.name") {
+        aValue = a.role?.name || "";
+        bValue = b.role?.name || "";
+      } else if (sortConfig.key === "civilite.libelle") {
+        aValue = a.civilite?.libelle || "";
+        bValue = b.civilite?.libelle || "";
+      } else if (sortConfig.key === "deleted_at") {
+        aValue = a.deleted_at ? new Date(a.deleted_at).getTime() : 0;
+        bValue = b.deleted_at ? new Date(b.deleted_at).getTime() : 0;
+      } else {
+        aValue = a[sortConfig.key as keyof Agent];
+        bValue = b[sortConfig.key as keyof Agent];
+      }
+
+      // Gérer les valeurs null/undefined
+      if (aValue == null) aValue = "";
+      if (bValue == null) bValue = "";
+
+      if (aValue < bValue) {
+        return sortConfig.direction === "asc" ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return sortConfig.direction === "asc" ? 1 : -1;
+      }
+      return 0;
+    });
+  };
+
+  const requestSort = (key: keyof Agent | "role.name" | "civilite.libelle") => {
+    let direction: "asc" | "desc" = "asc";
+    if (
+      sortConfig &&
+      sortConfig.key === key &&
+      sortConfig.direction === "asc"
+    ) {
+      direction = "desc";
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIcon = (key: keyof Agent | "role.name" | "civilite.libelle") => {
+    if (!sortConfig || sortConfig.key !== key) {
+      return <FontAwesomeIcon icon={faSort} className="text-muted ms-1" />;
+    }
+    return sortConfig.direction === "asc" ? (
+      <FontAwesomeIcon icon={faSortUp} className="text-primary ms-1" />
+    ) : (
+      <FontAwesomeIcon icon={faSortDown} className="text-primary ms-1" />
+    );
+  };
+
+  // Gestion de la sélection multiple
+  const handleSelectAgent = (agentId: string) => {
+    setSelectedAgents((prev) => {
+      if (prev.includes(agentId)) {
+        return prev.filter((id) => id !== agentId);
+      } else {
+        return [...prev, agentId];
+      }
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectAll) {
+      setSelectedAgents([]);
+    } else {
+      const allAgentIds = filteredAgents.map((agent) => agent.uuid);
+      setSelectedAgents(allAgentIds);
+    }
+    setSelectAll(!selectAll);
+  };
+
+  const handleSelectAllOnPage = () => {
+    const pageAgentIds = currentItems.map((agent) => agent.uuid);
+    const allSelected = pageAgentIds.every((id) => selectedAgents.includes(id));
+
+    if (allSelected) {
+      // Désélectionner tous les agents de la page
+      setSelectedAgents((prev) =>
+        prev.filter((id) => !pageAgentIds.includes(id)),
+      );
+    } else {
+      // Sélectionner tous les agents de la page
+      const newSelection = [...new Set([...selectedAgents, ...pageAgentIds])];
+      setSelectedAgents(newSelection);
+    }
+  };
+
+  // Actions en masse
+  const handleBulkAction = async (action: "restore" | "delete") => {
+    if (selectedAgents.length === 0) {
+      setInfoMessage("Veuillez sélectionner au moins un agent");
+      setTimeout(() => setInfoMessage(null), 3000);
+      return;
+    }
+
+    try {
+      setBulkActionLoading(true);
+
+      switch (action) {
+        case "restore":
+          await handleBulkRestore();
+          break;
+        case "delete":
+          // Pour la suppression définitive, on utilise la modal de confirmation
+          setShowDeleteMultipleModal(true);
+          setBulkActionLoading(false);
+          return;
+      }
+    } catch (err) {
+      console.error("Erreur lors de l'action en masse:", err);
+      setInfoMessage("Erreur lors de l'action en masse");
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
+  // Filtrer et trier les agents avec useMemo pour la performance
+  const filteredAgents = useMemo(() => {
+    return sortAgents(
+      agents.filter((agent) => {
+        // Filtrage côté client supplémentaire
+        let passesFilter = true;
+
+        // Filtre par recherche
+        if (searchTerm.trim()) {
+          const searchLower = searchTerm.toLowerCase();
+          passesFilter =
+            passesFilter &&
+            (agent.nom?.toLowerCase().includes(searchLower) ||
+              agent.prenoms?.toLowerCase().includes(searchLower) ||
+              agent.email?.toLowerCase().includes(searchLower) ||
+              agent.telephone?.includes(searchTerm) ||
+              agent.matricule?.toLowerCase().includes(searchLower) ||
+              agent.fonction?.toLowerCase().includes(searchLower) ||
+              agent.departement?.toLowerCase().includes(searchLower));
+        }
+
+        // Filtre par rôle
+        if (selectedRole !== "all") {
+          if (selectedRole === "admin") {
+            passesFilter = passesFilter && agent.is_admin === true;
+          } else if (selectedRole === "agent") {
+            passesFilter = passesFilter && agent.is_admin === false;
+          }
+        }
+
+        // Toujours filtrer par statut supprimé
+        passesFilter = passesFilter && agent.is_deleted === true;
+
+        return passesFilter;
+      }),
+    );
+  }, [agents, searchTerm, selectedRole, sortConfig]);
+
+  const currentItems = useMemo(() => {
+    const start = (pagination.page - 1) * pagination.limit;
+    const end = start + pagination.limit;
+    return filteredAgents.slice(start, end);
+  }, [filteredAgents, pagination.page, pagination.limit]);
+
+  // Réinitialiser les filtres
+  const resetFilters = () => {
+    setSearchTerm("");
+    setSelectedRole("all");
+    setSortConfig(null);
+    setPagination((prev) => ({ ...prev, page: 1 }));
+    setSelectedAgents([]);
+    setSelectAll(false);
+  };
+
+  // Effet pour mettre à jour selectAll quand on change de page ou de sélection
+  useEffect(() => {
+    if (currentItems.length > 0) {
+      const allSelected = currentItems.every((agent) =>
+        selectedAgents.includes(agent.uuid),
+      );
+      setSelectAll(allSelected);
+    } else {
+      setSelectAll(false);
+    }
+  }, [selectedAgents, currentItems]);
+
+  return (
+    <>
+      {/* Modal de suppression permanente simple */}
+      <PermanentDeleteModal
+        show={showDeleteModal}
+        agent={selectedAgent}
+        loading={deleteLoading}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setSelectedAgent(null);
+        }}
+        onConfirm={handlePermanentDeleteAgent}
+        type="single"
+      />
+
+      {/* Modal de suppression permanente multiple */}
+      <PermanentDeleteModal
+        show={showDeleteMultipleModal}
+        agent={null}
+        loading={deleteLoading}
+        onClose={() => {
+          setShowDeleteMultipleModal(false);
+        }}
+        onConfirm={handlePermanentDeleteMultipleAgents}
+        type="multiple"
+        count={selectedAgents.length}
+      />
+
+      <div className="p-3 p-md-4">
+        <div className="card border-0 shadow-sm overflow-hidden">
+          <div className="card-header bg-white border-0 py-3">
+            <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+              <div>
+                <p className="text-muted mb-1">Corbeille des Agents</p>
+                <div className="d-flex align-items-center gap-3">
+                  <h2 className="h4 mb-0 fw-bold">
+                    Liste des Agents Supprimés
+                  </h2>
+                  <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary">
+                    {pagination.total} agent(s) supprimé(s)
+                    {selectedAgents.length > 0 &&
+                      ` (${selectedAgents.length} sélectionné(s))`}
+                  </span>
+                </div>
+              </div>
+
+              <div className="d-flex flex-wrap gap-2">
+                <Link
+                  href="/dashboard-admin/agents/liste-agents"
+                  className="btn btn-outline-primary d-flex align-items-center gap-2"
+                  aria-label="Voir les agents actifs"
+                >
+                  <FontAwesomeIcon icon={faUser} />
+                  Agents actifs
+                </Link>
+
+                <Link
+                  href="/dashboard-admin/agents/liste-agents-bloques"
+                  className="btn btn-outline-warning d-flex align-items-center gap-2"
+                  aria-label="Voir les agents bloqués"
+                >
+                  <FontAwesomeIcon icon={faBan} />
+                  Agents bloqués
+                </Link>
+
+                <button
+                  onClick={() => fetchDeletedAgents()}
+                  className="btn btn-outline-secondary d-flex align-items-center gap-2"
+                  disabled={loading}
+                  aria-label="Rafraîchir la liste"
+                >
+                  <FontAwesomeIcon icon={faRefresh} spin={loading} />
+                  Rafraîchir
+                </button>
+
+                <button
+                  onClick={handleExport}
+                  className="btn btn-outline-primary d-flex align-items-center gap-2"
+                  disabled={agents.length === 0 || loading}
+                  aria-label="Exporter les données"
+                >
+                  <FontAwesomeIcon icon={faDownload} />
+                  Exporter PDF
+                </button>
+              </div>
+            </div>
+
+            {/* Messages d'alerte */}
+            {error && (
+              <div
+                className="alert alert-warning alert-dismissible fade show mt-3 mb-0"
+                role="alert"
+              >
+                <div className="d-flex align-items-center">
+                  <FontAwesomeIcon
+                    icon={faExclamationTriangle}
+                    className="me-2"
+                  />
+                  <div>
+                    <strong>Attention:</strong> {error}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setError(null)}
+                  aria-label="Fermer l'alerte"
+                ></button>
+              </div>
+            )}
+
+            {successMessage && (
+              <div
+                className="alert alert-success alert-dismissible fade show mt-3 mb-0"
+                role="alert"
+              >
+                <div className="d-flex align-items-center">
+                  <FontAwesomeIcon icon={faCheckCircle} className="me-2" />
+                  <div>
+                    <strong>Succès:</strong> {successMessage}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setSuccessMessage(null)}
+                  aria-label="Fermer l'alerte"
+                ></button>
+              </div>
+            )}
+
+            {infoMessage && (
+              <div
+                className="alert alert-info alert-dismissible fade show mt-3 mb-0"
+                role="alert"
+              >
+                <FontAwesomeIcon icon={faInfoCircle} className="me-2" />
+                <strong>Information:</strong> {infoMessage}
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setInfoMessage(null)}
+                  aria-label="Fermer l'alerte"
+                ></button>
+              </div>
+            )}
+          </div>
+
+          {/* Barre d'actions en masse */}
+          {selectedAgents.length > 0 && (
+            <div className="p-3 border-bottom bg-warning bg-opacity-10">
+              <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+                <div className="d-flex align-items-center gap-2">
+                  <FontAwesomeIcon icon={faUsers} className="text-warning" />
+                  <span className="fw-semibold">
+                    {selectedAgents.length} agent(s) sélectionné(s)
+                  </span>
+                </div>
+
+                <div className="d-flex flex-wrap gap-2">
+                  <button
+                    className="btn btn-sm btn-outline-success d-flex align-items-center gap-1"
+                    onClick={() => handleBulkAction("restore")}
+                    disabled={bulkActionLoading}
+                    aria-label="Restaurer les agents sélectionnés"
+                  >
+                    <FontAwesomeIcon icon={faTrashRestore} />
+                    <span>Restaurer</span>
+                  </button>
+
+                  <button
+                    className="btn btn-sm btn-outline-danger d-flex align-items-center gap-1"
+                    onClick={() => handleBulkAction("delete")}
+                    disabled={bulkActionLoading}
+                    aria-label="Supprimer définitivement les agents sélectionnés"
+                  >
+                    <FontAwesomeIcon icon={faTrash} />
+                    <span>Supprimer définitivement</span>
+                  </button>
+
+                  <button
+                    className="btn btn-sm btn-outline-dark d-flex align-items-center gap-1"
+                    onClick={() => {
+                      setSelectedAgents([]);
+                      setSelectAll(false);
+                    }}
+                    disabled={bulkActionLoading}
+                    aria-label="Annuler la sélection"
+                  >
+                    <FontAwesomeIcon icon={faTimes} />
+                    <span>Annuler</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Filtres et recherche */}
+          <div className="p-4 border-bottom bg-light-subtle">
+            <div className="row g-3">
+              <div className="col-md-6">
+                <div className="input-group">
+                  <span className="input-group-text bg-white border-end-0">
+                    <FontAwesomeIcon icon={faSearch} className="text-muted" />
+                  </span>
+                  <input
+                    type="text"
+                    className="form-control border-start-0 ps-0"
+                    placeholder="Rechercher par nom, prénom, email ou téléphone..."
+                    value={searchTerm}
+                    onChange={(e) => {
+                      setSearchTerm(e.target.value);
+                      setPagination((prev) => ({ ...prev, page: 1 }));
+                    }}
+                    aria-label="Rechercher des agents supprimés"
+                  />
+                </div>
+              </div>
+
+              <div className="col-md-3">
+                <div className="input-group">
+                  <span className="input-group-text bg-white border-end-0">
+                    <FontAwesomeIcon
+                      icon={faBriefcase}
+                      className="text-muted"
+                    />
+                  </span>
+                  <select
+                    className="form-select border-start-0 ps-0"
+                    value={selectedRole}
+                    onChange={(e) => {
+                      setSelectedRole(e.target.value);
+                      setPagination((prev) => ({ ...prev, page: 1 }));
+                    }}
+                    aria-label="Filtrer par rôle"
+                  >
+                    <option value="all">Tous les rôles</option>
+                    <option value="agent">Agents</option>
+                    <option value="admin">Admins</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="col-md-3">
+                <div className="input-group">
+                  <span className="input-group-text bg-white border-end-0">
+                    <FontAwesomeIcon icon={faFilter} className="text-muted" />
+                  </span>
+                  <select
+                    className="form-select border-start-0 ps-0"
+                    value={pagination.limit}
+                    onChange={(e) =>
+                      setPagination((prev) => ({
+                        ...prev,
+                        limit: Number(e.target.value),
+                        page: 1,
+                      }))
+                    }
+                    aria-label="Nombre d'éléments par page"
+                  >
+                    {itemsPerPageOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option} / page
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="row mt-3">
+              <div className="col-md-6">
+                <div className="d-flex align-items-center gap-2">
+                  <small className="text-muted">
+                    Total: <strong>{pagination.total}</strong> agents supprimés
+                    {searchTerm && (
+                      <>
+                        {" "}
+                        pour "<strong>{searchTerm}</strong>"
+                      </>
+                    )}
+                    {selectedRole !== "all" && (
+                      <>
+                        {" "}
+                        avec rôle "
+                        <strong>
+                          {selectedRole === "admin" ? "Admins" : "Agents"}
+                        </strong>
+                        "
+                      </>
+                    )}
+                  </small>
+                </div>
+              </div>
+
+              <div className="col-md-6 text-end">
+                <div className="d-flex align-items-center gap-2 justify-content-end">
+                  {selectedAgents.length > 0 && (
+                    <small className="text-primary fw-semibold">
+                      {selectedAgents.length} sélectionné(s)
+                    </small>
+                  )}
+                  <button
+                    onClick={resetFilters}
+                    className="btn btn-sm btn-outline-secondary"
+                    disabled={loading}
+                    aria-label="Réinitialiser les filtres"
+                  >
+                    Réinitialiser les filtres
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tableau des agents */}
+          <div className="table-responsive">
+            {loading ? (
+              <div className="text-center py-5">
+                <div
+                  className="spinner-border text-primary"
+                  role="status"
+                  aria-hidden="true"
+                >
+                  <span className="visually-hidden">Chargement...</span>
+                </div>
+                <p className="mt-3">Chargement des agents supprimés...</p>
+              </div>
+            ) : (
+              <>
+                {filteredAgents.length === 0 ? (
+                  <div className="text-center py-5">
+                    <div
+                      className="alert alert-info mx-auto"
+                      style={{ maxWidth: "500px" }}
+                    >
+                      <div className="d-flex flex-column align-items-center">
+                        <FontAwesomeIcon
+                          icon={faTrashRestore}
+                          className="fs-1 mb-3 text-info"
+                        />
+                        <h5 className="alert-heading mb-2">
+                          {agents.length === 0
+                            ? "Corbeille vide"
+                            : "Aucun résultat"}
+                        </h5>
+                        <p className="mb-0 text-center">
+                          {agents.length === 0
+                            ? "Aucun agent n'a été supprimé ou la corbeille a été vidée."
+                            : "Aucun agent supprimé ne correspond à vos critères de recherche."}
+                        </p>
+                        {searchTerm && (
+                          <button
+                            onClick={resetFilters}
+                            className="btn btn-outline-primary mt-3"
+                            aria-label="Effacer la recherche"
+                          >
+                            <FontAwesomeIcon icon={faFilter} className="me-2" />
+                            Effacer la recherche
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <table className="table table-hover mb-0">
+                      <thead className="table-light">
+                        <tr>
+                          <th style={{ width: "50px" }} className="text-center">
+                            <div className="form-check">
+                              <input
+                                type="checkbox"
+                                className="form-check-input"
+                                checked={selectAll && currentItems.length > 0}
+                                onChange={handleSelectAll}
+                                disabled={currentItems.length === 0}
+                                title={
+                                  selectAll
+                                    ? "Tout désélectionner"
+                                    : "Tout sélectionner"
+                                }
+                                aria-label={
+                                  selectAll
+                                    ? "Tout désélectionner"
+                                    : "Tout sélectionner"
+                                }
+                              />
+                            </div>
+                          </th>
+                          <th style={{ width: "60px" }} className="text-center">
+                            #
+                          </th>
+                          <th style={{ width: "180px" }}>
+                            <button
+                              className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
+                              onClick={() => requestSort("nom")}
+                              aria-label={`Trier par nom ${sortConfig?.key === "nom" ? (sortConfig.direction === "asc" ? "croissant" : "décroissant") : ""}`}
+                            >
+                              Nom & Prénoms
+                              {getSortIcon("nom")}
+                            </button>
+                          </th>
+                          <th style={{ width: "200px" }}>
+                            <button
+                              className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
+                              onClick={() => requestSort("email")}
+                              aria-label={`Trier par email ${sortConfig?.key === "email" ? (sortConfig.direction === "asc" ? "croissant" : "décroissant") : ""}`}
+                            >
+                              <FontAwesomeIcon
+                                icon={faEnvelope}
+                                className="me-1"
+                              />
+                              Email
+                              {getSortIcon("email")}
+                            </button>
+                          </th>
+                          <th style={{ width: "150px" }}>
+                            <button
+                              className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
+                              onClick={() => requestSort("telephone")}
+                              aria-label={`Trier par téléphone ${sortConfig?.key === "telephone" ? (sortConfig.direction === "asc" ? "croissant" : "décroissant") : ""}`}
+                            >
+                              <FontAwesomeIcon
+                                icon={faPhone}
+                                className="me-1"
+                              />
+                              Téléphone
+                              {getSortIcon("telephone")}
+                            </button>
+                          </th>
+                          <th style={{ width: "120px" }}>
+                            <span className="fw-semibold">
+                              <FontAwesomeIcon
+                                icon={faBriefcase}
+                                className="me-1"
+                              />
+                              Rôle
+                            </span>
+                          </th>
+                          <th style={{ width: "120px" }}>
+                            <span className="fw-semibold">Statut</span>
+                          </th>
+                          <th style={{ width: "180px" }}>
+                            <button
+                              className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
+                              onClick={() => requestSort("deleted_at")}
+                              aria-label={`Trier par date de suppression ${sortConfig?.key === "deleted_at" ? (sortConfig.direction === "asc" ? "croissant" : "décroissant") : ""}`}
+                            >
+                              <FontAwesomeIcon
+                                icon={faCalendar}
+                                className="me-1"
+                              />
+                              Supprimé le
+                              {getSortIcon("deleted_at")}
+                            </button>
+                          </th>
+                          <th
+                            style={{ width: "140px" }}
+                            className="text-center"
+                          >
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {currentItems.map((agent, index) => (
+                          <tr
+                            key={agent.uuid}
+                            className={`align-middle ${selectedAgents.includes(agent.uuid) ? "table-active" : ""}`}
+                          >
+                            <td className="text-center">
+                              <div className="form-check">
+                                <input
+                                  type="checkbox"
+                                  className="form-check-input"
+                                  checked={selectedAgents.includes(agent.uuid)}
+                                  onChange={() => handleSelectAgent(agent.uuid)}
+                                  aria-label={`Sélectionner ${agent.nom} ${agent.prenoms}`}
+                                />
+                              </div>
+                            </td>
+                            <td className="text-center text-muted fw-semibold">
+                              {(pagination.page - 1) * pagination.limit +
+                                index +
+                                1}
+                            </td>
+                            <td>
+                              <div className="d-flex align-items-center">
+                                <div className="flex-shrink-0">
+                                  <div
+                                    className="bg-secondary bg-opacity-10 text-secondary rounded-circle d-flex align-items-center justify-content-center"
+                                    style={{ width: "40px", height: "40px" }}
+                                  >
+                                    <FontAwesomeIcon icon={faUser} />
+                                  </div>
+                                </div>
+                                <div className="flex-grow-1 ms-3">
+                                  <div className="fw-semibold">
+                                    {agent.nom} {agent.prenoms}
+                                  </div>
+                                  <small className="text-muted">
+                                    {agent.civilite?.libelle}
+                                  </small>
+                                  {agent.is_admin && (
+                                    <span className="badge bg-info bg-opacity-10 text-info fs-11 px-2 py-1 ms-2">
+                                      Admin
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <div className="d-flex align-items-center">
+                                <FontAwesomeIcon
+                                  icon={faEnvelope}
+                                  className="text-muted me-2"
+                                />
+                                <div
+                                  className="text-truncate"
+                                  style={{ maxWidth: "180px" }}
+                                  title={agent.email}
+                                >
+                                  {agent.email}
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <div className="d-flex align-items-center">
+                                <FontAwesomeIcon
+                                  icon={faPhone}
+                                  className="text-muted me-2"
+                                />
+                                <span className="font-monospace">
+                                  {agent.telephone}
+                                </span>
+                              </div>
+                            </td>
+                            <td>
+                              <span
+                                className={`badge ${agent.is_admin ? "bg-primary" : "bg-secondary"} bg-opacity-10 text-dark border`}
+                              >
+                                {agent.role?.name || "Agent"}
+                              </span>
+                            </td>
+                            <td>
+                              <StatusBadge is_deleted={agent.is_deleted} />
+                              <div className="small text-muted mt-1">
+                                {getTimeSinceDeletion(agent.deleted_at)}
+                              </div>
+                            </td>
+                            <td>
+                              <div className="d-flex flex-column">
+                                <div className="d-flex align-items-center">
+                                  <FontAwesomeIcon
+                                    icon={faCalendar}
+                                    className="text-muted me-2"
+                                  />
+                                  <small className="text-muted">
+                                    {formatDateTime(agent.deleted_at)}
+                                  </small>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="text-center">
+                              <div
+                                className="btn-group btn-group-sm"
+                                role="group"
+                                aria-label={`Actions pour ${agent.nom} ${agent.prenoms}`}
+                              >
+                                <button
+                                  className="btn btn-outline-success"
+                                  title="Restaurer"
+                                  onClick={() => handleRestoreAgent(agent)}
+                                  disabled={loading}
+                                  aria-label={`Restaurer l'agent ${agent.nom} ${agent.prenoms}`}
+                                >
+                                  <FontAwesomeIcon icon={faTrashRestore} />
+                                </button>
+
+                                <button
+                                  className="btn btn-outline-danger"
+                                  title="Supprimer définitivement"
+                                  onClick={() =>
+                                    openPermanentDeleteModal(agent)
+                                  }
+                                  disabled={loading}
+                                  aria-label={`Supprimer définitivement l'agent ${agent.nom} ${agent.prenoms}`}
+                                >
+                                  <FontAwesomeIcon icon={faTrash} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+
+                    {/* Pagination */}
+                    {pagination.total > pagination.limit && (
+                      <Pagination
+                        currentPage={pagination.page}
+                        totalPages={pagination.pages}
+                        totalItems={filteredAgents.length}
+                        itemsPerPage={pagination.limit}
+                        indexOfFirstItem={
+                          (pagination.page - 1) * pagination.limit
+                        }
+                        onPageChange={(page) =>
+                          setPagination((prev) => ({ ...prev, page }))
+                        }
+                      />
+                    )}
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Styles inline */}
+      <style jsx>{`
+        .btn-group-sm > .btn {
+          padding: 0.25rem 0.5rem;
+          font-size: 0.875rem;
+        }
+
+        .font-monospace {
+          font-family:
+            "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier,
+            monospace;
+        }
+
+        .table > :not(caption) > * > * {
+          padding: 0.75rem 0.5rem;
+          vertical-align: middle;
+        }
+
+        .table-active {
+          background-color: rgba(13, 110, 253, 0.05) !important;
+        }
+
+        .form-check-input:checked {
+          background-color: #0d6efd;
+          border-color: #0d6efd;
+        }
+
+        .form-check-input:focus {
+          border-color: #86b7fe;
+          box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+        }
+
+        .fs-11 {
+          font-size: 11px !important;
+        }
+
+        .text-truncate {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+      `}</style>
+    </>
+  );
+}

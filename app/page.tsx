@@ -1,9 +1,6 @@
-// app/page.tsx
-import React from "react";
-import Home from "./(front-office)/home/page";
+// app/page.tsx (RACINE)
+import HomeContent from "./(front-office)/home/page";
 
-const HomePage: React.FC = () => {
-  return <Home />;
-};
-
-export default HomePage;
+export default function Home() {
+  return <HomeContent />;
+}

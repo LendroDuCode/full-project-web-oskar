@@ -1,14 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { Dialog } from "primereact/dialog";
-import { InputText } from "primereact/inputtext";
-import { Password } from "primereact/password";
-import { Checkbox } from "primereact/checkbox";
-import { Divider } from "primereact/divider";
-import { Button } from "primereact/button";
+import { useState, useEffect } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faEnvelope, faUser } from "@fortawesome/free-solid-svg-icons";
+import {
+  faEnvelope,
+  faUser,
+  faLock,
+  faXmark,
+  faEye,
+  faEyeSlash,
+} from "@fortawesome/free-solid-svg-icons";
 import { faGoogle, faFacebook } from "@fortawesome/free-brands-svg-icons";
 import colors from "../../../shared/constants/colors";
 
@@ -19,6 +20,7 @@ interface RegisterModalProps {
   onRegisterSuccess: (userData: {
     firstName: string;
     lastName: string;
+    email?: string;
   }) => void;
 }
 
@@ -48,6 +50,36 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
 
   const [loading, setLoading] = useState(false);
   const [passwordMismatch, setPasswordMismatch] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+
+  // S'assurer que le composant est monté côté client
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Gérer le scroll du body quand le modal est ouvert/fermé
+  useEffect(() => {
+    if (!isMounted) return;
+
+    if (visible) {
+      document.body.style.overflow = "hidden";
+      document.body.style.position = "fixed";
+      document.body.style.width = "100%";
+    } else {
+      document.body.style.overflow = "unset";
+      document.body.style.position = "";
+      document.body.style.width = "";
+    }
+
+    // Nettoyage lors du démontage
+    return () => {
+      document.body.style.overflow = "unset";
+      document.body.style.position = "";
+      document.body.style.width = "";
+    };
+  }, [visible, isMounted]);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,6 +99,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
         onRegisterSuccess({
           firstName: registerData.firstName,
           lastName: registerData.lastName,
+          email: registerData.email,
         });
       }
     } catch (error) {
@@ -90,236 +123,443 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
     if (passwordMismatch) setPasswordMismatch(false);
   };
 
-  const modalFooter = (
-    <div className="text-center mt-6">
-      <span className="text-gray-600 text-sm">Vous avez déjà un compte ?</span>
-      <button
-        className="ml-1 text-sm font-semibold text-oskar-green hover:underline focus:outline-none"
-        onClick={onSwitchToLogin}
-      >
-        Se connecter
-      </button>
-    </div>
-  );
+  // Gestion de la touche Échap
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape" && !loading) {
+      onHide();
+    }
+  };
+
+  // Ne rien rendre pendant le SSR ou si le modal n'est pas visible
+  if (!visible || !isMounted) return null;
 
   return (
-    <Dialog
-      header={
-        <div className="text-center text-2xl font-bold text-gray-800">
-          Bienvenue !
-        </div>
-      }
-      visible={visible}
-      style={{ width: "90vw", maxWidth: "500px" }}
-      onHide={onHide}
-      className="rounded-xl shadow-2xl border border-gray-100"
-      closeOnEscape={!loading}
-      closable={!loading}
-    >
-      <form onSubmit={handleRegister} className="px-2 py-4 space-y-5">
-        {/* Prénom et Nom */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="relative">
-            <label
-              htmlFor="firstName"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Prénom
-            </label>
-            <span className="p-input-icon-left w-full">
-              <FontAwesomeIcon
-                icon={faUser}
-                className="text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2"
-              />
-              <InputText
-                id="firstName"
-                placeholder="Jean"
-                className="w-full pl-10 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-oskar-green focus:border-transparent transition-all"
-                value={registerData.firstName}
-                onChange={(e) =>
-                  setRegisterData({
-                    ...registerData,
-                    firstName: e.target.value,
-                  })
-                }
-                required
+    <>
+      {/* Overlay */}
+      <div
+        className="modal-backdrop fade show"
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          backgroundColor: "rgba(0, 0, 0, 0.5)",
+          zIndex: 1040,
+        }}
+        onClick={onHide}
+      />
+
+      {/* Modal */}
+      <div
+        className="modal fade show d-block"
+        tabIndex={-1}
+        role="dialog"
+        style={{ zIndex: 1050 }}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={handleKeyDown}
+      >
+        <div
+          className="modal-dialog modal-dialog-centered"
+          role="document"
+          style={{ maxWidth: "500px" }}
+        >
+          <div className="modal-content rounded-3 shadow-lg border-0">
+            {/* Modal Header */}
+            <div className="modal-header border-bottom-0 pb-0">
+              <h5 className="modal-title w-100 text-center fs-4 fw-bold text-dark">
+                Bienvenue !
+              </h5>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={onHide}
                 disabled={loading}
-              />
-            </span>
+                aria-label="Fermer"
+              >
+                <FontAwesomeIcon icon={faXmark} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="modal-body px-4 py-3">
+              <form onSubmit={handleRegister}>
+                {/* Prénom et Nom */}
+                <div className="row mb-4">
+                  <div className="col-md-6 mb-3 mb-md-0">
+                    <label
+                      htmlFor="firstName"
+                      className="form-label fw-semibold text-dark"
+                    >
+                      Prénom
+                    </label>
+                    <div className="input-group">
+                      <span className="input-group-text bg-white border-end-0">
+                        <FontAwesomeIcon
+                          icon={faUser}
+                          className="text-secondary"
+                        />
+                      </span>
+                      <input
+                        type="text"
+                        className="form-control border-start-0"
+                        id="firstName"
+                        placeholder="Jean"
+                        value={registerData.firstName}
+                        onChange={(e) =>
+                          setRegisterData({
+                            ...registerData,
+                            firstName: e.target.value,
+                          })
+                        }
+                        required
+                        disabled={loading}
+                      />
+                    </div>
+                  </div>
+                  <div className="col-md-6">
+                    <label
+                      htmlFor="lastName"
+                      className="form-label fw-semibold text-dark"
+                    >
+                      Nom
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      id="lastName"
+                      placeholder="Dupont"
+                      value={registerData.lastName}
+                      onChange={(e) =>
+                        setRegisterData({
+                          ...registerData,
+                          lastName: e.target.value,
+                        })
+                      }
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+                </div>
+
+                {/* Email */}
+                <div className="mb-4">
+                  <label
+                    htmlFor="registerEmail"
+                    className="form-label fw-semibold text-dark"
+                  >
+                    Adresse email
+                  </label>
+                  <div className="input-group">
+                    <span className="input-group-text bg-white border-end-0">
+                      <FontAwesomeIcon
+                        icon={faEnvelope}
+                        className="text-secondary"
+                      />
+                    </span>
+                    <input
+                      type="email"
+                      className="form-control border-start-0"
+                      id="registerEmail"
+                      placeholder="votre@email.com"
+                      value={registerData.email}
+                      onChange={(e) =>
+                        setRegisterData({
+                          ...registerData,
+                          email: e.target.value,
+                        })
+                      }
+                      required
+                      disabled={loading}
+                      autoComplete="email"
+                    />
+                  </div>
+                </div>
+
+                {/* Mot de passe */}
+                <div className="mb-4">
+                  <label
+                    htmlFor="registerPassword"
+                    className="form-label fw-semibold text-dark"
+                  >
+                    Mot de passe
+                  </label>
+                  <div className="input-group">
+                    <span className="input-group-text bg-white border-end-0">
+                      <FontAwesomeIcon
+                        icon={faLock}
+                        className="text-secondary"
+                      />
+                    </span>
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      className="form-control border-start-0"
+                      id="registerPassword"
+                      placeholder="••••••••"
+                      value={registerData.password}
+                      onChange={(e) => handlePasswordChange(e.target.value)}
+                      required
+                      disabled={loading}
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary border-start-0"
+                      onClick={() => setShowPassword(!showPassword)}
+                      disabled={loading}
+                    >
+                      <FontAwesomeIcon
+                        icon={showPassword ? faEyeSlash : faEye}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Confirmation mot de passe */}
+                <div className="mb-4">
+                  <label
+                    htmlFor="confirmPassword"
+                    className="form-label fw-semibold text-dark"
+                  >
+                    Confirmer le mot de passe
+                  </label>
+                  <div className="input-group">
+                    <span className="input-group-text bg-white border-end-0">
+                      <FontAwesomeIcon
+                        icon={faLock}
+                        className="text-secondary"
+                      />
+                    </span>
+                    <input
+                      type={showConfirmPassword ? "text" : "password"}
+                      className="form-control border-start-0"
+                      id="confirmPassword"
+                      placeholder="••••••••"
+                      value={registerData.confirmPassword}
+                      onChange={(e) =>
+                        handleConfirmPasswordChange(e.target.value)
+                      }
+                      required
+                      disabled={loading}
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary border-start-0"
+                      onClick={() =>
+                        setShowConfirmPassword(!showConfirmPassword)
+                      }
+                      disabled={loading}
+                    >
+                      <FontAwesomeIcon
+                        icon={showConfirmPassword ? faEyeSlash : faEye}
+                      />
+                    </button>
+                  </div>
+                  {passwordMismatch && (
+                    <div className="text-danger small mt-2">
+                      Les mots de passe ne correspondent pas
+                    </div>
+                  )}
+                </div>
+
+                {/* CGU */}
+                <div className="form-check mb-4">
+                  <input
+                    className="form-check-input"
+                    type="checkbox"
+                    id="acceptTerms"
+                    checked={registerData.acceptTerms}
+                    onChange={(e) =>
+                      setRegisterData({
+                        ...registerData,
+                        acceptTerms: e.target.checked,
+                      })
+                    }
+                    disabled={loading}
+                  />
+                  <label
+                    className="form-check-label text-secondary"
+                    htmlFor="acceptTerms"
+                  >
+                    J'accepte les{" "}
+                    <button
+                      type="button"
+                      className="btn btn-link p-0 text-decoration-none"
+                      style={{ color: colors.oskar.green }}
+                    >
+                      conditions d'utilisation
+                    </button>{" "}
+                    et la{" "}
+                    <button
+                      type="button"
+                      className="btn btn-link p-0 text-decoration-none"
+                      style={{ color: colors.oskar.green }}
+                    >
+                      politique de confidentialité
+                    </button>
+                  </label>
+                </div>
+
+                {/* Bouton d'inscription */}
+                <button
+                  type="submit"
+                  className="btn w-100 py-3 mb-4 fw-bold text-white"
+                  style={{
+                    backgroundColor: colors.oskar.green,
+                    border: "none",
+                    borderRadius: "10px",
+                  }}
+                  disabled={
+                    loading ||
+                    !registerData.acceptTerms ||
+                    passwordMismatch ||
+                    !registerData.firstName ||
+                    !registerData.lastName ||
+                    !registerData.email ||
+                    !registerData.password ||
+                    !registerData.confirmPassword
+                  }
+                >
+                  {loading ? (
+                    <>
+                      <span
+                        className="spinner-border spinner-border-sm me-2"
+                        role="status"
+                        aria-hidden="true"
+                      ></span>
+                      Création en cours...
+                    </>
+                  ) : (
+                    "Créer mon compte"
+                  )}
+                </button>
+
+                {/* Séparateur */}
+                <div className="position-relative text-center mb-4">
+                  <hr className="w-100" />
+                  <span
+                    className="position-absolute top-50 start-50 translate-middle bg-white px-3 text-secondary"
+                    style={{ fontSize: "0.875rem" }}
+                  >
+                    ou continuer avec
+                  </span>
+                </div>
+
+                {/* Inscription sociale */}
+                <div className="row g-3 mb-4">
+                  <div className="col-6">
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary w-100 d-flex align-items-center justify-content-center gap-2 py-2"
+                      onClick={() => handleSocialRegister("google")}
+                      disabled={loading}
+                    >
+                      <FontAwesomeIcon icon={faGoogle} />
+                      <span>Google</span>
+                    </button>
+                  </div>
+                  <div className="col-6">
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary w-100 d-flex align-items-center justify-content-center gap-2 py-2"
+                      onClick={() => handleSocialRegister("facebook")}
+                      disabled={loading}
+                    >
+                      <FontAwesomeIcon icon={faFacebook} />
+                      <span>Facebook</span>
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="modal-footer border-top-0 pt-0">
+              <div className="w-100 text-center">
+                <span className="text-secondary me-1">
+                  Vous avez déjà un compte ?
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-link p-0 text-decoration-none fw-semibold"
+                  onClick={onSwitchToLogin}
+                  style={{ color: colors.oskar.green }}
+                >
+                  Se connecter
+                </button>
+              </div>
+            </div>
           </div>
-
-          <div className="relative">
-            <label
-              htmlFor="lastName"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Nom
-            </label>
-            <InputText
-              id="lastName"
-              placeholder="Dupont"
-              className="w-full py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-oskar-green focus:border-transparent transition-all"
-              value={registerData.lastName}
-              onChange={(e) =>
-                setRegisterData({ ...registerData, lastName: e.target.value })
-              }
-              required
-              disabled={loading}
-            />
-          </div>
         </div>
+      </div>
 
-        {/* Email */}
-        <div className="relative">
-          <label
-            htmlFor="registerEmail"
-            className="block text-sm font-medium text-gray-700 mb-1"
-          >
-            Email
-          </label>
-          <span className="p-input-icon-left w-full">
-            <FontAwesomeIcon
-              icon={faEnvelope}
-              className="text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2"
-            />
-            <InputText
-              id="registerEmail"
-              type="email"
-              placeholder="votre@email.com"
-              className="w-full pl-10 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-oskar-green focus:border-transparent transition-all"
-              value={registerData.email}
-              onChange={(e) =>
-                setRegisterData({ ...registerData, email: e.target.value })
-              }
-              required
-              disabled={loading}
-            />
-          </span>
-        </div>
+      {/* Styles supplémentaires */}
+      <style jsx global>{`
+        .modal-content {
+          box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+        }
 
-        {/* Mot de passe */}
-        <div className="relative">
-          <label
-            htmlFor="registerPassword"
-            className="block text-sm font-medium text-gray-700 mb-1"
-          >
-            Mot de passe
-          </label>
-          <Password
-            id="registerPassword"
-            placeholder="••••••••"
-            className="w-full"
-            inputClassName="w-full pl-10 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-oskar-green focus:border-transparent transition-all"
-            toggleMask
-            value={registerData.password}
-            onChange={(e) => handlePasswordChange(e.target.value)}
-            required
-            disabled={loading}
-          />
-        </div>
+        .input-group-text {
+          border-color: #dee2e6 !important;
+        }
 
-        {/* Confirmation mot de passe */}
-        <div className="relative">
-          <label
-            htmlFor="confirmPassword"
-            className="block text-sm font-medium text-gray-700 mb-1"
-          >
-            Confirmer le mot de passe
-          </label>
-          <Password
-            id="confirmPassword"
-            placeholder="••••••••"
-            className="w-full"
-            inputClassName="w-full pl-10 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-oskar-green focus:border-transparent transition-all"
-            toggleMask
-            value={registerData.confirmPassword}
-            onChange={(e) => handleConfirmPasswordChange(e.target.value)}
-            required
-            disabled={loading}
-          />
-          {passwordMismatch && (
-            <small className="text-red-500 text-xs mt-1 block">
-              Les mots de passe ne correspondent pas
-            </small>
-          )}
-        </div>
+        .form-control:focus {
+          border-color: ${colors.oskar.green} !important;
+          box-shadow: 0 0 0 0.25rem ${colors.oskar.green}20 !important;
+        }
 
-        {/* CGU */}
-        <div className="flex items-start space-x-3">
-          <Checkbox
-            inputId="acceptTerms"
-            checked={registerData.acceptTerms}
-            onChange={(e) =>
-              setRegisterData({
-                ...registerData,
-                acceptTerms: e.checked || false,
-              })
-            }
-            disabled={loading}
-            className="mt-0.5 rounded"
-          />
-          <label
-            htmlFor="acceptTerms"
-            className="text-sm text-gray-600 leading-relaxed"
-          >
-            J'accepte les{" "}
-            <button
-              type="button"
-              className="text-oskar-green hover:underline focus:outline-none"
-            >
-              conditions d'utilisation
-            </button>{" "}
-            et la{" "}
-            <button
-              type="button"
-              className="text-oskar-green hover:underline focus:outline-none"
-            >
-              politique de confidentialité
-            </button>
-            .
-          </label>
-        </div>
+        .btn-close:focus {
+          box-shadow: 0 0 0 0.25rem rgba(0, 0, 0, 0.1) !important;
+        }
 
-        {/* Bouton principal */}
-        <Button
-          type="submit"
-          label={loading ? "Création en cours..." : "Créer mon compte"}
-          className="w-full py-3 text-white font-semibold rounded-xl shadow-md hover:shadow-lg transition-all duration-200"
-          style={{ backgroundColor: colors.oskar.green }}
-          loading={loading}
-          disabled={loading || !registerData.acceptTerms || passwordMismatch}
-        />
+        .btn-outline-secondary:hover {
+          background-color: #f8f9fa !important;
+          border-color: #6c757d !important;
+        }
 
-        {/* Séparateur */}
-        <Divider>
-          <span className="px-2 bg-white text-gray-500 text-xs font-medium">
-            ou
-          </span>
-        </Divider>
+        .btn-link:hover {
+          text-decoration: underline !important;
+        }
 
-        {/* Inscription sociale */}
-        <div className="grid grid-cols-2 gap-3">
-          <Button
-            type="button"
-            icon={<FontAwesomeIcon icon={faGoogle} className="mr-2" />}
-            label="Google"
-            className="justify-center flex items-center gap-2 py-2.5 text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors shadow-sm"
-            onClick={() => handleSocialRegister("google")}
-            disabled={loading}
-          />
-          <Button
-            type="button"
-            icon={<FontAwesomeIcon icon={faFacebook} className="mr-2" />}
-            label="Facebook"
-            className="justify-center flex items-center gap-2 py-2.5 text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors shadow-sm"
-            onClick={() => handleSocialRegister("facebook")}
-            disabled={loading}
-          />
-        </div>
+        .modal-open {
+          overflow: hidden;
+        }
 
-        {modalFooter}
-      </form>
-    </Dialog>
+        .modal-open body {
+          overflow: hidden;
+          position: fixed;
+          width: 100%;
+        }
+
+        /* Animation pour le spinner */
+        @keyframes spinner-border {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
+        .spinner-border {
+          display: inline-block;
+          width: 1rem;
+          height: 1rem;
+          vertical-align: text-bottom;
+          border: 0.2em solid currentColor;
+          border-right-color: transparent;
+          border-radius: 50%;
+          animation: spinner-border 0.75s linear infinite;
+        }
+
+        /* Améliorations d'accessibilité */
+        .modal:focus {
+          outline: none;
+        }
+
+        .modal.show {
+          display: block !important;
+        }
+      `}</style>
+    </>
   );
 };
 

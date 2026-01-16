@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faStar,
@@ -9,7 +9,6 @@ import {
   faChevronLeft,
   faChevronRight,
 } from "@fortawesome/free-solid-svg-icons";
-import Image from "next/image";
 import colors from "../../../shared/constants/colors";
 
 interface Testimonial {
@@ -43,6 +42,8 @@ export default function TestimonialsSection({
   showAllStars = true,
 }: TestimonialsSectionProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(3);
 
   // Témoignages par défaut
   const defaultTestimonials: Testimonial[] = [
@@ -110,9 +111,47 @@ export default function TestimonialsSection({
 
   const displayTestimonials = testimonials || defaultTestimonials;
 
+  // Détecter la taille de l'écran
+  useEffect(() => {
+    // Fonction pour mettre à jour la taille d'écran
+    const updateScreenSize = () => {
+      if (typeof window !== "undefined") {
+        const mobile = window.innerWidth < 768;
+        setIsMobile(mobile);
+        setVisibleCount(mobile ? 1 : 3);
+      }
+    };
+
+    // Mettre à jour initialement
+    updateScreenSize();
+
+    // Écouter les changements de taille
+    window.addEventListener("resize", updateScreenSize);
+
+    // Nettoyer l'écouteur
+    return () => window.removeEventListener("resize", updateScreenSize);
+  }, []);
+
+  // Auto-play des témoignages
+  useEffect(() => {
+    if (!autoPlay || displayTestimonials.length <= visibleCount) return;
+
+    const intervalId = setInterval(() => {
+      setCurrentIndex((prev) => {
+        const nextIndex = prev + 1;
+        return nextIndex >= displayTestimonials.length ? 0 : nextIndex;
+      });
+    }, interval);
+
+    return () => clearInterval(intervalId);
+  }, [autoPlay, interval, displayTestimonials.length, visibleCount]);
+
   // Navigation
   const nextTestimonial = () => {
-    setCurrentIndex((prev) => (prev + 1) % displayTestimonials.length);
+    setCurrentIndex((prev) => {
+      const nextIndex = prev + 1;
+      return nextIndex >= displayTestimonials.length ? 0 : nextIndex;
+    });
   };
 
   const prevTestimonial = () => {
@@ -136,35 +175,53 @@ export default function TestimonialsSection({
     ));
   };
 
-  // Témoignages actuels pour l'affichage (3 à la fois sur desktop)
+  // Témoignages actuels pour l'affichage
   const getVisibleTestimonials = () => {
-    if (window.innerWidth >= 768) {
+    // Retourner un tableau vide pendant le rendu côté serveur
+    if (typeof window === "undefined") {
+      return displayTestimonials.slice(
+        0,
+        Math.min(3, displayTestimonials.length),
+      );
+    }
+
+    if (isMobile || visibleCount === 1) {
+      // Sur mobile : montrer seulement le témoignage courant
+      return [displayTestimonials[currentIndex]];
+    } else {
       // Sur desktop : montrer 3 témoignages
       const start = currentIndex;
-      const end = start + 3;
+      const end = start + visibleCount;
+
       if (end <= displayTestimonials.length) {
         return displayTestimonials.slice(start, end);
       } else {
+        // Gérer le débordement (carrousel circulaire)
+        const overflow = end - displayTestimonials.length;
         return [
           ...displayTestimonials.slice(start),
-          ...displayTestimonials.slice(0, end - displayTestimonials.length),
+          ...displayTestimonials.slice(0, overflow),
         ];
       }
-    } else {
-      // Sur mobile : montrer seulement le témoignage courant
-      return [displayTestimonials[currentIndex]];
     }
   };
 
   // Formatage de la date
   const formatDate = (dateString?: string) => {
     if (!dateString) return "";
-    return new Date(dateString).toLocaleDateString("fr-FR", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
+    try {
+      return new Date(dateString).toLocaleDateString("fr-FR", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      });
+    } catch {
+      return dateString;
+    }
   };
+
+  // Témoignages visibles (avec vérification de sécurité)
+  const visibleTestimonials = getVisibleTestimonials();
 
   return (
     <section id="testimonials-section" className="py-5 py-lg-6 bg-light">
@@ -181,7 +238,7 @@ export default function TestimonialsSection({
         </div>
 
         {/* Contrôles de navigation */}
-        {showNavigation && displayTestimonials.length > 3 && (
+        {showNavigation && displayTestimonials.length > visibleCount && (
           <div className="d-flex justify-content-between align-items-center mb-4">
             <button
               onClick={prevTestimonial}
@@ -211,7 +268,7 @@ export default function TestimonialsSection({
 
         {/* Témoignages */}
         <div className="row g-4">
-          {getVisibleTestimonials().map((testimonial) => (
+          {visibleTestimonials.map((testimonial) => (
             <div key={testimonial.id} className="col-md-6 col-lg-4">
               <div className="card border-0 shadow-lg h-100">
                 <div className="card-body p-4 p-lg-5">
@@ -246,7 +303,7 @@ export default function TestimonialsSection({
                         className="rounded-circle overflow-hidden"
                         style={{ width: "56px", height: "56px" }}
                       >
-                        {/* Image de l'avatar */}
+                        {/* Avatar avec initiale */}
                         <div
                           className="w-100 h-100 d-flex align-items-center justify-content-center"
                           style={{
@@ -302,7 +359,7 @@ export default function TestimonialsSection({
         </div>
 
         {/* Indicateurs de pagination */}
-        {showNavigation && displayTestimonials.length > 1 && (
+        {showNavigation && displayTestimonials.length > visibleCount && (
           <div className="d-flex justify-content-center gap-2 mt-4">
             {displayTestimonials.map((_, index) => (
               <button
@@ -369,6 +426,7 @@ export default function TestimonialsSection({
         </div>
       </div>
 
+      {/* Styles inline pour éviter les erreurs SSR */}
       <style jsx>{`
         .card {
           transition:
@@ -388,6 +446,10 @@ export default function TestimonialsSection({
 
           .card-body {
             padding: 1.5rem !important;
+          }
+
+          .display-4 {
+            font-size: 2.5rem;
           }
         }
 
