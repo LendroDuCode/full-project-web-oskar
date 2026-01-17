@@ -34,7 +34,7 @@ interface FormData {
 
 interface EditPaysModalProps {
   isOpen: boolean;
-  pays: Pays | null;
+  pays: Pays | undefined;
   onClose: () => void;
   onSuccess?: () => void;
 }
@@ -130,7 +130,7 @@ export default function EditPaysModal({
 
         // Récupérer les données complètes du pays
         const response = await api.get<Pays>(
-          API_ENDPOINTS.ADMIN.PAYS.DETAIL(pays.uuid),
+          API_ENDPOINTS.PAYS.DETAIL(pays.uuid),
         );
 
         if (response) {
@@ -273,7 +273,7 @@ export default function EditPaysModal({
       };
 
       // Appel à l'API pour la mise à jour
-      await api.put(API_ENDPOINTS.ADMIN.PAYS.UPDATE(pays.uuid), paysData);
+      await api.put(API_ENDPOINTS.PAYS.UPDATE(pays.uuid), paysData);
 
       setSuccessMessage("Pays modifié avec succès !");
 

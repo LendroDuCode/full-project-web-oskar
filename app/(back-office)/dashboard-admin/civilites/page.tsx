@@ -815,29 +815,6 @@ export default function CivilitesPage() {
     }
   };
 
-  // Fonction pour exporter les civilités
-  const handleExport = async () => {
-    try {
-      const response = await api.get(API_ENDPOINTS.CIVILITES.EXPORT_PDF, {
-        responseType: "blob",
-      });
-
-      const url = window.URL.createObjectURL(response);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `civilites-${new Date().toISOString().split("T")[0]}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-      setSuccess("Export PDF réussi");
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
-      handleCSVExport();
-    }
-  };
-
   // Fallback CSV export
   const handleCSVExport = () => {
     if (civilites.length === 0) {

@@ -2,7 +2,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import DashboardHeader from "../../components/DashboardHeader";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faEnvelope,
@@ -108,7 +107,7 @@ interface Message {
   estEnvoye: boolean;
   envoyeLe: string;
   estLu: boolean;
-  dateLecture?: string;
+  dateLecture?: string | null; // <-- Modifiez cette ligne
   dateCreation?: string;
 }
 
@@ -568,6 +567,7 @@ export default function ListeMessages() {
   }, []);
 
   // Charger les messages reçus
+  // Charger les messages reçus
   const fetchMessagesRecus = useCallback(async () => {
     setLoading((prev) => ({ ...prev, messages: true }));
     try {
@@ -584,22 +584,27 @@ export default function ListeMessages() {
       }
 
       // Transformer les données pour correspondre au format attendu
-      const transformedMessages = response
-        .map((item: MessageReceived) => {
-          // Vérifier si l'item existe
+      // Dans fetchMessagesRecus, modifiez la transformation :
+      // Mettez à jour la transformation dans fetchMessagesRecus :
+      const transformedMessages = (Array.isArray(response) ? response : [])
+        .map((item: any) => {
           if (!item) return null;
-
           return {
-            ...item.message,
-            estLu: item.estLu || false,
+            estLu: item.estLu,
             dateLecture: item.dateLecture || null,
-            envoyeLe:
-              item.dateReception ||
-              item.message.envoyeLe ||
-              new Date().toISOString(),
-          };
+            envoyeLe: item.envoyeLe,
+            uuid: item.uuid,
+            sujet: item.sujet,
+            contenu: item.contenu,
+            expediteurNom: item.expediteurNom,
+            expediteurEmail: item.expediteurEmail,
+            destinataireEmail: item.destinataireEmail,
+            type: item.type,
+            estEnvoye: item.estEnvoye,
+            dateCreation: item.dateCreation,
+          } as Message; // <-- Ajoutez "as Message" pour le type assertion
         })
-        .filter((item): item is Message => item !== null); // Filtrer les éventuelles valeurs nulles
+        .filter((item): item is Message => item !== null);
 
       console.log("📨 Messages transformés:", transformedMessages);
       setMessages(transformedMessages);
@@ -649,7 +654,6 @@ export default function ListeMessages() {
       console.log("🔄 Chargement des messages envoyés...");
       const response = await api.get<Message[]>(API_ENDPOINTS.MESSAGERIE.SENT);
 
-      // Vérifier la structure de la réponse
       if (!response) {
         console.warn("⚠️ Réponse API vide (messages envoyés)");
         setMessagesEnvoyes([]);
@@ -659,19 +663,18 @@ export default function ListeMessages() {
       // Formatter le type de message pour correspondre à l'interface
       const formattedMessages = response
         .map((msg: Message) => {
-          // Vérifier si le message existe
           if (!msg) return null;
 
           return {
             ...msg,
             type: (msg.type || "notification").toUpperCase(),
             estLu: msg.estLu || false,
-            dateLecture: msg.dateLecture || null,
+            dateLecture: msg.dateLecture || null, // <-- Utilisez null au lieu de undefined
             envoyeLe: msg.envoyeLe || new Date().toISOString(),
             expediteurNom: msg.expediteurNom || "Administrateur SONEC",
             expediteurEmail: msg.expediteurEmail || "admin@sonec.com",
             estEnvoye: msg.estEnvoye !== undefined ? msg.estEnvoye : true,
-          };
+          } as Message;
         })
         .filter((msg): msg is Message => msg !== null);
 
@@ -681,7 +684,6 @@ export default function ListeMessages() {
       console.error("❌ Error fetching sent messages:", err);
       setError("Erreur lors du chargement des messages envoyés");
 
-      // Données de démonstration
       const demoSentMessages: Message[] = [
         {
           uuid: "49807144-1990-41e9-a78c-a29307c74d5a",
@@ -709,6 +711,7 @@ export default function ListeMessages() {
           estEnvoye: true,
           envoyeLe: new Date(Date.now() - 43200000).toISOString(),
           estLu: false,
+          dateLecture: null, // <-- Utilisez null ici aussi
         },
       ];
       setMessagesEnvoyes(demoSentMessages);

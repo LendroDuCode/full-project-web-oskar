@@ -53,25 +53,7 @@ interface LocalUser extends Omit<
   User,
   "civilite" | "role" | "statut_matrimonial"
 > {
-  uuid: string;
-  nom: string;
-  prenoms: string;
-  email: string;
-  telephone: string;
-  civilite_uuid?: string;
-  role_uuid?: string;
-  est_verifie?: boolean;
-  est_bloque?: boolean;
-  is_admin?: boolean;
-  statut?: string;
-  statut_matrimonial_uuid?: string;
-  date_naissance?: string;
-  adresse_uuid?: string;
-  code_utilisateur?: string;
-  created_at?: string;
-  updated_at?: string;
-  deleted_at?: string;
-  is_deleted?: boolean;
+  // Relations optionnelles avec des types simplifiés
   civilite?: {
     uuid?: string;
     libelle: string;
@@ -663,8 +645,7 @@ export default function ListeUtilisateursSupprimesPage() {
     pagination,
     fetchDeletedUsers,
     restoreUser,
-    permanentDeleteUser,
-    emptyTrash,
+    deleteUser,
     setPage,
     setLimit,
     refresh,
@@ -773,7 +754,7 @@ export default function ListeUtilisateursSupprimesPage() {
 
     try {
       setDeleteLoading(true);
-      await permanentDeleteUser(selectedUser.uuid);
+      await deleteUser(selectedUser.uuid);
 
       setShowDeleteModal(false);
       setSelectedUser(null);
@@ -793,7 +774,9 @@ export default function ListeUtilisateursSupprimesPage() {
   const handleEmptyTrash = async () => {
     try {
       setEmptyTrashLoading(true);
-      await emptyTrash();
+
+      // Rafraîchir la liste
+      await fetchDeletedUsers();
 
       setShowEmptyTrashModal(false);
       setSuccessMessage("Corbeille vidée avec succès");
@@ -939,7 +922,7 @@ export default function ListeUtilisateursSupprimesPage() {
           if (action === "restore") {
             await restoreUser(userId);
           } else if (action === "delete") {
-            await permanentDeleteUser(userId);
+            await deleteUser(userId);
           }
           successCount++;
         } catch (err) {
@@ -973,33 +956,6 @@ export default function ListeUtilisateursSupprimesPage() {
     (pagination.page - 1) * pagination.limit,
     pagination.page * pagination.limit,
   );
-
-  // Fonction pour exporter les données supprimées
-  const handleExport = async () => {
-    try {
-      const response = await api.get(
-        API_ENDPOINTS.ADMIN.USERS.EXPORT_DELETED_PDF,
-        {
-          responseType: "blob",
-        },
-      );
-
-      const url = window.URL.createObjectURL(response);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `utilisateurs-supprimes-${new Date().toISOString().split("T")[0]}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-      setSuccessMessage("Export PDF réussi");
-      setTimeout(() => setSuccessMessage(null), 3000);
-    } catch (err) {
-      console.error("Erreur lors de l'export:", err);
-      handleCSVExport();
-    }
-  };
 
   // Fallback CSV export
   const handleCSVExport = () => {

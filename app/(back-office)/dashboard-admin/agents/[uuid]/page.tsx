@@ -106,19 +106,19 @@ export default function DetailAgentPage() {
         status === "actif"
           ? `${colors.oskar.green}15`
           : status === "supprimé"
-            ? `${colors.oskar.secondary}15`
+            ? `${colors.oskar.green}15`
             : `${colors.oskar.orange}15`,
       color:
         status === "actif"
           ? colors.oskar.green
           : status === "supprimé"
-            ? colors.oskar.secondary
+            ? colors.oskar.green
             : colors.oskar.orange,
       border: `1px solid ${
         status === "actif"
           ? colors.oskar.green + "30"
           : status === "supprimé"
-            ? colors.oskar.secondary + "30"
+            ? colors.oskar.green + "30"
             : colors.oskar.orange + "30"
       }`,
     }),
@@ -693,9 +693,9 @@ export default function DetailAgentPage() {
                         width: "120px",
                         height: "120px",
                         background: agent.is_deleted
-                          ? `linear-gradient(135deg, ${colors.oskar.secondary}15 0%, ${colors.oskar.lightGrey} 100%)`
+                          ? `linear-gradient(135deg, ${colors.oskar.yellow}15 0%, ${colors.oskar.lightGrey} 100%)`
                           : `linear-gradient(135deg, ${colors.oskar.blue}15 0%, ${colors.oskar.lightGrey} 100%)`,
-                        border: `3px solid ${agent.is_deleted ? colors.oskar.secondary + "30" : colors.oskar.blue + "30"}`,
+                        border: `3px solid ${agent.is_deleted ? colors.oskar.lightGrey + "30" : colors.oskar.blue + "30"}`,
                       }}
                     >
                       {getAvatarContent()}

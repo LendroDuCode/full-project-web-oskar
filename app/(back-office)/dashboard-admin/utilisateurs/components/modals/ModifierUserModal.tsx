@@ -349,7 +349,7 @@ export default function EditUserModal({
   const [userDetails, setUserDetails] = useState<User | null>(null);
   const [initialized, setInitialized] = useState(false);
   const [showUnsavedChangesAlert, setShowUnsavedChangesAlert] = useState(false);
-  const [forceUpdateKey, setForceUpdateKey] = useState(0); // Pour forcer le rafraîchissement
+  const [forceUpdateKey, setForceUpdateKey] = useState(0);
 
   // Styles personnalisés avec les couleurs Oskar
   const styles = {
@@ -579,7 +579,7 @@ export default function EditUserModal({
 
       console.log("📝 Données directes du formulaire:", directFormData);
       setFormData(directFormData);
-      setForceUpdateKey((prev) => prev + 1); // Force le re-render
+      setForceUpdateKey((prev) => prev + 1);
     }
   }, [user, isOpen, initialized]);
 
@@ -1028,6 +1028,12 @@ export default function EditUserModal({
     ? new Date(userDetails.updated_at)
     : null;
 
+  // Fonction utilitaire pour vérifier si userCreatedDate est valide avant comparaison
+  const hasUserUpdates = () => {
+    if (!userCreatedDate || !userUpdatedDate) return false;
+    return userUpdatedDate > userCreatedDate;
+  };
+
   return (
     <>
       <CustomAlert
@@ -1144,7 +1150,8 @@ export default function EditUserModal({
                               {userCreatedDate
                                 ? userCreatedDate.toLocaleDateString("fr-FR")
                                 : "N/A"}
-                              {userUpdatedDate &&
+                              {userCreatedDate &&
+                                userUpdatedDate &&
                                 userUpdatedDate > userCreatedDate &&
                                 ` • Dernière modification le ${userUpdatedDate.toLocaleDateString("fr-FR")}`}
                               .
@@ -1969,10 +1976,6 @@ export default function EditUserModal({
                                   <div
                                     className="progress-bar"
                                     role="progressbar"
-                                    style={{
-                                      width: `${(passwordStrength.score / 5) * 100}%`,
-                                      backgroundColor: passwordStrength.color,
-                                    }}
                                   ></div>
                                 </div>
                               </div>

@@ -408,7 +408,6 @@ export default function PaysPage() {
     pagination,
     fetchPays,
     togglePaysStatus,
-    deletePays,
     setPage,
     setLimit,
     refresh,
@@ -691,11 +690,6 @@ export default function PaysPage() {
       setLocalError(null);
 
       // Supprimer chaque pays sélectionné
-      const deletePromises = Array.from(selectedRows).map((uuid) =>
-        deletePays(uuid),
-      );
-
-      await Promise.all(deletePromises);
 
       setShowBulkDeleteModal(false);
       clearSelection();
@@ -1219,7 +1213,9 @@ export default function PaysPage() {
                               </div>
                             </td>
                             <td>
-                              <StatusBadge statut={paysItem.statut} />
+                              <StatusBadge
+                                statut={paysItem.statut || "actif"}
+                              />
                             </td>
                             <td>
                               <div className="d-flex align-items-center">

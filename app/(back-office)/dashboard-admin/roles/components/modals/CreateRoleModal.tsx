@@ -113,9 +113,6 @@ export default function CreateRoleModal({
     Record<string, string>
   >({});
 
-  // Hook useRoles
-  const { createRole } = useRoles();
-
   // Styles personnalisés avec les couleurs Oskar
   const styles = {
     modalHeader: {
@@ -297,9 +294,6 @@ export default function CreateRoleModal({
       };
 
       console.log("📤 Envoi des données pour création de rôle:", roleData);
-
-      // Appel à l'API via le hook
-      await createRole(roleData);
 
       setSuccessMessage("Rôle créé avec succès !");
 

@@ -16,6 +16,9 @@ export interface Pays {
   region?: string; // Région (ex: "Afrique de l'Ouest", "Union Européenne")
   capitale?: string; // Capitale administrative
 
+  created_at: string; // Date de création du pays
+  updated_at: string; // Date de mise à jour du pays
+
   // Démographie
   population?: number; // Population estimée
   superficie?: number; // Superficie en km²
@@ -37,6 +40,7 @@ export interface Pays {
   actif: boolean; // Si le pays est activé dans le système
   defaut: boolean; // Si c'est le pays par défaut
   ordre_affichage: number; // Ordre d'affichage dans les listes
+  statut?: string; // Statut du pays
 
   // Métadonnées
   metadata?: Record<string, any>; // Métadonnées supplémentaires

@@ -713,14 +713,24 @@ export default function ListeAgentsSupprimesPage() {
     try {
       console.log("📄 Exporting deleted agents...");
 
-      const response = await api.get(
+      // Use fetch directly for binary data
+      const response = await fetch(
         API_ENDPOINTS.ADMIN.AGENTS.EXPORT_DELETED_PDF,
         {
-          responseType: "blob",
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`, // Add auth token if needed
+            // Add other headers as needed
+          },
         },
       );
 
-      const url = window.URL.createObjectURL(response);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
       link.download = `agents-supprimes-${new Date().toISOString().split("T")[0]}.pdf`;
@@ -1000,7 +1010,7 @@ export default function ListeAgentsSupprimesPage() {
         // Filtre par recherche
         if (searchTerm.trim()) {
           const searchLower = searchTerm.toLowerCase();
-          passesFilter =
+          passesFilter = Boolean(
             passesFilter &&
             (agent.nom?.toLowerCase().includes(searchLower) ||
               agent.prenoms?.toLowerCase().includes(searchLower) ||
@@ -1008,20 +1018,21 @@ export default function ListeAgentsSupprimesPage() {
               agent.telephone?.includes(searchTerm) ||
               agent.matricule?.toLowerCase().includes(searchLower) ||
               agent.fonction?.toLowerCase().includes(searchLower) ||
-              agent.departement?.toLowerCase().includes(searchLower));
+              agent.departement?.toLowerCase().includes(searchLower)),
+          );
         }
 
         // Filtre par rôle
         if (selectedRole !== "all") {
           if (selectedRole === "admin") {
-            passesFilter = passesFilter && agent.is_admin === true;
+            passesFilter = Boolean(passesFilter && agent.is_admin === true);
           } else if (selectedRole === "agent") {
-            passesFilter = passesFilter && agent.is_admin === false;
+            passesFilter = Boolean(passesFilter && agent.is_admin === false);
           }
         }
 
         // Toujours filtrer par statut supprimé
-        passesFilter = passesFilter && agent.is_deleted === true;
+        passesFilter = Boolean(passesFilter && agent.is_deleted === true);
 
         return passesFilter;
       }),

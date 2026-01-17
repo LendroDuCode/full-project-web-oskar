@@ -13,12 +13,13 @@ import {
   faCode,
   faCalendarAlt,
   faInfoCircle,
+  faCheckCircle,
   faStar,
 } from "@fortawesome/free-solid-svg-icons";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import colors from "@/app/shared/constants/colors";
-import type { StatutMatrimonialType } from "@/services/statuts-matrimoniaux/statuts-matrimoniaux.types";
+import { StatutMatrimonialType } from "@/services/statut-matrimonials/statuts-matrimoniaux.types";
 
 // Types
 interface DeleteStatutMatrimonialModalProps {
@@ -480,7 +481,7 @@ export default function DeleteStatutMatrimonialModal({
                               </div>
                               <div>
                                 <h5 className="mb-0 fw-bold">
-                                  {statutDetails.slug}
+                                  {statutDetails.code}
                                 </h5>
                               </div>
                             </div>

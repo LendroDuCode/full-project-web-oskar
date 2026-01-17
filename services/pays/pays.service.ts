@@ -34,6 +34,16 @@ export interface ApiResponse<T> {
   pages?: number;
 }
 
+export interface Pays {
+  uuid: string;
+  nom: string;
+  code: string;
+  indicatif: string;
+  statut?: string;
+  created_at?: string;
+  updated_at?: string;
+  deleted_at?: string | null;
+}
 /**
  * Service complet pour la gestion des pays
  * Centralise toutes les opérations liées aux pays et à la localisation

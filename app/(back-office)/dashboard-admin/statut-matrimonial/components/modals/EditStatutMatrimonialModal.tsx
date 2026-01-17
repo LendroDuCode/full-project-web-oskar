@@ -22,7 +22,7 @@ import {
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import colors from "@/app/shared/constants/colors";
-import type { StatutMatrimonialType } from "@/services/statuts-matrimoniaux/statuts-matrimoniaux.types";
+import { StatutMatrimonialType } from "@/services/statut-matrimonials/statuts-matrimoniaux.types";
 
 // Types
 interface FormData {
@@ -719,7 +719,7 @@ export default function EditStatutMatrimonialModal({
                             <input
                               type="text"
                               className="form-control border-start-0 ps-0 bg-light"
-                              value={statutInfo.slug}
+                              value={statutInfo.code}
                               readOnly
                               disabled
                               style={{ cursor: "not-allowed" }}

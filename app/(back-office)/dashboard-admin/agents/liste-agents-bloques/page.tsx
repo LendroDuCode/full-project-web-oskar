@@ -734,18 +734,32 @@ export default function ListeAgentsBloquesPage() {
   };
 
   // Fonction pour exporter les agents bloqués
+  // Fonction pour exporter les agents bloqués
   const handleExport = async () => {
     try {
       console.log("📄 Exporting blocked agents...");
 
-      const response = await api.get(
+      // Option 1: If your API wrapper supports responseType
+      // Check your API wrapper implementation first
+
+      // Option 2: Use fetch directly for binary data
+      const response = await fetch(
         API_ENDPOINTS.ADMIN.AGENTS.EXPORT_BLOCKED_PDF,
         {
-          responseType: "blob",
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`, // Add auth if needed
+            // Add other headers as needed
+          },
         },
       );
 
-      const url = window.URL.createObjectURL(response);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
       link.download = `agents-bloques-${new Date().toISOString().split("T")[0]}.pdf`;
@@ -986,38 +1000,34 @@ export default function ListeAgentsBloquesPage() {
   };
 
   // Filtrer et trier les agents
+  // Filtrer et trier les agents
   const filteredAgents = sortAgents(
     agents.filter((agent) => {
-      // Filtrage côté client supplémentaire
-      let passesFilter = true;
+      // Toujours filtrer par statut bloqué
+      if (agent.est_bloque !== true) return false;
+
+      // Filtre par rôle
+      if (selectedRole !== "all") {
+        if (selectedRole === "admin" && agent.is_admin !== true) return false;
+        if (selectedRole === "agent" && agent.is_admin !== false) return false;
+      }
 
       // Filtre par recherche
       if (searchTerm.trim()) {
         const searchLower = searchTerm.toLowerCase();
-        passesFilter =
-          passesFilter &&
-          (agent.nom?.toLowerCase().includes(searchLower) ||
-            agent.prenoms?.toLowerCase().includes(searchLower) ||
-            agent.email?.toLowerCase().includes(searchLower) ||
-            agent.telephone?.includes(searchTerm) ||
-            agent.matricule?.toLowerCase().includes(searchLower) ||
-            agent.fonction?.toLowerCase().includes(searchLower) ||
-            agent.departement?.toLowerCase().includes(searchLower));
+        const matchesSearch =
+          agent.nom?.toLowerCase().includes(searchLower) ||
+          agent.prenoms?.toLowerCase().includes(searchLower) ||
+          agent.email?.toLowerCase().includes(searchLower) ||
+          agent.telephone?.includes(searchTerm) ||
+          agent.matricule?.toLowerCase().includes(searchLower) ||
+          agent.fonction?.toLowerCase().includes(searchLower) ||
+          agent.departement?.toLowerCase().includes(searchLower);
+
+        if (!matchesSearch) return false;
       }
 
-      // Filtre par rôle
-      if (selectedRole !== "all") {
-        if (selectedRole === "admin") {
-          passesFilter = passesFilter && agent.is_admin === true;
-        } else if (selectedRole === "agent") {
-          passesFilter = passesFilter && agent.is_admin === false;
-        }
-      }
-
-      // Toujours filtrer par statut bloqué
-      passesFilter = passesFilter && agent.est_bloque === true;
-
-      return passesFilter;
+      return true;
     }),
   );
 

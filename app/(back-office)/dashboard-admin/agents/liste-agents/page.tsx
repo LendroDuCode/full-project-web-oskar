@@ -860,14 +860,15 @@ export default function ListeAgentsActifsPage() {
       // Filtre par recherche
       if (searchTerm.trim()) {
         const searchLower = searchTerm.toLowerCase();
-        passesFilter =
-          passesFilter &&
-          (agent.nom?.toLowerCase().includes(searchLower) ||
-            agent.prenoms?.toLowerCase().includes(searchLower) ||
-            agent.email?.toLowerCase().includes(searchLower) ||
-            agent.telephone?.includes(searchTerm) ||
-            agent.matricule?.toLowerCase().includes(searchLower) ||
-            agent.poste?.toLowerCase().includes(searchLower));
+        const searchMatches =
+          Boolean(agent.nom?.toLowerCase().includes(searchLower)) ||
+          Boolean(agent.prenoms?.toLowerCase().includes(searchLower)) ||
+          Boolean(agent.email?.toLowerCase().includes(searchLower)) ||
+          Boolean(agent.telephone?.includes(searchTerm)) ||
+          Boolean(agent.matricule?.toLowerCase().includes(searchLower)) ||
+          Boolean(agent.poste?.toLowerCase().includes(searchLower));
+
+        passesFilter = passesFilter && searchMatches;
       }
 
       // Filtre par statut
@@ -901,30 +902,6 @@ export default function ListeAgentsActifsPage() {
     (pagination.page - 1) * pagination.limit,
     pagination.page * pagination.limit,
   );
-
-  // Fonction pour exporter les données
-  const handleExport = async () => {
-    try {
-      const response = await api.get(API_ENDPOINTS.ADMIN.AGENTS.EXPORT_PDF, {
-        responseType: "blob",
-      });
-
-      const url = window.URL.createObjectURL(response);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `agents-${new Date().toISOString().split("T")[0]}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-      setSuccessMessage("Export PDF réussi");
-      setTimeout(() => setSuccessMessage(null), 3000);
-    } catch (err) {
-      console.error("Erreur lors de l'export:", err);
-      handleCSVExport();
-    }
-  };
 
   // Fallback CSV export
   const handleCSVExport = () => {
@@ -1020,9 +997,10 @@ export default function ListeAgentsActifsPage() {
         }}
       />
       {/* Modal de modification d'agent */}
+      {/* Modal de modification d'agent */}
       <EditAgentModal
         isOpen={showEditModal}
-        agent={selectedAgentForEdit}
+        agent={selectedAgentForEdit as any} // Quick fix if types should match
         onClose={() => {
           setShowEditModal(false);
           setSelectedAgentForEdit(null);
@@ -1091,16 +1069,6 @@ export default function ListeAgentsActifsPage() {
                   <FontAwesomeIcon icon={faBan} />
                   Agents bloqués
                 </Link>
-
-                <button
-                  onClick={handleExport}
-                  className="btn btn-outline-primary d-flex align-items-center gap-2"
-                  disabled={agents.length === 0 || loading}
-                  aria-label="Exporter les données"
-                >
-                  <FontAwesomeIcon icon={faDownload} />
-                  Exporter
-                </button>
 
                 <button
                   onClick={() => setShowCreateModal(true)}

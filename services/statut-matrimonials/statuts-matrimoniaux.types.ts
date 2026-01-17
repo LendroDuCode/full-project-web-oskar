@@ -30,6 +30,9 @@ export interface StatutMatrimonialType {
   uuid: string;
   code: string; // Code unique (ex: "celibataire", "marie")
   libelle: string; // Libellé par défaut
+  statut: string; // S
+  updatedAt: string;
+  createdAt: string;
 
   // Informations générales
   description?: string;

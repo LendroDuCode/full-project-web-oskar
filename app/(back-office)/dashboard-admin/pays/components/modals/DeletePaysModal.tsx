@@ -16,7 +16,7 @@ import {
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import colors from "@/app/shared/constants/colors";
-import type { Pays } from "@/services/pays/pays.service";
+import { Pays } from "@/services/pays/pays.types";
 
 interface DeletePaysModalProps {
   isOpen: boolean;
@@ -36,12 +36,12 @@ export default function DeletePaysModal({
 
   const styles = {
     modalHeader: {
-      background: `linear-gradient(135deg, ${colors.oskar.red} 0%, ${colors.oskar.redHover} 100%)`,
+      background: `linear-gradient(135deg, ${colors.oskar.orange} 0%, ${colors.oskar.orangeHover} 100%)`,
       borderBottom: `3px solid ${colors.oskar.orange}`,
     },
     warningSection: {
       background: colors.oskar.lightGrey,
-      borderLeft: `4px solid ${colors.oskar.red}`,
+      borderLeft: `4px solid ${colors.oskar.orange}`,
     },
   };
 
@@ -52,7 +52,7 @@ export default function DeletePaysModal({
       setLoading(true);
       setError(null);
 
-      await api.delete(API_ENDPOINTS.ADMIN.PAYS.DELETE(pays.uuid));
+      await api.delete(API_ENDPOINTS.PAYS.DELETE(pays.uuid));
 
       if (onSuccess) {
         onSuccess();
@@ -205,7 +205,7 @@ export default function DeletePaysModal({
                   <div
                     className="rounded-circle p-3 mx-auto mb-3"
                     style={{
-                      backgroundColor: `${colors.oskar.red}15`,
+                      backgroundColor: `${colors.oskar.orange}15`,
                       width: "80px",
                       height: "80px",
                     }}
@@ -213,7 +213,7 @@ export default function DeletePaysModal({
                     <FontAwesomeIcon
                       icon={faTrash}
                       className="fs-2"
-                      style={{ color: colors.oskar.red }}
+                      style={{ color: colors.oskar.orange }}
                     />
                   </div>
                   <h5 className="fw-bold text-danger">

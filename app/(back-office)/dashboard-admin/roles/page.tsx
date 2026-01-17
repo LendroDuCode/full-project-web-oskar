@@ -31,11 +31,23 @@ import {
   faKey,
   faTags,
 } from "@fortawesome/free-solid-svg-icons";
-import { useRoles } from "@/hooks/useRoles";
+import { api } from "@/lib/api-client";
+import { API_ENDPOINTS } from "@/config/api-endpoints";
 import colors from "@/app/shared/constants/colors";
 import CreateRoleModal from "./components/modals/CreateRoleModal";
 import EditRoleModal from "./components/modals/EditRoleModal";
 import { useRouter } from "next/navigation";
+
+// Interface Role
+interface Role {
+  uuid: string;
+  name: string;
+  feature: string;
+  status: string;
+  is_deleted: boolean;
+  created_at: string;
+  updatedAt?: string;
+}
 
 // Composant de badge de statut
 const StatusBadge = ({
@@ -101,8 +113,8 @@ const RoleTypeBadge = ({ name }: { name: string }) => {
         return {
           icon: faUserTie,
           color: "info",
-          bgColor: colors.oskar.info,
-          textColor: colors.oskar.info,
+          bgColor: colors.oskar.blue,
+          textColor: colors.oskar.blue,
         };
       case "vendeur":
         return {
@@ -115,8 +127,8 @@ const RoleTypeBadge = ({ name }: { name: string }) => {
         return {
           icon: faUser,
           color: "secondary",
-          bgColor: colors.oskar.secondary,
-          textColor: colors.oskar.secondary,
+          bgColor: colors.oskar.grey,
+          textColor: colors.oskar.grey,
         };
       case "client":
         return {
@@ -161,12 +173,28 @@ const DeleteModal = ({
   onConfirm,
 }: {
   show: boolean;
-  role: any;
+  role: Role | null;
   loading: boolean;
   onClose: () => void;
   onConfirm: () => void;
 }) => {
   if (!show || !role) return null;
+
+  // Fonction pour formater la date
+  const formatDate = (dateString: string | null | undefined) => {
+    if (!dateString) return "N/A";
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "Date invalide";
+      return new Intl.DateTimeFormat("fr-FR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }).format(date);
+    } catch {
+      return "N/A";
+    }
+  };
 
   return (
     <div
@@ -436,41 +464,29 @@ const formatDateOnly = (dateString: string | null | undefined) => {
 export default function RolesPage() {
   const router = useRouter();
 
-  // Utilisation du hook useRoles avec valeurs par défaut
-  const {
-    roles = [],
-    loading = false,
-    error = null,
-    pagination = {
-      page: 1,
-      limit: 10,
-      total: 0,
-      pages: 1,
-    },
-    fetchRoles,
-    deleteRole,
-    toggleRoleStatus,
-    setPage,
-    setLimit,
-    clearError,
-    hasRoles,
-    isEmpty,
-    totalActiveRoles = 0,
-    totalInactiveRoles = 0,
-  } = useRoles();
+  // États pour les données
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // États pour la pagination
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [total, setTotal] = useState(0);
+  const [pages, setPages] = useState(1);
 
   // États pour les modals
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<any>(null);
+  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
 
   // États pour les filtres et recherche
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [selectedType, setSelectedType] = useState<string>("all");
   const [sortConfig, setSortConfig] = useState<{
-    key: string;
+    key: keyof Role;
     direction: "asc" | "desc";
   } | null>(null);
 
@@ -499,61 +515,123 @@ export default function RolesPage() {
     };
   }, [roles]);
 
+  // Fonction pour charger les rôles
+  const fetchRoles = async (params?: {
+    page?: number;
+    limit?: number;
+    filters?: any;
+  }) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const queryParams = new URLSearchParams();
+      queryParams.append("page", (params?.page || page).toString());
+      queryParams.append("limit", (params?.limit || limit).toString());
+
+      if (params?.filters) {
+        Object.entries(params.filters).forEach(([key, value]) => {
+          if (value) {
+            queryParams.append(key, String(value));
+          }
+        });
+      }
+
+      const response = await api.get(
+        `${API_ENDPOINTS.ROLES.LIST}?${queryParams.toString()}`,
+      );
+
+      if (response && response.data) {
+        setRoles(Array.isArray(response.data) ? response.data : []);
+        setTotal(response.total || response.data.length || 0);
+        setPages(
+          response.pages ||
+            Math.ceil((response.data.length || 0) / (params?.limit || limit)),
+        );
+
+        if (params?.page) setPage(params.page);
+        if (params?.limit) setLimit(params.limit);
+      } else {
+        setRoles([]);
+        setTotal(0);
+        setPages(1);
+      }
+    } catch (err: any) {
+      console.error("Erreur lors du chargement des rôles:", err);
+      setError(err.message || "Erreur lors du chargement des rôles");
+      setRoles([]);
+      setTotal(0);
+      setPages(1);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fonction pour supprimer un rôle
+  const deleteRole = async (uuid: string) => {
+    try {
+      await api.delete(API_ENDPOINTS.ROLES.DELETE(uuid));
+      return true;
+    } catch (err: any) {
+      console.error("Erreur lors de la suppression du rôle:", err);
+      throw new Error(err.message || "Erreur lors de la suppression");
+    }
+  };
+
+  // Fonction pour basculer le statut d'un rôle
+  const toggleRoleStatus = async (uuid: string, isActive: boolean) => {
+    try {
+      await api.put(API_ENDPOINTS.ROLES.UPDATE(uuid), {
+        status: isActive ? "actif" : "inactif",
+      });
+      return true;
+    } catch (err: any) {
+      console.error("Erreur lors du changement de statut:", err);
+      throw new Error(err.message || "Erreur lors du changement de statut");
+    }
+  };
+
   // Charger les rôles au montage
   useEffect(() => {
-    if (fetchRoles) {
-      fetchRoles();
-    }
+    fetchRoles();
   }, []);
 
   // Gérer les changements de pagination et filtres avec debounce
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      if (fetchRoles) {
-        const filters: any = {};
+      const filters: any = {};
 
-        if (searchTerm) filters.search = searchTerm;
-        if (selectedStatus !== "all") filters.status = selectedStatus;
-        if (selectedType !== "all") filters.type = selectedType;
+      if (searchTerm) filters.search = searchTerm;
+      if (selectedStatus !== "all") filters.status = selectedStatus;
+      if (selectedType !== "all") filters.type = selectedType;
 
-        fetchRoles({
-          page: pagination.page,
-          limit: pagination.limit,
-          filters,
-        });
-      }
+      fetchRoles({
+        page: page,
+        limit: limit,
+        filters,
+      });
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [
-    pagination?.page,
-    pagination?.limit,
-    searchTerm,
-    selectedStatus,
-    selectedType,
-  ]);
+  }, [page, limit, searchTerm, selectedStatus, selectedType]);
 
   // Fonction pour gérer la création d'un rôle
   const handleRoleCreated = () => {
     setSuccessMessage("Rôle créé avec succès !");
-    if (fetchRoles) {
-      fetchRoles();
-    }
+    fetchRoles();
     setTimeout(() => setSuccessMessage(null), 3000);
   };
 
   // Fonction pour gérer la modification d'un rôle
   const handleRoleUpdated = () => {
     setSuccessMessage("Rôle modifié avec succès !");
-    if (fetchRoles) {
-      fetchRoles();
-    }
+    fetchRoles();
     setTimeout(() => setSuccessMessage(null), 3000);
   };
 
   // Fonction pour gérer la suppression d'un rôle
   const handleDeleteRole = async () => {
-    if (!selectedRole || !deleteRole) return;
+    if (!selectedRole) return;
 
     try {
       setActionLoading(true);
@@ -564,6 +642,9 @@ export default function RolesPage() {
 
       setSuccessMessage("Rôle supprimé avec succès");
       setTimeout(() => setSuccessMessage(null), 3000);
+
+      // Recharger les données
+      fetchRoles();
     } catch (err: any) {
       console.error("Erreur lors de la suppression:", err);
       setSuccessMessage(`Erreur: ${err.message || "Échec de la suppression"}`);
@@ -573,15 +654,13 @@ export default function RolesPage() {
   };
 
   // Fonction pour ouvrir le modal de suppression
-  const openDeleteModal = (role: any) => {
+  const openDeleteModal = (role: Role) => {
     setSelectedRole(role);
     setShowDeleteModal(true);
   };
 
   // Fonction pour basculer le statut d'un rôle
-  const handleToggleStatus = async (role: any) => {
-    if (!toggleRoleStatus) return;
-
+  const handleToggleStatus = async (role: Role) => {
     try {
       setActionLoading(true);
 
@@ -592,6 +671,9 @@ export default function RolesPage() {
         `Rôle ${isActive ? "désactivé" : "activé"} avec succès`,
       );
       setTimeout(() => setSuccessMessage(null), 3000);
+
+      // Recharger les données
+      fetchRoles();
     } catch (err: any) {
       console.error("Erreur lors du changement de statut:", err);
       setSuccessMessage(`Erreur: ${err.message || "Échec de l'opération"}`);
@@ -613,7 +695,7 @@ export default function RolesPage() {
   };
 
   // Fonction de tri
-  const sortRoles = (rolesList: any[]) => {
+  const sortRoles = (rolesList: Role[]) => {
     if (!sortConfig || !rolesList.length) return rolesList;
 
     return [...rolesList].sort((a, b) => {
@@ -646,7 +728,7 @@ export default function RolesPage() {
     });
   };
 
-  const requestSort = (key: string) => {
+  const requestSort = (key: keyof Role) => {
     let direction: "asc" | "desc" = "asc";
     if (
       sortConfig &&
@@ -658,7 +740,7 @@ export default function RolesPage() {
     setSortConfig({ key, direction });
   };
 
-  const getSortIcon = (key: string) => {
+  const getSortIcon = (key: keyof Role) => {
     if (!sortConfig || sortConfig.key !== key) {
       return <FontAwesomeIcon icon={faSort} className="text-muted ms-1" />;
     }
@@ -700,10 +782,10 @@ export default function RolesPage() {
   const currentItems = useMemo(() => {
     if (!filteredRoles.length) return [];
 
-    const start = (pagination.page - 1) * pagination.limit;
-    const end = start + pagination.limit;
+    const start = (page - 1) * limit;
+    const end = start + limit;
     return filteredRoles.slice(start, end);
-  }, [filteredRoles, pagination.page, pagination.limit]);
+  }, [filteredRoles, page, limit]);
 
   // Réinitialiser les filtres
   const resetFilters = () => {
@@ -711,9 +793,7 @@ export default function RolesPage() {
     setSelectedStatus("all");
     setSelectedType("all");
     setSortConfig(null);
-    if (setPage) {
-      setPage(1);
-    }
+    setPage(1);
   };
 
   // Obtenir les types de rôle uniques
@@ -722,6 +802,17 @@ export default function RolesPage() {
     const types = roles.map((role) => role.name).filter(Boolean);
     return [...new Set(types)];
   }, [roles]);
+
+  // Créer un objet pagination pour faciliter le passage aux composants enfants
+  const pagination = useMemo(
+    () => ({
+      page,
+      limit,
+      total,
+      pages,
+    }),
+    [page, limit, total, pages],
+  );
 
   return (
     <>
@@ -786,7 +877,7 @@ export default function RolesPage() {
 
               <div className="d-flex flex-wrap gap-2">
                 <button
-                  onClick={() => fetchRoles && fetchRoles()}
+                  onClick={() => fetchRoles()}
                   className="btn btn-outline-secondary d-flex align-items-center gap-2"
                   disabled={loading || actionLoading}
                 >
@@ -823,7 +914,7 @@ export default function RolesPage() {
                 <button
                   type="button"
                   className="btn-close"
-                  onClick={clearError}
+                  onClick={() => setError(null)}
                   aria-label="Close"
                 ></button>
               </div>
@@ -913,10 +1004,8 @@ export default function RolesPage() {
                   </span>
                   <select
                     className="form-select border-start-0 ps-0"
-                    value={pagination.limit}
-                    onChange={(e) =>
-                      setLimit && setLimit(Number(e.target.value))
-                    }
+                    value={limit}
+                    onChange={(e) => setLimit(Number(e.target.value))}
                   >
                     {itemsPerPageOptions.map((option) => (
                       <option key={option} value={option}>
@@ -1086,9 +1175,7 @@ export default function RolesPage() {
                             }}
                           >
                             <td className="text-center text-muted fw-semibold">
-                              {(pagination.page - 1) * pagination.limit +
-                                index +
-                                1}
+                              {(page - 1) * limit + index + 1}
                             </td>
                             <td>
                               <div className="d-flex align-items-center">
@@ -1235,18 +1322,14 @@ export default function RolesPage() {
                     </table>
 
                     {/* Pagination */}
-                    {filteredRoles.length > pagination.limit && (
+                    {filteredRoles.length > limit && (
                       <Pagination
-                        currentPage={pagination.page}
-                        totalPages={Math.ceil(
-                          filteredRoles.length / pagination.limit,
-                        )}
+                        currentPage={page}
+                        totalPages={Math.ceil(filteredRoles.length / limit)}
                         totalItems={filteredRoles.length}
-                        itemsPerPage={pagination.limit}
-                        indexOfFirstItem={
-                          (pagination.page - 1) * pagination.limit
-                        }
-                        onPageChange={(page) => setPage && setPage(page)}
+                        itemsPerPage={limit}
+                        indexOfFirstItem={(page - 1) * limit}
+                        onPageChange={(newPage) => setPage(newPage)}
                       />
                     )}
                   </>
@@ -1290,6 +1373,17 @@ export default function RolesPage() {
 
         .table-hover tbody tr:hover {
           background-color: rgba(0, 0, 0, 0.03);
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+          .btn-group {
+            flex-wrap: wrap;
+          }
+
+          .btn-group-sm > .btn {
+            margin-bottom: 2px;
+          }
         }
       `}</style>
     </>

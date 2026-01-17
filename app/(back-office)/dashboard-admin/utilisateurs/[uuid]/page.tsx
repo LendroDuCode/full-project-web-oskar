@@ -23,14 +23,67 @@ import {
 import { userService } from "@/services/utilisateurs/utilisateur.service";
 import colors from "@/app/shared/constants/colors";
 import EditUserModal from "../components/modals/ModifierUserModal";
-import type { User } from "@/services/utilisateurs/user.types";
+import type { User as ServiceUser } from "@/services/utilisateurs/user.types";
+
+// Définir le type attendu par EditUserModal basé sur l'interface que vous avez partagée
+interface EditModalUser {
+  uuid: string;
+  code_utilisateur?: string;
+  civilite_uuid: string; // Obligatoire selon l'interface EditUserModal
+  nom: string;
+  prenoms: string;
+  indicatif?: string;
+  telephone: string;
+  email: string;
+  mot_de_passe?: string;
+  avatar?: string;
+  code?: string;
+  est_verifie: boolean;
+  est_bloque: boolean;
+  agentUuid?: string;
+  is_admin: boolean;
+  email_verifie_le?: string;
+  token_verification?: string;
+  statut_matrimonial_uuid?: string;
+  date_naissance?: string;
+  statut: string;
+  adminUuid: string;
+  role_uuid: string;
+  adresse_uuid?: string;
+  created_at?: string;
+  updated_at?: string;
+  is_deleted: boolean;
+  deleted_at?: string;
+  id: number;
+  otp?: string;
+  otp_expire?: string;
+  is_active_otp?: number;
+  civilite?: {
+    uuid: string;
+    libelle: string;
+    slug: string;
+    statut: string;
+  };
+  role?: {
+    uuid: string;
+    name: string;
+    feature: string;
+    status: string;
+    created_at: string;
+    updatedAt: string;
+  };
+  statut_matrimonial?: {
+    libelle: string;
+    uuid: string;
+  };
+}
 
 export default function DetailUtilisateurPage() {
   const params = useParams();
   const router = useRouter();
   const userId = params.uuid as string;
 
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<ServiceUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -56,6 +109,52 @@ export default function DetailUtilisateurPage() {
       color: status === "actif" ? colors.oskar.green : colors.oskar.orange,
       border: `1px solid ${status === "actif" ? colors.oskar.green + "30" : colors.oskar.orange + "30"}`,
     }),
+  };
+
+  // Fonction pour convertir ServiceUser en EditModalUser avec valeurs par défaut
+  const convertToEditModalUser = (serviceUser: ServiceUser): EditModalUser => {
+    return {
+      uuid: serviceUser.uuid,
+      code_utilisateur: serviceUser.code_utilisateur || undefined,
+      // Fournir une valeur par défaut pour les champs obligatoires
+      civilite_uuid: serviceUser.civilite_uuid || "",
+      nom: serviceUser.nom,
+      prenoms: serviceUser.prenoms,
+      indicatif: serviceUser.indicatif || undefined,
+      telephone: serviceUser.telephone,
+      email: serviceUser.email,
+      mot_de_passe: serviceUser.mot_de_passe || undefined,
+      avatar: serviceUser.avatar || undefined,
+      code: serviceUser.code || undefined,
+      est_verifie: serviceUser.est_verifie,
+      est_bloque: serviceUser.est_bloque,
+      agentUuid: serviceUser.agentUuid || undefined,
+      is_admin: serviceUser.is_admin,
+      email_verifie_le: serviceUser.email_verifie_le || undefined,
+      token_verification: serviceUser.token_verification || undefined,
+      statut_matrimonial_uuid: serviceUser.statut_matrimonial_uuid || undefined,
+      date_naissance: serviceUser.date_naissance || undefined,
+      statut: serviceUser.statut,
+      adminUuid: serviceUser.adminUuid,
+      role_uuid: serviceUser.role_uuid,
+      adresse_uuid: serviceUser.adresse_uuid || undefined,
+      created_at: serviceUser.created_at || undefined,
+      updated_at: serviceUser.updated_at || undefined,
+      is_deleted: serviceUser.is_deleted,
+      deleted_at: serviceUser.deleted_at || undefined,
+      id: serviceUser.id,
+      otp: serviceUser.otp || undefined,
+      otp_expire: serviceUser.otp_expire || undefined,
+      is_active_otp: serviceUser.is_active_otp,
+      civilite: serviceUser.civilite,
+      role: serviceUser.role,
+      statut_matrimonial: serviceUser.statut_matrimonial_uuid
+        ? {
+            uuid: serviceUser.statut_matrimonial_uuid,
+            libelle: "À déterminer",
+          }
+        : undefined,
+    };
   };
 
   // Charger les données de l'utilisateur
@@ -292,7 +391,7 @@ export default function DetailUtilisateurPage() {
       {/* Modal de modification */}
       <EditUserModal
         isOpen={showEditModal}
-        user={user}
+        user={convertToEditModalUser(user)}
         onClose={() => setShowEditModal(false)}
         onSuccess={async () => {
           setSuccessMessage("Utilisateur modifié avec succès !");

@@ -37,9 +37,10 @@ import {
   faHeartBroken,
   faHeartCrack,
   faHandshake,
-  faExclamationTriangle, // AJOUTÉ
+  faExclamationTriangle,
 } from "@fortawesome/free-solid-svg-icons";
 import { useStatutsMatrimoniaux } from "@/hooks/useStatutsMatrimoniaux";
+import { StatutMatrimonialType } from "@/services/statut-matrimonials/statuts-matrimoniaux.types";
 
 // Composant de badge de statut
 const StatusBadge = ({ statut }: { statut: string }) => {
@@ -417,6 +418,42 @@ const BulkDeleteModal = ({
   );
 };
 
+// Fonction utilitaire pour comparer les valeurs avec gestion des undefined/null
+const compareValues = (
+  a: any,
+  b: any,
+  direction: "asc" | "desc" = "asc",
+): number => {
+  // Gestion des valeurs nulles ou undefined
+  if (a == null && b == null) return 0;
+  if (a == null) return direction === "asc" ? -1 : 1;
+  if (b == null) return direction === "asc" ? 1 : -1;
+
+  // Conversion des dates si nécessaire
+  let valA = a;
+  let valB = b;
+
+  // Vérifier si ce sont des chaînes de date
+  if (typeof a === "string" && typeof b === "string") {
+    const dateA = new Date(a).getTime();
+    const dateB = new Date(b).getTime();
+
+    if (!isNaN(dateA) && !isNaN(dateB)) {
+      valA = dateA;
+      valB = dateB;
+    }
+  }
+
+  // Comparaison standard
+  if (valA < valB) {
+    return direction === "asc" ? -1 : 1;
+  }
+  if (valA > valB) {
+    return direction === "asc" ? 1 : -1;
+  }
+  return 0;
+};
+
 export default function StatutsMatrimoniauxPage() {
   const {
     statuts,
@@ -495,7 +532,7 @@ export default function StatutsMatrimoniauxPage() {
     }
   }, []);
 
-  // Fonction de tri
+  // Fonction de tri améliorée
   const sortStatuts = useCallback(
     (statutsList: StatutMatrimonialType[]) => {
       if (!sortConfig || !statutsList.length) return statutsList;
@@ -504,29 +541,26 @@ export default function StatutsMatrimoniauxPage() {
         const aValue = a[sortConfig.key];
         const bValue = b[sortConfig.key];
 
-        if (aValue < bValue) {
-          return sortConfig.direction === "asc" ? -1 : 1;
-        }
-        if (aValue > bValue) {
-          return sortConfig.direction === "asc" ? 1 : -1;
-        }
-        return 0;
+        return compareValues(aValue, bValue, sortConfig.direction);
       });
     },
     [sortConfig],
   );
 
-  const requestSort = useCallback((key: keyof StatutMatrimonialType) => {
-    let direction: "asc" | "desc" = "asc";
-    if (
-      sortConfig &&
-      sortConfig.key === key &&
-      sortConfig.direction === "asc"
-    ) {
-      direction = "desc";
-    }
-    setSortConfig({ key, direction });
-  }, []);
+  const requestSort = useCallback(
+    (key: keyof StatutMatrimonialType) => {
+      let direction: "asc" | "desc" = "asc";
+      if (
+        sortConfig &&
+        sortConfig.key === key &&
+        sortConfig.direction === "asc"
+      ) {
+        direction = "desc";
+      }
+      setSortConfig({ key, direction });
+    },
+    [sortConfig],
+  );
 
   const getSortIcon = useCallback(
     (key: keyof StatutMatrimonialType) => {
@@ -789,7 +823,7 @@ export default function StatutsMatrimoniauxPage() {
         ["Libellé", "Slug", "Statut", "Par défaut", "Créé le", "Modifié le"],
         ...filteredStatuts.map((s) => [
           s.libelle || "",
-          s.slug || "",
+          s.code || "",
           s.statut || "",
           s.defaut ? "Oui" : "Non",
           formatDate(s.createdAt),
@@ -861,9 +895,144 @@ export default function StatutsMatrimoniauxPage() {
     return faHeart;
   };
 
+  // Modal de création (à implémenter)
+  const CreateModal = () => {
+    if (!showCreateModal) return null;
+    return (
+      <div
+        className="modal fade show d-block"
+        style={{
+          backgroundColor: "rgba(0,0,0,0.5)",
+          backdropFilter: "blur(2px)",
+        }}
+        tabIndex={-1}
+      >
+        <div className="modal-dialog">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">Créer un nouveau statut</h5>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setShowCreateModal(false)}
+              ></button>
+            </div>
+            <div className="modal-body">
+              <p>Modal de création à implémenter</p>
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowCreateModal(false)}
+              >
+                Annuler
+              </button>
+              <button type="button" className="btn btn-primary">
+                Créer
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Modal d'édition (à implémenter)
+  const EditModal = () => {
+    if (!showEditModal || !selectedStatut) return null;
+    return (
+      <div
+        className="modal fade show d-block"
+        style={{
+          backgroundColor: "rgba(0,0,0,0.5)",
+          backdropFilter: "blur(2px)",
+        }}
+        tabIndex={-1}
+      >
+        <div className="modal-dialog">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">Modifier le statut</h5>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setShowEditModal(false)}
+              ></button>
+            </div>
+            <div className="modal-body">
+              <p>Édition de: {selectedStatut.libelle}</p>
+              <p>Modal d'édition à implémenter</p>
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowEditModal(false)}
+              >
+                Annuler
+              </button>
+              <button type="button" className="btn btn-primary">
+                Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Modal de suppression (à implémenter)
+  const DeleteModal = () => {
+    if (!showDeleteModal || !selectedStatut) return null;
+    return (
+      <div
+        className="modal fade show d-block"
+        style={{
+          backgroundColor: "rgba(0,0,0,0.5)",
+          backdropFilter: "blur(2px)",
+        }}
+        tabIndex={-1}
+      >
+        <div className="modal-dialog">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">Supprimer le statut</h5>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setShowDeleteModal(false)}
+              ></button>
+            </div>
+            <div className="modal-body">
+              <p>
+                Êtes-vous sûr de vouloir supprimer "{selectedStatut.libelle}" ?
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowDeleteModal(false)}
+              >
+                Annuler
+              </button>
+              <button type="button" className="btn btn-danger">
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <>
-      {/* Modal de suppression multiple */}
+      {/* Modals */}
+      <CreateModal />
+      <EditModal />
+      <DeleteModal />
       <BulkDeleteModal
         show={showBulkDeleteModal}
         loading={loading}
@@ -1128,11 +1297,11 @@ export default function StatutsMatrimoniauxPage() {
                           <th style={{ width: "150px" }}>
                             <button
                               className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
-                              onClick={() => requestSort("slug")}
+                              onClick={() => requestSort("code")}
                               disabled={loading}
                             >
                               Slug
-                              {getSortIcon("slug")}
+                              {getSortIcon("code")}
                             </button>
                           </th>
                           <th style={{ width: "120px" }}>
@@ -1219,14 +1388,14 @@ export default function StatutsMatrimoniauxPage() {
                                     />
                                   </div>
                                   <small className="text-muted">
-                                    {statutItem.slug}
+                                    {statutItem.code}
                                   </small>
                                 </div>
                               </div>
                             </td>
                             <td>
                               <code className="bg-light px-2 py-1 rounded">
-                                {statutItem.slug}
+                                {statutItem.code}
                               </code>
                             </td>
                             <td>
@@ -1266,10 +1435,10 @@ export default function StatutsMatrimoniauxPage() {
                                 <button
                                   className="btn btn-outline-warning"
                                   title="Modifier"
-                                  onClick={() =>
-                                    setSelectedStatut(statutItem) &&
-                                    setShowEditModal(true)
-                                  }
+                                  onClick={() => {
+                                    setSelectedStatut(statutItem);
+                                    setShowEditModal(true);
+                                  }}
                                   disabled={loading}
                                 >
                                   <FontAwesomeIcon icon={faEdit} />
@@ -1305,10 +1474,10 @@ export default function StatutsMatrimoniauxPage() {
                                 <button
                                   className="btn btn-outline-danger"
                                   title="Supprimer"
-                                  onClick={() =>
-                                    setSelectedStatut(statutItem) &&
-                                    setShowDeleteModal(true)
-                                  }
+                                  onClick={() => {
+                                    setSelectedStatut(statutItem);
+                                    setShowDeleteModal(true);
+                                  }}
                                   disabled={loading || statutItem.defaut}
                                 >
                                   <FontAwesomeIcon icon={faTrash} />

@@ -121,9 +121,9 @@ function CustomAlert({
       icon: faExclamationTriangle,
     },
     danger: {
-      bg: `${colors.oskar.red}15`,
-      border: `1px solid ${colors.oskar.red}30`,
-      color: colors.oskar.red,
+      bg: `${colors.oskar.orange}15`,
+      border: `1px solid ${colors.oskar.orange}30`,
+      color: colors.oskar.orange,
       icon: faExclamationTriangle,
     },
     info: {
@@ -278,7 +278,7 @@ export default function EditAgentModal({
   // Styles personnalisés avec les couleurs jaunes
   const styles = {
     modalHeader: {
-      background: `linear-gradient(135deg, ${colors.oskar.yellow} 0%, ${colors.oskar.yellowDark || colors.oskar.yellow} 100%)`,
+      background: `linear-gradient(135deg, ${colors.oskar.yellow} 0%, ${colors.oskar.yellowHover || colors.oskar.yellow} 100%)`,
       borderBottom: `3px solid ${colors.oskar.blue}`,
     },
     sectionHeader: {

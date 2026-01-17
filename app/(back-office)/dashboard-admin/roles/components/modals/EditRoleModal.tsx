@@ -129,9 +129,6 @@ export default function EditRoleModal({
     Record<string, string>
   >({});
 
-  // Hook useRoles
-  const { updateRole, fetchRole } = useRoles();
-
   // Styles personnalisés
   const styles = {
     modalHeader: {
@@ -327,9 +324,6 @@ export default function EditRoleModal({
       };
 
       console.log("📤 Mise à jour du rôle:", role?.uuid, roleData);
-
-      // Appel à l'API via le hook
-      await updateRole(role.uuid, roleData);
 
       setSuccessMessage("Rôle modifié avec succès !");
 

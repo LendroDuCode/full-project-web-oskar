@@ -742,12 +742,6 @@ export default function ListeUtilisateursActifsPage() {
 
         // Rafraîchir la liste
         refresh();
-
-        // Réinitialiser la sélection pour les actions non-destructives
-        if (action !== "delete") {
-          setSelectedUsers([]);
-          setSelectAll(false);
-        }
       }
     } catch (err) {
       console.error("Erreur lors de l'action en masse:", err);
@@ -822,66 +816,6 @@ export default function ListeUtilisateursActifsPage() {
     (pagination.page - 1) * pagination.limit,
     pagination.page * pagination.limit,
   );
-
-  // Fonction pour exporter les données
-  const handleExport = async () => {
-    try {
-      // Utilisation de l'API spécifique pour l'export PDF des utilisateurs
-      const response = await api.get(API_ENDPOINTS.ADMIN.USERS.EXPORT_PDF, {
-        responseType: "blob",
-        headers: {
-          Accept: "application/pdf",
-        },
-      });
-
-      // Vérifier si la réponse est un PDF valide
-      if (!response || !response.type.includes("pdf")) {
-        throw new Error("La réponse n'est pas un PDF valide");
-      }
-
-      // Créer l'URL du blob et télécharger
-      const blob = new Blob([response], { type: "application/pdf" });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `utilisateurs-${new Date().toISOString().split("T")[0]}.pdf`;
-
-      // Déclencher le téléchargement
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      // Libérer la mémoire
-      window.URL.revokeObjectURL(url);
-
-      // Message de succès
-      setSuccessMessage("Export PDF réussi !");
-      setTimeout(() => setSuccessMessage(null), 3000);
-    } catch (err: any) {
-      console.error("❌ Erreur lors de l'export PDF:", err);
-
-      // Gestion d'erreur spécifique
-      let errorMessage = "Erreur lors de l'export PDF";
-
-      if (err.response) {
-        // Erreur de l'API
-        if (err.response.status === 404) {
-          errorMessage = "L'endpoint d'export PDF n'est pas disponible";
-        } else if (err.response.status === 500) {
-          errorMessage = "Erreur serveur lors de la génération du PDF";
-        }
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-
-      setInfoMessage(errorMessage);
-      setTimeout(() => setInfoMessage(null), 5000);
-
-      // Fallback vers CSV en cas d'échec
-      console.log("Tentative d'export CSV en fallback...");
-      handleCSVExport();
-    }
-  };
 
   // Fallback CSV export
   const handleCSVExport = () => {
