@@ -1020,21 +1020,22 @@ export default function ModifierVendeurModal({
                               le modifier.
                             </>
                           ) : (
-                          <>
-  Modifiez les informations de{" "}
-  <strong>
-    {vendeur.nom} {vendeur.prenoms}
-  </strong>
-  {vendeur.type && ` • Type: ${vendeur.type}`}. Créé le{" "}
-  {vendeurCreatedDate
-    ? vendeurCreatedDate.toLocaleDateString("fr-FR")
-    : "N/A"}
-  {vendeurUpdatedDate &&
-    vendeurCreatedDate &&
-    vendeurUpdatedDate > vendeurCreatedDate &&
-    ` • Dernière modification le ${vendeurUpdatedDate.toLocaleDateString("fr-FR")}`}
-  .
-</>
+                            <>
+                              Modifiez les informations de{" "}
+                              <strong>
+                                {vendeur.nom} {vendeur.prenoms}
+                              </strong>
+                              {vendeur.type && ` • Type: ${vendeur.type}`}. Créé
+                              le{" "}
+                              {vendeurCreatedDate
+                                ? vendeurCreatedDate.toLocaleDateString("fr-FR")
+                                : "N/A"}
+                              {vendeurUpdatedDate &&
+                                vendeurCreatedDate &&
+                                vendeurUpdatedDate > vendeurCreatedDate &&
+                                ` • Dernière modification le ${vendeurUpdatedDate.toLocaleDateString("fr-FR")}`}
+                              .
+                            </>
                           )}
                         </p>
                         {isVendeurDeleted && (
@@ -1633,11 +1634,6 @@ export default function ModifierVendeurModal({
                                   <small className="fw-semibold">
                                     Force du mot de passe:
                                   </small>
-                                  <small
-                                    style={{ color: passwordStrength.color }}
-                                  >
-                                    {passwordStrength.label}
-                                  </small>
                                 </div>
                                 <div
                                   className="progress"
@@ -1646,7 +1642,6 @@ export default function ModifierVendeurModal({
                                   <div
                                     className="progress-bar"
                                     role="progressbar"
-                                    
                                   ></div>
                                 </div>
                               </div>

@@ -1135,21 +1135,21 @@ export default function EditUserModal({
                               le modifier.
                             </>
                           ) : (
-                          <>
-  Modifiez les informations de{" "}
-  <strong>
-    {user.nom} {user.prenoms}
-  </strong>
-  . Créé le{" "}
-  {userCreatedDate
-    ? userCreatedDate.toLocaleDateString("fr-FR")
-    : "N/A"}
-  {userUpdatedDate &&
-    userCreatedDate &&
-    userUpdatedDate > userCreatedDate &&
-    ` • Dernière modification le ${userUpdatedDate.toLocaleDateString("fr-FR")}`}
-  .
-</>
+                            <>
+                              Modifiez les informations de{" "}
+                              <strong>
+                                {user.nom} {user.prenoms}
+                              </strong>
+                              . Créé le{" "}
+                              {userCreatedDate
+                                ? userCreatedDate.toLocaleDateString("fr-FR")
+                                : "N/A"}
+                              {userUpdatedDate &&
+                                userCreatedDate &&
+                                userUpdatedDate > userCreatedDate &&
+                                ` • Dernière modification le ${userUpdatedDate.toLocaleDateString("fr-FR")}`}
+                              .
+                            </>
                           )}
                         </p>
                         {isUserDeleted && (
@@ -1957,11 +1957,6 @@ export default function EditUserModal({
                                   <small className="fw-semibold">
                                     Force du mot de passe:
                                   </small>
-                                  <small
-                                    style={{ color: passwordStrength.color }}
-                                  >
-                                    {passwordStrength.label}
-                                  </small>
                                 </div>
                                 <div
                                   className="progress"
@@ -1970,7 +1965,6 @@ export default function EditUserModal({
                                   <div
                                     className="progress-bar"
                                     role="progressbar"
-                                  
                                   ></div>
                                 </div>
                               </div>

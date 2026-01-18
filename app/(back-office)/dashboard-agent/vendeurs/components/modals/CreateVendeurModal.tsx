@@ -1187,15 +1187,11 @@ export default function CreateVendeurModal({
                               <small className="fw-semibold">
                                 Force du mot de passe:
                               </small>
-                              <small style={{ color: passwordStrength.color }}>
-                                {passwordStrength.label}
-                              </small>
                             </div>
                             <div className="progress" style={{ height: "6px" }}>
                               <div
                                 className="progress-bar"
                                 role="progressbar"
-                                
                               ></div>
                             </div>
                           </div>

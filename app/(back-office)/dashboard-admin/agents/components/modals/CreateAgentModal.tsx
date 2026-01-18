@@ -1110,9 +1110,7 @@ export default function CreateAgentModal({
                               <small className="fw-semibold">
                                 Force du mot de passe:
                               </small>
-                              <small style={{ color: passwordStrength.color }}>
-                                {passwordStrength.label}
-                              </small>
+
                             </div>
                             <div className="progress" style={{ height: "6px" }}>
                               <div
@@ -1146,7 +1144,7 @@ export default function CreateAgentModal({
                                 colors.oskar.green;
                             }}
                             onMouseLeave={(e) => {
-                              e.currentTarget.style.background = `${colors.oskar.green}10`;
+                              e.currentTar  get.style.background = `${colors.oskar.green}10`;
                               e.currentTarget.style.borderColor = `${colors.oskar.green}30`;
                             }}
                           >
