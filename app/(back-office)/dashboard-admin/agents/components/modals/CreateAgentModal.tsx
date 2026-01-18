@@ -1118,10 +1118,6 @@ export default function CreateAgentModal({
                               <div
                                 className="progress-bar"
                                 role="progressbar"
-                                style={{
-                                  width: `${(passwordStrength.score / 6) * 100}%`,
-                                  backgroundColor: passwordStrength.color,
-                                }}
                               ></div>
                             </div>
                           </div>
