@@ -85,7 +85,7 @@ export default function DataTable({
 }: DataTableProps) {
   const router = useRouter();
   const [data, setData] = useState<ContentItem[]>(externalData || []);
-  const [loading, setLoading] = useState(externalLoading || true);
+  const [loading, setLoading] = useState<boolean>(externalLoading || true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);

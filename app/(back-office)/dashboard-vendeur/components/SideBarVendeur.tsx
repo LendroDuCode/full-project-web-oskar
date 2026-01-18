@@ -576,7 +576,7 @@ export default function SidebarVendeur({
                   </>
                 ) : (
                   <Link
-                    href={item.submenu[0].href}
+                    href=""
                     className="text-decoration-none d-flex align-items-center justify-content-center gap-3 px-3 py-2 rounded position-relative"
                     style={{
                       color: "#d1d5db",

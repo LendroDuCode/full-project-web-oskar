@@ -21,7 +21,6 @@ import {
   faHistory,
   faCalendar,
 } from "@fortawesome/free-solid-svg-icons";
-import { useRoles } from "@/hooks/useRoles";
 import colors from "@/app/shared/constants/colors";
 
 // Types

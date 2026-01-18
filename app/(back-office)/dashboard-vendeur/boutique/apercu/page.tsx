@@ -409,7 +409,6 @@ export default function ListeBoutiquesVendeur() {
 
       const response = await api.get<PaginatedResponse>(
         API_ENDPOINTS.BOUTIQUES.LISTE_BOUTIQUES_CREE_PAR_VENDEUR,
-        { params },
       );
 
       setBoutiques(response.data);

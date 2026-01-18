@@ -745,7 +745,7 @@ export default function EducationCulturePage() {
               <div
                 className="mt-4 rounded-2 p-3"
                 style={{
-                  background: `linear-gradient(135deg, ${colors.oskar.lightBlue || "#E3F2FD"} 0%, ${colors.oskar.lightBlue || "#E3F2FD"}20 100%)`,
+                  background: `linear-gradient(135deg, ${colors.oskar.blue || "#E3F2FD"} 0%, ${colors.oskar.blueHover || "#E3F2FD"}20 100%)`,
                   border: `1px solid ${colors.oskar.blue || "#2196F3"}20`,
                 }}
               >

@@ -185,7 +185,7 @@ export default function ServicesProximitePage() {
       <section
         className="py-4 py-md-5"
         style={{
-          background: `linear-gradient(135deg, ${colors.oskar.green} 0%, ${colors.oskar.darkGreen || "#1e7d3e"} 100%)`,
+          background: `linear-gradient(135deg, ${colors.oskar.green} 0%, ${colors.oskar.green || "#1e7d3e"} 100%)`,
           color: "white",
         }}
       >
@@ -428,7 +428,7 @@ export default function ServicesProximitePage() {
                         <div className="d-flex align-items-start">
                           <div
                             className="rounded-circle p-2 me-2 flex-shrink-0"
-                            style={{ backgroundColor: colors.oskar.lightGreen }}
+                            style={{ backgroundColor: colors.oskar.greenHover }}
                           >
                             <i
                               className="fas fa-users"
@@ -542,7 +542,7 @@ export default function ServicesProximitePage() {
               <div
                 className="mt-4 rounded-2 p-3 text-center"
                 style={{
-                  background: `linear-gradient(135deg, ${colors.oskar.lightGreen} 0%, ${colors.oskar.lightGreen}20 100%)`,
+                  background: `linear-gradient(135deg, ${colors.oskar.greenHover} 0%, ${colors.oskar.greenHover}20 100%)`,
                   border: `1px solid ${colors.oskar.green}20`,
                 }}
               >
@@ -668,7 +668,7 @@ export default function ServicesProximitePage() {
                     <div
                       className="rounded-circle d-inline-flex align-items-center justify-content-center p-2"
                       style={{
-                        backgroundColor: colors.oskar.lightGreen,
+                        backgroundColor: colors.oskar.greenHover,
                         width: "50px",
                         height: "50px",
                       }}

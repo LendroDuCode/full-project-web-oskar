@@ -472,8 +472,8 @@ export default function DetailVendeurPage() {
 
   return (
     <>
-      {/* Modal de modification */}
-      <EditVendeurModal
+      {/* Modal de modification 
+       <EditVendeurModal
         isOpen={showEditModal}
         vendeur={vendeur}
         onClose={() => setShowEditModal(false)}
@@ -483,6 +483,8 @@ export default function DetailVendeurPage() {
           setTimeout(() => setSuccessMessage(null), 3000);
         }}
       />
+      */}
+     
 
       {/* Messages de succès */}
       {successMessage && (

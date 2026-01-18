@@ -19,11 +19,49 @@ import {
   faBox,
   faHandHoldingHeart,
   faEdit,
+  IconDefinition,
 } from "@fortawesome/free-solid-svg-icons";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import colors from "@/app/shared/constants/colors";
-import { Echange, EchangeFormData, Category } from "@/types/echange";
+
+// Interfaces
+interface Category {
+  label: string;
+  value: string;
+  uuid: string;
+  icon?: IconDefinition;
+}
+
+interface EchangeFormData {
+  nomElementEchange: string;
+  typeEchange: "produit" | "service";
+  objetPropose: string;
+  objetDemande: string;
+  categorie_uuid: string;
+  quantite: string;
+  prix: string;
+  numero: string;
+  message: string;
+  image: File | null;
+}
+
+interface Echange {
+  uuid: string;
+  nomElementEchange?: string;
+  titre?: string;
+  typeEchange?: "produit" | "service";
+  objetPropose?: string;
+  objetDemande?: string;
+  categorie_uuid?: string;
+  quantite?: string;
+  prix?: string;
+  numero?: string;
+  message?: string;
+  image?: string;
+  // Autres propriétés possibles
+  [key: string]: any;
+}
 
 interface EditEchangeModalProps {
   isOpen: boolean;
@@ -77,7 +115,7 @@ export default function EditEchangeModal({
         try {
           const response = await api.get(API_ENDPOINTS.CATEGORIES.LIST);
           if (Array.isArray(response)) {
-            const formatted: Category[] = response.map((item) => ({
+            const formatted: Category[] = response.map((item: any) => ({
               label: item.libelle || item.type || "Sans nom",
               value: item.uuid,
               uuid: item.uuid,
@@ -132,14 +170,20 @@ export default function EditEchangeModal({
 
     if (!formData.nomElementEchange.trim()) {
       errors.nomElementEchange = "Le titre est obligatoire";
+    } else if (formData.nomElementEchange.trim().length < 5) {
+      errors.nomElementEchange = "Le titre doit contenir au moins 5 caractères";
     }
 
     if (!formData.objetPropose.trim()) {
       errors.objetPropose = "L'objet proposé est obligatoire";
+    } else if (formData.objetPropose.trim().length < 3) {
+      errors.objetPropose = "L'objet proposé doit contenir au moins 3 caractères";
     }
 
     if (!formData.objetDemande.trim()) {
       errors.objetDemande = "L'objet recherché est obligatoire";
+    } else if (formData.objetDemande.trim().length < 3) {
+      errors.objetDemande = "L'objet recherché doit contenir au moins 3 caractères";
     }
 
     if (!formData.categorie_uuid) {
@@ -148,10 +192,21 @@ export default function EditEchangeModal({
 
     if (!formData.numero.trim()) {
       errors.numero = "Le numéro de contact est obligatoire";
+    } else if (!/^[\d\s\+\(\)\.-]+$/.test(formData.numero.trim())) {
+      errors.numero = "Format de numéro invalide";
     }
 
-    if (parseInt(formData.quantite) < 1) {
-      errors.quantite = "La quantité doit être au moins 1";
+    const quantiteNum = parseInt(formData.quantite);
+    if (isNaN(quantiteNum) || quantiteNum < 1) {
+      errors.quantite = "La quantité doit être un nombre d'au moins 1";
+    }
+
+    // Validation de l'image si elle existe
+    if (formData.image) {
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (formData.image.size > maxSize) {
+        errors.image = "L'image est trop volumineuse. Taille maximale : 10MB.";
+      }
     }
 
     setValidationErrors(errors);
@@ -284,7 +339,6 @@ export default function EditEchangeModal({
         API_ENDPOINTS.ECHANGES.UPDATE(echange.uuid),
         formDataToSend,
         {
-          requiresAuth: true,
         },
       );
 
@@ -375,6 +429,7 @@ export default function EditEchangeModal({
       style={{
         backgroundColor: "rgba(0,0,0,0.5)",
         backdropFilter: "blur(2px)",
+        zIndex: 1050,
       }}
       role="dialog"
       aria-labelledby="editEchangeModalLabel"
@@ -389,7 +444,7 @@ export default function EditEchangeModal({
           <div
             className="modal-header text-white border-0 rounded-top-3"
             style={{
-              background: `linear-gradient(135deg, ${colors.oskar.yellow} 0%, ${colors.oskar.yellowHover} 100%)`,
+              background: `linear-gradient(135deg, ${colors.oskar.yellow} 0%, ${colors.oskar.yellow} 100%)`,
               borderBottom: `3px solid ${colors.oskar.orange}`,
             }}
           >
@@ -784,6 +839,10 @@ export default function EditEchangeModal({
                             maxHeight: "200px",
                             objectFit: "cover",
                           }}
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.src = `https://via.placeholder.com/200/cccccc/ffffff?text=Image+Erreur`;
+                          }}
                         />
                         <button
                           type="button"
@@ -832,6 +891,12 @@ export default function EditEchangeModal({
                     </button>
                   </div>
 
+                  {validationErrors.image && (
+                    <div className="invalid-feedback d-block">
+                      {validationErrors.image}
+                    </div>
+                  )}
+
                   <div className="text-muted mt-2">
                     <small>
                       Formats acceptés: JPG, PNG, WEBP, GIF, SVG (max 10MB). Si
@@ -873,7 +938,7 @@ export default function EditEchangeModal({
                   background: isAuthenticated
                     ? colors.oskar.green
                     : colors.oskar.grey,
-                  border: `1px solid ${isAuthenticated ? colors.oskar.greenHover : colors.oskar.grey}`,
+                  border: `1px solid ${isAuthenticated ? colors.oskar.green : colors.oskar.grey}`,
                   borderRadius: "8px",
                   fontWeight: "500",
                   opacity: !isAuthenticated ? 0.6 : 1,
@@ -917,13 +982,18 @@ export default function EditEchangeModal({
         .form-control:focus,
         .form-select:focus {
           border-color: ${colors.oskar.green};
-          box-shadow: 0 0 0 0.25rem ${colors.oskar.greenHover}25;
+          box-shadow: 0 0 0 0.25rem ${colors.oskar.green}25;
         }
 
         .btn {
           border-radius: 8px !important;
           transition: all 0.3s ease;
           font-weight: 500;
+        }
+
+        .btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
         }
 
         .fs-14 {
@@ -937,6 +1007,28 @@ export default function EditEchangeModal({
         .img-fluid {
           max-width: 100%;
           height: auto;
+        }
+
+        .badge {
+          font-weight: 500;
+        }
+
+        .alert {
+          border-radius: 10px !important;
+        }
+
+        .card {
+          border-radius: 10px !important;
+          transition: transform 0.2s ease;
+        }
+
+        .card:hover {
+          transform: translateY(-2px);
+        }
+
+        .input-group:focus-within {
+          border-color: ${colors.oskar.blue};
+          box-shadow: 0 0 0 0.2rem ${colors.oskar.blue}20;
         }
       `}</style>
     </div>

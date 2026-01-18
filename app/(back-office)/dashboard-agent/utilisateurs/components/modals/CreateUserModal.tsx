@@ -1280,10 +1280,7 @@ export default function CreateUserModal({
                               <div
                                 className="progress-bar"
                                 role="progressbar"
-                                style={{
-                                  width: `${(passwordStrength.score / 5) * 100}%`,
-                                  backgroundColor: passwordStrength.color,
-                                }}
+                               
                               ></div>
                             </div>
                           </div>

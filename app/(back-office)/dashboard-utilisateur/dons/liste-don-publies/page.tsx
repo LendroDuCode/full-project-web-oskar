@@ -508,10 +508,7 @@ export default function DonsPubliesPage() {
         ...params,
       }).toString();
 
-      if (queryParams) {
-        endpoint = `${endpoint}?${queryParams}`;
-      }
-
+   
       console.log("🌐 Endpoint appelé:", endpoint);
 
       // Appel API avec gestion d'erreur améliorée
@@ -764,7 +761,6 @@ export default function DonsPubliesPage() {
   const handleExport = async () => {
     try {
       const response = await api.get(API_ENDPOINTS.DONS.EXPORT_PDF, {
-        responseType: "blob",
       });
       const url = window.URL.createObjectURL(response);
       const link = document.createElement("a");
@@ -985,13 +981,8 @@ export default function DonsPubliesPage() {
 
   return (
     <>
-      {/* Modals */}
-      <CreateDonModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onSuccess={() => handleSuccess("Don créé avec succès !")}
-      />
-      {selectedDon && (
+      {/* Modals 
+       {selectedDon && (
         <EditDonModal
           isOpen={showEditModal}
           don={selectedDon}
@@ -1012,6 +1003,13 @@ export default function DonsPubliesPage() {
           }}
         />
       )}
+      */}
+      <CreateDonModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={() => handleSuccess("Don créé avec succès !")}
+      />
+     
       <DeleteModal
         show={showDeleteModal}
         don={selectedDon}

@@ -30,11 +30,20 @@ import {
   faTrash as faTrashIcon,
   faEye,
 } from "@fortawesome/free-solid-svg-icons";
-import { usePays } from "@/hooks/usePays";
-import type { Pays } from "@/services/pays/pays.types";
+import { api } from "@/lib/api-client";
+import { API_ENDPOINTS } from "@/config/api-endpoints";
 import CreatePaysModal from "./modals/CreatePaysModal";
 import DeletePaysModal from "./modals/DeletePaysModal";
 import EditPaysModal from "./modals/EditPaysModal";
+import { Pays } from "@/app/shared/types/geography";
+
+// Interface pour la pagination
+interface PaginationInfo {
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+}
 
 // Composant de badge de statut
 const StatusBadge = ({ statut }: { statut: string }) => {
@@ -397,50 +406,18 @@ const BulkDeleteModal = ({
   );
 };
 
-// Composant de statistiques
-const StatsCard = ({
-  title,
-  value,
-  icon,
-  color,
-}: {
-  title: string;
-  value: number;
-  icon: any;
-  color: string;
-}) => (
-  <div className="card border-0 shadow-sm">
-    <div className="card-body">
-      <div className="d-flex align-items-center justify-content-between">
-        <div>
-          <h6 className="text-muted mb-1">{title}</h6>
-          <h3 className="mb-0 fw-bold">{value}</h3>
-        </div>
-        <div
-          className={`bg-${color} bg-opacity-10 text-${color} rounded-circle d-flex align-items-center justify-content-center`}
-          style={{ width: "48px", height: "48px" }}
-        >
-          <FontAwesomeIcon icon={icon} />
-        </div>
-      </div>
-    </div>
-  </div>
-);
-
 // Composant principal
 export default function PaysPage() {
-  const {
-    pays,
-    loading,
-    error,
-    pagination,
-    fetchPays,
-    togglePaysStatus,
-    deletePays,
-    setPage,
-    setLimit,
-    refresh,
-  } = usePays();
+  // États principaux
+  const [pays, setPays] = useState<Pays[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [pagination, setPagination] = useState<PaginationInfo>({
+    page: 1,
+    limit: 10,
+    total: 0,
+    pages: 1,
+  });
 
   // États pour les modals
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -468,6 +445,167 @@ export default function PaysPage() {
 
   // Options pour les éléments par page
   const itemsPerPageOptions = [5, 10, 20, 50];
+
+  // Fonction pour charger les pays
+  const fetchPays = useCallback(async (params?: any) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const queryParams = new URLSearchParams({
+        page: String(params?.page || pagination.page),
+        limit: String(params?.limit || pagination.limit),
+        ...params,
+      });
+
+      // Nettoyer les paramètres undefined
+      Object.keys(queryParams).forEach((key) => {
+        if (queryParams.get(key) === undefined || queryParams.get(key) === null) {
+          queryParams.delete(key);
+        }
+      });
+
+      const endpoint = `${API_ENDPOINTS.PAYS.LIST}?${queryParams.toString()}`;
+      console.log("📡 Requête API pour les pays:", endpoint);
+
+      const response = await api.get(endpoint);
+
+      if (response.data && Array.isArray(response.data.data)) {
+        setPays(response.data.data);
+        
+        // Mettre à jour la pagination si disponible
+        if (response.data.meta) {
+          setPagination({
+            page: response.data.meta.current_page || 1,
+            limit: response.data.meta.per_page || pagination.limit,
+            total: response.data.meta.total || response.data.data.length,
+            pages: response.data.meta.last_page || 1,
+          });
+        } else {
+          // Fallback si pas de métadonnées
+          setPagination(prev => ({
+            ...prev,
+            page: params?.page || prev.page,
+            limit: params?.limit || prev.limit,
+            total: response.data.data.length,
+            pages: Math.ceil(response.data.data.length / (params?.limit || prev.limit)),
+          }));
+        }
+      } else {
+        console.error("❌ Format de réponse inattendu pour les pays:", response.data);
+        setError("Format de réponse inattendu du serveur");
+        setPays([]);
+      }
+    } catch (err: any) {
+      console.error("❌ Erreur lors du chargement des pays:", err);
+      
+      let errorMessage = "Erreur lors du chargement des pays";
+      if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
+      setPays([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [pagination.page, pagination.limit]);
+
+  // Fonction pour changer le statut d'un pays
+  const togglePaysStatus = async (uuid: string) => {
+    try {
+      setLoading(true);
+      const response = await api.post(API_ENDPOINTS.PAYS.TOGGLE_STATUS(uuid));
+
+      if (response.data) {
+        // Mettre à jour l'état local
+        setPays(prev => prev.map(p => 
+          p.uuid === uuid ? { ...p, statut: response.data.statut } : p
+        ));
+        return response.data;
+      }
+    } catch (err: any) {
+      console.error("❌ Erreur lors du changement de statut:", err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fonction pour supprimer un pays
+  const deletePays = async (uuid: string) => {
+    try {
+      setLoading(true);
+      await api.delete(API_ENDPOINTS.PAYS.DELETE(uuid));
+      
+      // Retirer le pays de la liste
+      setPays(prev => prev.filter(p => p.uuid !== uuid));
+      
+      // Mettre à jour le total
+      setPagination(prev => ({
+        ...prev,
+        total: prev.total - 1,
+        pages: Math.ceil((prev.total - 1) / prev.limit),
+      }));
+      
+      return true;
+    } catch (err: any) {
+      console.error("❌ Erreur lors de la suppression:", err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fonction pour supprimer plusieurs pays
+  const deleteMultiplePays = async (uuids: string[]) => {
+    try {
+      setLoading(true);
+      
+      // Supprimer chaque pays
+      for (const uuid of uuids) {
+        await api.delete(API_ENDPOINTS.PAYS.DELETE(uuid));
+      }
+      
+      // Retirer les pays de la liste
+      setPays(prev => prev.filter(p => !uuids.includes(p.uuid)));
+      
+      // Mettre à jour le total
+      setPagination(prev => ({
+        ...prev,
+        total: prev.total - uuids.length,
+        pages: Math.ceil((prev.total - uuids.length) / prev.limit),
+      }));
+      
+      return true;
+    } catch (err: any) {
+      console.error("❌ Erreur lors de la suppression multiple:", err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fonction pour rafraîchir la liste
+  const refresh = useCallback(() => {
+    return fetchPays({
+      page: pagination.page,
+      limit: pagination.limit,
+      search: searchTerm.trim() || undefined,
+      statut: selectedStatut !== "all" ? selectedStatut : undefined,
+    });
+  }, [fetchPays, pagination.page, pagination.limit, searchTerm, selectedStatut]);
+
+  // Fonctions pour la pagination
+  const setPage = useCallback((page: number) => {
+    setPagination(prev => ({ ...prev, page }));
+  }, []);
+
+  const setLimit = useCallback((limit: number) => {
+    setPagination(prev => ({ ...prev, limit, page: 1 }));
+  }, []);
 
   // Statistiques
   const stats = useMemo(() => {
@@ -710,20 +848,20 @@ export default function PaysPage() {
     setLocalError(null);
   };
 
-  const handleOpenEditModal = (pays: Pays) => {
-    setSelectedPays(pays);
+  const handleOpenEditModal = (paysItem: Pays) => {
+    setSelectedPays(paysItem);
     setShowEditModal(true);
     setLocalError(null);
   };
 
-  const handleOpenViewModal = (pays: Pays) => {
-    setSelectedPays(pays);
+  const handleOpenViewModal = (paysItem: Pays) => {
+    setSelectedPays(paysItem);
     setShowViewModal(true);
     setLocalError(null);
   };
 
-  const handleOpenDeleteModal = (pays: Pays) => {
-    setSelectedPays(pays);
+  const handleOpenDeleteModal = (paysItem: Pays) => {
+    setSelectedPays(paysItem);
     setShowDeleteModal(true);
     setLocalError(null);
   };
@@ -790,19 +928,14 @@ export default function PaysPage() {
 
     try {
       setLocalError(null);
+      const uuids = Array.from(selectedRows);
 
-      // Supprimer chaque pays sélectionné
-      const deletePromises = Array.from(selectedRows).map((uuid) =>
-        deletePays(uuid),
-      );
-
-      await Promise.all(deletePromises);
+      await deleteMultiplePays(uuids);
 
       setShowBulkDeleteModal(false);
       clearSelection();
-      await refresh();
 
-      setSuccessMessage(`${selectedRows.size} pays supprimé(s) avec succès`);
+      setSuccessMessage(`${uuids.length} pays supprimé(s) avec succès`);
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
       console.error("❌ Erreur lors de la suppression en masse:", err);
@@ -1338,7 +1471,7 @@ export default function PaysPage() {
                                 </div>
                               </td>
                               <td>
-                                <StatusBadge statut={paysItem.statut} />
+                                <StatusBadge statut={paysItem.statut || ""} />
                               </td>
                               <td>
                                 <div className="d-flex align-items-center">

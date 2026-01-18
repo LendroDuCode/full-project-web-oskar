@@ -397,7 +397,6 @@ export default function ProduitVendeur() {
       // Utiliser l'endpoint pour les produits du vendeur
       const response = await api.get<PaginatedResponse>(
         API_ENDPOINTS.PRODUCTS.VENDEUR_PRODUCTS,
-        { params },
       );
 
       setProducts(response.data);
@@ -528,7 +527,7 @@ export default function ProduitVendeur() {
   // Publication d'un produit
   const handlePublishProduct = async (productUuid: string) => {
     try {
-      await api.post(API_ENDPOINTS.PRODUCTS.PUBLISH, {
+      await api.post(API_ENDPOINTS.PRODUCTS.PUBLLIER, {
         produitUuid: productUuid,
       });
       handleSuccess("Produit publié avec succès !");
@@ -542,7 +541,7 @@ export default function ProduitVendeur() {
   // Dépublier un produit
   const handleUnpublishProduct = async (productUuid: string) => {
     try {
-      await api.post(API_ENDPOINTS.PRODUCTS.UNPUBLISH, {
+      await api.post(API_ENDPOINTS.PRODUCTS.PUBLLIER, {
         produitUuid: productUuid,
       });
       handleSuccess("Produit dépublié avec succès !");
@@ -580,7 +579,7 @@ export default function ProduitVendeur() {
       const product = products.find((p) => p.uuid === productUuid);
       if (!product) return;
 
-      await api.put(API_ENDPOINTS.PRODUCTS.UPDATE_STOCK_VENDEUR(productUuid), {
+      await api.put(API_ENDPOINTS.PRODUCTS.UPDATE_STOCK_PRODUIT(productUuid), {
         disponible: disponible,
         quantite: product.quantite,
       });
@@ -617,12 +616,12 @@ export default function ProduitVendeur() {
 
           switch (action) {
             case "publish":
-              await api.post(API_ENDPOINTS.PRODUCTS.PUBLISH, {
+              await api.post(API_ENDPOINTS.PRODUCTS.PUBLLIER, {
                 produitUuid: productUuid,
               });
               break;
             case "unpublish":
-              await api.post(API_ENDPOINTS.PRODUCTS.UNPUBLISH, {
+              await api.post(API_ENDPOINTS.PRODUCTS.PUBLLIER, {
                 produitUuid: productUuid,
               });
               break;
@@ -727,14 +726,8 @@ export default function ProduitVendeur() {
 
   return (
     <>
-      {/* Modals */}
-      <CreateProductModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onSuccess={() => handleSuccess("Produit créé avec succès !")}
-      />
-
-      {selectedProduct && (
+      {/* Modals
+         {selectedProduct && (
         <EditProductModal
           isOpen={showEditModal}
           product={selectedProduct}
@@ -756,6 +749,14 @@ export default function ProduitVendeur() {
           }}
         />
       )}
+      */}
+      <CreateProductModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={() => handleSuccess("Produit créé avec succès !")}
+      />
+
+   
 
       {/* Modal de suppression */}
       <DeleteModal

@@ -31,6 +31,16 @@ interface FavoriItem {
 
 type TabType = "all" | "produits" | "dons" | "echanges";
 
+// Fonction pour convertir les filtres UI en types d'items
+const filterToItemType = (filter: string): "don" | "echange" | "produit" => {
+  switch(filter) {
+    case "dons": return "don";
+    case "echanges": return "echange";
+    case "produits": return "produit";
+    default: return "don"; // Fallback
+  }
+};
+
 // Fonction pour formater le prix
 const formatPrice = (price: number | string | null | undefined) => {
   if (price === null || price === undefined) return "Gratuit";
@@ -115,7 +125,7 @@ function LoginRequiredPage() {
                   <div
                     className="col-md-5 d-none d-md-block"
                     style={{
-                      background: `linear-gradient(135deg, ${colors.oskar.lightPurple || "#F3E5F5"} 0%, ${colors.oskar.lightPurple}20 100%)`,
+                      background: `linear-gradient(135deg, ${colors.oskar.purple || "#F3E5F5"} 0%, ${colors.oskar.purpleLight}20 100%)`,
                     }}
                   >
                     <div className="h-100 d-flex flex-column justify-content-center align-items-center p-5">
@@ -209,8 +219,8 @@ function LoginRequiredPage() {
                               style={{
                                 width: "60px",
                                 height: "60px",
-                                background: `${colors.oskar.lightGreen}20`,
-                                border: `2px solid ${colors.oskar.lightGreen}`,
+                                background: `${colors.oskar.greenHover}20`,
+                                border: `2px solid ${colors.oskar.greenHover}`,
                               }}
                             >
                               <i
@@ -397,7 +407,7 @@ function LoginRequiredPage() {
                             style={{
                               width: "70px",
                               height: "70px",
-                              background: `${colors.oskar.lightPurple}`,
+                              background: `${colors.oskar.purpleLight}`,
                             }}
                           >
                             <i
@@ -423,7 +433,7 @@ function LoginRequiredPage() {
                             style={{
                               width: "70px",
                               height: "70px",
-                              background: `${colors.oskar.lightGreen}20`,
+                              background: `${colors.oskar.greenHover}20`,
                             }}
                           >
                             <i
@@ -896,7 +906,9 @@ export default function ListeFavorisPage() {
   // Filtrer les favoris selon l'onglet actif
   const filteredFavoris = favoris.filter((item) => {
     if (activeFilter === "all") return true;
-    return item.type === activeFilter;
+    // Utiliser la fonction de conversion pour comparer les types
+    const itemType = filterToItemType(activeFilter);
+    return item.type === itemType;
   });
 
   const handleSortChange = (sort: string) => {
@@ -1105,7 +1117,7 @@ export default function ListeFavorisPage() {
                         style={{
                           background:
                             activeFilter === "all"
-                              ? `${colors.oskar.lightPurple || "#F3E5F5"}`
+                              ? `${colors.oskar.purpleLight || "#F3E5F5"}`
                               : "transparent",
                           color:
                             activeFilter === "all"
@@ -1129,7 +1141,7 @@ export default function ListeFavorisPage() {
                         style={{
                           background:
                             activeFilter === "produits"
-                              ? `${colors.oskar.lightGreen}20`
+                              ? `${colors.oskar.green}20`
                               : "transparent",
                           color:
                             activeFilter === "produits"
@@ -1319,7 +1331,7 @@ export default function ListeFavorisPage() {
                         style={{
                           background:
                             activeFilter === "all"
-                              ? `${colors.oskar.lightPurple || "#F3E5F5"}`
+                              ? `${colors.oskar.purpleLight || "#F3E5F5"}`
                               : "transparent",
                           color:
                             activeFilter === "all"
@@ -1346,7 +1358,7 @@ export default function ListeFavorisPage() {
                         style={{
                           background:
                             activeFilter === "produits"
-                              ? `${colors.oskar.lightGreen}20`
+                              ? `${colors.oskar.greenHover}20`
                               : "transparent",
                           color:
                             activeFilter === "produits"
@@ -1775,7 +1787,7 @@ export default function ListeFavorisPage() {
                             <div
                               className="rounded-circle p-2 me-2 flex-shrink-0"
                               style={{
-                                backgroundColor: colors.oskar.lightGreen,
+                                backgroundColor: colors.oskar.greenHover,
                               }}
                             >
                               <i
@@ -1824,7 +1836,7 @@ export default function ListeFavorisPage() {
                 <div
                   className="mt-4 rounded-2 p-3 text-center"
                   style={{
-                    background: `linear-gradient(135deg, ${colors.oskar.lightPurple || "#F3E5F5"} 0%, ${colors.oskar.lightPurple || "#F3E5F5"}20 100%)`,
+                    background: `linear-gradient(135deg, ${colors.oskar.purpleLight || "#F3E5F5"} 0%, ${colors.oskar.purpleLight || "#F3E5F5"}20 100%)`,
                     border: `1px solid ${colors.oskar.purple || "#9C27B0"}20`,
                   }}
                 >

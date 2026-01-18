@@ -968,8 +968,8 @@ export default function DonsBloquesUtilisateur() {
 
   return (
     <>
-      {/* Modals */}
-      {selectedDon && (
+      {/* Modals 
+        {selectedDon && (
         <ViewDonModal
           isOpen={showViewModal}
           don={selectedDon}
@@ -979,6 +979,8 @@ export default function DonsBloquesUtilisateur() {
           }}
         />
       )}
+      */}
+    
 
       <DeleteModal
         show={showDeleteModal}

@@ -13,6 +13,7 @@ import {
   faImage,
   faStar,
   faCheckCircle,
+  faHeart,
   faSpinner,
   faUpload,
   faTrash,
@@ -36,6 +37,8 @@ import colors from "@/app/shared/constants/colors";
 interface EditProduitModalProps {
   isOpen: boolean;
   produit: Produit | null;
+  createdAt: string | null;
+  
   onClose: () => void;
   onSuccess: (message: string) => void;
 }
@@ -88,12 +91,7 @@ const EditProduitModal = ({
         prix: produit.prix.replace(".00", ""),
         quantite: produit.quantite,
         description: produit.description || "",
-        couleur: produit.couleur || "",
-        dimensions: produit.dimensions || "",
-        poids: produit.poids || "",
-        code_barre: produit.code_barre || "",
-        promo: produit.promo !== null ? produit.promo : 0,
-        promo_date_fin: produit.promo_date_fin || "",
+       
       });
       setImagePreview(produit.image || null);
       setValidationErrors({});
@@ -174,9 +172,7 @@ const EditProduitModal = ({
       errors.categorie_uuid = "La catégorie est obligatoire";
     }
 
-    if (formData.promo && (formData.promo < 0 || formData.promo > 100)) {
-      errors.promo = "La promotion doit être entre 0% et 100%";
-    }
+   
 
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
@@ -312,20 +308,7 @@ const EditProduitModal = ({
       formDataToSend.append("quantite", (formData.quantite || 1).toString());
 
       // Champs optionnels
-      if (formData.type !== undefined)
-        formDataToSend.append("type", formData.type);
-      if (formData.description !== undefined)
-        formDataToSend.append("description", formData.description);
-      if (formData.couleur) formDataToSend.append("couleur", formData.couleur);
-      if (formData.dimensions)
-        formDataToSend.append("dimensions", formData.dimensions);
-      if (formData.poids) formDataToSend.append("poids", formData.poids);
-      if (formData.code_barre)
-        formDataToSend.append("code_barre", formData.code_barre);
-      if (formData.promo)
-        formDataToSend.append("promo", formData.promo.toString());
-      if (formData.promo_date_fin)
-        formDataToSend.append("promo_date_fin", formData.promo_date_fin);
+
 
       if (formData.image instanceof File) {
         formDataToSend.append("image", formData.image);
@@ -1377,7 +1360,6 @@ const EditProduitModal = ({
                               type="text"
                               className="form-control bg-light"
                               value={new Date(
-                                produit.createdAt,
                               ).toLocaleDateString("fr-FR", {
                                 day: "2-digit",
                                 month: "2-digit",
@@ -1405,7 +1387,6 @@ const EditProduitModal = ({
                               type="text"
                               className="form-control bg-light"
                               value={new Date(
-                                produit.updatedAt,
                               ).toLocaleDateString("fr-FR", {
                                 day: "2-digit",
                                 month: "2-digit",

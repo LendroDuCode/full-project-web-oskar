@@ -22,7 +22,7 @@ import {
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import colors from "@/app/shared/constants/colors";
-import type { Pays } from "@/services/pays/pays.service";
+import { Pays } from "@/app/shared/types/geography";
 
 // Types
 interface FormData {
@@ -130,7 +130,7 @@ export default function EditPaysModal({
 
         // Récupérer les données complètes du pays
         const response = await api.get<Pays>(
-          API_ENDPOINTS.ADMIN.PAYS.DETAIL(pays.uuid),
+          API_ENDPOINTS.PAYS.DETAIL(pays.uuid),
         );
 
         if (response) {
@@ -273,7 +273,7 @@ export default function EditPaysModal({
       };
 
       // Appel à l'API pour la mise à jour
-      await api.put(API_ENDPOINTS.ADMIN.PAYS.UPDATE(pays.uuid), paysData);
+      await api.put(API_ENDPOINTS.PAYS.UPDATE(pays.uuid), paysData);
 
       setSuccessMessage("Pays modifié avec succès !");
 

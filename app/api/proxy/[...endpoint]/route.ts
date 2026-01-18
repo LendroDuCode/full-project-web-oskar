@@ -7,7 +7,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
 // Fonction pour extraire les params de manière compatible
 async function extractParams(context: {
   params: Promise<{ endpoint: string[] }>;
-}) {
+}): Promise<string[]> {
   try {
     const params = await context.params;
     console.log("📦 Params extraits:", params);
@@ -19,16 +19,10 @@ async function extractParams(context: {
 
     const endpointArray = params.endpoint;
 
-    // Vérifier que c'est un tableau
-    if (!Array.isArray(endpointArray)) {
-      // Si c'est une string, la convertir en tableau
-      if (typeof endpointArray === "string") {
-        return endpointArray.split("/").filter(Boolean);
-      }
-      throw new Error("Endpoint doit être un tableau");
-    }
 
-    return endpointArray;
+
+    // S'assurer que tous les éléments sont des strings
+    return endpointArray.filter(item => typeof item === "string");
   } catch (error) {
     console.error("❌ Erreur extraction params:", error);
     throw error;
@@ -164,12 +158,17 @@ async function handleRequest(
     let endpointParts: string[];
     try {
       endpointParts = await extractParams(context);
+      console.log("✅ Endpoint parts extraits:", endpointParts);
     } catch (error: any) {
       console.error("❌ Erreur extraction params:", error);
       return NextResponse.json(
         {
           error: "Erreur de paramètres",
           message: error.message,
+          diagnostic: {
+            errorType: "ParamsExtractionError",
+            timestamp: new Date().toISOString(),
+          }
         },
         { status: 400 },
       );
@@ -177,10 +176,33 @@ async function handleRequest(
 
     // Vérifier qu'on a des parties
     if (!endpointParts || endpointParts.length === 0) {
+      console.warn("⚠️  Endpoint parts est vide");
       return NextResponse.json(
         {
           error: "Endpoint manquant",
           message: "Veuillez spécifier un endpoint",
+          diagnostic: {
+            errorType: "EmptyEndpoint",
+            timestamp: new Date().toISOString(),
+          }
+        },
+        { status: 400 },
+      );
+    }
+
+    // Vérifier que tous les éléments sont des strings
+    const invalidParts = endpointParts.filter(item => typeof item !== "string");
+    if (invalidParts.length > 0) {
+      console.error("❌ Endpoint contient des éléments non-string:", invalidParts);
+      return NextResponse.json(
+        {
+          error: "Endpoint invalide",
+          message: "Les parties de l'endpoint doivent être des strings",
+          diagnostic: {
+            errorType: "InvalidEndpointType",
+            invalidParts,
+            timestamp: new Date().toISOString(),
+          }
         },
         { status: 400 },
       );
@@ -215,7 +237,9 @@ async function handleRequest(
 
     // FORCER les headers pour éviter les réponses HTML
     headers.set("Accept", "application/json, text/plain, */*");
-    headers.set("Content-Type", "application/json");
+    if (!headers.has("content-type")) {
+      headers.set("Content-Type", "application/json");
+    }
 
     // Ajouter un header pour identifier le proxy
     headers.set("X-Requested-With", "XMLHttpRequest");
@@ -275,6 +299,10 @@ async function handleRequest(
           message: errorMessage,
           backendUrl,
           timestamp: new Date().toISOString(),
+          diagnostic: {
+            errorType: fetchError.name === "AbortError" ? "TimeoutError" : "FetchError",
+            duration: `${Date.now() - requestStartTime}ms`,
+          }
         },
         { status: 502 },
       );
@@ -402,7 +430,7 @@ async function handleRequest(
 
     // Ajouter des métadonnées de proxy pour le débogage
     const finalResponse = {
-      ...(typeof responseBody === "object"
+      ...(typeof responseBody === "object" && responseBody !== null
         ? responseBody
         : { data: responseBody }),
       _proxyMeta: {

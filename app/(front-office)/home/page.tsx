@@ -19,7 +19,6 @@ const Home: React.FC = () => {
       <HeroSearch />
       <HeroCarousel />
       <Breadcrumb />
-      <FilterStatsBar />
       <MainContent />
       <QuickStats />
       <CategoriesShowcase />

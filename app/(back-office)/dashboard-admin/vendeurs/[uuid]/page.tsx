@@ -29,20 +29,22 @@ import { API_ENDPOINTS } from "@/config/api-endpoints";
 import colors from "@/app/shared/constants/colors";
 import EditVendeurModal from "../components/modals/ModifierVendeurModal";
 
-// Types pour les vendeurs
-interface Vendeur {
+// lib/types/vendeur.ts
+export interface Vendeur {
   uuid: string;
   id?: number;
   nom: string;
   prenoms: string;
   email: string;
   telephone: string;
-  civilite_uuid?: string;
+  civilite_uuid?: string; // Allow undefined
   civilite?: {
     libelle: string;
+    uuid: string;
   };
   role?: {
     name: string;
+    uuid: string;
   };
   est_verifie: boolean;
   est_bloque: boolean;
@@ -67,13 +69,13 @@ interface Vendeur {
     pays?: string;
     adresse?: string;
   };
-  // Ajouts spécifiques aux vendeurs
   type_vendeur?: string;
   specialite?: string;
   commission?: number;
   notes?: string;
   statut?: string;
 }
+
 
 export default function DetailVendeurPage() {
   const params = useParams();
@@ -435,7 +437,6 @@ export default function DetailVendeurPage() {
   if (error || !vendeur) {
     return (
       <div className="p-3 p-md-4">
-        <DashboardHeader title="Détail du Vendeur" />
         <div
           className="alert alert-danger border-0 shadow-sm"
           style={{ borderRadius: "12px" }}
@@ -473,8 +474,9 @@ export default function DetailVendeurPage() {
 
   return (
     <>
-      {/* Modal de modification */}
-      <EditVendeurModal
+      {/* Modal de modification
+      
+            <EditVendeurModal
         isOpen={showEditModal}
         vendeur={vendeur}
         onClose={() => setShowEditModal(false)}
@@ -484,6 +486,8 @@ export default function DetailVendeurPage() {
           setTimeout(() => setSuccessMessage(null), 3000);
         }}
       />
+
+      */}
 
       {/* Messages de succès */}
       {successMessage && (

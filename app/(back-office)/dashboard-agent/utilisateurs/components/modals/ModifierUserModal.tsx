@@ -1135,20 +1135,21 @@ export default function EditUserModal({
                               le modifier.
                             </>
                           ) : (
-                            <>
-                              Modifiez les informations de{" "}
-                              <strong>
-                                {user.nom} {user.prenoms}
-                              </strong>
-                              . Créé le{" "}
-                              {userCreatedDate
-                                ? userCreatedDate.toLocaleDateString("fr-FR")
-                                : "N/A"}
-                              {userUpdatedDate &&
-                                userUpdatedDate > userCreatedDate &&
-                                ` • Dernière modification le ${userUpdatedDate.toLocaleDateString("fr-FR")}`}
-                              .
-                            </>
+                          <>
+  Modifiez les informations de{" "}
+  <strong>
+    {user.nom} {user.prenoms}
+  </strong>
+  . Créé le{" "}
+  {userCreatedDate
+    ? userCreatedDate.toLocaleDateString("fr-FR")
+    : "N/A"}
+  {userUpdatedDate &&
+    userCreatedDate &&
+    userUpdatedDate > userCreatedDate &&
+    ` • Dernière modification le ${userUpdatedDate.toLocaleDateString("fr-FR")}`}
+  .
+</>
                           )}
                         </p>
                         {isUserDeleted && (
@@ -1969,10 +1970,7 @@ export default function EditUserModal({
                                   <div
                                     className="progress-bar"
                                     role="progressbar"
-                                    style={{
-                                      width: `${(passwordStrength.score / 5) * 100}%`,
-                                      backgroundColor: passwordStrength.color,
-                                    }}
+                                  
                                   ></div>
                                 </div>
                               </div>

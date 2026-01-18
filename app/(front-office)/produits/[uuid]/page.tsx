@@ -421,9 +421,9 @@ export default function ProduitDetailPage() {
 
           if (Array.isArray(commentairesResponse)) {
             commentairesData = commentairesResponse;
-          } else if (commentairesResponse?.data) {
-            commentairesData = Array.isArray(commentairesResponse.data)
-              ? commentairesResponse.data
+          } else if (commentairesResponse) {
+            commentairesData = Array.isArray(commentairesResponse)
+              ? commentairesResponse
               : [];
           }
 
@@ -433,12 +433,13 @@ export default function ProduitDetailPage() {
           );
 
           let notesData: NoteAPI[] = [];
+          
 
           if (Array.isArray(notesResponse)) {
             notesData = notesResponse;
-          } else if (notesResponse?.data) {
-            notesData = Array.isArray(notesResponse.data)
-              ? notesResponse.data
+          } else if (notesResponse) {
+            notesData = Array.isArray(notesResponse)
+              ? notesResponse
               : [];
           }
 

@@ -905,7 +905,6 @@ export default function ListeVendeursActifsPage() {
   const handleExport = async () => {
     try {
       const response = await api.get(API_ENDPOINTS.ADMIN.VENDEURS.EXPORT_PDF, {
-        responseType: "blob",
       });
 
       const url = window.URL.createObjectURL(response);
@@ -1011,8 +1010,9 @@ export default function ListeVendeursActifsPage() {
         onSuccess={handleVendeurCreated}
       />
 
-      {/* Modal de modification de vendeur */}
-      <ModifierVendeurModal
+      {/* Modal de modification de vendeur 
+      
+       <ModifierVendeurModal
         isOpen={showEditModal}
         vendeur={selectedVendeurForEdit}
         onClose={() => {
@@ -1028,6 +1028,8 @@ export default function ListeVendeursActifsPage() {
           setTimeout(() => setSuccessMessage(null), 3000);
         }}
       />
+      */}
+     
 
       {/* Modal de suppression simple */}
       <DeleteModal

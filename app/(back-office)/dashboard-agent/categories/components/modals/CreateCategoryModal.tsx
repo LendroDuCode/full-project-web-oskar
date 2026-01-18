@@ -295,7 +295,7 @@ export default function CreateCategoryModal({
         API_ENDPOINTS.CATEGORIES.CREATE,
         formDataToSend,
         {
-          requiresAuth: true,
+         // requiresAuth: true,
         },
       );
 

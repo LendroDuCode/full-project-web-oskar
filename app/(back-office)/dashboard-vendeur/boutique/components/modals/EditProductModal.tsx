@@ -315,7 +315,7 @@ export default function EditProductModal({
 
       // Envoyer la requête de mise à jour
       const response = await api.put(
-        API_ENDPOINTS.PRODUCTS.UPDATE_STOCK_VENDEUR(product.uuid),
+        API_ENDPOINTS.PRODUCTS.UPDATE_STOCK_PRODUIT(product.uuid),
         formDataToSend,
         {
           headers: {

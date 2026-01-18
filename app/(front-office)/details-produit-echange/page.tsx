@@ -1,7 +1,7 @@
-// src/features/pages/product-details/ProductDetails.tsx
+// app/(front-office)/details-produit-echange/page.tsx
 "use client";
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useRouter, useParams } from "next/navigation"; // Changé ici
 import { Button } from "primereact/button";
 import { Card } from "primereact/card";
 import { Rating } from "primereact/rating";
@@ -55,14 +55,16 @@ interface Product {
   negotiation: boolean;
 }
 
-const ProductDetails: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+const ProductDetailsPage: React.FC = () => {
+  const router = useRouter(); // Changé ici (useNavigate -> useRouter)
+  const params = useParams(); // Changé ici
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
   const [isFavorite, setIsFavorite] = useState(false);
   const [activeTab, setActiveTab] = useState("description");
+
+  const id = params?.id as string; // Récupérer l'ID depuis les paramètres
 
   // Simuler le chargement des données du produit
   useEffect(() => {
@@ -183,7 +185,7 @@ Je vends car j'ai reçu un nouveau téléphone en cadeau. Ce téléphone a été
           <Button
             label="Retour à l'accueil"
             icon={<FontAwesomeIcon icon={faArrowLeft} />}
-            onClick={() => navigate("/")}
+            onClick={() => router.push("/")} // Changé ici
             style={{
               backgroundColor: colors.oskar.green,
               borderColor: colors.oskar.green,
@@ -200,7 +202,7 @@ Je vends car j'ai reçu un nouveau téléphone en cadeau. Ce téléphone a été
         <Button
           label="Retour"
           icon={<FontAwesomeIcon icon={faArrowLeft} />}
-          onClick={() => navigate(-1)}
+          onClick={() => router.back()} // Changé ici
           className="mb-6"
           style={{
             backgroundColor: "transparent",
@@ -394,4 +396,4 @@ Je vends car j'ai reçu un nouveau téléphone en cadeau. Ce téléphone a été
   );
 };
 
-export default ProductDetails;
+export default ProductDetailsPage;

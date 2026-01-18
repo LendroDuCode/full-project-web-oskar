@@ -23,6 +23,8 @@ import {
   Category,
   DonData,
   EchangeData,
+  PublishAdModalProps,
+  VenteData,
 } from "./components/constantes/types";
 import DonForm from "./components/DonForm";
 import EchangeForm from "./components/ExchangeForm";

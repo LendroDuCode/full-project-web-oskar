@@ -28,7 +28,7 @@ interface FormDataTypeBoutique {
   description: string;
   peut_vendre_produits: boolean;
   peut_vendre_biens: boolean;
-  imageFile?: File | null;
+  imageFile?: File | null | undefined;
 }
 
 interface ValidationErrors {
@@ -69,6 +69,7 @@ export default function CreateTypeBoutiqueModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fonction utilitaire pour générer un image_key
+  // Fonction utilitaire pour générer un image_key
   const generateImageKey = (file?: File): string => {
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(2, 8);
@@ -84,6 +85,8 @@ export default function CreateTypeBoutiqueModal({
     return `type-boutique-default-${timestamp}-${random}`;
   };
 
+  // Dans handleSubmit, appeler la fonction comme ceci :
+  const imageKey = generateImageKey(formData.imageFile || undefined);
   // Initialiser
   useEffect(() => {
     if (isOpen) {
@@ -276,7 +279,7 @@ export default function CreateTypeBoutiqueModal({
       );
 
       // IMPORTANT: Ajouter image_key TOUJOURS, même sans fichier
-      const imageKey = generateImageKey(formData.imageFile);
+      const imageKey = generateImageKey(formData.imageFile || undefined);
       formDataToSend.append("image_key", imageKey);
       console.log("🔑 Image key généré:", imageKey);
 

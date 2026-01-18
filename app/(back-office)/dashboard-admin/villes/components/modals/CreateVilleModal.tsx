@@ -1,7 +1,7 @@
 // app/(back-office)/dashboard-admin/villes/components/modals/CreateVilleModal.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faTimes,
@@ -18,9 +18,675 @@ import {
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import colors from "@/app/shared/constants/colors";
-import { usePays } from "@/hooks/usePays";
-import type { Pays } from "@/services/pays/pays.types";
+import { User } from "../../../utilisateurs/types/user.types";
 
+// Types pour les pays
+// Types pour les villes
+
+// Type principal Ville
+interface Ville {
+  // Identifiant unique
+  uuid: string;
+  
+  // Informations principales
+  nom: string;
+  code_postal: string;
+  code_insee?: string;
+  description?: string;
+  
+  // Géographie
+  latitude?: number;
+  longitude?: number;
+  altitude?: number;
+  superficie?: number;
+  population?: number;
+  densite?: number;
+  
+  // Relations
+  pays_uuid: string;
+  departement_uuid?: string;
+  region_uuid?: string;
+  
+  // Statut
+  statut: "actif" | "inactif" | "archive";
+  est_capitale?: boolean;
+  est_capitale_region?: boolean;
+  est_capitale_departement?: boolean;
+  
+  // Démographie
+  annee_recensement?: number;
+  evolution_population?: number;
+  taux_natalite?: number;
+  taux_mortalite?: number;
+  esperance_vie?: number;
+  
+  // Économie
+  nombre_entreprises?: number;
+  taux_chomage?: number;
+  revenu_median?: number;
+  principales_activites?: string[];
+  
+  // Infrastructure
+  nombre_ecoles?: number;
+  nombre_hopitaux?: number;
+  nombre_transports?: number;
+  reseau_transport?: {
+    bus?: boolean;
+    metro?: boolean;
+    tram?: boolean;
+    train?: boolean;
+    aeroport?: boolean;
+  };
+  
+  // Climat
+  climat?: {
+    type?: string;
+    temperature_moyenne?: number;
+    precipitation_moyenne?: number;
+    ensoleillement_moyen?: number;
+  };
+  
+  // Tourisme
+  sites_touristiques?: string[];
+  nombre_hotels?: number;
+  capacite_hebergement?: number;
+  frequentation_touristique?: number;
+  
+  // Culture
+  nombre_musees?: number;
+  nombre_theatres?: number;
+  evenements_culturels?: string[];
+  
+  // Environnement
+  espaces_verts?: number;
+  taux_forestation?: number;
+  qualite_air?: number;
+  
+  // Relations (optionnelles selon le contexte)
+  pays?: Pays;
+  departement?: Departement;
+  region?: Region;
+  quartiers?: Quartier[];
+  adresses?: Adresse[];
+  utilisateurs?: User[];
+  
+  // Codes standards
+  code_postal_principal?: string;
+  codes_postaux?: string[];
+  zone_horaire?: string;
+  code_telephonique_local?: string;
+  
+  // Métadonnées
+  created_at?: string;
+  updated_at?: string;
+  created_by?: string;
+  updated_by?: string;
+  validated_at?: string;
+  validated_by?: string;
+  
+  // Historique
+  anciens_noms?: {
+    nom: string;
+    periode: string;
+  }[];
+  date_fondation?: string;
+  evenements_historiques?: {
+    date: string;
+    evenement: string;
+  }[];
+}
+
+// Type pour les formulaires
+interface VilleFormData {
+  nom: string;
+  code_postal: string;
+  pays_uuid: string;
+  departement_uuid?: string;
+  region_uuid?: string;
+  code_insee?: string;
+  description?: string;
+  latitude?: number;
+  longitude?: number;
+  altitude?: number;
+  superficie?: number;
+  population?: number;
+  statut?: "actif" | "inactif";
+  est_capitale?: boolean;
+  est_capitale_region?: boolean;
+  est_capitale_departement?: boolean;
+  annee_recensement?: number;
+  principales_activites?: string[];
+  sites_touristiques?: string[];
+}
+
+// Type pour la création de ville
+interface CreateVilleData {
+  nom: string;
+  code_postal: string;
+  pays_uuid: string;
+  description?: string;
+  latitude?: number;
+  longitude?: number;
+  statut?: "actif" | "inactif";
+  departement_uuid?: string;
+  region_uuid?: string;
+  code_insee?: string;
+}
+
+// Type pour la mise à jour de ville
+interface UpdateVilleData {
+  nom?: string;
+  code_postal?: string;
+  pays_uuid?: string;
+  departement_uuid?: string;
+  region_uuid?: string;
+  code_insee?: string;
+  description?: string;
+  latitude?: number;
+  longitude?: number;
+  altitude?: number;
+  superficie?: number;
+  population?: number;
+  densite?: number;
+  statut?: "actif" | "inactif" | "archive";
+  est_capitale?: boolean;
+  est_capitale_region?: boolean;
+  est_capitale_departement?: boolean;
+  annee_recensement?: number;
+  evolution_population?: number;
+  taux_natalite?: number;
+  taux_mortalite?: number;
+  nombre_entreprises?: number;
+  taux_chomage?: number;
+  revenu_median?: number;
+  principales_activites?: string[];
+  nombre_ecoles?: number;
+  nombre_hopitaux?: number;
+  sites_touristiques?: string[];
+  espaces_verts?: number;
+  qualite_air?: number;
+  codes_postaux?: string[];
+  zone_horaire?: string;
+}
+
+// Type pour la réponse API
+interface ApiResponseVille {
+  success: boolean;
+  message: string;
+  data: Ville | Ville[];
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  timestamp: string;
+}
+
+// Type pour les filtres de recherche
+interface VilleFilterType {
+  search?: string;
+  pays_uuid?: string;
+  departement_uuid?: string;
+  region_uuid?: string;
+  statut?: "actif" | "inactif" | "archive" | "tous";
+  est_capitale?: boolean;
+  avec_code_postal?: boolean;
+  avec_coordonnees?: boolean;
+  population_min?: number;
+  population_max?: number;
+  orderBy?: keyof Ville | 'pays.nom' | 'departement.nom' | 'population';
+  orderDirection?: 'asc' | 'desc';
+  page?: number;
+  limit?: number;
+}
+
+// Type pour les statistiques villes
+interface VilleStatsType {
+  total: number;
+  par_pays: Record<string, number>;
+  par_statut: {
+    actif: number;
+    inactif: number;
+    archive: number;
+  };
+  avec_coordonnees: number;
+  capitales: number;
+  population_totale: number;
+  densite_moyenne: number;
+  villes_plus_peuplees: Ville[];
+}
+
+// Type pour les options de sélection
+interface VilleOptionType {
+  value: string;
+  label: string;
+  code_postal: string;
+  pays_uuid: string;
+  pays_nom?: string;
+  population?: number;
+  disabled?: boolean;
+}
+
+// Type pour l'export ville
+interface VilleExportData {
+  uuid: string;
+  nom: string;
+  code_postal: string;
+  code_insee: string;
+  pays_nom: string;
+  pays_code: string;
+  region_nom: string;
+  departement_nom: string;
+  latitude: number;
+  longitude: number;
+  altitude: number;
+  superficie: number;
+  population: number;
+  densite: number;
+  statut: string;
+  est_capitale: boolean;
+  annee_recensement: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// Type pour la recherche de ville
+interface VilleSearchResult {
+  uuid: string;
+  nom: string;
+  code_postal: string;
+  pays: {
+    uuid: string;
+    nom: string;
+    code: string;
+  };
+  departement?: {
+    uuid: string;
+    nom: string;
+    code: string;
+  };
+  region?: {
+    uuid: string;
+    nom: string;
+    code: string;
+  };
+  latitude?: number;
+  longitude?: number;
+  population?: number;
+  distance?: number; // Pour les recherches géolocalisées
+}
+
+// Type pour les coordonnées géographiques
+interface VilleCoordinates {
+  uuid: string;
+  nom: string;
+  code_postal: string;
+  latitude: number;
+  longitude: number;
+  pays_nom: string;
+}
+
+// Type pour les quartiers
+interface Quartier {
+  uuid: string;
+  nom: string;
+  ville_uuid: string;
+  description?: string;
+  type?: string;
+  population?: number;
+  superficie?: number;
+  latitude?: number;
+  longitude?: number;
+  statut: "actif" | "inactif";
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Type pour les adresses
+interface Adresse {
+  uuid: string;
+  rue: string;
+  numero?: string;
+  complement?: string;
+  code_postal: string;
+  ville_uuid: string;
+  pays_uuid: string;
+  latitude?: number;
+  longitude?: number;
+  type?: "residence" | "bureau" | "commercial" | "autre";
+  statut: "actif" | "inactif";
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Type pour les régions
+interface Region {
+  uuid: string;
+  nom: string;
+  code: string;
+  pays_uuid: string;
+  description?: string;
+  superficie?: number;
+  population?: number;
+  capitale_region_uuid?: string;
+  statut: "actif" | "inactif";
+  created_at?: string;
+  updated_at?: string;
+  pays?: Pays;
+  villes?: Ville[];
+  departements?: Departement[];
+}
+
+// Type pour les départements
+interface Departement {
+  uuid: string;
+  nom: string;
+  code: string;
+  region_uuid?: string;
+  pays_uuid: string;
+  description?: string;
+  superficie?: number;
+  population?: number;
+  prefecture_uuid?: string;
+  statut: "actif" | "inactif";
+  created_at?: string;
+  updated_at?: string;
+  region?: Region;
+  pays?: Pays;
+  villes?: Ville[];
+}
+// Type principal Pays
+interface Pays {
+  // Identifiant unique
+  uuid: string;
+  code: string;
+  
+  // Informations principales
+  nom: string;
+  nom_complet?: string;
+  nom_local?: string;
+  description?: string;
+  
+  // Drapeau et symboles
+  code_drapeau?: string;
+  emoji_drapeau?: string;
+  devise?: string;
+  monnaie_code?: string;
+  monnaie_symbole?: string;
+  
+  // Géographie
+  continent?: string;
+  sous_continent?: string;
+  region?: string;
+  sous_region?: string;
+  capitale?: string;
+  superficie?: number;
+  population?: number;
+  densite?: number;
+  
+  // Langues
+  langues_officielles?: string[];
+  langues_parlees?: string[];
+  
+  // Indicatifs
+  indicatif_telephonique?: string;
+  tld?: string;
+  
+  // Fuseau horaire
+  fuseau_horaire?: string;
+  utc_offset?: string;
+  
+  // Économie
+  pib?: number;
+  pib_par_habitant?: number;
+  croissance_pib?: number;
+  inflation?: number;
+  chomage?: number;
+  
+  // Démographie
+  esperance_vie?: number;
+  taux_natalite?: number;
+  taux_mortalite?: number;
+  taux_migration?: number;
+  
+  // Indices
+  indice_developpement_humain?: number;
+  indice_gini?: number;
+  indice_bonheur?: number;
+  
+  // Statut
+  statut: "actif" | "inactif" | "archive";
+  est_soumis_tva?: boolean;
+  taux_tva_standard?: number;
+  
+  // Classifications
+  organisation_mondiale_commerce?: boolean;
+  union_europeenne?: boolean;
+  zone_schengen?: boolean;
+  zone_euro?: boolean;
+  commonwealth?: boolean;
+  francophonie?: boolean;
+  
+  // Codes standards
+  code_iso2?: string;
+  code_iso3?: string;
+  code_iso_numerique?: string;
+  code_fips?: string;
+  code_ioc?: string;
+  code_cctld?: string;
+  
+  // Localisation
+  latitude?: number;
+  longitude?: number;
+  
+  // Relations (optionnelles selon le contexte)
+  villes?: Ville[];
+  regions?: Region[];
+  departements?: Departement[];
+  
+  // Métadonnées
+  created_at?: string;
+  updated_at?: string;
+  created_by?: string;
+  updated_by?: string;
+}
+
+// Type pour les formulaires
+interface PaysFormData {
+  nom: string;
+  code: string;
+  nom_complet?: string;
+  nom_local?: string;
+  description?: string;
+  code_drapeau?: string;
+  emoji_drapeau?: string;
+  devise?: string;
+  monnaie_code?: string;
+  monnaie_symbole?: string;
+  continent?: string;
+  sous_continent?: string;
+  region?: string;
+  sous_region?: string;
+  capitale?: string;
+  superficie?: number;
+  population?: number;
+  langues_officielles?: string[];
+  indicatif_telephonique?: string;
+  tld?: string;
+  fuseau_horaire?: string;
+  statut?: "actif" | "inactif";
+  est_soumis_tva?: boolean;
+  taux_tva_standard?: number;
+  latitude?: number;
+  longitude?: number;
+  code_iso2?: string;
+  code_iso3?: string;
+}
+
+// Type pour la création de pays
+interface CreatePaysData {
+  nom: string;
+  code: string;
+  nom_complet?: string;
+  code_drapeau?: string;
+  continent?: string;
+  capitale?: string;
+  statut?: "actif" | "inactif";
+  description?: string;
+}
+
+// Type pour la mise à jour de pays
+interface UpdatePaysData {
+  nom?: string;
+  code?: string;
+  nom_complet?: string;
+  nom_local?: string;
+  description?: string;
+  code_drapeau?: string;
+  emoji_drapeau?: string;
+  devise?: string;
+  monnaie_code?: string;
+  monnaie_symbole?: string;
+  continent?: string;
+  sous_continent?: string;
+  region?: string;
+  sous_region?: string;
+  capitale?: string;
+  superficie?: number;
+  population?: number;
+  densite?: number;
+  langues_officielles?: string[];
+  indicatif_telephonique?: string;
+  tld?: string;
+  fuseau_horaire?: string;
+  utc_offset?: string;
+  statut?: "actif" | "inactif" | "archive";
+  est_soumis_tva?: boolean;
+  taux_tva_standard?: number;
+  latitude?: number;
+  longitude?: number;
+  code_iso2?: string;
+  code_iso3?: string;
+}
+
+// Type pour la réponse API
+interface ApiResponsePays {
+  success: boolean;
+  message: string;
+  data: Pays | Pays[];
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  timestamp: string;
+}
+
+// Type pour les filtres de recherche
+interface PaysFilterType {
+  search?: string;
+  continent?: string;
+  region?: string;
+  sous_region?: string;
+  statut?: "actif" | "inactif" | "archive" | "tous";
+  avec_villes?: boolean;
+  avec_regions?: boolean;
+  orderBy?: keyof Pays | 'nombre_villes';
+  orderDirection?: 'asc' | 'desc';
+  page?: number;
+  limit?: number;
+}
+
+// Type pour les statistiques pays
+interface PaysStatsType {
+  total: number;
+  par_continent: Record<string, number>;
+  par_statut: {
+    actif: number;
+    inactif: number;
+    archive: number;
+  };
+  avec_capitale: number;
+  avec_coordonnees: number;
+  densite_moyenne: number;
+  superficie_totale: number;
+  population_totale: number;
+}
+
+// Type pour les options de sélection
+interface PaysOptionType {
+  value: string;
+  label: string;
+  code: string;
+  code_drapeau?: string;
+  emoji_drapeau?: string;
+  continent?: string;
+  disabled?: boolean;
+}
+
+// Type pour l'export pays
+interface PaysExportData {
+  uuid: string;
+  nom: string;
+  code: string;
+  nom_complet: string;
+  continent: string;
+  region: string;
+  sous_region: string;
+  capitale: string;
+  superficie: number;
+  population: number;
+  densite: number;
+  indicatif_telephonique: string;
+  tld: string;
+  devise: string;
+  monnaie_code: string;
+  statut: string;
+  nombre_villes: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// Type pour les drapeaux pays
+interface PaysDrapeauType {
+  code: string;
+  nom: string;
+  emoji: string;
+  unicode: string;
+  image_url?: string;
+}
+
+// Type pour la carte pays
+interface PaysCarteType {
+  uuid: string;
+  nom: string;
+  code: string;
+  svg_path?: string;
+  coordinates?: {
+    latitude: number;
+    longitude: number;
+  }[];
+  bounding_box?: {
+    nord: number;
+    sud: number;
+    est: number;
+    ouest: number;
+  };
+}
+
+// Type pour les relations internationales
+interface PaysRelationInternationale {
+  pays_uuid: string;
+  pays_partenaire_uuid: string;
+  type_relation: 'diplomatique' | 'commerciale' | 'culturelle' | 'militaire' | 'autre';
+  date_debut: string;
+  date_fin?: string;
+  description?: string;
+  created_at: string;
+  updated_at: string;
+}
 // Types
 interface FormData {
   nom: string;
@@ -52,6 +718,10 @@ export default function CreateVilleModal({
     description: "",
   });
 
+  // États pour les pays
+  const [pays, setPays] = useState<Pays[]>([]);
+  const [loadingPays, setLoadingPays] = useState(false);
+
   // États de chargement et erreurs
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,9 +729,6 @@ export default function CreateVilleModal({
   const [validationErrors, setValidationErrors] = useState<
     Record<string, string>
   >({});
-
-  // Charger les pays
-  const { pays, loading: loadingPays } = usePays();
 
   // Styles personnalisés
   const styles = {
@@ -92,6 +759,57 @@ export default function CreateVilleModal({
       borderColor: colors.oskar.purpleHover,
     },
   };
+
+  // Fonction pour charger les pays
+  const fetchPays = useCallback(async () => {
+    try {
+      setLoadingPays(true);
+      setError(null);
+
+      // Construire les paramètres de requête
+      const params = new URLSearchParams({
+        limit: "100", // Charger plus de pays pour les listes déroulantes
+        statut: "actif", // Ne charger que les pays actifs
+        sort: "nom", // Trier par nom
+      });
+
+      const endpoint = `${API_ENDPOINTS.PAYS.LIST}?${params.toString()}`;
+      console.log("📡 Chargement des pays:", endpoint);
+
+      const response = await api.get(endpoint);
+
+      if (response.data && Array.isArray(response.data.data)) {
+        setPays(response.data.data);
+      } else if (Array.isArray(response.data)) {
+        // Fallback pour les APIs qui retournent directement un tableau
+        setPays(response.data);
+      } else {
+        console.error("❌ Format de réponse inattendu pour les pays:", response.data);
+        setPays([]);
+      }
+    } catch (err: any) {
+      console.error("❌ Erreur lors du chargement des pays:", err);
+      
+      let errorMessage = "Erreur lors du chargement des pays";
+      if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
+      setPays([]);
+    } finally {
+      setLoadingPays(false);
+    }
+  }, []);
+
+  // Charger les pays quand la modal s'ouvre
+  useEffect(() => {
+    if (isOpen) {
+      fetchPays();
+    }
+  }, [isOpen, fetchPays]);
 
   // Réinitialiser le formulaire quand la modal s'ouvre
   useEffect(() => {
@@ -579,12 +1297,27 @@ export default function CreateVilleModal({
                           }
                         >
                           <option value="">Sélectionnez un pays</option>
-                          {pays.map((pays: Pays) => (
-                            <option key={pays.uuid} value={pays.uuid}>
-                              {pays.nom} ({pays.code})
+                          {loadingPays ? (
+                            <option value="" disabled>
+                              Chargement des pays...
                             </option>
-                          ))}
+                          ) : pays.length === 0 ? (
+                            <option value="" disabled>
+                              Aucun pays disponible
+                            </option>
+                          ) : (
+                            pays.map((pays: Pays) => (
+                              <option key={pays.uuid} value={pays.uuid}>
+                                {pays.nom} ({pays.code})
+                              </option>
+                            ))
+                          )}
                         </select>
+                        {loadingPays && (
+                          <div className="position-absolute end-0 top-50 translate-middle-y me-3">
+                            <FontAwesomeIcon icon={faSpinner} spin className="text-muted" />
+                          </div>
+                        )}
                       </div>
                       {validationErrors.pays_uuid && (
                         <div

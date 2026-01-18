@@ -26,6 +26,7 @@ interface UtilisateurProfile {
   telephone: string | null;
   avatar: string | null;
   est_verifie: boolean;
+  type: "standard" | "premium";
   est_bloque: boolean;
   date_naissance: string | null;
   statut: string;

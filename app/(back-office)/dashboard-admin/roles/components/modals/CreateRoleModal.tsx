@@ -21,7 +21,6 @@ import {
   faEyeSlash,
   faInfoCircle,
 } from "@fortawesome/free-solid-svg-icons";
-import { useRoles } from "@/hooks/useRoles";
 import colors from "@/app/shared/constants/colors";
 
 // Types

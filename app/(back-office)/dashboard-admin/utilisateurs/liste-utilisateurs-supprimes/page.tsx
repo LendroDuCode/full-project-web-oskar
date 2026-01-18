@@ -1,7 +1,7 @@
 // app/(back-office)/dashboard-admin/utilisateurs/liste-utilisateurs-supprimes/page.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -41,19 +41,55 @@ import {
   faUserPlus,
 } from "@fortawesome/free-solid-svg-icons";
 
-// Import des services et hooks
+// Import des services
 import { API_ENDPOINTS } from "@/config/api-endpoints";
-import { useUsers } from "@/hooks/useUtilisateurs";
-import type { User } from "@/services/utilisateurs/user.types";
 import { api } from "@/lib/api-client";
 import CreateUserModal from "../components/modals/CreateUserModal";
 
+// Version simplifiée pour résoudre l'erreur immédiate
+interface User {
+  // Identifiant unique
+  uuid: string;
+  code_utilisateur?: string;
+  
+  // Informations personnelles
+  nom: string;
+  prenoms: string;
+  email: string;
+  telephone: string;
+  deleted_at?: string;
+  
+  // Authentification et statut
+  est_verifie: boolean;
+  est_bloque: boolean;
+  is_deleted?: boolean;
+  
+  // Rôles et permissions
+  role_uuid: string;
+  is_admin: boolean;
+  
+  // Civilité
+  civilite_uuid?: string;
+  
+  // Métadonnées
+  created_at?: string;
+  updated_at?: string;
+  
+  // Relations (optionnelles)
+  civilite?: {
+    uuid: string;
+    libelle: string;
+  };
+  role?: {
+    uuid: string;
+    name: string;
+  };
+}
 // Interface local pour le composant
 interface LocalUser extends Omit<
   User,
   "civilite" | "role" | "statut_matrimonial"
 > {
-  // Relations optionnelles avec des types simplifiés
   civilite?: {
     uuid?: string;
     libelle: string;
@@ -67,6 +103,68 @@ interface LocalUser extends Omit<
     libelle: string;
   };
 }
+
+// Interface pour la pagination
+interface PaginationData {
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+}
+
+// Service pour gérer les utilisateurs supprimés
+const deletedUserService = {
+  // Récupérer les utilisateurs supprimés avec pagination et filtres
+  async getDeletedUsers(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    is_admin?: string;
+    est_bloque?: string;
+    est_verifie?: string;
+  }) {
+    const queryParams = new URLSearchParams();
+    
+    // Paramètres par défaut pour les utilisateurs supprimés
+    queryParams.append('is_deleted', 'true');
+    
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.is_admin) queryParams.append('is_admin', params.is_admin);
+    if (params?.est_bloque) queryParams.append('est_bloque', params.est_bloque);
+    if (params?.est_verifie) queryParams.append('est_verifie', params.est_verifie);
+
+    const response = await api.get(
+      `${API_ENDPOINTS.ADMIN.USERS.BASE}?${queryParams.toString()}`
+    );
+    return response.data;
+  },
+
+  // Restaurer un utilisateur
+  async restoreUser(uuid: string) {
+    const response = await api.post(
+      API_ENDPOINTS.ADMIN.USERS.RESTORE(uuid)
+    );
+    return response.data;
+  },
+
+  // Supprimer définitivement un utilisateur
+  async permanentDeleteUser(uuid: string) {
+    const response = await api.delete(
+      `${API_ENDPOINTS.ADMIN.USERS.BASE}/${uuid}/permanent`
+    );
+    return response.data;
+  },
+
+  // Vider la corbeille (supprimer tous les utilisateurs supprimés)
+  async emptyTrash() {
+    const response = await api.delete(
+      API_ENDPOINTS.ADMIN.USERS.EMPTY_TRASH
+    );
+    return response.data;
+  }
+};
 
 // Composant de statut amélioré
 const StatusBadge = ({
@@ -637,19 +735,16 @@ const Pagination = ({
 };
 
 export default function ListeUtilisateursSupprimesPage() {
-  // Utilisation du hook personnalisé
-  const {
-    users,
-    loading,
-    error,
-    pagination,
-    fetchDeletedUsers,
-    restoreUser,
-    deleteUser,
-    setPage,
-    setLimit,
-    refresh,
-  } = useUsers();
+  // États pour les données
+  const [users, setUsers] = useState<LocalUser[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pagination, setPagination] = useState<PaginationData>({
+    page: 1,
+    limit: 10,
+    total: 0,
+    pages: 1,
+  });
 
   // États pour les modals
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -682,51 +777,159 @@ export default function ListeUtilisateursSupprimesPage() {
   // Options pour les éléments par page
   const itemsPerPageOptions = [5, 10, 20, 50];
 
+  // Fonction pour charger les utilisateurs supprimés
+  const fetchDeletedUsers = useCallback(async (params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    is_admin?: string;
+    est_bloque?: string;
+    est_verifie?: string;
+  }) => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const result = await deletedUserService.getDeletedUsers({
+        page: params?.page || pagination.page,
+        limit: params?.limit || pagination.limit,
+        search: params?.search,
+        is_admin: params?.is_admin,
+        est_bloque: params?.est_bloque,
+        est_verifie: params?.est_verifie,
+      });
+
+      // Supposons que l'API retourne { data: User[], pagination: PaginationData }
+      setUsers(result.data || []);
+      
+      if (result.pagination) {
+        setPagination(result.pagination);
+      } else {
+        // Fallback si l'API ne retourne pas de pagination
+        setPagination({
+          page: params?.page || 1,
+          limit: params?.limit || pagination.limit,
+          total: result.data?.length || 0,
+          pages: Math.ceil((result.data?.length || 0) / (params?.limit || pagination.limit))
+        });
+      }
+      
+    } catch (err: any) {
+      setError(err.message || "Erreur lors du chargement des utilisateurs supprimés");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [pagination.page, pagination.limit]);
+
+  // Fonction pour restaurer un utilisateur
+  const restoreUser = useCallback(async (uuid: string) => {
+    try {
+      const result = await deletedUserService.restoreUser(uuid);
+      
+      // Supprimer localement de la liste
+      setUsers(prev => prev.filter(user => user.uuid !== uuid));
+      
+      // Mettre à jour la pagination
+      setPagination(prev => ({
+        ...prev,
+        total: prev.total - 1,
+        pages: Math.ceil((prev.total - 1) / prev.limit)
+      }));
+      
+      return result.data;
+    } catch (err: any) {
+      throw new Error(err.message || "Erreur lors de la restauration de l'utilisateur");
+    }
+  }, []);
+
+  // Fonction pour supprimer définitivement un utilisateur
+  const permanentDeleteUser = useCallback(async (uuid: string) => {
+    try {
+      await deletedUserService.permanentDeleteUser(uuid);
+      
+      // Supprimer localement
+      setUsers(prev => prev.filter(user => user.uuid !== uuid));
+      
+      // Mettre à jour la pagination
+      setPagination(prev => ({
+        ...prev,
+        total: prev.total - 1,
+        pages: Math.ceil((prev.total - 1) / prev.limit)
+      }));
+      
+      return true;
+    } catch (err: any) {
+      throw new Error(err.message || "Erreur lors de la suppression définitive de l'utilisateur");
+    }
+  }, []);
+
+  // Fonction pour vider la corbeille
+  const emptyTrash = useCallback(async () => {
+    try {
+      await deletedUserService.emptyTrash();
+      
+      // Vider localement
+      setUsers([]);
+      
+      // Réinitialiser la pagination
+      setPagination(prev => ({
+        ...prev,
+        total: 0,
+        pages: 1
+      }));
+      
+      return true;
+    } catch (err: any) {
+      throw new Error(err.message || "Erreur lors du vidage de la corbeille");
+    }
+  }, []);
+
+  // Fonctions de pagination
+  const setPage = useCallback((page: number) => {
+    setPagination(prev => ({ ...prev, page }));
+    fetchDeletedUsers({ page });
+  }, [fetchDeletedUsers]);
+
+  const setLimit = useCallback((limit: number) => {
+    setPagination(prev => ({ ...prev, limit, page: 1 }));
+    fetchDeletedUsers({ limit });
+  }, [fetchDeletedUsers]);
+
+  // Fonction de rafraîchissement
+  const refresh = useCallback(() => {
+    return fetchDeletedUsers({
+      page: pagination.page,
+      limit: pagination.limit,
+      search: searchTerm || undefined,
+      is_admin: selectedRole !== "all" ? selectedRole === "admin" ? "true" : "false" : undefined,
+      est_bloque: selectedStatus === "blocked" ? "true" : undefined,
+      est_verifie: selectedStatus === "unverified" ? "false" : undefined,
+    });
+  }, [fetchDeletedUsers, pagination.page, pagination.limit, searchTerm, selectedRole, selectedStatus]);
+
   // Charger les utilisateurs supprimés au montage
   useEffect(() => {
     fetchDeletedUsers();
-  }, []);
+  }, [fetchDeletedUsers]);
 
-  // Gérer les changements de pagination et filtres
+  // Gérer les changements de recherche et filtres avec debounce
   useEffect(() => {
-    const fetchData = async () => {
-      const params: any = {
-        page: pagination.page,
-        limit: pagination.limit,
-      };
-
-      if (searchTerm.trim()) {
-        params.search = searchTerm.trim();
-      }
-
-      if (selectedRole !== "all") {
-        params.is_admin = selectedRole === "admin" ? "true" : "false";
-      }
-
-      if (selectedStatus !== "all") {
-        params.est_bloque = selectedStatus === "blocked" ? "true" : "false";
-        if (selectedStatus === "unverified") {
-          params.est_verifie = "false";
-        }
-      }
-
-      await fetchDeletedUsers(params);
-    };
-
     const timeoutId = setTimeout(() => {
-      fetchData();
-    }, 300);
+      fetchDeletedUsers({
+        page: 1,
+        limit: pagination.limit,
+        search: searchTerm || undefined,
+        is_admin: selectedRole !== "all" ? selectedRole === "admin" ? "true" : "false" : undefined,
+        est_bloque: selectedStatus === "blocked" ? "true" : undefined,
+        est_verifie: selectedStatus === "unverified" ? "false" : undefined,
+      });
+    }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [
-    pagination.page,
-    pagination.limit,
-    searchTerm,
-    selectedRole,
-    selectedStatus,
-  ]);
+  }, [searchTerm, selectedRole, selectedStatus, fetchDeletedUsers, pagination.limit]);
 
-  // Fonction pour restaurer un utilisateur
+  // Fonction pour restaurer un utilisateur (avec modal)
   const handleRestoreUser = async () => {
     if (!selectedUser) return;
 
@@ -740,21 +943,19 @@ export default function ListeUtilisateursSupprimesPage() {
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
       console.error("Erreur lors de la restauration:", err);
-      setInfoMessage(
-        err.response?.data?.message || "Erreur lors de la restauration",
-      );
+      setInfoMessage(err.message || "Erreur lors de la restauration");
     } finally {
       setRestoreLoading(false);
     }
   };
 
-  // Fonction pour supprimer définitivement un utilisateur
+  // Fonction pour supprimer définitivement un utilisateur (avec modal)
   const handlePermanentDelete = async () => {
     if (!selectedUser) return;
 
     try {
       setDeleteLoading(true);
-      await deleteUser(selectedUser.uuid);
+      await permanentDeleteUser(selectedUser.uuid);
 
       setShowDeleteModal(false);
       setSelectedUser(null);
@@ -762,9 +963,7 @@ export default function ListeUtilisateursSupprimesPage() {
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
       console.error("Erreur lors de la suppression définitive:", err);
-      setInfoMessage(
-        err.response?.data?.message || "Erreur lors de la suppression",
-      );
+      setInfoMessage(err.message || "Erreur lors de la suppression");
     } finally {
       setDeleteLoading(false);
     }
@@ -774,18 +973,14 @@ export default function ListeUtilisateursSupprimesPage() {
   const handleEmptyTrash = async () => {
     try {
       setEmptyTrashLoading(true);
-
-      // Rafraîchir la liste
-      await fetchDeletedUsers();
+      await emptyTrash();
 
       setShowEmptyTrashModal(false);
       setSuccessMessage("Corbeille vidée avec succès");
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
       console.error("Erreur lors du vidage de la corbeille:", err);
-      setInfoMessage(
-        err.response?.data?.message || "Erreur lors du vidage de la corbeille",
-      );
+      setInfoMessage(err.message || "Erreur lors du vidage de la corbeille");
     } finally {
       setEmptyTrashLoading(false);
     }
@@ -922,7 +1117,7 @@ export default function ListeUtilisateursSupprimesPage() {
           if (action === "restore") {
             await restoreUser(userId);
           } else if (action === "delete") {
-            await deleteUser(userId);
+            await permanentDeleteUser(userId);
           }
           successCount++;
         } catch (err) {
@@ -936,9 +1131,6 @@ export default function ListeUtilisateursSupprimesPage() {
       );
       setTimeout(() => setSuccessMessage(null), 3000);
 
-      // Rafraîchir la liste
-      refresh();
-
       // Réinitialiser la sélection
       setSelectedUsers([]);
       setSelectAll(false);
@@ -950,12 +1142,15 @@ export default function ListeUtilisateursSupprimesPage() {
     }
   };
 
-  // Filtrer et trier les utilisateurs
-  const filteredUtilisateurs = sortUtilisateurs(users as LocalUser[]);
-  const currentItems = filteredUtilisateurs.slice(
-    (pagination.page - 1) * pagination.limit,
-    pagination.page * pagination.limit,
-  );
+  // Filtrer et trier les utilisateurs côté client (pour le tri seulement)
+  const filteredUtilisateurs = useMemo(() => {
+    return sortUtilisateurs(users);
+  }, [users, sortConfig]);
+
+  // Calculer les éléments à afficher (déjà paginés par l'API)
+  const currentItems = useMemo(() => {
+    return filteredUtilisateurs;
+  }, [filteredUtilisateurs]);
 
   // Fallback CSV export
   const handleCSVExport = () => {
@@ -1109,7 +1304,7 @@ export default function ListeUtilisateursSupprimesPage() {
             <button
               type="button"
               className="btn-close"
-              onClick={() => {}}
+              onClick={() => setError(null)}
               aria-label="Close"
             ></button>
           </div>
@@ -1167,6 +1362,45 @@ export default function ListeUtilisateursSupprimesPage() {
                 <p className="text-muted mb-0 mt-2">
                   Gérez les utilisateurs qui ont été supprimés du système
                 </p>
+              </div>
+
+              <div className="d-flex flex-wrap gap-2">
+                <button
+                  onClick={() => refresh()}
+                  className="btn btn-outline-secondary d-flex align-items-center gap-2"
+                  disabled={loading}
+                >
+                  <FontAwesomeIcon icon={faRefresh} spin={loading} />
+                  Rafraîchir
+                </button>
+
+                <button
+                  onClick={handleCSVExport}
+                  className="btn btn-outline-primary d-flex align-items-center gap-2"
+                  disabled={users.length === 0 || loading}
+                >
+                  <FontAwesomeIcon icon={faDownload} />
+                  Exporter CSV
+                </button>
+
+                {users.length > 0 && (
+                  <button
+                    onClick={() => setShowEmptyTrashModal(true)}
+                    className="btn btn-danger d-flex align-items-center gap-2"
+                    disabled={loading}
+                  >
+                    <FontAwesomeIcon icon={faBoxOpen} />
+                    Vider la corbeille
+                  </button>
+                )}
+
+                <Link
+                  href="/dashboard-admin/utilisateurs/liste-utilisateurs"
+                  className="btn btn-outline-success d-flex align-items-center gap-2"
+                >
+                  <FontAwesomeIcon icon={faArrowLeft} />
+                  Retour aux utilisateurs
+                </Link>
               </div>
             </div>
           </div>
@@ -1373,13 +1607,6 @@ export default function ListeUtilisateursSupprimesPage() {
                           : "Aucun utilisateur supprimé ne correspond à vos critères de recherche"}
                       </p>
                       <div className="mt-3">
-                        <button
-                          onClick={() => setShowCreateModal(true)}
-                          className="btn btn-primary me-2"
-                        >
-                          <FontAwesomeIcon icon={faPlus} className="me-2" />
-                          Créer un nouvel utilisateur
-                        </button>
                         <Link
                           href="/dashboard-admin/utilisateurs/liste-utilisateurs"
                           className="btn btn-outline-primary"
@@ -1702,10 +1929,6 @@ export default function ListeUtilisateursSupprimesPage() {
         .form-check-input:focus {
           border-color: #86b7fe;
           box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
-        }
-
-        .bg-dark-opacity-10 {
-          background-color: rgba(33, 37, 41, 0.1) !important;
         }
       `}</style>
     </>

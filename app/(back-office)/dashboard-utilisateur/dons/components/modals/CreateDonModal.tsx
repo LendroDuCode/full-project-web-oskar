@@ -325,7 +325,6 @@ export default function CreateDonModal({
         API_ENDPOINTS.DONS.CREATE,
         formDataToSend,
         {
-          requiresAuth: true,
         },
       );
 

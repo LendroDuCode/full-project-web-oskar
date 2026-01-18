@@ -18,18 +18,50 @@ import {
   faCalendarAlt,
   faKey,
   faSync,
+  faMapMarkerAlt,
+  faUsers,
+  faBuilding,
+  faMoneyBillWave,
+  faLanguage,
+  faEarthAmericas,
+  faDatabase,
 } from "@fortawesome/free-solid-svg-icons";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import colors from "@/app/shared/constants/colors";
-import type { Pays } from "@/services/pays/pays.service";
 
-// Types
+// Types locaux
+interface Pays {
+  uuid: string;
+  nom: string;
+  data: any;
+  code: string;
+  indicatif: string;
+  statut: string;
+  created_at?: string;
+  updated_at?: string;
+  deleted_at?: string;
+  description?: string;
+  continent?: string;
+  capitale?: string;
+  langue_officielle?: string;
+  population?: number;
+  superficie?: number;
+  devise?: string;
+  domaine_internet?: string;
+  fuseau_horaire?: string;
+  code_continent?: string;
+}
+
 interface FormData {
   nom: string;
   code: string;
   indicatif: string;
   statut: string;
+  description?: string;
+  capitale?: string;
+  devise?: string;
+  langue_officielle?: string;
 }
 
 interface EditPaysModalProps {
@@ -51,6 +83,10 @@ export default function EditPaysModal({
     code: "",
     indicatif: "",
     statut: "actif",
+    description: "",
+    capitale: "",
+    devise: "",
+    langue_officielle: "",
   });
 
   // États de chargement et erreurs
@@ -64,6 +100,7 @@ export default function EditPaysModal({
 
   // États pour les informations du pays
   const [paysInfo, setPaysInfo] = useState<Pays | null>(null);
+  const [hasChanges, setHasChanges] = useState(false);
 
   // Styles personnalisés
   const styles = {
@@ -78,6 +115,10 @@ export default function EditPaysModal({
     infoSection: {
       background: colors.oskar.lightGrey,
       borderLeft: `4px solid ${colors.oskar.purple}`,
+    },
+    statsSection: {
+      background: colors.oskar.lightGrey,
+      borderLeft: `4px solid ${colors.oskar.green}`,
     },
     primaryButton: {
       background: colors.oskar.blue,
@@ -100,8 +141,8 @@ export default function EditPaysModal({
   };
 
   // Formater la date
-  const formatDate = useCallback((dateString: string | null | undefined) => {
-    if (!dateString) return "N/A";
+  const formatDate = useCallback((dateString?: string) => {
+    if (!dateString) return "Non spécifié";
     try {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return "Date invalide";
@@ -113,8 +154,30 @@ export default function EditPaysModal({
         minute: "2-digit",
       }).format(date);
     } catch {
-      return "N/A";
+      return "Non spécifié";
     }
+  }, []);
+
+  // Formater les nombres
+  const formatNumber = useCallback((number?: number) => {
+    if (!number) return "Non spécifié";
+    return number.toLocaleString('fr-FR');
+  }, []);
+
+  // Vérifier les changements
+  const checkForChanges = useCallback((currentForm: FormData, original: Pays | null) => {
+    if (!original) return false;
+    
+    return (
+      currentForm.nom !== original.code ||
+      currentForm.code !== original.code ||
+      currentForm.indicatif !== original.indicatif ||
+      currentForm.statut !== original.statut ||
+      currentForm.description !== (original.description || "") ||
+      currentForm.capitale !== (original.capitale || "") ||
+      currentForm.devise !== (original.devise || "") ||
+      currentForm.langue_officielle !== (original.langue_officielle || "")
+    );
   }, []);
 
   // Charger les données du pays quand il change
@@ -133,13 +196,18 @@ export default function EditPaysModal({
           API_ENDPOINTS.PAYS.DETAIL(pays.uuid),
         );
 
-        if (response) {
-          setPaysInfo(response);
+        if (response.data) {
+          const paysData = response.data;
+          setPaysInfo(paysData);
           setFormData({
-            nom: response.nom || "",
-            code: response.code || "",
-            indicatif: response.indicatif || "",
-            statut: response.statut || "actif",
+            nom: paysData.nom || "",
+            code: paysData.code || "",
+            indicatif: paysData.indicatif || "",
+            statut: paysData.statut || "actif",
+            description: paysData.description || "",
+            capitale: paysData.capitale || "",
+            devise: paysData.devise || "",
+            langue_officielle: paysData.langue_officielle || "",
           });
         } else {
           // Utiliser les données de base si l'API ne répond pas
@@ -149,10 +217,14 @@ export default function EditPaysModal({
             code: pays.code || "",
             indicatif: pays.indicatif || "",
             statut: pays.statut || "actif",
+            description: pays.description || "",
+            capitale: pays.capitale || "",
+            devise: pays.devise || "",
+            langue_officielle: pays.langue_officielle || "",
           });
         }
       } catch (err: any) {
-        console.error("Erreur lors du chargement des données:", err);
+        console.error("❌ Erreur lors du chargement des données:", err);
         setError("Impossible de charger les données du pays");
 
         // Utiliser les données de base en cas d'erreur
@@ -162,6 +234,10 @@ export default function EditPaysModal({
           code: pays.code || "",
           indicatif: pays.indicatif || "",
           statut: pays.statut || "actif",
+          description: pays.description || "",
+          capitale: pays.capitale || "",
+          devise: pays.devise || "",
+          langue_officielle: pays.langue_officielle || "",
         });
       } finally {
         setLoadingPays(false);
@@ -170,6 +246,11 @@ export default function EditPaysModal({
 
     loadPaysData();
   }, [isOpen, pays]);
+
+  // Vérifier les changements
+  useEffect(() => {
+    setHasChanges(checkForChanges(formData, paysInfo));
+  }, [formData, paysInfo, checkForChanges]);
 
   // Réinitialiser les messages d'erreur quand la modal s'ouvre
   useEffect(() => {
@@ -212,13 +293,30 @@ export default function EditPaysModal({
       errors.statut = "Le statut est obligatoire";
     }
 
+    // Validation optionnelles
+    if (formData.description && formData.description.length > 500) {
+      errors.description = "La description ne doit pas dépasser 500 caractères";
+    }
+
+    if (formData.capitale && formData.capitale.length > 100) {
+      errors.capitale = "Le nom de la capitale ne doit pas dépasser 100 caractères";
+    }
+
+    if (formData.devise && formData.devise.length > 50) {
+      errors.devise = "Le nom de la devise ne doit pas dépasser 50 caractères";
+    }
+
+    if (formData.langue_officielle && formData.langue_officielle.length > 100) {
+      errors.langue_officielle = "La langue officielle ne doit pas dépasser 100 caractères";
+    }
+
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
   // Gestion des changements de formulaire
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
   ) => {
     const { name, value } = e.target;
 
@@ -270,12 +368,25 @@ export default function EditPaysModal({
         code: formData.code.trim(),
         indicatif: formData.indicatif.trim(),
         statut: formData.statut,
+        description: formData.description?.trim() || null,
+        capitale: formData.capitale?.trim() || null,
+        devise: formData.devise?.trim() || null,
+        langue_officielle: formData.langue_officielle?.trim() || null,
       };
 
+      console.log("📤 Envoi des données de mise à jour:", paysData);
+
       // Appel à l'API pour la mise à jour
-      await api.put(API_ENDPOINTS.PAYS.UPDATE(pays.uuid), paysData);
+      const response = await api.put(API_ENDPOINTS.PAYS.UPDATE(pays.uuid), paysData);
+
+      console.log("✅ Réponse de l'API:", response.data);
 
       setSuccessMessage("Pays modifié avec succès !");
+
+      // Mettre à jour les informations locales
+      if (response.data) {
+        setPaysInfo(response.data);
+      }
 
       // Appeler le callback de succès
       if (onSuccess) {
@@ -289,6 +400,8 @@ export default function EditPaysModal({
         }, 2000);
       }
     } catch (err: any) {
+      console.error("❌ Erreur lors de la modification du pays:", err);
+
       let errorMessage = "Erreur lors de la modification du pays";
 
       if (err.response?.data?.message) {
@@ -322,6 +435,10 @@ export default function EditPaysModal({
       code: paysInfo.code || "",
       indicatif: paysInfo.indicatif || "",
       statut: paysInfo.statut || "actif",
+      description: paysInfo.description || "",
+      capitale: paysInfo.capitale || "",
+      devise: paysInfo.devise || "",
+      langue_officielle: paysInfo.langue_officielle || "",
     });
     setError(null);
     setSuccessMessage(null);
@@ -332,13 +449,7 @@ export default function EditPaysModal({
   const handleClose = () => {
     if (loading || loadingPays) return;
 
-    if (
-      paysInfo &&
-      (formData.nom !== paysInfo.nom ||
-        formData.code !== paysInfo.code ||
-        formData.indicatif !== paysInfo.indicatif ||
-        formData.statut !== paysInfo.statut)
-    ) {
+    if (hasChanges) {
       if (
         !confirm(
           "Vous avez des modifications non sauvegardées. Voulez-vous vraiment annuler ?",
@@ -349,6 +460,24 @@ export default function EditPaysModal({
     }
 
     onClose();
+  };
+
+  // Obtenir le badge de statut
+  const getStatusBadge = (statut: string) => {
+    if (statut === "actif") {
+      return (
+        <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 d-inline-flex align-items-center gap-1">
+          <FontAwesomeIcon icon={faCheckCircle} className="fs-12" />
+          <span>Actif</span>
+        </span>
+      );
+    }
+    return (
+      <span className="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 d-inline-flex align-items-center gap-1">
+        <FontAwesomeIcon icon={faExclamationTriangle} className="fs-12" />
+        <span>Inactif</span>
+      </span>
+    );
   };
 
   // Si la modal n'est pas ouverte, ne rien afficher
@@ -502,7 +631,7 @@ export default function EditPaysModal({
                           className="mb-0 fw-bold"
                           style={{ color: colors.oskar.blue }}
                         >
-                          Informations du Pays
+                          Informations Principales
                         </h6>
                         <small className="text-muted">
                           Les champs marqués d'un * sont obligatoires
@@ -644,14 +773,13 @@ export default function EditPaysModal({
 
                     <div className="row g-3 mt-3">
                       {/* Indicatif téléphonique */}
-                      <div className="col-md-6">
+                      <div className="col-md-3">
                         <label
                           htmlFor="indicatif"
                           className="form-label fw-semibold"
                         >
                           <FontAwesomeIcon icon={faPhone} className="me-2" />
-                          Indicatif téléphonique{" "}
-                          <span className="text-danger">*</span>
+                          Indicatif <span className="text-danger">*</span>
                         </label>
                         <div className="input-group">
                           <span className="input-group-text bg-light border-end-0">
@@ -685,133 +813,391 @@ export default function EditPaysModal({
                           </div>
                         )}
                         <small className="text-muted">
-                          Code d'appel international (commence par +)
+                          Code d'appel international
+                        </small>
+                      </div>
+
+                      {/* Capitale */}
+                      <div className="col-md-3">
+                        <label
+                          htmlFor="capitale"
+                          className="form-label fw-semibold"
+                        >
+                          <FontAwesomeIcon icon={faBuilding} className="me-2" />
+                          Capitale
+                        </label>
+                        <div className="input-group">
+                          <span className="input-group-text bg-light border-end-0">
+                            <FontAwesomeIcon
+                              icon={faBuilding}
+                              className="text-muted"
+                            />
+                          </span>
+                          <input
+                            type="text"
+                            id="capitale"
+                            name="capitale"
+                            className={`form-control border-start-0 ps-0 ${validationErrors.capitale ? "is-invalid" : ""}`}
+                            placeholder="Ex: Paris, Washington..."
+                            value={formData.capitale}
+                            onChange={handleChange}
+                            disabled={loading}
+                          />
+                        </div>
+                        {validationErrors.capitale && (
+                          <div className="invalid-feedback d-block">
+                            {validationErrors.capitale}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Devise */}
+                      <div className="col-md-3">
+                        <label
+                          htmlFor="devise"
+                          className="form-label fw-semibold"
+                        >
+                          <FontAwesomeIcon icon={faMoneyBillWave} className="me-2" />
+                          Devise
+                        </label>
+                        <div className="input-group">
+                          <span className="input-group-text bg-light border-end-0">
+                            <FontAwesomeIcon
+                              icon={faMoneyBillWave}
+                              className="text-muted"
+                            />
+                          </span>
+                          <input
+                            type="text"
+                            id="devise"
+                            name="devise"
+                            className={`form-control border-start-0 ps-0 ${validationErrors.devise ? "is-invalid" : ""}`}
+                            placeholder="Ex: Euro, Dollar..."
+                            value={formData.devise}
+                            onChange={handleChange}
+                            disabled={loading}
+                          />
+                        </div>
+                        {validationErrors.devise && (
+                          <div className="invalid-feedback d-block">
+                            {validationErrors.devise}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Langue officielle */}
+                      <div className="col-md-3">
+                        <label
+                          htmlFor="langue_officielle"
+                          className="form-label fw-semibold"
+                        >
+                          <FontAwesomeIcon icon={faLanguage} className="me-2" />
+                          Langue officielle
+                        </label>
+                        <div className="input-group">
+                          <span className="input-group-text bg-light border-end-0">
+                            <FontAwesomeIcon
+                              icon={faLanguage}
+                              className="text-muted"
+                            />
+                          </span>
+                          <input
+                            type="text"
+                            id="langue_officielle"
+                            name="langue_officielle"
+                            className={`form-control border-start-0 ps-0 ${validationErrors.langue_officielle ? "is-invalid" : ""}`}
+                            placeholder="Ex: Français, Anglais..."
+                            value={formData.langue_officielle}
+                            onChange={handleChange}
+                            disabled={loading}
+                          />
+                        </div>
+                        {validationErrors.langue_officielle && (
+                          <div className="invalid-feedback d-block">
+                            {validationErrors.langue_officielle}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    <div className="row g-3 mt-3">
+                      <div className="col-12">
+                        <label htmlFor="description" className="form-label fw-semibold">
+                          <FontAwesomeIcon icon={faInfoCircle} className="me-2" />
+                          Description
+                        </label>
+                        <textarea
+                          id="description"
+                          name="description"
+                          className={`form-control ${validationErrors.description ? "is-invalid" : ""}`}
+                          rows={3}
+                          placeholder="Description du pays (facultatif)"
+                          value={formData.description}
+                          onChange={handleChange}
+                          disabled={loading}
+                          maxLength={500}
+                        />
+                        {validationErrors.description && (
+                          <div className="invalid-feedback d-block">
+                            {validationErrors.description}
+                          </div>
+                        )}
+                        <small className="text-muted">
+                          {formData.description?.length || 0}/500 caractères
                         </small>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Section 2: Informations système */}
+                {/* Section 2: Informations supplémentaires */}
                 {paysInfo && (
-                  <div
-                    className="card border-0 shadow-sm mb-4"
-                    style={{ borderRadius: "12px" }}
-                  >
+                  <>
                     <div
-                      className="card-header border-0 py-3"
-                      style={styles.infoSection}
+                      className="card border-0 shadow-sm mb-4"
+                      style={{ borderRadius: "12px" }}
                     >
-                      <div className="d-flex align-items-center">
-                        <div
-                          className="rounded-circle p-2 me-3"
-                          style={{
-                            backgroundColor: `${colors.oskar.purple}15`,
-                          }}
-                        >
-                          <FontAwesomeIcon
-                            icon={faInfoCircle}
-                            style={{ color: colors.oskar.purple }}
-                          />
-                        </div>
-                        <div>
-                          <h6
-                            className="mb-0 fw-bold"
-                            style={{ color: colors.oskar.purple }}
+                      <div
+                        className="card-header border-0 py-3"
+                        style={styles.statsSection}
+                      >
+                        <div className="d-flex align-items-center">
+                          <div
+                            className="rounded-circle p-2 me-3"
+                            style={{ backgroundColor: `${colors.oskar.green}15` }}
                           >
-                            Informations Système
-                          </h6>
-                          <small className="text-muted">
-                            Informations techniques (lecture seule)
-                          </small>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="card-body p-4">
-                      <div className="row g-3">
-                        {/* UUID */}
-                        <div className="col-md-6">
-                          <label className="form-label fw-semibold">
-                            <FontAwesomeIcon icon={faKey} className="me-2" />
-                            UUID
-                          </label>
-                          <div className="input-group">
-                            <span className="input-group-text bg-light border-end-0">
-                              <FontAwesomeIcon
-                                icon={faKey}
-                                className="text-muted"
-                              />
-                            </span>
-                            <input
-                              type="text"
-                              className="form-control border-start-0 ps-0 bg-light"
-                              value={paysInfo.uuid}
-                              readOnly
-                              disabled
-                              style={{ cursor: "not-allowed" }}
+                            <FontAwesomeIcon
+                              icon={faEarthAmericas}
+                              style={{ color: colors.oskar.green }}
                             />
                           </div>
-                          <small className="text-muted">
-                            Identifiant unique
-                          </small>
-                        </div>
-
-                        {/* Date de création */}
-                        <div className="col-md-3">
-                          <label className="form-label fw-semibold">
-                            <FontAwesomeIcon
-                              icon={faCalendarAlt}
-                              className="me-2"
-                            />
-                            Créé le
-                          </label>
-                          <div className="input-group">
-                            <span className="input-group-text bg-light border-end-0">
-                              <FontAwesomeIcon
-                                icon={faCalendarAlt}
-                                className="text-muted"
-                              />
-                            </span>
-                            <input
-                              type="text"
-                              className="form-control border-start-0 ps-0 bg-light"
-                              value={formatDate(paysInfo.created_at)}
-                              readOnly
-                              disabled
-                              style={{ cursor: "not-allowed" }}
-                            />
-                          </div>
-                        </div>
-
-                        {/* Date de modification */}
-                        <div className="col-md-3">
-                          <label className="form-label fw-semibold">
-                            <FontAwesomeIcon
-                              icon={faCalendarAlt}
-                              className="me-2"
-                            />
-                            Modifié le
-                          </label>
-                          <div className="input-group">
-                            <span className="input-group-text bg-light border-end-0">
-                              <FontAwesomeIcon
-                                icon={faCalendarAlt}
-                                className="text-muted"
-                              />
-                            </span>
-                            <input
-                              type="text"
-                              className="form-control border-start-0 ps-0 bg-light"
-                              value={formatDate(paysInfo.updated_at)}
-                              readOnly
-                              disabled
-                              style={{ cursor: "not-allowed" }}
-                            />
+                          <div>
+                            <h6
+                              className="mb-0 fw-bold"
+                              style={{ color: colors.oskar.green }}
+                            >
+                              Informations Géographiques
+                            </h6>
+                            <small className="text-muted">
+                              Données statistiques (lecture seule)
+                            </small>
                           </div>
                         </div>
                       </div>
+                      <div className="card-body p-4">
+                        <div className="row g-3">
+                          {/* Population */}
+                          {paysInfo.population && (
+                            <div className="col-md-4">
+                              <label className="form-label fw-semibold">
+                                <FontAwesomeIcon icon={faUsers} className="me-2" />
+                                Population
+                              </label>
+                              <div className="input-group">
+                                <span className="input-group-text bg-light border-end-0">
+                                  <FontAwesomeIcon
+                                    icon={faUsers}
+                                    className="text-muted"
+                                  />
+                                </span>
+                                <input
+                                  type="text"
+                                  className="form-control border-start-0 ps-0 bg-light"
+                                  value={formatNumber(paysInfo.population)}
+                                  readOnly
+                                  disabled
+                                  style={{ cursor: "not-allowed" }}
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Superficie */}
+                          {paysInfo.superficie && (
+                            <div className="col-md-4">
+                              <label className="form-label fw-semibold">
+                                <FontAwesomeIcon icon={faMapMarkerAlt} className="me-2" />
+                                Superficie (km²)
+                              </label>
+                              <div className="input-group">
+                                <span className="input-group-text bg-light border-end-0">
+                                  <FontAwesomeIcon
+                                    icon={faMapMarkerAlt}
+                                    className="text-muted"
+                                  />
+                                </span>
+                                <input
+                                  type="text"
+                                  className="form-control border-start-0 ps-0 bg-light"
+                                  value={formatNumber(paysInfo.superficie)}
+                                  readOnly
+                                  disabled
+                                  style={{ cursor: "not-allowed" }}
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Continent */}
+                          {paysInfo.continent && (
+                            <div className="col-md-4">
+                              <label className="form-label fw-semibold">
+                                <FontAwesomeIcon icon={faGlobe} className="me-2" />
+                                Continent
+                              </label>
+                              <div className="input-group">
+                                <span className="input-group-text bg-light border-end-0">
+                                  <FontAwesomeIcon
+                                    icon={faGlobe}
+                                    className="text-muted"
+                                  />
+                                </span>
+                                <input
+                                  type="text"
+                                  className="form-control border-start-0 ps-0 bg-light"
+                                  value={paysInfo.continent}
+                                  readOnly
+                                  disabled
+                                  style={{ cursor: "not-allowed" }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
+
+                    {/* Section 3: Informations système */}
+                    <div
+                      className="card border-0 shadow-sm mb-4"
+                      style={{ borderRadius: "12px" }}
+                    >
+                      <div
+                        className="card-header border-0 py-3"
+                        style={styles.infoSection}
+                      >
+                        <div className="d-flex align-items-center">
+                          <div
+                            className="rounded-circle p-2 me-3"
+                            style={{
+                              backgroundColor: `${colors.oskar.purple}15`,
+                            }}
+                          >
+                            <FontAwesomeIcon
+                              icon={faDatabase}
+                              style={{ color: colors.oskar.purple }}
+                            />
+                          </div>
+                          <div>
+                            <h6
+                              className="mb-0 fw-bold"
+                              style={{ color: colors.oskar.purple }}
+                            >
+                              Informations Système
+                            </h6>
+                            <small className="text-muted">
+                              Informations techniques (lecture seule)
+                            </small>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="card-body p-4">
+                        <div className="row g-3">
+                          {/* UUID */}
+                          <div className="col-md-4">
+                            <label className="form-label fw-semibold">
+                              <FontAwesomeIcon icon={faKey} className="me-2" />
+                              UUID
+                            </label>
+                            <div className="input-group">
+                              <span className="input-group-text bg-light border-end-0">
+                                <FontAwesomeIcon
+                                  icon={faKey}
+                                  className="text-muted"
+                                />
+                              </span>
+                              <input
+                                type="text"
+                                className="form-control border-start-0 ps-0 bg-light text-truncate"
+                                value={paysInfo.uuid}
+                                readOnly
+                                disabled
+                                style={{ cursor: "not-allowed" }}
+                              />
+                            </div>
+                            <small className="text-muted">
+                              Identifiant unique
+                            </small>
+                          </div>
+
+                          {/* Statut actuel */}
+                          <div className="col-md-4">
+                            <label className="form-label fw-semibold">
+                              Statut actuel
+                            </label>
+                            <div className="d-flex align-items-center h-100">
+                              {getStatusBadge(paysInfo.statut)}
+                            </div>
+                          </div>
+
+                          {/* Date de création */}
+                          <div className="col-md-2">
+                            <label className="form-label fw-semibold">
+                              <FontAwesomeIcon
+                                icon={faCalendarAlt}
+                                className="me-2"
+                              />
+                              Créé le
+                            </label>
+                            <div className="input-group">
+                              <span className="input-group-text bg-light border-end-0">
+                                <FontAwesomeIcon
+                                  icon={faCalendarAlt}
+                                  className="text-muted"
+                                />
+                              </span>
+                              <input
+                                type="text"
+                                className="form-control border-start-0 ps-0 bg-light"
+                                value={formatDate(paysInfo.created_at)}
+                                readOnly
+                                disabled
+                                style={{ cursor: "not-allowed" }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Date de modification */}
+                          <div className="col-md-2">
+                            <label className="form-label fw-semibold">
+                              <FontAwesomeIcon
+                                icon={faCalendarAlt}
+                                className="me-2"
+                              />
+                              Modifié le
+                            </label>
+                            <div className="input-group">
+                              <span className="input-group-text bg-light border-end-0">
+                                <FontAwesomeIcon
+                                  icon={faCalendarAlt}
+                                  className="text-muted"
+                                />
+                              </span>
+                              <input
+                                type="text"
+                                className="form-control border-start-0 ps-0 bg-light"
+                                value={formatDate(paysInfo.updated_at)}
+                                readOnly
+                                disabled
+                                style={{ cursor: "not-allowed" }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </>
                 )}
               </form>
             )}
@@ -820,25 +1206,34 @@ export default function EditPaysModal({
           {/* Pied de la modal */}
           <div className="modal-footer border-top-0 py-4 px-4">
             <div className="d-flex justify-content-between w-100">
-              <button
-                type="button"
-                className="btn d-flex align-items-center gap-2"
-                onClick={handleReset}
-                disabled={loading || loadingPays}
-                style={styles.secondaryButton}
-                onMouseEnter={(e) => {
-                  Object.assign(
-                    e.currentTarget.style,
-                    styles.secondaryButtonHover,
-                  );
-                }}
-                onMouseLeave={(e) => {
-                  Object.assign(e.currentTarget.style, styles.secondaryButton);
-                }}
-              >
-                <FontAwesomeIcon icon={faSync} />
-                Réinitialiser
-              </button>
+              <div className="d-flex align-items-center">
+                {hasChanges && (
+                  <span className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 me-3">
+                    <FontAwesomeIcon icon={faExclamationTriangle} className="me-1" />
+                    Modifications non sauvegardées
+                  </span>
+                )}
+                <button
+                  type="button"
+                  className="btn d-flex align-items-center gap-2"
+                  onClick={handleReset}
+                  disabled={loading || loadingPays || !hasChanges}
+                  style={styles.secondaryButton}
+                  onMouseEnter={(e) => {
+                    if (!loading && !loadingPays && hasChanges) {
+                      Object.assign(e.currentTarget.style, styles.secondaryButtonHover);
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!loading && !loadingPays && hasChanges) {
+                      Object.assign(e.currentTarget.style, styles.secondaryButton);
+                    }
+                  }}
+                >
+                  <FontAwesomeIcon icon={faSync} />
+                  Réinitialiser
+                </button>
+              </div>
 
               <div className="d-flex gap-3">
                 <button
@@ -852,12 +1247,16 @@ export default function EditPaysModal({
                     border: `1px solid ${colors.oskar.grey}30`,
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.background = colors.oskar.grey + "15";
-                    e.currentTarget.style.color = colors.oskar.black;
+                    if (!loading && !loadingPays) {
+                      e.currentTarget.style.background = colors.oskar.grey + "15";
+                      e.currentTarget.style.color = colors.oskar.black;
+                    }
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.background = colors.oskar.lightGrey;
-                    e.currentTarget.style.color = colors.oskar.grey;
+                    if (!loading && !loadingPays) {
+                      e.currentTarget.style.background = colors.oskar.lightGrey;
+                      e.currentTarget.style.color = colors.oskar.grey;
+                    }
                   }}
                 >
                   <FontAwesomeIcon icon={faTimes} />
@@ -868,16 +1267,17 @@ export default function EditPaysModal({
                   type="submit"
                   className="btn text-white d-flex align-items-center gap-2"
                   onClick={handleSubmit}
-                  disabled={loading || loadingPays}
+                  disabled={loading || loadingPays || !hasChanges}
                   style={styles.primaryButton}
                   onMouseEnter={(e) => {
-                    Object.assign(
-                      e.currentTarget.style,
-                      styles.primaryButtonHover,
-                    );
+                    if (!loading && !loadingPays && hasChanges) {
+                      Object.assign(e.currentTarget.style, styles.primaryButtonHover);
+                    }
                   }}
                   onMouseLeave={(e) => {
-                    Object.assign(e.currentTarget.style, styles.primaryButton);
+                    if (!loading && !loadingPays && hasChanges) {
+                      Object.assign(e.currentTarget.style, styles.primaryButton);
+                    }
                   }}
                 >
                   {loading ? (
@@ -910,15 +1310,22 @@ export default function EditPaysModal({
         }
 
         .form-control,
-        .form-select {
+        .form-select,
+        textarea {
           border-radius: 8px !important;
           transition: all 0.3s ease;
         }
 
         .form-control:focus,
-        .form-select:focus {
+        .form-select:focus,
+        textarea:focus {
           border-color: ${colors.oskar.blue};
           box-shadow: 0 0 0 0.25rem ${colors.oskar.blue}25;
+        }
+
+        .form-control.is-invalid {
+          border-color: ${colors.oskar.red};
+          box-shadow: 0 0 0 0.25rem ${colors.oskar.red}25;
         }
 
         .btn {
@@ -927,12 +1334,21 @@ export default function EditPaysModal({
           font-weight: 500;
         }
 
+        .btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
         .input-group-text {
           border-radius: 8px 0 0 8px !important;
         }
 
         .fs-14 {
           font-size: 14px !important;
+        }
+
+        .fs-12 {
+          font-size: 12px !important;
         }
 
         .shadow-sm {
@@ -945,6 +1361,29 @@ export default function EditPaysModal({
 
         .bg-light {
           background-color: #f8f9fa !important;
+        }
+
+        .badge {
+          border-radius: 20px !important;
+          padding: 0.25rem 0.5rem;
+          font-size: 0.75rem;
+          font-weight: 500;
+        }
+
+        .text-truncate {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .h-100 {
+          height: 100%;
+        }
+
+        .invalid-feedback {
+          color: ${colors.oskar.red};
+          font-size: 0.875rem;
+          margin-top: 0.25rem;
         }
       `}</style>
     </div>

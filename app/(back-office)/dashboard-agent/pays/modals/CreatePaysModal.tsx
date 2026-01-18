@@ -188,7 +188,7 @@ export default function CreatePaysModal({
       };
 
       // Appel à l'API
-      await api.post(API_ENDPOINTS.ADMIN.PAYS.CREATE, paysData);
+      await api.post(API_ENDPOINTS.PAYS.CREATE, paysData);
 
       setSuccessMessage("Pays créé avec succès !");
 

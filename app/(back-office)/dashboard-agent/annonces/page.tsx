@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import FilterBar from "./components/FilterBar";
-import DataTable from "./components/DataTable.tsx";
+import DataTable from "./components/DataTable";
 
 export default function Annonces() {
   const [allData, setAllData] = useState<any[]>([]);
@@ -225,7 +225,7 @@ export default function Annonces() {
 
         switch (type) {
           case "produit":
-            endpoint = API_ENDPOINTS.PRODUCTS.PUBLISH;
+            endpoint = API_ENDPOINTS.PRODUCTS.PUBLLIER;
             break;
           case "don":
             endpoint = API_ENDPOINTS.DONS.PUBLISH;

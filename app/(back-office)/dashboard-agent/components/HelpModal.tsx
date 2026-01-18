@@ -725,12 +725,12 @@ export default function HelpModal({ show, onClose }: HelpModalProps) {
                                 color: "success",
                               },
                               {
-                                icon: faSlack,
+                                icon: faUsersCog,
                                 label: "Slack Équipe",
                                 color: "primary",
                               },
                               {
-                                icon: faTeams,
+                                icon: faUsersCog,
                                 label: "Teams",
                                 color: "info",
                               },

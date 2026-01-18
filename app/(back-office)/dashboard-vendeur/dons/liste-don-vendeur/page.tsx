@@ -18,6 +18,7 @@ import {
   faCalendar,
   faCheckCircle,
   faTimesCircle,
+  faInfoCircle,
   faChartBar,
   faStore,
   faUsers,
@@ -845,7 +846,6 @@ export default function DonVendeurPage() {
   const handleExport = async () => {
     try {
       const response = await api.get(API_ENDPOINTS.DONS.EXPORT_PDF, {
-        responseType: "blob",
       });
       const url = window.URL.createObjectURL(response);
       const link = document.createElement("a");
@@ -1688,7 +1688,7 @@ export default function DonVendeurPage() {
                                   setSelectedDon(don);
                                   setShowEditModal(true);
                                 }}
-                                disabled={loading || don.est_bloque}
+                               // disabled={loading || don.est_bloque}
                               >
                                 <FontAwesomeIcon icon={faEdit} />
                               </button>
@@ -1707,7 +1707,7 @@ export default function DonVendeurPage() {
                               <button
                                 className="btn btn-sm btn-outline-warning w-100"
                                 onClick={() => handleUnpublishDon(don.uuid)}
-                                disabled={loading || don.est_bloque}
+                              // disabled={loading || don.est_bloque}
                                 title="Dépublier le don"
                               >
                                 <FontAwesomeIcon
@@ -1720,7 +1720,7 @@ export default function DonVendeurPage() {
                               <button
                                 className="btn btn-sm btn-outline-success w-100"
                                 onClick={() => handlePublishDon(don.uuid)}
-                                disabled={loading || don.est_bloque}
+                                //disabled={loading || don.est_bloque}
                                 title="Publier le don"
                               >
                                 <FontAwesomeIcon

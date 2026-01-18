@@ -2,7 +2,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import DashboardHeader from "../../components/DashboardHeader";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faPlus,
@@ -605,27 +604,6 @@ export default function TypeBoutiquePage() {
     setShowDeleteMultipleModal(true);
   };
 
-  // Export
-  const handleExport = async () => {
-    try {
-      const response = await api.get(API_ENDPOINTS.TYPES_BOUTIQUE.EXPORT_PDF, {
-        responseType: "blob",
-      });
-      const url = window.URL.createObjectURL(response);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `types-boutique-${new Date().toISOString().split("T")[0]}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      handleSuccess("Export PDF réussi !");
-    } catch (err) {
-      console.error("Erreur export PDF, tentative CSV...");
-      createCSVExport();
-    }
-  };
-
   const createCSVExport = () => {
     if (typesBoutique.length === 0) {
       setInfoMessage("Aucun type de boutique à exporter");
@@ -892,7 +870,6 @@ export default function TypeBoutiquePage() {
                 </button>
 
                 <button
-                  onClick={handleExport}
                   className="btn btn-outline-primary d-flex align-items-center gap-2"
                   disabled={typesBoutique.length === 0 || loading}
                 >

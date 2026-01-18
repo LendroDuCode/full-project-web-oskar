@@ -608,7 +608,6 @@ export default function TypeBoutiquePage() {
   const handleExport = async () => {
     try {
       const response = await api.get(API_ENDPOINTS.TYPES_BOUTIQUE.EXPORT_PDF, {
-        responseType: "blob",
       });
       const url = window.URL.createObjectURL(response);
       const link = document.createElement("a");

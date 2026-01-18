@@ -19,6 +19,7 @@ import {
   faCheckCircle,
   faTimesCircle,
   faChartBar,
+  faInfoCircle,
   faBoxOpen,
   faUsers,
   faLocationDot,
@@ -757,7 +758,6 @@ export default function DonsPubliesPage() {
   const handleExport = async () => {
     try {
       const response = await api.get(API_ENDPOINTS.DONS.EXPORT_PDF, {
-        responseType: "blob",
       });
       const url = window.URL.createObjectURL(response);
       const link = document.createElement("a");

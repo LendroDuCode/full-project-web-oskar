@@ -1,7 +1,7 @@
 // app/(back-office)/dashboard-admin/utilisateurs/liste-utilisateurs-bloques/page.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -36,14 +36,338 @@ import {
   faExclamationTriangle,
 } from "@fortawesome/free-solid-svg-icons";
 
-// Import des services et hooks
+// Import des services
 import { API_ENDPOINTS } from "@/config/api-endpoints";
-import { useUsers } from "@/hooks/useUtilisateurs";
-import type { User } from "@/services/utilisateurs/user.types";
 import { api } from "@/lib/api-client";
 import CreateUserModal from "../components/modals/CreateUserModal";
 import EditUserModal from "../components/modals/ModifierUserModal";
 
+// Types pour les utilisateurs
+
+// Type principal User
+interface User {
+  // Identifiant unique
+  uuid: string;
+  code_utilisateur?: string;
+  
+  // Informations personnelles
+  nom: string;
+  prenoms: string;
+  email: string;
+  telephone: string;
+  date_naissance?: string;
+  lieu_naissance?: string;
+  nationalite?: string;
+  photo_profil?: string;
+  
+  // Authentification
+  mot_de_passe?: string;
+  est_verifie: boolean;
+  est_bloque: boolean;
+  is_deleted?: boolean;
+  raison_blocage?: string;
+  date_derniere_connexion?: string;
+  date_derniere_deconnexion?: string;
+  
+  // Rôles et permissions
+  role_uuid: string;
+  is_admin: boolean;
+  permissions?: string[];
+  
+  // Civilité
+  civilite_uuid?: string;
+  
+  // Statut matrimonial
+  statut_matrimonial_uuid?: string;
+  
+  // Adresse
+  adresse?: string;
+  ville?: string;
+  code_postal?: string;
+  pays?: string;
+  
+  // Informations professionnelles
+  profession?: string;
+  employeur?: string;
+  secteur_activite?: string;
+  
+  // Métadonnées
+  created_at?: string;
+  updated_at?: string;
+  deleted_at?: string;
+  created_by?: string;
+  updated_by?: string;
+  deleted_by?: string;
+  
+  // Relations (optionnelles selon le contexte)
+  civilite?: Civilite;
+  role?: Role;
+  statut_matrimonial?: StatutMatrimonial;
+  user_profile?: UserProfile;
+}
+
+// Type pour le profil utilisateur étendu
+interface UserProfile {
+  uuid: string;
+  user_uuid: string;
+  bio?: string;
+  site_web?: string;
+  reseaux_sociaux?: {
+    facebook?: string;
+    twitter?: string;
+    linkedin?: string;
+    instagram?: string;
+  };
+  preferences?: {
+    langue?: string;
+    fuseau_horaire?: string;
+    notifications_email?: boolean;
+    notifications_push?: boolean;
+    theme?: 'light' | 'dark' | 'auto';
+  };
+  statistiques?: {
+    nombre_connexions: number;
+    derniere_activite?: string;
+    temps_total_session?: number;
+  };
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Type pour les civilités
+interface Civilite {
+  uuid: string;
+  libelle: string;
+  code: string;
+  ordre?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Type pour les rôles
+interface Role {
+  uuid: string;
+  name: string;
+  description?: string;
+  permissions: string[];
+  is_default?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Type pour les statuts matrimoniaux
+interface StatutMatrimonial {
+  uuid: string;
+  libelle: string;
+  code: string;
+  description?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Type pour les formulaires
+interface UserFormData {
+  nom: string;
+  prenoms: string;
+  email: string;
+  telephone: string;
+  date_naissance?: string;
+  lieu_naissance?: string;
+  nationalite?: string;
+  civilite_uuid?: string;
+  role_uuid: string;
+  statut_matrimonial_uuid?: string;
+  adresse?: string;
+  ville?: string;
+  code_postal?: string;
+  pays?: string;
+  profession?: string;
+  employeur?: string;
+  secteur_activite?: string;
+  est_verifie?: boolean;
+  est_bloque?: boolean;
+  is_admin?: boolean;
+  mot_de_passe?: string;
+  confirm_mot_de_passe?: string;
+}
+
+// Type pour la création d'utilisateur
+interface CreateUserData {
+  nom: string;
+  prenoms: string;
+  email: string;
+  telephone: string;
+  mot_de_passe: string;
+  confirm_mot_de_passe: string;
+  civilite_uuid?: string;
+  role_uuid: string;
+  est_verifie?: boolean;
+  est_bloque?: boolean;
+  is_admin?: boolean;
+}
+
+// Type pour la mise à jour d'utilisateur
+interface UpdateUserData {
+  nom?: string;
+  prenoms?: string;
+  email?: string;
+  telephone?: string;
+  date_naissance?: string;
+  lieu_naissance?: string;
+  nationalite?: string;
+  civilite_uuid?: string;
+  role_uuid?: string;
+  statut_matrimonial_uuid?: string;
+  adresse?: string;
+  ville?: string;
+  code_postal?: string;
+  pays?: string;
+  profession?: string;
+  employeur?: string;
+  secteur_activite?: string;
+  est_verifie?: boolean;
+  est_bloque?: boolean;
+  is_admin?: boolean;
+  mot_de_passe?: string;
+  photo_profil?: string;
+}
+
+// Type pour la réponse API
+interface ApiResponseUser {
+  success: boolean;
+  message: string;
+  data: User | User[];
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  timestamp: string;
+}
+
+// Type pour les filtres de recherche
+interface UserFilterType {
+  search?: string;
+  role_uuid?: string;
+  civilite_uuid?: string;
+  statut_matrimonial_uuid?: string;
+  est_bloque?: boolean | string;
+  est_verifie?: boolean | string;
+  is_admin?: boolean | string;
+  is_deleted?: boolean | string;
+  date_debut?: string;
+  date_fin?: string;
+  orderBy?: keyof User | 'role.name' | 'civilite.libelle';
+  orderDirection?: 'asc' | 'desc';
+  page?: number;
+  limit?: number;
+}
+
+// Type pour les statistiques utilisateur
+interface UserStatsType {
+  total: number;
+  actifs: number;
+  bloques: number;
+  non_verifies: number;
+  admins: number;
+  nouveaux_cette_semaine: number;
+  taux_activite: number;
+  repartition_par_role: Array<{
+    role: string;
+    count: number;
+    percentage: number;
+  }>;
+  croissance_mensuelle: number;
+}
+
+// Type pour l'historique des connexions
+interface UserLoginHistory {
+  uuid: string;
+  user_uuid: string;
+  ip_address: string;
+  user_agent: string;
+  device_type?: string;
+  browser?: string;
+  os?: string;
+  location?: {
+    ville?: string;
+    region?: string;
+    pays?: string;
+  };
+  status: 'success' | 'failed' | 'blocked';
+  reason?: string;
+  created_at: string;
+}
+
+// Type pour les activités utilisateur
+interface UserActivity {
+  uuid: string;
+  user_uuid: string;
+  type: 'connexion' | 'deconnexion' | 'modification' | 'creation' | 'suppression' | 'telechargement' | 'upload';
+  description: string;
+  metadata?: Record<string, any>;
+  ip_address?: string;
+  user_agent?: string;
+  created_at: string;
+}
+
+// Type pour les options de sélection
+interface UserOptionType {
+  value: string;
+  label: string;
+  email: string;
+  role?: string;
+  disabled?: boolean;
+}
+
+// Type pour l'export
+interface UserExportData {
+  uuid: string;
+  nom: string;
+  prenoms: string;
+  email: string;
+  telephone: string;
+  civilite: string;
+  role: string;
+  est_verifie: boolean;
+  est_bloque: boolean;
+  is_admin: boolean;
+  created_at: string;
+  updated_at: string;
+  derniere_connexion?: string;
+}
+
+// Type pour les notifications utilisateur
+interface UserNotification {
+  uuid: string;
+  user_uuid: string;
+  type: 'info' | 'success' | 'warning' | 'error' | 'system';
+  title: string;
+  message: string;
+  is_read: boolean;
+  action_url?: string;
+  action_label?: string;
+  metadata?: Record<string, any>;
+  created_at: string;
+  read_at?: string;
+}
+
+// Type pour les préférences utilisateur
+interface UserPreferences {
+  uuid: string;
+  user_uuid: string;
+  langue: string;
+  fuseau_horaire: string;
+  format_date: string;
+  format_heure: string;
+  notifications_email: boolean;
+  notifications_push: boolean;
+  theme: 'light' | 'dark' | 'auto';
+  email_frequency: 'immediate' | 'daily' | 'weekly';
+  created_at: string;
+  updated_at: string;
+}
 // Interface local pour le composant
 interface LocalUser extends Omit<User, "civilite" | "role"> {
   civilite?: {
@@ -54,7 +378,7 @@ interface LocalUser extends Omit<User, "civilite" | "role"> {
   };
 }
 
-// Type pour EditUserModal basé sur ce que le composant attend
+// Type pour EditUserModal
 interface EditModalUser {
   uuid: string;
   code_utilisateur?: string;
@@ -69,10 +393,91 @@ interface EditModalUser {
   is_admin: boolean;
   created_at?: string;
   updated_at?: string;
-  statut: string; // Changé de optionnel à obligatoire
+  statut: string;
   civilite?: { libelle: string; uuid: string };
   role?: { name: string; uuid: string };
 }
+
+// Interface pour la pagination
+interface PaginationData {
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+}
+
+// Service pour gérer les utilisateurs
+const userService = {
+  // Récupérer les utilisateurs bloqués avec pagination et filtres
+  async getBlockedUsers(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    is_admin?: string;
+  }) {
+    const queryParams = new URLSearchParams();
+    
+    // Paramètres par défaut pour les utilisateurs bloqués
+    queryParams.append('est_bloque', 'true');
+    
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.is_admin) queryParams.append('is_admin', params.is_admin);
+
+    const response = await api.get(
+      `${API_ENDPOINTS.ADMIN.USERS.LIST}?${queryParams.toString()}`
+    );
+    return response.data;
+  },
+
+  // Récupérer tous les utilisateurs avec filtres
+  async getAllUsers(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    est_bloque?: string;
+    is_admin?: string;
+  }) {
+    const queryParams = new URLSearchParams();
+    
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.est_bloque) queryParams.append('est_bloque', params.est_bloque);
+    if (params?.is_admin) queryParams.append('is_admin', params.is_admin);
+
+    const response = await api.get(
+      `${API_ENDPOINTS.ADMIN.USERS.BASE}?${queryParams.toString()}`
+    );
+    return response.data;
+  },
+
+  // Mettre à jour un utilisateur
+  async updateUser(uuid: string, data: Partial<User>) {
+    const response = await api.patch(
+      `${API_ENDPOINTS.ADMIN.USERS.BASE}/${uuid}`,
+      data
+    );
+    return response.data;
+  },
+
+  // Supprimer un utilisateur
+  async deleteUser(uuid: string) {
+    const response = await api.delete(
+      `${API_ENDPOINTS.ADMIN.USERS.BASE}/${uuid}`
+    );
+    return response.data;
+  },
+
+  // Débloquer un utilisateur (admin)
+  async unblockUser(uuid: string) {
+    const response = await api.post(
+      API_ENDPOINTS.ADMIN.USERS.UNBLOCK(uuid)
+    );
+    return response.data;
+  }
+};
 
 // Composant de statut
 const StatusBadge = ({
@@ -468,7 +873,6 @@ const Pagination = ({
 };
 
 // Fonction pour convertir LocalUser en EditModalUser
-// Fonction pour convertir LocalUser en EditModalUser
 const convertToEditModalUser = (localUser: LocalUser): EditModalUser => {
   return {
     uuid: localUser.uuid,
@@ -488,7 +892,7 @@ const convertToEditModalUser = (localUser: LocalUser): EditModalUser => {
       ? "Bloqué"
       : localUser.est_verifie
         ? "Actif"
-        : "Non vérifié", // Toujours défini, pas optionnel
+        : "Non vérifié",
     civilite: localUser.civilite
       ? {
           libelle: localUser.civilite.libelle,
@@ -505,31 +909,25 @@ const convertToEditModalUser = (localUser: LocalUser): EditModalUser => {
 };
 
 export default function ListeUtilisateursBloquesPage() {
-  // Utilisation du hook personnalisé
-  const {
-    users,
-    loading,
-    error,
-    pagination,
-    fetchUsers,
-    fetchBlockedUsers,
-    updateUser,
-    deleteUser,
-    setPage,
-    setLimit,
-    refresh,
-  } = useUsers();
+  // États pour les données
+  const [users, setUsers] = useState<LocalUser[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pagination, setPagination] = useState<PaginationData>({
+    page: 1,
+    limit: 10,
+    total: 0,
+    pages: 1,
+  });
 
   // États pour les modals
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showUnblockModal, setShowUnblockModal] = useState(false);
-  const [showUnblockMultipleModal, setShowUnblockMultipleModal] =
-    useState(false);
+  const [showUnblockMultipleModal, setShowUnblockMultipleModal] = useState(false);
   const [showDeleteMultipleModal, setShowDeleteMultipleModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<LocalUser | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [selectedUserForEdit, setSelectedUserForEdit] =
-    useState<LocalUser | null>(null);
+  const [selectedUserForEdit, setSelectedUserForEdit] = useState<LocalUser | null>(null);
 
   // États pour les filtres et recherche
   const [searchTerm, setSearchTerm] = useState("");
@@ -553,58 +951,138 @@ export default function ListeUtilisateursBloquesPage() {
   // Options pour les éléments par page
   const itemsPerPageOptions = [5, 10, 20, 50];
 
+  // Fonction pour charger les utilisateurs bloqués
+  const fetchBlockedUsers = useCallback(async (params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    is_admin?: string;
+  }) => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const result = await userService.getBlockedUsers({
+        page: params?.page || pagination.page,
+        limit: params?.limit || pagination.limit,
+        search: params?.search,
+        is_admin: params?.is_admin,
+      });
+
+      // Supposons que l'API retourne { data: User[], pagination: PaginationData }
+      setUsers(result.data || []);
+      
+      if (result.pagination) {
+        setPagination(result.pagination);
+      } else {
+        // Fallback si l'API ne retourne pas de pagination
+        setPagination({
+          page: params?.page || 1,
+          limit: params?.limit || pagination.limit,
+          total: result.data?.length || 0,
+          pages: Math.ceil((result.data?.length || 0) / (params?.limit || pagination.limit))
+        });
+      }
+      
+    } catch (err: any) {
+      setError(err.message || "Erreur lors du chargement des utilisateurs bloqués");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [pagination.page, pagination.limit]);
+
+  // Fonction pour mettre à jour un utilisateur
+  const updateUser = useCallback(async (uuid: string, data: Partial<User>) => {
+    try {
+      const result = await userService.updateUser(uuid, data);
+      
+      // Mettre à jour localement
+      setUsers(prev => prev.map(user => 
+        user.uuid === uuid ? { ...user, ...result.data } : user
+      ));
+      
+      return result.data;
+    } catch (err: any) {
+      throw new Error(err.message || "Erreur lors de la mise à jour de l'utilisateur");
+    }
+  }, []);
+
+  // Fonction pour supprimer un utilisateur
+  const deleteUser = useCallback(async (uuid: string) => {
+    try {
+      await userService.deleteUser(uuid);
+      
+      // Supprimer localement
+      setUsers(prev => prev.filter(user => user.uuid !== uuid));
+      
+      // Mettre à jour la pagination
+      setPagination(prev => ({
+        ...prev,
+        total: prev.total - 1,
+        pages: Math.ceil((prev.total - 1) / prev.limit)
+      }));
+      
+      return true;
+    } catch (err: any) {
+      throw new Error(err.message || "Erreur lors de la suppression de l'utilisateur");
+    }
+  }, []);
+
+  // Fonction pour débloquer un utilisateur via l'endpoint admin
+  const unblockUser = useCallback(async (uuid: string) => {
+    try {
+      await userService.unblockUser(uuid);
+      return true;
+    } catch (err: any) {
+      throw new Error(err.message || "Erreur lors du déblocage de l'utilisateur");
+    }
+  }, []);
+
+  // Fonctions de pagination
+  const setPage = useCallback((page: number) => {
+    setPagination(prev => ({ ...prev, page }));
+    fetchBlockedUsers({ page });
+  }, [fetchBlockedUsers]);
+
+  const setLimit = useCallback((limit: number) => {
+    setPagination(prev => ({ ...prev, limit, page: 1 }));
+    fetchBlockedUsers({ limit });
+  }, [fetchBlockedUsers]);
+
+  // Fonction de rafraîchissement
+  const refresh = useCallback(() => {
+    return fetchBlockedUsers({
+      page: pagination.page,
+      limit: pagination.limit,
+      search: searchTerm || undefined,
+      is_admin: selectedRole !== "all" ? selectedRole === "admin" ? "true" : "false" : undefined
+    });
+  }, [fetchBlockedUsers, pagination.page, pagination.limit, searchTerm, selectedRole]);
+
   // Charger les utilisateurs bloqués au montage
   useEffect(() => {
     fetchBlockedUsers();
-  }, []);
+  }, [fetchBlockedUsers]);
 
-  // Gérer les changements de pagination et filtres
+  // Gérer les changements de recherche et filtres avec debounce
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Construction des paramètres de requête pour les utilisateurs bloqués
-        const params: any = {
-          page: pagination.page,
-          limit: pagination.limit,
-          est_bloque: "true", // Toujours filtrer par utilisateurs bloqués
-        };
-
-        // Ajout du terme de recherche si spécifié
-        if (searchTerm.trim()) {
-          params.search = searchTerm.trim();
-        }
-
-        // Ajout du filtre de rôle si spécifié
-        if (selectedRole !== "all") {
-          params.is_admin = selectedRole === "admin" ? "true" : "false";
-        }
-
-        console.log(
-          "📡 Paramètres de requête pour utilisateurs bloqués:",
-          params,
-        );
-
-        // Utiliser fetchUsers avec les paramètres spécifiques
-        await fetchUsers(params);
-      } catch (error) {
-        console.error(
-          "❌ Erreur lors du chargement des utilisateurs bloqués:",
-          error,
-        );
-      }
-    };
-
     const timeoutId = setTimeout(() => {
-      fetchData();
-    }, 300);
+      fetchBlockedUsers({
+        page: 1, // Retourner à la première page lors d'un nouveau filtre
+        limit: pagination.limit,
+        search: searchTerm || undefined,
+        is_admin: selectedRole !== "all" ? selectedRole === "admin" ? "true" : "false" : undefined
+      });
+    }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [pagination.page, pagination.limit, searchTerm, selectedRole]);
+  }, [searchTerm, selectedRole, fetchBlockedUsers, pagination.limit]);
 
   // Fonction appelée après création réussie
   const handleUserCreated = () => {
     setSuccessMessage("Utilisateur créé avec succès !");
-    fetchBlockedUsers(); // Rafraîchir la liste
+    refresh(); // Rafraîchir la liste
     setTimeout(() => setSuccessMessage(null), 3000);
   };
 
@@ -615,13 +1093,12 @@ export default function ListeUtilisateursBloquesPage() {
     try {
       setUnblockLoading(true);
 
-      if (selectedUser.is_admin) {
-        // Pour les admins
-        await api.post(API_ENDPOINTS.ADMIN.USERS.UNBLOCK(selectedUser.uuid));
-      } else {
-        // Pour les utilisateurs réguliers
+      // Essayer d'abord la méthode admin, sinon méthode régulière
+      try {
+        await unblockUser(selectedUser.uuid);
+      } catch {
+        // Fallback à la méthode régulière
         await updateUser(selectedUser.uuid, {
-          ...selectedUser,
           est_bloque: false,
         } as Partial<User>);
       }
@@ -635,11 +1112,11 @@ export default function ListeUtilisateursBloquesPage() {
       setSelectAll(false);
 
       // Rafraîchir la liste
-      fetchBlockedUsers();
+      refresh();
       setTimeout(() => setSuccessMessage(null), 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erreur lors du déblocage:", err);
-      setInfoMessage("Erreur lors du déblocage de l'utilisateur");
+      setInfoMessage(err.message || "Erreur lors du déblocage de l'utilisateur");
     } finally {
       setUnblockLoading(false);
     }
@@ -659,13 +1136,12 @@ export default function ListeUtilisateursBloquesPage() {
           const user = users.find((u) => u.uuid === userId);
           if (!user) continue;
 
-          if (user.is_admin) {
-            // Pour les admins
-            await api.post(API_ENDPOINTS.ADMIN.USERS.UNBLOCK(userId));
-          } else {
-            // Pour les utilisateurs réguliers
+          // Essayer d'abord la méthode admin
+          try {
+            await unblockUser(userId);
+          } catch {
+            // Fallback à la méthode régulière
             await updateUser(userId, {
-              ...user,
               est_bloque: false,
             } as Partial<User>);
           }
@@ -687,10 +1163,10 @@ export default function ListeUtilisateursBloquesPage() {
       setSelectAll(false);
 
       // Rafraîchir la liste
-      fetchBlockedUsers();
-    } catch (err) {
+      refresh();
+    } catch (err: any) {
       console.error("Erreur lors du déblocage multiple:", err);
-      setInfoMessage("Erreur lors du déblocage des utilisateurs");
+      setInfoMessage(err.message || "Erreur lors du déblocage des utilisateurs");
     } finally {
       setUnblockLoading(false);
     }
@@ -709,7 +1185,7 @@ export default function ListeUtilisateursBloquesPage() {
         try {
           await deleteUser(userId);
           successCount++;
-        } catch (err) {
+        } catch (err: any) {
           console.error(`Erreur pour l'utilisateur ${userId}:`, err);
           errorCount++;
         }
@@ -726,10 +1202,10 @@ export default function ListeUtilisateursBloquesPage() {
       setSelectAll(false);
 
       // Rafraîchir la liste
-      fetchBlockedUsers();
-    } catch (err) {
+      refresh();
+    } catch (err: any) {
       console.error("Erreur lors de la suppression multiple:", err);
-      setInfoMessage("Erreur lors de la suppression des utilisateurs");
+      setInfoMessage(err.message || "Erreur lors de la suppression des utilisateurs");
     } finally {
       setDeleteLoading(false);
     }
@@ -895,7 +1371,7 @@ export default function ListeUtilisateursBloquesPage() {
       setTimeout(() => setSuccessMessage(null), 3000);
 
       // Rafraîchir la liste
-      fetchBlockedUsers();
+      refresh();
 
       // Réinitialiser la sélection pour les actions non-destructives
       setSelectedUsers([]);
@@ -925,40 +1401,15 @@ export default function ListeUtilisateursBloquesPage() {
     }
   };
 
-  // Filtrer et trier les utilisateurs
-  const filteredUtilisateurs = sortUtilisateurs(
-    users.filter((user: LocalUser) => {
-      // Filtrage côté client pour garantir que seuls les utilisateurs bloqués sont affichés
-      let passesFilter = user.est_bloque === true;
+  // Filtrer et trier les utilisateurs côté client (pour le tri seulement)
+  const filteredUtilisateurs = useMemo(() => {
+    return sortUtilisateurs(users);
+  }, [users, sortConfig]);
 
-      // Filtre par recherche
-      if (searchTerm.trim()) {
-        const searchLower = searchTerm.toLowerCase();
-        passesFilter =
-          passesFilter &&
-          (user.nom?.toLowerCase().includes(searchLower) ||
-            user.prenoms?.toLowerCase().includes(searchLower) ||
-            user.email?.toLowerCase().includes(searchLower) ||
-            user.telephone?.includes(searchTerm));
-      }
-
-      // Filtre par rôle
-      if (selectedRole !== "all") {
-        if (selectedRole === "admin") {
-          passesFilter = passesFilter && user.is_admin === true;
-        } else if (selectedRole === "user") {
-          passesFilter = passesFilter && user.is_admin === false;
-        }
-      }
-
-      return passesFilter;
-    }) as LocalUser[],
-  );
-
-  const currentItems = filteredUtilisateurs.slice(
-    (pagination.page - 1) * pagination.limit,
-    pagination.page * pagination.limit,
-  );
+  // Calculer les éléments à afficher (déjà paginés par l'API)
+  const currentItems = useMemo(() => {
+    return filteredUtilisateurs;
+  }, [filteredUtilisateurs]);
 
   // Export PDF (à adapter selon vos besoins)
   const handleExport = async () => {
@@ -1058,7 +1509,7 @@ export default function ListeUtilisateursBloquesPage() {
       try {
         await deleteUser(utilisateur.uuid);
         setSuccessMessage("Utilisateur supprimé avec succès");
-        fetchBlockedUsers();
+        refresh();
         setTimeout(() => setSuccessMessage(null), 3000);
       } catch (err) {
         console.error("Erreur lors de la suppression:", err);
@@ -1087,7 +1538,7 @@ export default function ListeUtilisateursBloquesPage() {
           }}
           onSuccess={() => {
             setSuccessMessage("Utilisateur modifié avec succès");
-            fetchBlockedUsers();
+            refresh();
             setTimeout(() => setSuccessMessage(null), 3000);
           }}
         />
@@ -1152,7 +1603,7 @@ export default function ListeUtilisateursBloquesPage() {
 
               <div className="d-flex flex-wrap gap-2">
                 <button
-                  onClick={() => fetchBlockedUsers()}
+                  onClick={() => refresh()}
                   className="btn btn-outline-secondary d-flex align-items-center gap-2"
                   disabled={loading}
                 >
@@ -1201,7 +1652,7 @@ export default function ListeUtilisateursBloquesPage() {
                 <button
                   type="button"
                   className="btn-close"
-                  onClick={() => {}}
+                  onClick={() => setError(null)}
                   aria-label="Close"
                 ></button>
               </div>

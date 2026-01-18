@@ -815,73 +815,8 @@ export default function CivilitesPage() {
     }
   };
 
-  // Fonction pour exporter les civilités
-  const handleExport = async () => {
-    try {
-      const response = await api.get(API_ENDPOINTS.CIVILITES.EXPORT_PDF, {
-        responseType: "blob",
-      });
 
-      const url = window.URL.createObjectURL(response);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `civilites-${new Date().toISOString().split("T")[0]}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
 
-      setSuccess("Export PDF réussi");
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
-      handleCSVExport();
-    }
-  };
-
-  // Fallback CSV export
-  const handleCSVExport = () => {
-    if (civilites.length === 0) {
-      setError("Aucune civilité à exporter");
-      setTimeout(() => setError(null), 3000);
-      return;
-    }
-
-    try {
-      const csvContent = [
-        ["ID", "UUID", "Libellé", "Slug", "Statut", "Créé le", "Modifié le"],
-        ...civilites.map((c) => [
-          c.id,
-          c.uuid,
-          c.libelle,
-          c.slug,
-          c.statut,
-          formatDate(c.createdAt),
-          formatDate(c.updatedAt),
-        ]),
-      ]
-        .map((row) => row.map((cell) => `"${cell}"`).join(","))
-        .join("\n");
-
-      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-      const link = document.createElement("a");
-      const url = URL.createObjectURL(blob);
-      link.setAttribute("href", url);
-      link.setAttribute(
-        "download",
-        `civilites-${new Date().toISOString().split("T")[0]}.csv`,
-      );
-      link.style.visibility = "hidden";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      setSuccess("Export CSV réussi");
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
-      setError("Erreur lors de l'export CSV");
-      setTimeout(() => setError(null), 3000);
-    }
-  };
 
   // Fonction pour dupliquer une civilité
   const handleDuplicate = async (civilite: Civilite) => {

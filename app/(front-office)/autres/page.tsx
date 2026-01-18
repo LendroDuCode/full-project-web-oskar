@@ -68,6 +68,16 @@ interface ListingItem {
   statut: string;
 }
 
+// Fonction utilitaire pour convertir les filtres UI en types d'items
+const filterToItemType = (filter: string): "don" | "echange" | "produit" => {
+  switch(filter) {
+    case "dons": return "don";
+    case "echanges": return "echange";
+    case "produits": return "produit";
+    default: return "don"; // Fallback
+  }
+};
+
 export default function AutrePage() {
   const [data, setData] = useState<CategoryData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -156,7 +166,8 @@ export default function AutrePage() {
     if (activeFilter === "all") {
       setFilteredItems(allItems);
     } else {
-      setFilteredItems(allItems.filter((item) => item.type === activeFilter));
+      const itemType = filterToItemType(activeFilter);
+      setFilteredItems(allItems.filter((item) => item.type === itemType));
     }
   }, [activeFilter, allItems]);
 
@@ -177,7 +188,7 @@ export default function AutrePage() {
       }
     });
     setFilteredItems(sorted);
-  }, [sortOption, activeFilter, allItems]);
+  }, [sortOption, filteredItems]);
 
   // Fonction pour formater la date
   const formatDate = (dateString: string) => {
@@ -258,7 +269,7 @@ export default function AutrePage() {
       <section
         className="py-4 py-md-5"
         style={{
-          background: `linear-gradient(135deg, ${colors.oskar.green} 0%, ${colors.oskar.darkGreen || "#1e7d3e"} 100%)`,
+          background: `linear-gradient(135deg, ${colors.oskar.green} 0%, ${colors.oskar.green || "#1e7d3e"} 100%)`,
           color: "white",
         }}
       >

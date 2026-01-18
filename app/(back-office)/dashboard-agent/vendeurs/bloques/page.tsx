@@ -1097,7 +1097,6 @@ export default function ListeVendeursBloquesPage() {
       const response = await api.get(
         API_ENDPOINTS.ADMIN.VENDEURS.EXPORT_BLOCKED_PDF,
         {
-          responseType: "blob",
         },
       );
 
@@ -1183,7 +1182,7 @@ export default function ListeVendeursBloquesPage() {
 
   return (
     <>
-      {/* Modal de modification de vendeur */}
+      {/* Modal de modification de vendeur
       <EditVendeurModal
         isOpen={showEditModal}
         vendeur={selectedVendeurForEdit}
@@ -1197,6 +1196,8 @@ export default function ListeVendeursBloquesPage() {
           setTimeout(() => setSuccessMessage(null), 3000);
         }}
       />
+      */}
+      
 
       {/* Modal de déblocage simple */}
       <UnblockModal

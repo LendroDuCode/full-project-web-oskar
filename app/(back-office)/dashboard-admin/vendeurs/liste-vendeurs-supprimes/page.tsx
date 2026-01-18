@@ -1096,7 +1096,7 @@ export default function ListeVendeursSupprimesPage() {
       const response = await api.get(
         API_ENDPOINTS.ADMIN.VENDEURS.EXPORT_DELETED_PDF,
         {
-          responseType: "blob",
+          // Removed responseType, handle blob explicitly
         },
       );
 

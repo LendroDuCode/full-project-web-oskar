@@ -17,7 +17,7 @@ import {
   faHashtag,
 } from "@fortawesome/free-solid-svg-icons";
 import colors from "@/app/shared/constants/colors";
-import { Echange } from "@/types/echange";
+import { Echange } from "@/app/shared/types/echange.types";
 
 interface ViewEchangeModalProps {
   isOpen: boolean;
@@ -95,7 +95,7 @@ export default function ViewEchangeModal({
   echange,
   onClose,
 }: ViewEchangeModalProps) {
-  const formatDate = (dateString: string | null) => {
+  const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return "Non spécifié";
     try {
       const date = new Date(dateString);
@@ -258,9 +258,7 @@ export default function ViewEchangeModal({
                             <small className="text-muted d-block">
                               Prix estimé
                             </small>
-                            <p className="fw-semibold mb-0">
-                              {formatPrice(echange.prix)}
-                            </p>
+                            <p className="fw-semibold mb-0"></p>
                           </div>
                         </div>
                       </div>
@@ -309,7 +307,7 @@ export default function ViewEchangeModal({
                               Date de création
                             </small>
                             <p className="fw-semibold mb-0">
-                              {formatDate(echange.createdAt)}
+                              {formatDate(echange.created_at)}
                             </p>
                           </div>
                         </div>

@@ -19,9 +19,22 @@ import {
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import colors from "@/app/shared/constants/colors";
-import { StatutMatrimonialType } from "@/services/statut-matrimonials/statuts-matrimoniaux.types";
 
-// Types
+// Déclaration du type directement dans le fichier
+interface StatutMatrimonialType {
+  uuid: string;
+  libelle: string;
+  code: string;
+  description?: string;
+  statut: "actif" | "inactif";
+  defaut: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy?: string;
+  updatedBy?: string;
+}
+
+// Types pour les props
 interface DeleteStatutMatrimonialModalProps {
   isOpen: boolean;
   statut: StatutMatrimonialType | null;
@@ -40,6 +53,7 @@ export default function DeleteStatutMatrimonialModal({
   const [loadingStatut, setLoadingStatut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [confirmationText, setConfirmationText] = useState("");
 
   // États pour les informations détaillées
   const [statutDetails, setStatutDetails] =
@@ -73,6 +87,12 @@ export default function DeleteStatutMatrimonialModal({
       color: colors.oskar.black,
       borderColor: colors.oskar.grey,
     },
+    disabledButton: {
+      background: colors.oskar.lightGrey,
+      color: colors.oskar.grey,
+      borderColor: colors.oskar.lightGrey,
+      cursor: "not-allowed",
+    },
   };
 
   // Formater la date
@@ -102,6 +122,7 @@ export default function DeleteStatutMatrimonialModal({
         setLoadingStatut(true);
         setError(null);
         setSuccessMessage(null);
+        setConfirmationText("");
 
         // Récupérer les détails complets du statut
         const response = await api.get(
@@ -141,8 +162,24 @@ export default function DeleteStatutMatrimonialModal({
       setStatutDetails(null);
       setError(null);
       setSuccessMessage(null);
+      setConfirmationText("");
     }
   }, [isOpen]);
+
+  // Vérifier si la confirmation est valide
+  const isConfirmationValid = () => {
+    return confirmationText.trim().toUpperCase() === "CONFIRMER";
+  };
+
+  // Vérifier si le bouton de suppression doit être désactivé
+  const isDeleteDisabled = () => {
+    return (
+      loading ||
+      loadingStatut ||
+      statutDetails?.defaut ||
+      !isConfirmationValid()
+    );
+  };
 
   // Suppression du statut
   const handleDelete = async () => {
@@ -153,6 +190,11 @@ export default function DeleteStatutMatrimonialModal({
 
     if (statut.defaut) {
       setError("Impossible de supprimer le statut par défaut");
+      return;
+    }
+
+    if (!isConfirmationValid()) {
+      setError("Veuillez taper 'CONFIRMER' pour confirmer la suppression");
       return;
     }
 
@@ -210,6 +252,20 @@ export default function DeleteStatutMatrimonialModal({
     if (loading || loadingStatut) return;
     onClose();
   };
+
+  // Gérer l'appui sur la touche Entrée
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        handleClose();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [loading, loadingStatut]);
 
   // Si la modal n'est pas ouverte, ne rien afficher
   if (!isOpen) return null;
@@ -665,20 +721,42 @@ export default function DeleteStatutMatrimonialModal({
                           id="confirmation"
                           className="form-control"
                           placeholder="Tapez 'CONFIRMER' pour supprimer"
-                          onChange={(e) => {
-                            // La validation se fait côté serveur, mais on peut ajouter un indicateur visuel
-                          }}
+                          value={confirmationText}
+                          onChange={(e) => setConfirmationText(e.target.value)}
                           disabled={loading || statutDetails.defaut}
                           style={{
-                            border: "2px solid #dee2e6",
+                            border: `2px solid ${
+                              isConfirmationValid()
+                                ? colors.oskar.green
+                                : confirmationText
+                                  ? colors.oskar.red
+                                  : "#dee2e6"
+                            }`,
                             borderRadius: "8px",
                             padding: "12px",
+                            transition: "border-color 0.3s ease",
                           }}
                         />
-                        <small className="text-muted">
-                          Cette mesure de sécurité empêche les suppressions
-                          accidentelles.
-                        </small>
+                        <div className="d-flex justify-content-between align-items-center mt-2">
+                          <small className="text-muted">
+                            {statutDetails.defaut
+                              ? "Impossible de supprimer un statut par défaut"
+                              : "Cette mesure de sécurité empêche les suppressions accidentelles."}
+                          </small>
+                          {confirmationText && (
+                            <small
+                              className={`fw-bold ${
+                                isConfirmationValid()
+                                  ? "text-success"
+                                  : "text-danger"
+                              }`}
+                            >
+                              {isConfirmationValid()
+                                ? "✓ Confirmation valide"
+                                : "✗ La confirmation ne correspond pas"}
+                            </small>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -714,18 +792,20 @@ export default function DeleteStatutMatrimonialModal({
                 type="button"
                 className="btn text-white d-flex align-items-center gap-2"
                 onClick={handleDelete}
-                disabled={
-                  loading || loadingStatut || statutDetails?.defaut || false
-                }
-                style={styles.dangerButton}
+                disabled={isDeleteDisabled()}
+                style={isDeleteDisabled() ? styles.disabledButton : styles.dangerButton}
                 onMouseEnter={(e) => {
-                  Object.assign(
-                    e.currentTarget.style,
-                    styles.dangerButtonHover,
-                  );
+                  if (!isDeleteDisabled()) {
+                    Object.assign(
+                      e.currentTarget.style,
+                      styles.dangerButtonHover,
+                    );
+                  }
                 }}
                 onMouseLeave={(e) => {
-                  Object.assign(e.currentTarget.style, styles.dangerButton);
+                  if (!isDeleteDisabled()) {
+                    Object.assign(e.currentTarget.style, styles.dangerButton);
+                  }
                 }}
               >
                 {loading ? (
@@ -781,6 +861,11 @@ export default function DeleteStatutMatrimonialModal({
           padding: 2px 6px;
           border-radius: 4px;
           font-weight: bold;
+        }
+
+        input:disabled {
+          background-color: ${colors.oskar.lightGrey};
+          cursor: not-allowed;
         }
       `}</style>
     </div>

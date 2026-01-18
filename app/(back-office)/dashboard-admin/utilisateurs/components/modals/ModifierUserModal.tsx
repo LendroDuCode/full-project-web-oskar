@@ -47,6 +47,25 @@ interface FormData {
   date_naissance?: string;
   adresse_uuid?: string;
 }
+export type UserForEdit = {
+  uuid: string;
+  nom?: string;
+  prenoms?: string;
+  email?: string;
+  telephone?: string;
+  civilite_uuid?: string | null;
+  statut_matrimonial_uuid?: string | null;
+  date_naissance?: string;
+  role_uuid?: string | null;
+  est_verifie?: boolean;
+  statut?: string;
+  est_bloque?: boolean;
+  adresse_uuid?: string | null;
+  is_admin?: boolean;
+  code_utilisateur?: string | null;
+  civilite?: { libelle: string; uuid?: string };
+  role?: { name: string; uuid?: string };
+};
 
 interface Civilite {
   uuid: string;
@@ -82,9 +101,9 @@ interface User extends FormData {
 
 interface EditUserModalProps {
   isOpen: boolean;
-  user: User | null;
+  user: UserForEdit | null; // ← Utilisez UserForEdit ici
   onClose: () => void;
-  onSuccess?: () => void;
+  onSuccess: () => void;
 }
 
 // Composant d'alerte personnalisée

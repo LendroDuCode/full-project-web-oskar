@@ -7,6 +7,12 @@ export interface Produit {
   type: string | null;
   image: string;
   image_key: string;
+  promo: number | null;
+  promo_date_fin: string | null;
+  code_barre: string | null;
+  poids: string | null;
+  dimensions: string | null;
+  couleur: string | null;
   disponible: boolean;
   statut: string;
   prix: string;
@@ -42,6 +48,10 @@ export interface Produit {
   };
   source?: {
     type: string;
+    email: string;
+    telephone: string;
+    boutique_uuid: string | null;
+    boutique_nom: string | null;
     infos: {
       uuid: string;
       nom: string;
@@ -63,6 +73,12 @@ export interface CreateProduitDto {
   prix: number | string;
   quantite: number;
   description?: string;
+  promo?: number;
+  promo_date_fin?: string;
+  code_barre?: string;
+  poids?: string;
+  dimensions?: string;
+  couleur?: string;
 }
 
 export interface UpdateProduitDto extends Partial<CreateProduitDto> {}
@@ -72,6 +88,7 @@ export interface PaginationState {
   limit: number;
   total: number;
   pages: number;
+  promo: boolean;
 }
 
 export interface SortConfig {

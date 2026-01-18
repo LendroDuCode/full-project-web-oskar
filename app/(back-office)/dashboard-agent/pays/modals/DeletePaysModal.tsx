@@ -16,7 +16,7 @@ import {
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import colors from "@/app/shared/constants/colors";
-import type { Pays } from "@/services/pays/pays.service";
+import { Pays } from "@/app/shared/types/geography";
 
 interface DeletePaysModalProps {
   isOpen: boolean;
@@ -52,7 +52,7 @@ export default function DeletePaysModal({
       setLoading(true);
       setError(null);
 
-      await api.delete(API_ENDPOINTS.ADMIN.PAYS.DELETE(pays.uuid));
+      await api.delete(API_ENDPOINTS.PAYS.DELETE(pays.uuid));
 
       if (onSuccess) {
         onSuccess();

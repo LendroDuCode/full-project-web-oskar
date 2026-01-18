@@ -1091,32 +1091,6 @@ export default function ListeVendeursBloquesPage() {
     pagination.page * pagination.limit,
   );
 
-  // Fonction pour exporter les données
-  const handleExport = async () => {
-    try {
-      const response = await api.get(
-        API_ENDPOINTS.ADMIN.VENDEURS.EXPORT_BLOCKED_PDF,
-        {
-          responseType: "blob",
-        },
-      );
-
-      const url = window.URL.createObjectURL(response);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `vendeurs-bloques-${new Date().toISOString().split("T")[0]}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-      setSuccessMessage("Export PDF réussi");
-      setTimeout(() => setSuccessMessage(null), 3000);
-    } catch (err) {
-      console.error("Erreur lors de l'export PDF:", err);
-      handleCSVExport();
-    }
-  };
 
   // Fallback CSV export
   const handleCSVExport = () => {
@@ -1183,8 +1157,8 @@ export default function ListeVendeursBloquesPage() {
 
   return (
     <>
-      {/* Modal de modification de vendeur */}
-      <EditVendeurModal
+      {/* Modal de modification de vendeur
+           <EditVendeurModal
         isOpen={showEditModal}
         vendeur={selectedVendeurForEdit}
         onClose={() => {
@@ -1197,6 +1171,8 @@ export default function ListeVendeursBloquesPage() {
           setTimeout(() => setSuccessMessage(null), 3000);
         }}
       />
+      */}
+ 
 
       {/* Modal de déblocage simple */}
       <UnblockModal
@@ -1284,7 +1260,7 @@ export default function ListeVendeursBloquesPage() {
                 </Link>
 
                 <button
-                  onClick={handleExport}
+                 // onClick={handleExport}
                   className="btn btn-outline-danger d-flex align-items-center gap-2"
                   disabled={vendeurs.length === 0 || loading}
                 >

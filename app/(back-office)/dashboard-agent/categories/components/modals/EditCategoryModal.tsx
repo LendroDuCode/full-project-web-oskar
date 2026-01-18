@@ -637,7 +637,7 @@ export default function EditCategoryModal({
       const response = await api.delete(
         API_ENDPOINTS.CATEGORIES.DELETE(category.uuid),
         {
-          requiresAuth: true,
+         // requiresAuth: true,
         },
       );
 
@@ -695,7 +695,7 @@ export default function EditCategoryModal({
         `/categories/${category.uuid}/restore`,
         {},
         {
-          requiresAuth: true,
+          //requiresAuth: true,
         },
       );
 

@@ -39,8 +39,6 @@ import {
   faHandshake,
   faExclamationTriangle,
 } from "@fortawesome/free-solid-svg-icons";
-import { useStatutsMatrimoniaux } from "@/hooks/useStatutsMatrimoniaux";
-import { StatutMatrimonialType } from "@/services/statut-matrimonials/statuts-matrimoniaux.types";
 
 // Composant de badge de statut
 const StatusBadge = ({ statut }: { statut: string }) => {
@@ -454,20 +452,237 @@ const compareValues = (
   return 0;
 };
 
+// Interface pour les services
+interface PaginationData {
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+}
+
+// Service API pour les statuts matrimoniaux
+const statutMatrimonialService = {
+  // Récupérer tous les statuts avec pagination et filtres
+  async getStatuts(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    actif?: boolean;
+  }) {
+    const queryParams = new URLSearchParams();
+    
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.actif !== undefined) queryParams.append('actif', params.actif.toString());
+
+    const response = await fetch(`/api/admin/statuts-matrimoniaux?${queryParams.toString()}`);
+    if (!response.ok) throw new Error('Erreur lors de la récupération des statuts');
+    
+    return response.json();
+  },
+
+  // Basculer le statut actif/inactif
+  async toggleStatus(uuid: string) {
+    const response = await fetch(`/api/admin/statuts-matrimoniaux/${uuid}/toggle-status`, {
+      method: 'PATCH'
+    });
+    if (!response.ok) throw new Error('Erreur lors du changement de statut');
+    
+    return response.json();
+  },
+
+  // Définir comme statut par défaut
+  async setDefault(uuid: string) {
+    const response = await fetch(`/api/admin/statuts-matrimoniaux/${uuid}/set-default`, {
+      method: 'PATCH'
+    });
+    if (!response.ok) throw new Error('Erreur lors de la définition du statut par défaut');
+    
+    return response.json();
+  },
+
+  // Supprimer un statut
+  async deleteStatut(uuid: string) {
+    const response = await fetch(`/api/admin/statuts-matrimoniaux/${uuid}`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) throw new Error('Erreur lors de la suppression du statut');
+    
+    return response.json();
+  }
+};
+// Types pour le statut matrimonial
+interface StatutMatrimonialType {
+  // Identifiant unique
+  uuid: string;
+  
+  // Informations principales
+  libelle: string;
+  code: string;
+  description?: string;
+  
+  // Statut et configuration
+  statut: "actif" | "inactif";
+  defaut: boolean;
+  ordre?: number;
+  
+  // Métadonnées
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy?: string;
+  updatedBy?: string;
+  
+  // Données statistiques (optionnelles)
+  nombreUtilisations?: number;
+  derniereUtilisation?: string;
+  
+  // Historique des modifications
+  historique?: Array<{
+    date: string;
+    action: string;
+    utilisateur: string;
+    details?: string;
+  }>;
+  
+  // Relations (optionnelles selon les besoins)
+  utilisateurs?: Array<{
+    uuid: string;
+    nom: string;
+    prenom: string;
+    email: string;
+  }>;
+  
+  // Validation et contraintes
+  estValide?: boolean;
+  contraintes?: {
+    minAge?: number;
+    maxAge?: number;
+    conditions?: string[];
+  };
+}
+
+// Types pour les opérations CRUD
+interface CreateStatutMatrimonialType {
+  libelle: string;
+  code: string;
+  description?: string;
+  statut?: "actif" | "inactif";
+  defaut?: boolean;
+  ordre?: number;
+}
+
+interface UpdateStatutMatrimonialType {
+  libelle?: string;
+  code?: string;
+  description?: string;
+  statut?: "actif" | "inactif";
+  defaut?: boolean;
+  ordre?: number;
+}
+
+// Type pour la réponse API
+interface ApiResponseStatutMatrimonial {
+  success: boolean;
+  message: string;
+  data: StatutMatrimonialType | StatutMatrimonialType[];
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  timestamp: string;
+}
+
+// Type pour les filtres de recherche
+interface StatutMatrimonialFilterType {
+  search?: string;
+  statut?: "actif" | "inactif" | "tous";
+  defaut?: boolean;
+  dateDebut?: string;
+  dateFin?: string;
+  orderBy?: "libelle" | "code" | "createdAt" | "ordre";
+  orderDirection?: "asc" | "desc";
+  page?: number;
+  limit?: number;
+}
+
+// Type pour les statistiques
+interface StatutMatrimonialStatsType {
+  total: number;
+  actifs: number;
+  inactifs: number;
+  parDefaut: number;
+  derniereCreation: string;
+  moyenneUtilisations: number;
+  repartitionParStatut: Array<{
+    statut: string;
+    count: number;
+    percentage: number;
+  }>;
+}
+
+// Type pour l'import/export
+interface StatutMatrimonialImportType {
+  libelle: string;
+  code: string;
+  description?: string;
+  statut: "actif" | "inactif";
+  defaut: boolean;
+  ordre: number;
+}
+
+// Type pour les erreurs de validation
+interface StatutMatrimonialValidationError {
+  field: keyof CreateStatutMatrimonialType;
+  message: string;
+  code: string;
+}
+
+// Type pour l'historique des modifications
+interface StatutMatrimonialHistoryType {
+  id: string;
+  statutId: string;
+  action: "creation" | "modification" | "suppression" | "activation" | "desactivation";
+  ancienneValeur?: Partial<StatutMatrimonialType>;
+  nouvelleValeur?: Partial<StatutMatrimonialType>;
+  utilisateurId: string;
+  utilisateurNom: string;
+  utilisateurEmail: string;
+  date: string;
+  ipAddress?: string;
+  userAgent?: string;
+}
+
+// Type pour les options de sélection
+interface StatutMatrimonialOptionType {
+  value: string;
+  label: string;
+  code: string;
+  defaut: boolean;
+  disabled?: boolean;
+}
+
+// Type pour le formulaire de suppression
+interface DeleteStatutMatrimonialType {
+  uuid: string;
+  libelle: string;
+  confirmation: string;
+  raison?: string;
+  forceDelete?: boolean;
+}
 export default function StatutsMatrimoniauxPage() {
-  const {
-    statuts,
-    loading,
-    error,
-    pagination,
-    fetchStatuts,
-    toggleStatutStatus,
-    setStatutDefaut,
-    deleteStatut,
-    setPage,
-    setLimit,
-    refresh,
-  } = useStatutsMatrimoniaux();
+  // États pour les données
+  const [statuts, setStatuts] = useState<StatutMatrimonialType[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pagination, setPagination] = useState<PaginationData>({
+    page: 1,
+    limit: 10,
+    total: 0,
+    pages: 1,
+  });
 
   // États pour les modals
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -496,25 +711,151 @@ export default function StatutsMatrimoniauxPage() {
   // Options pour les éléments par page
   const itemsPerPageOptions = [5, 10, 20, 50];
 
+  // Fonction pour charger les statuts depuis l'API
+  const fetchStatuts = useCallback(async (options?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    actif?: boolean;
+  }) => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const result = await statutMatrimonialService.getStatuts({
+        page: options?.page || 1,
+        limit: options?.limit || pagination.limit,
+        search: options?.search,
+        actif: options?.actif
+      });
+
+      // Supposons que l'API retourne { data: StatutMatrimonialType[], pagination: PaginationData }
+      setStatuts(result.data || []);
+      
+      if (result.pagination) {
+        setPagination(result.pagination);
+      } else {
+        // Fallback si l'API ne retourne pas de pagination
+        setPagination({
+          page: options?.page || 1,
+          limit: options?.limit || pagination.limit,
+          total: result.data?.length || 0,
+          pages: Math.ceil((result.data?.length || 0) / (options?.limit || pagination.limit))
+        });
+      }
+      
+    } catch (err: any) {
+      setError(err.message || "Erreur lors du chargement des statuts matrimoniaux");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [pagination.limit]);
+
+  // Fonction pour basculer le statut
+  const toggleStatutStatus = useCallback(async (uuid: string) => {
+    setLoading(true);
+    try {
+      await statutMatrimonialService.toggleStatus(uuid);
+      
+      // Mettre à jour localement
+      setStatuts(prev => prev.map(statut => {
+        if (statut.uuid === uuid) {
+          return {
+            ...statut,
+            statut: statut.statut === "actif" ? "inactif" : "actif"
+          };
+        }
+        return statut;
+      }));
+      
+      return true;
+    } catch (err: any) {
+      setError(err.message || "Erreur lors du changement de statut");
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Fonction pour définir comme statut par défaut
+  const setStatutDefaut = useCallback(async (uuid: string) => {
+    setLoading(true);
+    try {
+      await statutMatrimonialService.setDefault(uuid);
+      
+      // Mettre à jour localement - définir ce statut comme défaut et les autres comme non-défaut
+      setStatuts(prev => prev.map(statut => ({
+        ...statut,
+        defaut: statut.uuid === uuid
+      })));
+      
+      return true;
+    } catch (err: any) {
+      setError(err.message || "Erreur lors de la définition du statut par défaut");
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Fonction pour supprimer un statut
+  const deleteStatut = useCallback(async (uuid: string) => {
+    setLoading(true);
+    try {
+      await statutMatrimonialService.deleteStatut(uuid);
+      
+      // Supprimer localement
+      setStatuts(prev => prev.filter(statut => statut.uuid !== uuid));
+      
+      return true;
+    } catch (err: any) {
+      setError(err.message || "Erreur lors de la suppression du statut");
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Fonctions de pagination
+  const setPage = useCallback((page: number) => {
+    setPagination(prev => ({ ...prev, page }));
+    fetchStatuts({ page });
+  }, [fetchStatuts]);
+
+  const setLimit = useCallback((limit: number) => {
+    setPagination(prev => ({ ...prev, limit, page: 1 }));
+    fetchStatuts({ limit });
+  }, [fetchStatuts]);
+
+  // Fonction de rafraîchissement
+  const refresh = useCallback(() => {
+    return fetchStatuts({
+      page: pagination.page,
+      limit: pagination.limit,
+      search: searchTerm || undefined,
+      actif: selectedStatus !== "all" ? selectedStatus === "actif" : undefined
+    });
+  }, [fetchStatuts, pagination.page, pagination.limit, searchTerm, selectedStatus]);
+
   // Charger les statuts au montage
   useEffect(() => {
     fetchStatuts();
-  }, []);
+  }, [fetchStatuts]);
 
-  // Gérer les changements de pagination et filtres
+  // Gérer les changements de recherche et filtres avec debounce
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       fetchStatuts({
-        page: pagination.page,
+        page: 1, // Retourner à la première page lors d'un nouveau filtre
         limit: pagination.limit,
         search: searchTerm || undefined,
-        actif:
-          selectedStatus !== "all" ? selectedStatus === "actif" : undefined,
+        actif: selectedStatus !== "all" ? selectedStatus === "actif" : undefined,
       });
-    }, 300);
+    }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [pagination.page, pagination.limit, searchTerm, selectedStatus]);
+  }, [searchTerm, selectedStatus, fetchStatuts, pagination.limit]);
 
   // Fonction pour formater la date
   const formatDate = useCallback((dateString: string | null | undefined) => {
@@ -576,18 +917,17 @@ export default function StatutsMatrimoniauxPage() {
     [sortConfig],
   );
 
-  // Filtrer et trier les statuts
+  // Filtrer et trier les statuts côté client (pour le tri seulement)
   const filteredStatuts = useMemo(() => {
+    // Note: Le filtrage principal est fait côté serveur via l'API
+    // On applique seulement le tri côté client
     return sortStatuts(statuts);
   }, [statuts, sortStatuts]);
 
-  // Calculer les éléments à afficher
+  // Calculer les éléments à afficher (déjà paginés par l'API)
   const currentItems = useMemo(() => {
-    return filteredStatuts.slice(
-      (pagination.page - 1) * pagination.limit,
-      pagination.page * pagination.limit,
-    );
-  }, [filteredStatuts, pagination.page, pagination.limit]);
+    return filteredStatuts;
+  }, [filteredStatuts]);
 
   // Gestion de la sélection multiple
   const handleRowSelect = (uuid: string) => {
@@ -780,6 +1120,7 @@ export default function StatutsMatrimoniauxPage() {
     try {
       setLocalError(null);
 
+      // Tentative d'export PDF via API
       const response = await fetch(
         "/api/admin/export-statuts-matrimoniaux-pdf",
         {
@@ -790,22 +1131,25 @@ export default function StatutsMatrimoniauxPage() {
         },
       );
 
-      if (!response.ok) throw new Error("Erreur lors de l'export");
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `statuts-matrimoniaux-${new Date().toISOString().split("T")[0]}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `statuts-matrimoniaux-${new Date().toISOString().split("T")[0]}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-      setSuccessMessage("Export PDF réussi");
-      setTimeout(() => setSuccessMessage(null), 3000);
+        setSuccessMessage("Export PDF réussi");
+        setTimeout(() => setSuccessMessage(null), 3000);
+      } else {
+        // Fallback CSV export
+        handleCSVExport();
+      }
     } catch (err) {
-      console.error("Erreur lors de l'export:", err);
+      console.error("Erreur lors de l'export PDF:", err);
       // Fallback CSV export
       handleCSVExport();
     }
@@ -865,7 +1209,7 @@ export default function StatutsMatrimoniauxPage() {
 
   // Icône selon le type de statut
   const getStatutIcon = (libelle: string) => {
-    const lowerLibelle = libelle.toLowerCase();
+    const lowerLibelle = libelle?.toLowerCase() || "";
     if (
       lowerLibelle.includes("célibataire") ||
       lowerLibelle.includes("celibataire")

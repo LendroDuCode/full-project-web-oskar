@@ -12,11 +12,32 @@ import {
   faFlag,
   faPhone,
   faCode,
+  faCalendar,
+  faCheckCircle,
+  faTimesCircle,
 } from "@fortawesome/free-solid-svg-icons";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import colors from "@/app/shared/constants/colors";
-import { Pays } from "@/services/pays/pays.types";
+
+// Type local pour le pays
+interface Pays {
+  uuid: string;
+  nom: string;
+  code: string;
+  indicatif: string;
+  statut: string;
+  created_at?: string;
+  updated_at?: string;
+  description?: string;
+  continent?: string;
+  capitale?: string;
+  langue_officielle?: string;
+  population?: number;
+  superficie?: number;
+  devise?: string;
+  domaine_internet?: string;
+}
 
 interface DeletePaysModalProps {
   isOpen: boolean;
@@ -33,33 +54,68 @@ export default function DeletePaysModal({
 }: DeletePaysModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmationText, setConfirmationText] = useState("");
 
   const styles = {
     modalHeader: {
-      background: `linear-gradient(135deg, ${colors.oskar.orange} 0%, ${colors.oskar.orangeHover} 100%)`,
-      borderBottom: `3px solid ${colors.oskar.orange}`,
+      background: `linear-gradient(135deg, ${colors.oskar.red} 0%, ${colors.oskar.redHover} 100%)`,
+      borderBottom: `3px solid ${colors.oskar.red}`,
     },
     warningSection: {
       background: colors.oskar.lightGrey,
-      borderLeft: `4px solid ${colors.oskar.orange}`,
+      borderLeft: `4px solid ${colors.oskar.red}`,
+    },
+    dangerButton: {
+      background: colors.oskar.red,
+      borderColor: colors.oskar.red,
+    },
+    dangerButtonHover: {
+      background: colors.oskar.redHover,
+      borderColor: colors.oskar.redHover,
     },
   };
 
+  // Vérifier si le texte de confirmation est correct
+  const isConfirmationValid = () => {
+    return confirmationText.toLowerCase() === "supprimer";
+  };
+
   const handleSubmit = async () => {
-    if (!pays || !pays.uuid) return;
+    if (!pays || !pays.uuid) {
+      setError("Pays non spécifié");
+      return;
+    }
+
+    if (!isConfirmationValid()) {
+      setError("Veuillez taper 'supprimer' pour confirmer la suppression");
+      return;
+    }
 
     try {
       setLoading(true);
       setError(null);
 
-      await api.delete(API_ENDPOINTS.PAYS.DELETE(pays.uuid));
+      console.log(`🗑️ Tentative de suppression du pays: ${pays.nom} (${pays.uuid})`);
+
+      // Appel à l'API pour supprimer le pays
+      const response = await api.delete(API_ENDPOINTS.PAYS.DELETE(pays.uuid));
+
+      console.log("✅ Pays supprimé avec succès:", response.data);
+
+      // Réinitialiser le formulaire
+      setConfirmationText("");
 
       if (onSuccess) {
         onSuccess();
       }
 
-      onClose();
+      // Fermer la modal après un court délai pour montrer le succès
+      setTimeout(() => {
+        onClose();
+      }, 500);
     } catch (err: any) {
+      console.error("❌ Erreur lors de la suppression du pays:", err);
+
       let errorMessage = "Erreur lors de la suppression du pays";
 
       if (err.response?.data?.message) {
@@ -68,10 +124,14 @@ export default function DeletePaysModal({
         errorMessage = err.message;
       }
 
-      if (err.response?.status === 404) {
-        errorMessage = "Pays non trouvé.";
+      if (err.response?.status === 400) {
+        errorMessage = "Requête invalide. Veuillez vérifier les données.";
       } else if (err.response?.status === 403) {
         errorMessage = "Vous n'avez pas la permission de supprimer ce pays.";
+      } else if (err.response?.status === 404) {
+        errorMessage = "Pays non trouvé.";
+      } else if (err.response?.status === 409) {
+        errorMessage = "Impossible de supprimer ce pays car il est utilisé par d'autres données.";
       } else if (err.response?.status === 500) {
         errorMessage = "Erreur serveur. Veuillez réessayer plus tard.";
       }
@@ -84,7 +144,51 @@ export default function DeletePaysModal({
 
   const handleClose = () => {
     if (loading) return;
+    
+    // Demander confirmation si l'utilisateur a commencé à taper
+    if (confirmationText.trim() !== "") {
+      if (!confirm("Voulez-vous vraiment annuler ? Les modifications seront perdues.")) {
+        return;
+      }
+    }
+    
+    setConfirmationText("");
+    setError(null);
     onClose();
+  };
+
+  // Fonction pour formater la date
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return "N/A";
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "Date invalide";
+      return new Intl.DateTimeFormat("fr-FR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }).format(date);
+    } catch {
+      return "N/A";
+    }
+  };
+
+  // Obtenir le badge de statut
+  const getStatusBadge = (statut: string) => {
+    if (statut === "actif") {
+      return (
+        <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 d-inline-flex align-items-center gap-1">
+          <FontAwesomeIcon icon={faCheckCircle} className="fs-12" />
+          <span>Actif</span>
+        </span>
+      );
+    }
+    return (
+      <span className="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 d-inline-flex align-items-center gap-1">
+        <FontAwesomeIcon icon={faTimesCircle} className="fs-12" />
+        <span>Inactif</span>
+      </span>
+    );
   };
 
   if (!isOpen || !pays) return null;
@@ -120,7 +224,7 @@ export default function DeletePaysModal({
                   Supprimer le Pays
                 </h5>
                 <p className="mb-0 opacity-75 fs-14">
-                  Confirmation de suppression
+                  Action irréversible - Confirmation requise
                 </p>
               </div>
             </div>
@@ -147,7 +251,7 @@ export default function DeletePaysModal({
                   <div className="flex-shrink-0">
                     <div
                       className="rounded-circle p-2"
-                      style={{ backgroundColor: `${colors.oskar.orange}20` }}
+                      style={{ backgroundColor: `${colors.oskar.red}20` }}
                     >
                       <FontAwesomeIcon
                         icon={faExclamationTriangle}
@@ -192,10 +296,10 @@ export default function DeletePaysModal({
                       className="mb-0 fw-bold"
                       style={{ color: colors.oskar.red }}
                     >
-                      Attention ! Action irréversible
+                      ⚠️ ATTENTION : Action définitive
                     </h6>
                     <small className="text-muted">
-                      Cette action ne peut pas être annulée
+                      Cette opération ne peut pas être annulée ou restaurée
                     </small>
                   </div>
                 </div>
@@ -203,9 +307,9 @@ export default function DeletePaysModal({
               <div className="card-body p-4">
                 <div className="text-center mb-4">
                   <div
-                    className="rounded-circle p-3 mx-auto mb-3"
+                    className="rounded-circle p-3 mx-auto mb-3 d-flex align-items-center justify-content-center"
                     style={{
-                      backgroundColor: `${colors.oskar.orange}15`,
+                      backgroundColor: `${colors.oskar.red}15`,
                       width: "80px",
                       height: "80px",
                     }}
@@ -213,26 +317,29 @@ export default function DeletePaysModal({
                     <FontAwesomeIcon
                       icon={faTrash}
                       className="fs-2"
-                      style={{ color: colors.oskar.orange }}
+                      style={{ color: colors.oskar.red }}
                     />
                   </div>
-                  <h5 className="fw-bold text-danger">
-                    Êtes-vous sûr de vouloir supprimer ce pays ?
+                  <h5 className="fw-bold text-danger mb-3">
+                    Confirmer la suppression
                   </h5>
-                  <p className="text-muted">
-                    Cette action supprimera définitivement le pays de la base de
-                    données.
+                  <p className="text-muted mb-0">
+                    Vous êtes sur le point de supprimer définitivement ce pays.
                   </p>
                 </div>
 
-                {/* Informations du pays */}
+                {/* Informations détaillées du pays */}
                 <div className="bg-light p-4 rounded mb-4">
-                  <h6 className="fw-semibold mb-3">Pays à supprimer :</h6>
+                  <h6 className="fw-semibold mb-3">
+                    <FontAwesomeIcon icon={faGlobe} className="me-2" />
+                    Informations du pays à supprimer :
+                  </h6>
+                  
                   <div className="row g-3">
                     <div className="col-md-6">
-                      <div className="d-flex align-items-center mb-2">
+                      <div className="d-flex align-items-center mb-3">
                         <div
-                          className="rounded-circle p-2 me-3"
+                          className="rounded-circle p-2 me-3 flex-shrink-0"
                           style={{ backgroundColor: `${colors.oskar.blue}15` }}
                         >
                           <FontAwesomeIcon
@@ -240,16 +347,17 @@ export default function DeletePaysModal({
                             style={{ color: colors.oskar.blue }}
                           />
                         </div>
-                        <div>
-                          <small className="text-muted d-block">Nom</small>
-                          <span className="fw-semibold">{pays.nom}</span>
+                        <div className="flex-grow-1">
+                          <small className="text-muted d-block">Nom du pays</small>
+                          <span className="fw-semibold fs-5">{pays.nom}</span>
                         </div>
                       </div>
                     </div>
+                    
                     <div className="col-md-3">
-                      <div className="d-flex align-items-center mb-2">
+                      <div className="d-flex align-items-center mb-3">
                         <div
-                          className="rounded-circle p-2 me-3"
+                          className="rounded-circle p-2 me-3 flex-shrink-0"
                           style={{ backgroundColor: `${colors.oskar.green}15` }}
                         >
                           <FontAwesomeIcon
@@ -258,15 +366,16 @@ export default function DeletePaysModal({
                           />
                         </div>
                         <div>
-                          <small className="text-muted d-block">Code</small>
+                          <small className="text-muted d-block">Code ISO</small>
                           <span className="fw-semibold">{pays.code}</span>
                         </div>
                       </div>
                     </div>
+                    
                     <div className="col-md-3">
-                      <div className="d-flex align-items-center mb-2">
+                      <div className="d-flex align-items-center mb-3">
                         <div
-                          className="rounded-circle p-2 me-3"
+                          className="rounded-circle p-2 me-3 flex-shrink-0"
                           style={{
                             backgroundColor: `${colors.oskar.orange}15`,
                           }}
@@ -278,34 +387,127 @@ export default function DeletePaysModal({
                         </div>
                         <div>
                           <small className="text-muted d-block">
-                            Indicatif
+                            Indicatif téléphonique
                           </small>
-                          <span className="fw-semibold">{pays.indicatif}</span>
+                          <span className="fw-semibold">+{pays.indicatif}</span>
                         </div>
                       </div>
                     </div>
                   </div>
+
+                  <div className="row g-3">
+                    <div className="col-md-4">
+                      <div className="mb-2">
+                        <small className="text-muted d-block">Statut</small>
+                        {getStatusBadge(pays.statut)}
+                      </div>
+                    </div>
+                    
+                    <div className="col-md-4">
+                      <div className="mb-2">
+                        <small className="text-muted d-block">
+                          <FontAwesomeIcon icon={faCalendar} className="me-1" />
+                          Créé le
+                        </small>
+                        <span className="fw-semibold">{formatDate(pays.created_at)}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="col-md-4">
+                      <div className="mb-2">
+                        <small className="text-muted d-block">
+                          <FontAwesomeIcon icon={faCalendar} className="me-1" />
+                          Modifié le
+                        </small>
+                        <span className="fw-semibold">{formatDate(pays.updated_at)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Informations supplémentaires */}
+                  {(pays.capitale || pays.devise || pays.population) && (
+                    <div className="mt-3 pt-3 border-top">
+                      <h6 className="fw-semibold mb-2">Informations supplémentaires :</h6>
+                      <div className="row g-2">
+                        {pays.capitale && (
+                          <div className="col-md-4">
+                            <small className="text-muted d-block">Capitale</small>
+                            <span className="fw-semibold">{pays.capitale}</span>
+                          </div>
+                        )}
+                        {pays.devise && (
+                          <div className="col-md-4">
+                            <small className="text-muted d-block">Devise</small>
+                            <span className="fw-semibold">{pays.devise}</span>
+                          </div>
+                        )}
+                        {pays.population && (
+                          <div className="col-md-4">
+                            <small className="text-muted d-block">Population</small>
+                            <span className="fw-semibold">
+                              {pays.population.toLocaleString('fr-FR')}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* Avertissement */}
-                <div
-                  className="alert alert-warning border-0"
-                  style={{ borderRadius: "10px" }}
-                >
-                  <div className="d-flex align-items-start">
-                    <FontAwesomeIcon
-                      icon={faExclamationTriangle}
-                      className="me-2 mt-1 text-warning"
-                    />
-                    <div>
-                      <h6 className="alert-heading mb-1">Important</h6>
-                      <p className="mb-0 small">
-                        Cette suppression est définitive. Toutes les données
-                        associées à ce pays seront perdues. Assurez-vous
-                        qu'aucune donnée dépendante n'utilise ce pays avant de
-                        continuer.
-                      </p>
+                {/* Section de confirmation */}
+                <div className="mb-4">
+                  <div className="alert alert-danger border-0 mb-3" style={{ borderRadius: "10px" }}>
+                    <div className="d-flex align-items-start">
+                      <FontAwesomeIcon
+                        icon={faExclamationTriangle}
+                        className="me-2 mt-1 text-danger"
+                      />
+                      <div>
+                        <h6 className="alert-heading mb-1 text-danger">Conséquences de cette action :</h6>
+                        <ul className="mb-0 small ps-3">
+                          <li>Toutes les données associées à ce pays seront définitivement supprimées</li>
+                          <li>Les villes, régions ou autres entités géographiques liées seront affectées</li>
+                          <li>Les utilisateurs ou entreprises référençant ce pays devront être mis à jour</li>
+                          <li>Aucune récupération des données ne sera possible</li>
+                        </ul>
+                      </div>
                     </div>
+                  </div>
+
+                  {/* Zone de confirmation texte */}
+                  <div className="mb-3">
+                    <label htmlFor="confirmationText" className="form-label fw-semibold">
+                      Pour confirmer, veuillez taper <code className="text-danger">"supprimer"</code> :
+                    </label>
+                    <input
+                      type="text"
+                      id="confirmationText"
+                      className={`form-control ${confirmationText && !isConfirmationValid() ? "is-invalid" : ""}`}
+                      placeholder='Tapez "supprimer" pour confirmer'
+                      value={confirmationText}
+                      onChange={(e) => {
+                        setConfirmationText(e.target.value);
+                        if (error && error.includes("Veuillez taper")) {
+                          setError(null);
+                        }
+                      }}
+                      disabled={loading}
+                      style={{ 
+                        borderColor: confirmationText && !isConfirmationValid() ? colors.oskar.red : undefined,
+                        borderRadius: "8px"
+                      }}
+                    />
+                    {confirmationText && !isConfirmationValid() && (
+                      <div className="invalid-feedback d-block">
+                        Le texte ne correspond pas à "supprimer"
+                      </div>
+                    )}
+                    {isConfirmationValid() && (
+                      <div className="valid-feedback d-block text-success">
+                        <FontAwesomeIcon icon={faCheckCircle} className="me-1" />
+                        Confirmation valide
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -342,18 +544,17 @@ export default function DeletePaysModal({
                 type="button"
                 className="btn text-white d-flex align-items-center gap-2"
                 onClick={handleSubmit}
-                disabled={loading}
-                style={{
-                  background: colors.oskar.red,
-                  borderColor: colors.oskar.red,
-                }}
+                disabled={loading || !isConfirmationValid()}
+                style={styles.dangerButton}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = colors.oskar.redHover;
-                  e.currentTarget.style.borderColor = colors.oskar.redHover;
+                  if (!loading && isConfirmationValid()) {
+                    Object.assign(e.currentTarget.style, styles.dangerButtonHover);
+                  }
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = colors.oskar.red;
-                  e.currentTarget.style.borderColor = colors.oskar.red;
+                  if (!loading && isConfirmationValid()) {
+                    Object.assign(e.currentTarget.style, styles.dangerButton);
+                  }
                 }}
               >
                 {loading ? (
@@ -388,10 +589,24 @@ export default function DeletePaysModal({
           border-radius: 8px !important;
           transition: all 0.3s ease;
           font-weight: 500;
+          min-width: 120px;
+        }
+
+        .btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
         }
 
         .fs-14 {
           font-size: 14px !important;
+        }
+
+        .fs-12 {
+          font-size: 12px !important;
+        }
+
+        .fs-5 {
+          font-size: 1.25rem !important;
         }
 
         .shadow-sm {
@@ -400,6 +615,55 @@ export default function DeletePaysModal({
 
         .shadow-lg {
           box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1) !important;
+        }
+
+        .flex-shrink-0 {
+          flex-shrink: 0;
+        }
+
+        .flex-grow-1 {
+          flex-grow: 1;
+        }
+
+        .badge {
+          border-radius: 20px !important;
+          padding: 0.25rem 0.5rem;
+          font-size: 0.75rem;
+          font-weight: 500;
+        }
+
+        .form-control {
+          border-radius: 8px !important;
+          transition: all 0.3s ease;
+        }
+
+        .form-control:focus {
+          border-color: ${colors.oskar.blue};
+          box-shadow: 0 0 0 0.25rem ${colors.oskar.blue}25;
+        }
+
+        .form-control.is-invalid {
+          border-color: ${colors.oskar.red};
+          box-shadow: 0 0 0 0.25rem ${colors.oskar.red}25;
+        }
+
+        .invalid-feedback {
+          color: ${colors.oskar.red};
+          font-size: 0.875rem;
+          margin-top: 0.25rem;
+        }
+
+        .valid-feedback {
+          color: ${colors.oskar.green};
+          font-size: 0.875rem;
+          margin-top: 0.25rem;
+        }
+
+        code {
+          background-color: ${colors.oskar.lightGrey};
+          padding: 0.1rem 0.3rem;
+          border-radius: 4px;
+          font-family: "Courier New", Courier, monospace;
         }
       `}</style>
     </div>

@@ -1,870 +1,250 @@
-// app/(back-office)/dashboard-admin/villes/components/modals/DeleteVilleModal.tsx
-"use client";
+// app/page.tsx
+'use client';
 
-import { useState, useEffect } from "react";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faTimes,
-  faTrash,
-  faExclamationTriangle,
-  faSpinner,
-  faCity,
-  faMapMarkerAlt,
-  faGlobe,
-  faCalendarAlt,
-  faInfoCircle,
-} from "@fortawesome/free-solid-svg-icons";
-import { api } from "@/lib/api-client";
-import { API_ENDPOINTS } from "@/config/api-endpoints";
-import colors from "@/app/shared/constants/colors";
-import type { Ville } from "@/services/villes/villes.types";
-import type { Pays } from "@/services/pays/pays.types";
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import Image from 'next/image';
 
-// Types
-interface DeleteVilleModalProps {
-  isOpen: boolean;
-  ville: Ville | null;
-  onClose: () => void;
-  onSuccess?: () => void;
-}
+export default function HomePage() {
+  const [count, setCount] = useState(0);
+  const [isClient, setIsClient] = useState(false);
 
-export default function DeleteVilleModal({
-  isOpen,
-  ville,
-  onClose,
-  onSuccess,
-}: DeleteVilleModalProps) {
-  // États de chargement et erreurs
-  const [loading, setLoading] = useState(false);
-  const [loadingVille, setLoadingVille] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-
-  // États pour les informations détaillées
-  const [villeDetails, setVilleDetails] = useState<Ville | null>(null);
-  const [paysInfo, setPaysInfo] = useState<Pays | null>(null);
-
-  // Styles personnalisés
-  const styles = {
-    modalHeader: {
-      background: `linear-gradient(135deg, ${colors.oskar.orange} 0%, ${colors.oskar.orangeHover} 100%)`,
-      borderBottom: `3px solid ${colors.oskar.red}`,
-    },
-    warningSection: {
-      background: `${colors.oskar.orange}15`,
-      borderLeft: `4px solid ${colors.oskar.orange}`,
-    },
-    dangerButton: {
-      background: colors.oskar.red,
-      borderColor: colors.oskar.red,
-    },
-    dangerButtonHover: {
-      background: colors.oskar.redHover,
-      borderColor: colors.oskar.redHover,
-    },
-    secondaryButton: {
-      background: "white",
-      color: colors.oskar.grey,
-      borderColor: colors.oskar.grey,
-    },
-    secondaryButtonHover: {
-      background: colors.oskar.lightGrey,
-      color: colors.oskar.black,
-      borderColor: colors.oskar.grey,
-    },
-  };
-
-  // Formater la date
-  const formatDate = (dateString: string | null | undefined) => {
-    if (!dateString) return "N/A";
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return "Date invalide";
-      return new Intl.DateTimeFormat("fr-FR", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      }).format(date);
-    } catch {
-      return "N/A";
-    }
-  };
-
-  // Charger les détails de la ville et du pays
+  // Détecter si on est côté client
   useEffect(() => {
-    if (!isOpen || !ville) return;
+    setIsClient(true);
+  }, []);
 
-    const loadDetails = async () => {
-      try {
-        setLoadingVille(true);
-        setError(null);
-        setSuccessMessage(null);
-
-        // Récupérer les détails complets de la ville
-        const response = await api.get(API_ENDPOINTS.VILLES.DETAIL(ville.uuid));
-
-        let villeData: Ville;
-        if (
-          response.data &&
-          typeof response.data === "object" &&
-          "data" in response.data
-        ) {
-          villeData = (response.data as any).data;
-        } else {
-          villeData = response.data as Ville;
-        }
-
-        if (villeData) {
-          setVilleDetails(villeData);
-
-          // Si la ville a des informations sur le pays, les charger
-          if (villeData.pays) {
-            setPaysInfo(villeData.pays as Pays);
-          } else if (villeData.pays_uuid) {
-            try {
-              const paysResponse = await api.get(
-                API_ENDPOINTS.PAYS.DETAIL(villeData.pays_uuid),
-              );
-              setPaysInfo(paysResponse.data as Pays);
-            } catch {
-              // Continuer sans les infos du pays
-            }
-          }
-        } else {
-          setVilleDetails(ville);
-        }
-      } catch (err: any) {
-        console.error("Erreur lors du chargement des détails:", err);
-        // Utiliser les données de base
-        setVilleDetails(ville);
-      } finally {
-        setLoadingVille(false);
-      }
-    };
-
-    loadDetails();
-  }, [isOpen, ville]);
-
-  // Réinitialiser les états quand la modal se ferme
-  useEffect(() => {
-    if (!isOpen) {
-      setVilleDetails(null);
-      setPaysInfo(null);
-      setError(null);
-      setSuccessMessage(null);
+  // Données de démonstration
+  const features = [
+    {
+      id: 1,
+      title: 'Routing App',
+      description: 'Système de routing basé sur le système de fichiers',
+      icon: '🚀'
+    },
+    {
+      id: 2,
+      title: 'Server Components',
+      description: 'Composants serveur par défaut pour de meilleures performances',
+      icon: '⚡'
+    },
+    {
+      id: 3,
+      title: 'Optimisation d\'images',
+      description: 'Optimisation automatique avec le composant Image',
+      icon: '🖼️'
     }
-  }, [isOpen]);
-
-  // Suppression de la ville
-  const handleDelete = async () => {
-    if (!ville || !ville.uuid) {
-      setError("Aucune ville sélectionnée pour la suppression");
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-      setSuccessMessage(null);
-
-      // Appel à l'API pour la suppression
-      await api.delete(API_ENDPOINTS.VILLES.DELETE(ville.uuid));
-
-      setSuccessMessage("Ville supprimée avec succès !");
-
-      // Appeler le callback de succès
-      if (onSuccess) {
-        setTimeout(() => {
-          onSuccess();
-          onClose();
-        }, 1500);
-      } else {
-        setTimeout(() => {
-          onClose();
-        }, 2000);
-      }
-    } catch (err: any) {
-      let errorMessage = "Erreur lors de la suppression de la ville";
-
-      if (err.response?.data?.message) {
-        errorMessage = err.response.data.message;
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-
-      if (err.response?.status === 400) {
-        errorMessage = "Impossible de supprimer la ville. Données invalides.";
-      } else if (err.response?.status === 403) {
-        errorMessage = "Vous n'êtes pas autorisé à supprimer cette ville.";
-      } else if (err.response?.status === 404) {
-        errorMessage =
-          "Ville non trouvée. Elle a peut-être déjà été supprimée.";
-      } else if (err.response?.status === 409) {
-        errorMessage =
-          "Impossible de supprimer la ville. Elle est utilisée dans d'autres données.";
-      } else if (err.response?.status === 500) {
-        errorMessage = "Erreur serveur. Veuillez réessayer plus tard.";
-      }
-
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Fermer la modal
-  const handleClose = () => {
-    if (loading || loadingVille) return;
-    onClose();
-  };
-
-  // Si la modal n'est pas ouverte, ne rien afficher
-  if (!isOpen) return null;
+  ];
 
   return (
-    <div
-      className="modal fade show d-block"
-      tabIndex={-1}
-      style={{
-        backgroundColor: "rgba(0,0,0,0.5)",
-        backdropFilter: "blur(2px)",
-      }}
-      role="dialog"
-      aria-labelledby="deleteVilleModalLabel"
-      aria-modal="true"
-    >
-      <div className="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
-        <div className="modal-content border-0 shadow-lg">
-          {/* En-tête de la modal */}
-          <div
-            className="modal-header text-white border-0 rounded-top-3"
-            style={styles.modalHeader}
-          >
-            <div className="d-flex align-items-center">
-              <div className="bg-white bg-opacity-20 rounded-circle p-2 me-3">
-                <FontAwesomeIcon icon={faTrash} className="fs-5" />
-              </div>
-              <div>
-                <h5
-                  className="modal-title mb-0 fw-bold"
-                  id="deleteVilleModalLabel"
-                >
-                  Supprimer une Ville
-                </h5>
-                <p className="mb-0 opacity-75 fs-14">
-                  Confirmation de suppression définitive
-                </p>
-              </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      {/* Header */}
+      <header className="sticky top-0 z-50 w-full border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+        <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
+              <span className="font-bold text-white">N</span>
             </div>
-            <button
-              type="button"
-              className="btn-close btn-close-white"
-              onClick={handleClose}
-              disabled={loading || loadingVille}
-              aria-label="Fermer"
-              style={{ filter: "brightness(0) invert(1)" }}
-            ></button>
+            <span className="text-xl font-bold">Next.js App</span>
           </div>
+          
+          <nav className="hidden md:flex items-center gap-6">
+            <Link href="/" className="text-sm font-medium transition-colors hover:text-blue-600">
+              Accueil
+            </Link>
+            <Link href="/about" className="text-sm font-medium text-gray-600 transition-colors hover:text-blue-600">
+              À propos
+            </Link>
+            <Link href="/contact" className="text-sm font-medium text-gray-600 transition-colors hover:text-blue-600">
+              Contact
+            </Link>
+          </nav>
+          
+          <button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700">
+            Commencer
+          </button>
+        </div>
+      </header>
 
-          {/* Corps de la modal */}
-          <div className="modal-body py-4">
-            {/* Messages d'alerte */}
-            {error && (
-              <div
-                className="alert alert-danger alert-dismissible fade show mb-4 border-0 shadow-sm"
-                role="alert"
-                style={{ borderRadius: "10px" }}
-              >
-                <div className="d-flex align-items-center">
-                  <div className="flex-shrink-0">
-                    <div
-                      className="rounded-circle p-2"
-                      style={{ backgroundColor: `${colors.oskar.orange}20` }}
-                    >
-                      <FontAwesomeIcon
-                        icon={faExclamationTriangle}
-                        className="text-danger"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex-grow-1 ms-3">
-                    <h6 className="alert-heading mb-1">Erreur</h6>
-                    <p className="mb-0">{error}</p>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn-close"
-                    onClick={() => setError(null)}
-                    aria-label="Fermer l'alerte"
-                  ></button>
-                </div>
-              </div>
-            )}
-
-            {successMessage && (
-              <div
-                className="alert alert-success alert-dismissible fade show mb-4 border-0 shadow-sm"
-                role="alert"
-                style={{ borderRadius: "10px" }}
-              >
-                <div className="d-flex align-items-center">
-                  <div className="flex-shrink-0">
-                    <div
-                      className="rounded-circle p-2"
-                      style={{ backgroundColor: `${colors.oskar.green}20` }}
-                    >
-                      <FontAwesomeIcon
-                        icon={faCheckCircle}
-                        className="text-success"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex-grow-1 ms-3">
-                    <h6 className="alert-heading mb-1">Succès</h6>
-                    <p className="mb-0">{successMessage}</p>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn-close"
-                    onClick={() => setSuccessMessage(null)}
-                    aria-label="Fermer l'alerte"
-                  ></button>
-                </div>
-              </div>
-            )}
-
-            {/* Section d'avertissement */}
-            <div
-              className="card border-0 shadow-sm mb-4"
-              style={{ borderRadius: "12px" }}
+      {/* Hero Section */}
+      <main className="container mx-auto px-4 py-12 md:py-24">
+        <section className="mx-auto max-w-4xl text-center">
+          <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl md:text-6xl">
+            Bienvenue sur votre{' '}
+            <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              application Next.js
+            </span>
+          </h1>
+          
+          <p className="mx-auto mt-6 max-w-2xl text-lg text-gray-600">
+            Une page de démarrage moderne avec Tailwind CSS, composants interactifs
+            et toutes les fonctionnalités essentielles de Next.js 14.
+          </p>
+          
+          <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-6 py-3 text-base font-medium text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
-              <div
-                className="card-header border-0 py-3"
-                style={styles.warningSection}
-              >
-                <div className="d-flex align-items-center">
-                  <div
-                    className="rounded-circle p-2 me-3"
-                    style={{ backgroundColor: `${colors.oskar.orange}15` }}
-                  >
-                    <FontAwesomeIcon
-                      icon={faExclamationTriangle}
-                      style={{ color: colors.oskar.orange }}
-                    />
-                  </div>
-                  <div>
-                    <h6
-                      className="mb-0 fw-bold"
-                      style={{ color: colors.oskar.orange }}
-                    >
-                      Attention - Action Irréversible
-                    </h6>
-                    <small className="text-muted">
-                      Cette action ne peut pas être annulée
-                    </small>
-                  </div>
-                </div>
-              </div>
-              <div className="card-body p-4">
-                <div className="row align-items-center">
-                  <div className="col-md-2 text-center">
-                    <div
-                      className="rounded-circle p-3 mx-auto"
-                      style={{
-                        backgroundColor: `${colors.oskar.red}15`,
-                        width: "80px",
-                        height: "80px",
-                      }}
-                    >
-                      <FontAwesomeIcon
-                        icon={faTrash}
-                        className="fs-2"
-                        style={{ color: colors.oskar.red }}
-                      />
-                    </div>
-                  </div>
-                  <div className="col-md-10">
-                    <h6 className="fw-bold mb-2">
-                      Vous êtes sur le point de supprimer définitivement cette
-                      ville.
-                    </h6>
-                    <p className="mb-0 text-muted">
-                      Cette action supprimera toutes les données associées à
-                      cette ville. Les utilisateurs et autres éléments liés à
-                      cette ville pourraient être affectés.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
+              Explorer le tableau de bord
+            </Link>
+            <Link
+              href="/docs"
+              className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-6 py-3 text-base font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
+              Lire la documentation
+            </Link>
+          </div>
+        </section>
 
-            {/* Informations de la ville */}
-            {loadingVille ? (
-              <div className="text-center py-3">
-                <div className="spinner-border text-primary" role="status">
-                  <span className="visually-hidden">Chargement...</span>
+        {/* Features Section */}
+        <section className="mt-20">
+          <div className="mx-auto max-w-7xl">
+            <div className="text-center">
+              <h2 className="text-3xl font-bold text-gray-900">Fonctionnalités principales</h2>
+              <p className="mt-4 text-lg text-gray-600">
+                Découvrez les capacités puissantes de Next.js 14
+              </p>
+            </div>
+            
+            <div className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+              {features.map((feature) => (
+                <div
+                  key={feature.id}
+                  className="relative rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:shadow-md hover:-translate-y-1"
+                >
+                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-blue-50 text-2xl">
+                    {feature.icon}
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900">{feature.title}</h3>
+                  <p className="mt-2 text-gray-600">{feature.description}</p>
                 </div>
-                <p className="mt-2">
-                  Chargement des informations de la ville...
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Counter Component */}
+        <section className="mt-20">
+          <div className="mx-auto max-w-2xl rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 p-8 md:p-12">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-gray-900">Composant interactif</h2>
+              <p className="mt-2 text-gray-600">
+                Exemple de composant client avec useState et useEffect
+              </p>
+              
+              <div className="mt-8">
+                <div className="inline-flex items-center gap-4 rounded-lg bg-white px-6 py-4 shadow-sm">
+                  <span className="text-lg font-medium text-gray-700">Compteur :</span>
+                  <span className="text-3xl font-bold text-blue-600">{count}</span>
+                  
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setCount(count - 1)}
+                      className="rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200"
+                    >
+                      -
+                    </button>
+                    <button
+                      onClick={() => setCount(count + 1)}
+                      className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                    >
+                      +
+                    </button>
+                    <button
+                      onClick={() => setCount(0)}
+                      className="rounded-md bg-red-100 px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-200"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                </div>
+                
+                <p className="mt-4 text-sm text-gray-500">
+                  {isClient ? 'Côté client ✓' : 'Côté serveur...'}
                 </p>
               </div>
-            ) : (
-              villeDetails && (
-                <>
-                  {/* Section des détails */}
-                  <div
-                    className="card border-0 shadow-sm mb-4"
-                    style={{ borderRadius: "12px" }}
-                  >
-                    <div className="card-header border-0 py-3 bg-light">
-                      <div className="d-flex align-items-center">
-                        <div
-                          className="rounded-circle p-2 me-3"
-                          style={{
-                            backgroundColor: `${colors.oskar.purple}15`,
-                          }}
-                        >
-                          <FontAwesomeIcon
-                            icon={faCity}
-                            style={{ color: colors.oskar.purple }}
-                          />
-                        </div>
-                        <div>
-                          <h6
-                            className="mb-0 fw-bold"
-                            style={{ color: colors.oskar.purple }}
-                          >
-                            Ville à Supprimer
-                          </h6>
-                          <small className="text-muted">
-                            Détails de la ville qui sera supprimée
-                          </small>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="card-body p-4">
-                      <div className="row g-3">
-                        {/* Nom et code postal */}
-                        <div className="col-md-6">
-                          <div className="mb-3">
-                            <label className="form-label fw-semibold text-muted mb-1">
-                              <FontAwesomeIcon icon={faCity} className="me-2" />
-                              Nom de la ville
-                            </label>
-                            <div className="d-flex align-items-center">
-                              <div
-                                className="rounded-circle p-2 me-3"
-                                style={{
-                                  backgroundColor: `${colors.oskar.purple}10`,
-                                }}
-                              >
-                                <FontAwesomeIcon
-                                  icon={faCity}
-                                  className="text-primary"
-                                />
-                              </div>
-                              <div>
-                                <h5 className="mb-0 fw-bold">
-                                  {villeDetails.nom}
-                                </h5>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="col-md-6">
-                          <div className="mb-3">
-                            <label className="form-label fw-semibold text-muted mb-1">
-                              <FontAwesomeIcon
-                                icon={faMapMarkerAlt}
-                                className="me-2"
-                              />
-                              Code postal
-                            </label>
-                            <div className="d-flex align-items-center">
-                              <div
-                                className="rounded-circle p-2 me-3"
-                                style={{
-                                  backgroundColor: `${colors.oskar.blue}10`,
-                                }}
-                              >
-                                <FontAwesomeIcon
-                                  icon={faMapMarkerAlt}
-                                  className="text-info"
-                                />
-                              </div>
-                              <div>
-                                <h5 className="mb-0 fw-bold">
-                                  {villeDetails.code_postal}
-                                </h5>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Informations du pays */}
-                        {paysInfo && (
-                          <div className="col-md-6">
-                            <div className="mb-3">
-                              <label className="form-label fw-semibold text-muted mb-1">
-                                <FontAwesomeIcon
-                                  icon={faGlobe}
-                                  className="me-2"
-                                />
-                                Pays
-                              </label>
-                              <div className="d-flex align-items-center">
-                                <div
-                                  className="rounded-circle p-2 me-3"
-                                  style={{
-                                    backgroundColor: `${colors.oskar.green}10`,
-                                  }}
-                                >
-                                  <FontAwesomeIcon
-                                    icon={faGlobe}
-                                    className="text-success"
-                                  />
-                                </div>
-                                <div>
-                                  <h6 className="mb-0 fw-bold">
-                                    {paysInfo.nom}
-                                  </h6>
-                                  <small className="text-muted">
-                                    Code: {paysInfo.code}
-                                    {paysInfo.indicatif &&
-                                      ` | Indicatif: ${paysInfo.indicatif}`}
-                                  </small>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Statut */}
-                        <div className="col-md-6">
-                          <div className="mb-3">
-                            <label className="form-label fw-semibold text-muted mb-1">
-                              Statut actuel
-                            </label>
-                            <div className="d-flex align-items-center">
-                              <span
-                                className={`badge ${villeDetails.statut === "actif" ? "bg-success" : "bg-danger"} bg-opacity-10 text-${villeDetails.statut === "actif" ? "success" : "danger"} border border-${villeDetails.statut === "actif" ? "success" : "danger"} border-opacity-25 px-3 py-2`}
-                              >
-                                {villeDetails.statut === "actif"
-                                  ? "Actif"
-                                  : "Inactif"}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Dates */}
-                        <div className="col-md-6">
-                          <div className="mb-3">
-                            <label className="form-label fw-semibold text-muted mb-1">
-                              <FontAwesomeIcon
-                                icon={faCalendarAlt}
-                                className="me-2"
-                              />
-                              Créée le
-                            </label>
-                            <div className="d-flex align-items-center">
-                              <div
-                                className="rounded-circle p-2 me-3"
-                                style={{
-                                  backgroundColor: `${colors.oskar.grey}10`,
-                                }}
-                              >
-                                <FontAwesomeIcon
-                                  icon={faCalendarAlt}
-                                  className="text-secondary"
-                                />
-                              </div>
-                              <div>
-                                <span className="text-muted">
-                                  {formatDate(villeDetails.created_at)}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="col-md-6">
-                          <div className="mb-3">
-                            <label className="form-label fw-semibold text-muted mb-1">
-                              <FontAwesomeIcon
-                                icon={faCalendarAlt}
-                                className="me-2"
-                              />
-                              Dernière modification
-                            </label>
-                            <div className="d-flex align-items-center">
-                              <div
-                                className="rounded-circle p-2 me-3"
-                                style={{
-                                  backgroundColor: `${colors.oskar.grey}10`,
-                                }}
-                              >
-                                <FontAwesomeIcon
-                                  icon={faCalendarAlt}
-                                  className="text-secondary"
-                                />
-                              </div>
-                              <div>
-                                <span className="text-muted">
-                                  {formatDate(villeDetails.updated_at)}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Description */}
-                        {villeDetails.description && (
-                          <div className="col-12">
-                            <div className="mb-3">
-                              <label className="form-label fw-semibold text-muted mb-1">
-                                <FontAwesomeIcon
-                                  icon={faInfoCircle}
-                                  className="me-2"
-                                />
-                                Description
-                              </label>
-                              <div
-                                className="p-3 rounded"
-                                style={{
-                                  backgroundColor: `${colors.oskar.lightGrey}`,
-                                  borderLeft: `3px solid ${colors.oskar.blue}`,
-                                }}
-                              >
-                                <p className="mb-0">
-                                  {villeDetails.description}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Coordonnées GPS */}
-                        {(villeDetails.latitude || villeDetails.longitude) && (
-                          <div className="col-12">
-                            <div className="mb-3">
-                              <label className="form-label fw-semibold text-muted mb-1">
-                                Coordonnées GPS
-                              </label>
-                              <div className="d-flex gap-3">
-                                {villeDetails.latitude && (
-                                  <div className="flex-grow-1">
-                                    <div
-                                      className="p-3 rounded text-center"
-                                      style={{
-                                        backgroundColor: `${colors.oskar.lightGrey}`,
-                                      }}
-                                    >
-                                      <div className="text-primary fw-bold">
-                                        {villeDetails.latitude}
-                                      </div>
-                                      <small className="text-muted">
-                                        Latitude
-                                      </small>
-                                    </div>
-                                  </div>
-                                )}
-                                {villeDetails.longitude && (
-                                  <div className="flex-grow-1">
-                                    <div
-                                      className="p-3 rounded text-center"
-                                      style={{
-                                        backgroundColor: `${colors.oskar.lightGrey}`,
-                                      }}
-                                    >
-                                      <div className="text-primary fw-bold">
-                                        {villeDetails.longitude}
-                                      </div>
-                                      <small className="text-muted">
-                                        Longitude
-                                      </small>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Section de confirmation */}
-                  <div
-                    className="card border-0 shadow-sm"
-                    style={{ borderRadius: "12px" }}
-                  >
-                    <div className="card-body p-4">
-                      <div
-                        className="alert alert-warning border-0 mb-0"
-                        style={{ borderRadius: "8px" }}
-                      >
-                        <div className="d-flex align-items-center">
-                          <div className="flex-shrink-0">
-                            <div
-                              className="rounded-circle p-2"
-                              style={{
-                                backgroundColor: `${colors.oskar.orange}20`,
-                              }}
-                            >
-                              <FontAwesomeIcon
-                                icon={faExclamationTriangle}
-                                className="text-warning"
-                              />
-                            </div>
-                          </div>
-                          <div className="flex-grow-1 ms-3">
-                            <h6 className="alert-heading mb-1">
-                              Confirmation requise
-                            </h6>
-                            <p className="mb-0">
-                              Êtes-vous absolument certain de vouloir supprimer
-                              la ville <strong>"{villeDetails.nom}"</strong> ?
-                              Tapez{" "}
-                              <code className="text-danger">CONFIRMER</code>{" "}
-                              dans le champ ci-dessous pour continuer.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Champ de confirmation */}
-                      <div className="mt-4">
-                        <label
-                          htmlFor="confirmation"
-                          className="form-label fw-semibold"
-                        >
-                          Confirmation de suppression
-                        </label>
-                        <input
-                          type="text"
-                          id="confirmation"
-                          className="form-control"
-                          placeholder="Tapez 'CONFIRMER' pour supprimer"
-                          onChange={(e) => {
-                            // La validation se fait côté serveur, mais on peut ajouter un indicateur visuel
-                          }}
-                          disabled={loading}
-                          style={{
-                            border: "2px solid #dee2e6",
-                            borderRadius: "8px",
-                            padding: "12px",
-                          }}
-                        />
-                        <small className="text-muted">
-                          Cette mesure de sécurité empêche les suppressions
-                          accidentelles.
-                        </small>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )
-            )}
-          </div>
-
-          {/* Pied de la modal */}
-          <div className="modal-footer border-top-0 py-4 px-4">
-            <div className="d-flex justify-content-between w-100">
-              <button
-                type="button"
-                className="btn d-flex align-items-center gap-2"
-                onClick={handleClose}
-                disabled={loading || loadingVille}
-                style={styles.secondaryButton}
-                onMouseEnter={(e) => {
-                  Object.assign(
-                    e.currentTarget.style,
-                    styles.secondaryButtonHover,
-                  );
-                }}
-                onMouseLeave={(e) => {
-                  Object.assign(e.currentTarget.style, styles.secondaryButton);
-                }}
-              >
-                <FontAwesomeIcon icon={faTimes} />
-                Annuler
-              </button>
-
-              <button
-                type="button"
-                className="btn text-white d-flex align-items-center gap-2"
-                onClick={handleDelete}
-                disabled={loading || loadingVille}
-                style={styles.dangerButton}
-                onMouseEnter={(e) => {
-                  Object.assign(
-                    e.currentTarget.style,
-                    styles.dangerButtonHover,
-                  );
-                }}
-                onMouseLeave={(e) => {
-                  Object.assign(e.currentTarget.style, styles.dangerButton);
-                }}
-              >
-                {loading ? (
-                  <>
-                    <FontAwesomeIcon icon={faSpinner} spin />
-                    Suppression en cours...
-                  </>
-                ) : (
-                  <>
-                    <FontAwesomeIcon icon={faTrash} />
-                    Supprimer Définitivement
-                  </>
-                )}
-              </button>
             </div>
+          </div>
+        </section>
+
+        {/* Data Fetching Example */}
+        <section className="mt-20">
+          <div className="mx-auto max-w-4xl">
+            <h2 className="text-2xl font-bold text-gray-900 text-center">Récupération de données</h2>
+            <p className="mt-2 text-gray-600 text-center">
+              Exemple de récupération de données côté client
+            </p>
+            
+            <div className="mt-8">
+              {/* Vous pouvez remplacer cette section par un vrai fetch API */}
+              <div className="rounded-xl border border-gray-200 bg-white p-6">
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-lg font-semibold">Liste des utilisateurs (exemple)</h3>
+                  <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-800">
+                    API Ready
+                  </span>
+                </div>
+                
+                <div className="space-y-3">
+                  {[
+                    { id: 1, name: 'Jean Dupont', role: 'Admin', status: 'Actif' },
+                    { id: 2, name: 'Marie Curie', role: 'Éditeur', status: 'Actif' },
+                    { id: 3, name: 'Paul Martin', role: 'Utilisateur', status: 'Inactif' }
+                  ].map((user) => (
+                    <div key={user.id} className="flex items-center justify-between rounded-lg border border-gray-100 p-4 hover:bg-gray-50">
+                      <div>
+                        <h4 className="font-medium text-gray-900">{user.name}</h4>
+                        <p className="text-sm text-gray-500">{user.role}</p>
+                      </div>
+                      <span className={`rounded-full px-3 py-1 text-xs font-medium ${user.status === 'Actif' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        {user.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      {/* Footer */}
+      <footer className="mt-20 border-t bg-white">
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex flex-col md:flex-row justify-between items-center">
+            <div className="mb-4 md:mb-0">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
+                  <span className="font-bold text-white">N</span>
+                </div>
+                <span className="text-lg font-bold">Next.js App</span>
+              </div>
+              <p className="mt-2 text-sm text-gray-600">
+                Construit avec Next.js 14 et Tailwind CSS
+              </p>
+            </div>
+            
+            <div className="flex gap-6">
+              <Link href="/privacy" className="text-sm text-gray-600 hover:text-blue-600">
+                Confidentialité
+              </Link>
+              <Link href="/terms" className="text-sm text-gray-600 hover:text-blue-600">
+                Conditions
+              </Link>
+              <Link href="https://nextjs.org" className="text-sm text-gray-600 hover:text-blue-600" target="_blank">
+                Documentation Next.js
+              </Link>
+            </div>
+          </div>
+          
+          <div className="mt-8 border-t pt-8 text-center">
+            <p className="text-sm text-gray-500">
+              © {new Date().getFullYear()} Votre application Next.js. Tous droits réservés.
+            </p>
           </div>
         </div>
-      </div>
-
-      {/* Styles inline supplémentaires */}
-      <style jsx>{`
-        .modal-content {
-          border-radius: 16px !important;
-          overflow: hidden;
-        }
-
-        .card-header {
-          border-radius: 12px 12px 0 0 !important;
-        }
-
-        .btn {
-          border-radius: 8px !important;
-          transition: all 0.3s ease;
-          font-weight: 500;
-          padding: 10px 20px;
-        }
-
-        .fs-14 {
-          font-size: 14px !important;
-        }
-
-        .shadow-sm {
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
-        }
-
-        .shadow-lg {
-          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1) !important;
-        }
-
-        code {
-          background-color: ${colors.oskar.red}15;
-          color: ${colors.oskar.red};
-          padding: 2px 6px;
-          border-radius: 4px;
-          font-weight: bold;
-        }
-      `}</style>
+      </footer>
     </div>
   );
 }

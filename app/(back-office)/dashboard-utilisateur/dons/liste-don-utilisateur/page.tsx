@@ -1070,7 +1070,7 @@ export default function ListeDonUtilisateur() {
           // Supposons qu'il existe un endpoint pour dépublier
           for (const don of selectedDonsList) {
             actionPromises.push(
-              api.post(API_ENDPOINTS.DONS.UNPUBLISH, { uuid: don.uuid }),
+              api.post(API_ENDPOINTS.DONS.PUBLISH, { uuid: don.uuid }),
             );
           }
           break;
@@ -1233,13 +1233,8 @@ export default function ListeDonUtilisateur() {
 
   return (
     <>
-      {/* Modals */}
-      <CreateDonModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onSuccess={() => handleSuccess("Don créé avec succès !")}
-      />
-      {selectedDon && (
+      {/* Modals 
+         {selectedDon && (
         <EditDonModal
           isOpen={showEditModal}
           don={selectedDon}
@@ -1260,6 +1255,13 @@ export default function ListeDonUtilisateur() {
           }}
         />
       )}
+      */}
+      <CreateDonModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={() => handleSuccess("Don créé avec succès !")}
+      />
+   
       <DeleteModal
         show={showDeleteModal}
         don={selectedDon}

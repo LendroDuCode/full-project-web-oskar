@@ -749,133 +749,85 @@ export default function BoutiquesPage() {
   const itemsPerPageOptions = [5, 10, 20, 50];
 
   // Charger les boutiques depuis l'API
-  const fetchBoutiques = useCallback(
-    async (params?: Record<string, any>) => {
-      try {
-        setLoading(true);
-        setError(null);
-        setInfoMessage(null);
-        setSuccessMessage(null);
+  // Charger les boutiques depuis l'API
+const fetchBoutiques = useCallback(
+  async (params?: Record<string, any>) => {
+    try {
+      setLoading(true);
+      setError(null);
+      setInfoMessage(null);
+      setSuccessMessage(null);
 
-        console.log("📡 Chargement des boutiques depuis l'API...");
+      console.log("📡 Chargement des boutiques depuis l'API...");
 
-        // Construire les paramètres de requête
-        const queryParams: Record<string, any> = {
-          page: pagination.page,
+      // Construire les paramètres de requête
+      const queryParams: Record<string, any> = {
+        page: pagination.page,
+        limit: pagination.limit,
+        ...params,
+      };
+
+      // Nettoyer les paramètres vides
+      Object.keys(queryParams).forEach((key) => {
+        if (
+          queryParams[key] === undefined ||
+          queryParams[key] === null ||
+          queryParams[key] === ""
+        ) {
+          delete queryParams[key];
+        }
+      });
+
+      console.log("Paramètres de requête:", queryParams);
+
+      // Appel à l'API réelle
+      const response = await api.get<ApiResponse>(
+        API_ENDPOINTS.BOUTIQUES.ALL,
+        {
+        },
+      );
+
+      console.log("Réponse API:", response.data);
+
+      // CORRECTION : Définir une variable pour les données de réponse
+      const responseData = response.data;
+      let boutiquesData: Boutique[] = [];
+
+      if (responseData && Array.isArray(responseData)) {
+        // Si la réponse est un tableau simple
+        boutiquesData = responseData as Boutique[];
+        setBoutiques(boutiquesData);
+        setPagination({
+          page: 1,
           limit: pagination.limit,
-          ...params,
-        };
-
-        // Nettoyer les paramètres vides
-        Object.keys(queryParams).forEach((key) => {
-          if (
-            queryParams[key] === undefined ||
-            queryParams[key] === null ||
-            queryParams[key] === ""
-          ) {
-            delete queryParams[key];
-          }
+          total: boutiquesData.length,
+          pages: Math.ceil(boutiquesData.length / pagination.limit),
         });
+      } else if (responseData && "data" in responseData) {
+        // Si la réponse a une structure { data: [], meta: {} }
+        const apiResponse = responseData as ApiResponse;
+        boutiquesData = apiResponse.data || [];
+        setBoutiques(boutiquesData);
 
-        console.log("Paramètres de requête:", queryParams);
-
-        // Appel à l'API réelle
-        const response = await api.get<ApiResponse>(
-          API_ENDPOINTS.BOUTIQUES.ALL,
-          {
-            params: queryParams,
-          },
-        );
-
-        console.log("Réponse API:", response.data);
-
-        if (response.data && Array.isArray(response.data)) {
-          // Si la réponse est un tableau simple
-          const boutiquesData = response.data as Boutique[];
-          setBoutiques(boutiquesData);
+        if (apiResponse.meta) {
+          setPagination({
+            page: apiResponse.meta.page || 1,
+            limit: apiResponse.meta.limit || pagination.limit,
+            total: apiResponse.meta.total || boutiquesData.length,
+            pages:
+              apiResponse.meta.totalPages ||
+              Math.ceil(boutiquesData.length / pagination.limit),
+          });
+        } else {
           setPagination({
             page: 1,
             limit: pagination.limit,
             total: boutiquesData.length,
             pages: Math.ceil(boutiquesData.length / pagination.limit),
           });
-        } else if (response.data && "data" in response.data) {
-          // Si la réponse a une structure { data: [], meta: {} }
-          const apiResponse = response.data as ApiResponse;
-          const boutiquesData = apiResponse.data || [];
-          setBoutiques(boutiquesData);
-
-          if (apiResponse.meta) {
-            setPagination({
-              page: apiResponse.meta.page || 1,
-              limit: apiResponse.meta.limit || pagination.limit,
-              total: apiResponse.meta.total || boutiquesData.length,
-              pages:
-                apiResponse.meta.totalPages ||
-                Math.ceil(boutiquesData.length / pagination.limit),
-            });
-          } else {
-            setPagination({
-              page: 1,
-              limit: pagination.limit,
-              total: boutiquesData.length,
-              pages: Math.ceil(boutiquesData.length / pagination.limit),
-            });
-          }
-        } else {
-          console.error("Format de réponse API inattendu:", response.data);
-          setBoutiques([]);
-          setPagination({
-            page: 1,
-            limit: pagination.limit,
-            total: 0,
-            pages: 1,
-          });
         }
-
-        // Extraire les types de boutiques uniques
-        const typesMap = new Map<string, TypeBoutique>();
-        const allBoutiques = response.data?.data || response.data || [];
-        allBoutiques.forEach((b: Boutique) => {
-          if (b.type_boutique && b.type_boutique.uuid) {
-            typesMap.set(b.type_boutique.uuid, b.type_boutique);
-          }
-        });
-        setUniqueTypes(Array.from(typesMap.values()));
-
-        // Réinitialiser la sélection après chargement
-        setSelectedBoutiques([]);
-        setSelectAll(false);
-
-        console.log(
-          `✅ ${allBoutiques.length} boutiques chargées depuis l'API`,
-        );
-      } catch (err: any) {
-        console.error("❌ Erreur lors du chargement des boutiques:", err);
-
-        // Message d'erreur plus détaillé
-        let errorMessage = "Erreur lors du chargement des boutiques";
-        if (err.response) {
-          if (err.response.status === 401) {
-            errorMessage = "Session expirée. Veuillez vous reconnecter.";
-          } else if (err.response.status === 403) {
-            errorMessage =
-              "Vous n'avez pas la permission d'accéder à cette ressource.";
-          } else if (err.response.status === 404) {
-            errorMessage = "API non trouvée. Vérifiez l'URL de l'API.";
-          } else if (err.response.data?.message) {
-            errorMessage = `Erreur ${err.response.status}: ${err.response.data.message}`;
-          } else {
-            errorMessage = `Erreur ${err.response.status}: ${err.response.statusText}`;
-          }
-        } else if (err.request) {
-          errorMessage =
-            "Impossible de joindre le serveur. Vérifiez votre connexion.";
-        } else {
-          errorMessage = err.message || "Erreur inconnue";
-        }
-
-        setError(errorMessage);
+      } else {
+        console.error("Format de réponse API inattendu:", responseData);
         setBoutiques([]);
         setPagination({
           page: 1,
@@ -883,12 +835,90 @@ export default function BoutiquesPage() {
           total: 0,
           pages: 1,
         });
-      } finally {
-        setLoading(false);
       }
-    },
-    [pagination.page, pagination.limit],
-  );
+
+      // CORRECTION : Extraire les types de boutiques uniques
+      const typesMap = new Map<string, TypeBoutique>();
+      
+      // Déterminer toutes les boutiques à traiter
+      let allBoutiques: Boutique[] = [];
+      
+      if (Array.isArray(responseData)) {
+        // Si la réponse est directement un tableau
+        allBoutiques = responseData;
+      } else if (responseData && typeof responseData === 'object') {
+        // Si la réponse a une structure { data: Boutique[] }
+        const apiResponse = responseData as any;
+        if ('data' in apiResponse && Array.isArray(apiResponse.data)) {
+          allBoutiques = apiResponse.data;
+        } else if (Array.isArray(apiResponse)) {
+          // Fallback si apiResponse est un tableau
+          allBoutiques = apiResponse;
+        }
+      }
+      
+      // Alternative plus concise :
+      // const allBoutiques = Array.isArray(responseData) 
+      //   ? responseData 
+      //   : (responseData as any)?.data || [];
+
+      console.log(`📊 ${allBoutiques.length} boutiques à traiter pour les types`);
+
+      allBoutiques.forEach((boutique: Boutique) => {
+        if (boutique.type_boutique && boutique.type_boutique.uuid) {
+          typesMap.set(boutique.type_boutique.uuid, boutique.type_boutique);
+        }
+      });
+      
+      setUniqueTypes(Array.from(typesMap.values()));
+      console.log(`🏷️ ${typesMap.size} types de boutiques uniques trouvés`);
+
+      // Réinitialiser la sélection après chargement
+      setSelectedBoutiques([]);
+      setSelectAll(false);
+
+      console.log(
+        `✅ ${boutiquesData.length} boutiques chargées depuis l'API`,
+      );
+    } catch (err: any) {
+      console.error("❌ Erreur lors du chargement des boutiques:", err);
+
+      // Message d'erreur plus détaillé
+      let errorMessage = "Erreur lors du chargement des boutiques";
+      if (err.response) {
+        if (err.response.status === 401) {
+          errorMessage = "Session expirée. Veuillez vous reconnecter.";
+        } else if (err.response.status === 403) {
+          errorMessage =
+            "Vous n'avez pas la permission d'accéder à cette ressource.";
+        } else if (err.response.status === 404) {
+          errorMessage = "API non trouvée. Vérifiez l'URL de l'API.";
+        } else if (err.response.data?.message) {
+          errorMessage = `Erreur ${err.response.status}: ${err.response.data.message}`;
+        } else {
+          errorMessage = `Erreur ${err.response.status}: ${err.response.statusText}`;
+        }
+      } else if (err.request) {
+        errorMessage =
+          "Impossible de joindre le serveur. Vérifiez votre connexion.";
+      } else {
+        errorMessage = err.message || "Erreur inconnue";
+      }
+
+      setError(errorMessage);
+      setBoutiques([]);
+      setPagination({
+        page: 1,
+        limit: pagination.limit,
+        total: 0,
+        pages: 1,
+      });
+    } finally {
+      setLoading(false);
+    }
+  },
+  [pagination.page, pagination.limit],
+);
 
   // Charger les boutiques au montage
   useEffect(() => {
@@ -1218,7 +1248,8 @@ export default function BoutiquesPage() {
   };
 
   // Export CSV
-  const createCSVExport = async () => {
+  /**
+     const createCSVExport = async () => {
     if (boutiques.length === 0) {
       setInfoMessage("Aucune boutique à exporter");
       setTimeout(() => setInfoMessage(null), 3000);
@@ -1300,6 +1331,8 @@ export default function BoutiquesPage() {
       setLoading(false);
     }
   };
+
+   */
 
   // Utils
   const formatDate = (dateString?: string) => {
@@ -1529,7 +1562,7 @@ export default function BoutiquesPage() {
                 </button>
 
                 <button
-                  onClick={createCSVExport}
+                //  onClick={createCSVExport}
                   className="btn btn-outline-primary d-flex align-items-center gap-2"
                   disabled={boutiques.length === 0 || loading}
                 >
@@ -2042,7 +2075,7 @@ export default function BoutiquesPage() {
                         </td>
                         <td>
                           <BoutiqueImage
-                            src={boutique.logo}
+                            src={boutique.logo ?? null}
                             alt={`Logo ${boutique.nom}`}
                             type="logo"
                             onView={() =>
@@ -2056,7 +2089,7 @@ export default function BoutiquesPage() {
                         </td>
                         <td>
                           <BoutiqueImage
-                            src={boutique.banniere}
+                            src={boutique.banniere ?? null}
                             alt={`Bannière ${boutique.nom}`}
                             type="banniere"
                             onView={() =>

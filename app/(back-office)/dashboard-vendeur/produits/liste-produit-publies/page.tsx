@@ -555,7 +555,7 @@ export default function ProduitsVendeurPage() {
 
           // Pour publier/dépublier ou activer/désactiver
           await api.put(
-            API_ENDPOINTS.PRODUCTS.UPDATE_STOCK_VENDEUR(productUuid),
+            API_ENDPOINTS.PRODUCTS.UPDATE_STOCK_PRODUIT(productUuid),
             {
               disponible: action === "activate" || action === "publish",
             },

@@ -341,7 +341,6 @@ export default function EditDonModal({
         API_ENDPOINTS.DONS.UPDATE(don.uuid),
         formDataToSend,
         {
-          requiresAuth: true,
         },
       );
 

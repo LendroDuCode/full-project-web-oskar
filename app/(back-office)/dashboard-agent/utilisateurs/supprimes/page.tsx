@@ -1,7 +1,6 @@
-// app/(back-office)/dashboard-admin/utilisateurs/liste-utilisateurs-supprimes/page.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -43,16 +42,10 @@ import {
 
 // Import des services et hooks
 import { API_ENDPOINTS } from "@/config/api-endpoints";
-import { useUsers } from "@/hooks/useUtilisateurs";
-import type { User } from "@/services/utilisateurs/user.types";
 import { api } from "@/lib/api-client";
-import CreateUserModal from "../components/modals/CreateUserModal";
 
 // Interface local pour le composant
-interface LocalUser extends Omit<
-  User,
-  "civilite" | "role" | "statut_matrimonial"
-> {
+interface LocalUser {
   uuid: string;
   nom: string;
   prenoms: string;
@@ -67,7 +60,7 @@ interface LocalUser extends Omit<
   statut_matrimonial_uuid?: string;
   date_naissance?: string;
   adresse_uuid?: string;
-  code_utilisateur?: string;
+  code_utilisateur?: string | null;
   created_at?: string;
   updated_at?: string;
   deleted_at?: string;
@@ -84,6 +77,13 @@ interface LocalUser extends Omit<
     uuid?: string;
     libelle: string;
   };
+}
+
+interface PaginationData {
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
 }
 
 // Composant de statut amélioré
@@ -153,6 +153,7 @@ const RestoreModal = ({
       style={{
         backgroundColor: "rgba(0,0,0,0.5)",
         backdropFilter: "blur(2px)",
+        zIndex: 1050,
       }}
       tabIndex={-1}
     >
@@ -168,6 +169,7 @@ const RestoreModal = ({
               className="btn-close btn-close-white"
               onClick={onClose}
               disabled={loading}
+              aria-label="Fermer"
             ></button>
           </div>
           <div className="modal-body p-4">
@@ -269,6 +271,7 @@ const PermanentDeleteModal = ({
       style={{
         backgroundColor: "rgba(0,0,0,0.5)",
         backdropFilter: "blur(2px)",
+        zIndex: 1050,
       }}
       tabIndex={-1}
     >
@@ -284,6 +287,7 @@ const PermanentDeleteModal = ({
               className="btn-close btn-close-white"
               onClick={onClose}
               disabled={loading}
+              aria-label="Fermer"
             ></button>
           </div>
           <div className="modal-body p-4">
@@ -415,6 +419,7 @@ const EmptyTrashModal = ({
       style={{
         backgroundColor: "rgba(0,0,0,0.5)",
         backdropFilter: "blur(2px)",
+        zIndex: 1050,
       }}
       tabIndex={-1}
     >
@@ -430,6 +435,7 @@ const EmptyTrashModal = ({
               className="btn-close btn-close-white"
               onClick={onClose}
               disabled={loading}
+              aria-label="Fermer"
             ></button>
           </div>
           <div className="modal-body p-4">
@@ -604,7 +610,9 @@ const Pagination = ({
             ))}
 
             <li
-              className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}
+              className={`page-item ${
+                currentPage === totalPages ? "disabled" : ""
+              }`}
             >
               <button
                 className="page-link"
@@ -617,7 +625,9 @@ const Pagination = ({
             </li>
 
             <li
-              className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}
+              className={`page-item ${
+                currentPage === totalPages ? "disabled" : ""
+              }`}
             >
               <button
                 className="page-link"
@@ -655,23 +665,18 @@ const Pagination = ({
 };
 
 export default function ListeUtilisateursSupprimesPage() {
-  // Utilisation du hook personnalisé
-  const {
-    users,
-    loading,
-    error,
-    pagination,
-    fetchDeletedUsers,
-    restoreUser,
-    permanentDeleteUser,
-    emptyTrash,
-    setPage,
-    setLimit,
-    refresh,
-  } = useUsers();
+  // États pour les données
+  const [users, setUsers] = useState<LocalUser[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pagination, setPagination] = useState<PaginationData>({
+    page: 1,
+    limit: 10,
+    total: 0,
+    pages: 0,
+  });
 
   // États pour les modals
-  const [showCreateModal, setShowCreateModal] = useState(false);
   const [showRestoreModal, setShowRestoreModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showEmptyTrashModal, setShowEmptyTrashModal] = useState(false);
@@ -700,6 +705,107 @@ export default function ListeUtilisateursSupprimesPage() {
 
   // Options pour les éléments par page
   const itemsPerPageOptions = [5, 10, 20, 50];
+
+  // Fonction pour charger les utilisateurs supprimés
+  const fetchDeletedUsers = async (params?: any) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const queryParams = {
+        page: pagination.page,
+        limit: pagination.limit,
+        ...params,
+      };
+
+      const response = await api.get(API_ENDPOINTS.ADMIN.USERS.DELETED, {
+        
+      });
+      
+      if (response.success) {
+        setUsers(response.data?.data || response.data?.users || []);
+        setPagination(response.data?.pagination || {
+          page: 1,
+          limit: 10,
+          total: 0,
+          pages: 0,
+        });
+      } else {
+        setError(response.message || "Erreur lors du chargement");
+      }
+    } catch (err: any) {
+      setError(err.message || 'Erreur lors du chargement des utilisateurs supprimés');
+      console.error("Erreur fetchDeletedUsers:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fonction pour restaurer un utilisateur
+  const handleRestoreUser = async (uuid: string) => {
+    try {
+      setRestoreLoading(true);
+      const response = await api.post(API_ENDPOINTS.ADMIN.USERS.RESTORE(uuid), {}, {
+      });
+
+      if (response.success) {
+        // Rafraîchir la liste après restauration
+        fetchDeletedUsers();
+        return { success: true, message: "Utilisateur restauré avec succès" };
+      } else {
+        throw new Error(response.message || "Erreur lors de la restauration");
+      }
+    } catch (err: any) {
+      console.error("Erreur handleRestoreUser:", err);
+      throw new Error(err.message || "Erreur lors de la restauration");
+    } finally {
+      setRestoreLoading(false);
+    }
+  };
+
+  // Fonction pour supprimer définitivement un utilisateur
+  const handlePermanentDelete = async (uuid: string) => {
+    try {
+      setDeleteLoading(true);
+      const response = await api.delete(API_ENDPOINTS.ADMIN.USERS.DELETE(uuid), {
+      });
+
+      if (response.success) {
+        // Rafraîchir la liste après suppression
+        fetchDeletedUsers();
+        return { success: true, message: "Utilisateur supprimé définitivement" };
+      } else {
+        throw new Error(response.message || "Erreur lors de la suppression définitive");
+      }
+    } catch (err: any) {
+      console.error("Erreur handlePermanentDelete:", err);
+      throw new Error(err.message || "Erreur lors de la suppression définitive");
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  // Fonction pour vider la corbeille
+  const handleEmptyTrash = async () => {
+    try {
+      setEmptyTrashLoading(true);
+      const response = await api.post(API_ENDPOINTS.ADMIN.USERS.CREATE, {}, {
+      });
+
+      if (response.success) {
+        // Rafraîchir la liste après vidage
+        fetchDeletedUsers();
+        return { success: true, message: "Corbeille vidée avec succès" };
+      } else {
+        throw new Error(response.message || "Erreur lors du vidage de la corbeille");
+      }
+    } catch (err: any) {
+      console.error("Erreur handleEmptyTrash:", err);
+      throw new Error(err.message || "Erreur lors du vidage de la corbeille");
+    } finally {
+      setEmptyTrashLoading(false);
+    }
+  };
 
   // Charger les utilisateurs supprimés au montage
   useEffect(() => {
@@ -745,73 +851,49 @@ export default function ListeUtilisateursSupprimesPage() {
     selectedStatus,
   ]);
 
-  // Fonction pour restaurer un utilisateur
-  const handleRestoreUser = async () => {
+  // Fonction pour restaurer un utilisateur (avec modal)
+  const handleRestoreConfirm = async () => {
     if (!selectedUser) return;
 
     try {
-      setRestoreLoading(true);
-      await restoreUser(selectedUser.uuid);
-
+      await handleRestoreUser(selectedUser.uuid);
       setShowRestoreModal(false);
       setSelectedUser(null);
       setSuccessMessage("Utilisateur restauré avec succès");
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
       console.error("Erreur lors de la restauration:", err);
-      setInfoMessage(
-        err.response?.data?.message || "Erreur lors de la restauration",
-      );
-    } finally {
-      setRestoreLoading(false);
+      setInfoMessage(err.message || "Erreur lors de la restauration");
     }
   };
 
-  // Fonction pour supprimer définitivement un utilisateur
-  const handlePermanentDelete = async () => {
+  // Fonction pour supprimer définitivement un utilisateur (avec modal)
+  const handleDeleteConfirm = async () => {
     if (!selectedUser) return;
 
     try {
-      setDeleteLoading(true);
-      await permanentDeleteUser(selectedUser.uuid);
-
+      await handlePermanentDelete(selectedUser.uuid);
       setShowDeleteModal(false);
       setSelectedUser(null);
       setSuccessMessage("Utilisateur supprimé définitivement avec succès");
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
       console.error("Erreur lors de la suppression définitive:", err);
-      setInfoMessage(
-        err.response?.data?.message || "Erreur lors de la suppression",
-      );
-    } finally {
-      setDeleteLoading(false);
+      setInfoMessage(err.message || "Erreur lors de la suppression");
     }
   };
 
-  // Fonction pour vider la corbeille
-  const handleEmptyTrash = async () => {
+  // Fonction pour vider la corbeille (avec modal)
+  const handleEmptyTrashConfirm = async () => {
     try {
-      setEmptyTrashLoading(true);
-      await emptyTrash();
-
+      await handleEmptyTrash();
       setShowEmptyTrashModal(false);
       setSuccessMessage("Corbeille vidée avec succès");
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
       console.error("Erreur lors du vidage de la corbeille:", err);
-      setInfoMessage(
-        err.response?.data?.message || "Erreur lors du vidage de la corbeille",
-      );
-    } finally {
-      setEmptyTrashLoading(false);
+      setInfoMessage(err.message || "Erreur lors du vidage de la corbeille");
     }
-  };
-
-  // Fonction appelée après création réussie d'un utilisateur
-  const handleUserCreated = () => {
-    setSuccessMessage("Utilisateur créé avec succès !");
-    setTimeout(() => setSuccessMessage(null), 3000);
   };
 
   // Fonction pour ouvrir le modal de restauration
@@ -937,9 +1019,9 @@ export default function ListeUtilisateursSupprimesPage() {
       for (const userId of selectedUsers) {
         try {
           if (action === "restore") {
-            await restoreUser(userId);
+            await handleRestoreUser(userId);
           } else if (action === "delete") {
-            await permanentDeleteUser(userId);
+            await handlePermanentDelete(userId);
           }
           successCount++;
         } catch (err) {
@@ -949,12 +1031,13 @@ export default function ListeUtilisateursSupprimesPage() {
       }
 
       setSuccessMessage(
-        `${successCount} utilisateur(s) ${action === "restore" ? "restauré(s)" : "supprimé(s)"} avec succès${errorCount > 0 ? ` (${errorCount} échec(s))` : ""}`,
+        `${successCount} utilisateur(s) ${
+          action === "restore" ? "restauré(s)" : "supprimé(s)"
+        } avec succès${
+          errorCount > 0 ? ` (${errorCount} échec(s))` : ""
+        }`,
       );
       setTimeout(() => setSuccessMessage(null), 3000);
-
-      // Rafraîchir la liste
-      refresh();
 
       // Réinitialiser la sélection
       setSelectedUsers([]);
@@ -967,8 +1050,21 @@ export default function ListeUtilisateursSupprimesPage() {
     }
   };
 
+  // Fonctions de pagination
+  const setPage = (page: number) => {
+    setPagination(prev => ({ ...prev, page }));
+  };
+
+  const setLimit = (limit: number) => {
+    setPagination(prev => ({ ...prev, limit, page: 1 }));
+  };
+
+  const refresh = () => {
+    fetchDeletedUsers();
+  };
+
   // Filtrer et trier les utilisateurs
-  const filteredUtilisateurs = sortUtilisateurs(users as LocalUser[]);
+  const filteredUtilisateurs = sortUtilisateurs(users);
   const currentItems = filteredUtilisateurs.slice(
     (pagination.page - 1) * pagination.limit,
     pagination.page * pagination.limit,
@@ -980,14 +1076,16 @@ export default function ListeUtilisateursSupprimesPage() {
       const response = await api.get(
         API_ENDPOINTS.ADMIN.USERS.EXPORT_DELETED_PDF,
         {
-          responseType: "blob",
+          
         },
       );
 
       const url = window.URL.createObjectURL(response);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `utilisateurs-supprimes-${new Date().toISOString().split("T")[0]}.pdf`;
+      link.download = `utilisateurs-supprimes-${new Date()
+        .toISOString()
+        .split("T")[0]}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -996,7 +1094,7 @@ export default function ListeUtilisateursSupprimesPage() {
       setSuccessMessage("Export PDF réussi");
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err) {
-      console.error("Erreur lors de l'export:", err);
+      console.error("Erreur lors de l'export PDF, tentative CSV:", err);
       handleCSVExport();
     }
   };
@@ -1040,7 +1138,9 @@ export default function ListeUtilisateursSupprimesPage() {
     link.setAttribute("href", url);
     link.setAttribute(
       "download",
-      `utilisateurs-supprimes-${new Date().toISOString().split("T")[0]}.csv`,
+      `utilisateurs-supprimes-${new Date()
+        .toISOString()
+        .split("T")[0]}.csv`,
     );
     link.style.visibility = "hidden";
     document.body.appendChild(link);
@@ -1103,13 +1203,6 @@ export default function ListeUtilisateursSupprimesPage() {
 
   return (
     <>
-      {/* Modal de création d'utilisateur */}
-      <CreateUserModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onSuccess={handleUserCreated}
-      />
-
       {/* Modals de gestion des utilisateurs supprimés */}
       <RestoreModal
         show={showRestoreModal}
@@ -1119,7 +1212,7 @@ export default function ListeUtilisateursSupprimesPage() {
           setShowRestoreModal(false);
           setSelectedUser(null);
         }}
-        onConfirm={handleRestoreUser}
+        onConfirm={handleRestoreConfirm}
       />
 
       <PermanentDeleteModal
@@ -1130,7 +1223,7 @@ export default function ListeUtilisateursSupprimesPage() {
           setShowDeleteModal(false);
           setSelectedUser(null);
         }}
-        onConfirm={handlePermanentDelete}
+        onConfirm={handleDeleteConfirm}
       />
 
       <EmptyTrashModal
@@ -1138,7 +1231,7 @@ export default function ListeUtilisateursSupprimesPage() {
         count={users.length}
         loading={emptyTrashLoading}
         onClose={() => setShowEmptyTrashModal(false)}
-        onConfirm={handleEmptyTrash}
+        onConfirm={handleEmptyTrashConfirm}
       />
 
       <div className="p-3 p-md-4">
@@ -1153,8 +1246,8 @@ export default function ListeUtilisateursSupprimesPage() {
             <button
               type="button"
               className="btn-close"
-              onClick={() => {}}
-              aria-label="Close"
+              onClick={() => setError(null)}
+              aria-label="Fermer"
             ></button>
           </div>
         )}
@@ -1170,7 +1263,7 @@ export default function ListeUtilisateursSupprimesPage() {
               type="button"
               className="btn-close"
               onClick={() => setSuccessMessage(null)}
-              aria-label="Close"
+              aria-label="Fermer"
             ></button>
           </div>
         )}
@@ -1186,7 +1279,7 @@ export default function ListeUtilisateursSupprimesPage() {
               type="button"
               className="btn-close"
               onClick={() => setInfoMessage(null)}
-              aria-label="Close"
+              aria-label="Fermer"
             ></button>
           </div>
         )}
@@ -1211,6 +1304,43 @@ export default function ListeUtilisateursSupprimesPage() {
                 <p className="text-muted mb-0 mt-2">
                   Gérez les utilisateurs qui ont été supprimés du système
                 </p>
+              </div>
+              
+              <div className="d-flex flex-wrap gap-2">
+                <Link
+                  href="/dashboard-agent/utilisateurs/liste-utilisateurs"
+                  className="btn btn-outline-primary d-flex align-items-center gap-2"
+                >
+                  <FontAwesomeIcon icon={faArrowLeft} />
+                  Retour aux utilisateurs actifs
+                </Link>
+                
+                <button
+                  className="btn btn-outline-success d-flex align-items-center gap-2"
+                  onClick={handleExport}
+                  disabled={loading || users.length === 0}
+                >
+                  <FontAwesomeIcon icon={faDownload} />
+                  Exporter
+                </button>
+                
+                <button
+                  className="btn btn-danger d-flex align-items-center gap-2"
+                  onClick={() => setShowEmptyTrashModal(true)}
+                  disabled={loading || users.length === 0}
+                >
+                  <FontAwesomeIcon icon={faBoxOpen} />
+                  Vider la corbeille
+                </button>
+                
+                <button
+                  className="btn btn-outline-secondary d-flex align-items-center gap-2"
+                  onClick={refresh}
+                  disabled={loading}
+                >
+                  <FontAwesomeIcon icon={faRefresh} />
+                  Actualiser
+                </button>
               </div>
             </div>
           </div>
@@ -1417,13 +1547,6 @@ export default function ListeUtilisateursSupprimesPage() {
                           : "Aucun utilisateur supprimé ne correspond à vos critères de recherche"}
                       </p>
                       <div className="mt-3">
-                        <button
-                          onClick={() => setShowCreateModal(true)}
-                          className="btn btn-primary me-2"
-                        >
-                          <FontAwesomeIcon icon={faPlus} className="me-2" />
-                          Créer un nouvel utilisateur
-                        </button>
                         <Link
                           href="/dashboard-agent/utilisateurs/liste-utilisateurs"
                           className="btn btn-outline-primary"
@@ -1554,7 +1677,11 @@ export default function ListeUtilisateursSupprimesPage() {
                         {currentItems.map((utilisateur, index) => (
                           <tr
                             key={utilisateur.uuid}
-                            className={`align-middle ${selectedUsers.includes(utilisateur.uuid) ? "table-active" : ""}`}
+                            className={`align-middle ${
+                              selectedUsers.includes(utilisateur.uuid)
+                                ? "table-active"
+                                : ""
+                            }`}
                           >
                             <td className="text-center">
                               <div className="form-check">
@@ -1630,7 +1757,11 @@ export default function ListeUtilisateursSupprimesPage() {
                             </td>
                             <td>
                               <span
-                                className={`badge ${utilisateur.is_admin ? "bg-primary" : "bg-secondary"} bg-opacity-10 text-dark border`}
+                                className={`badge ${
+                                  utilisateur.is_admin
+                                    ? "bg-primary"
+                                    : "bg-secondary"
+                                } bg-opacity-10 text-dark border`}
                               >
                                 {utilisateur.role?.name || "Utilisateur"}
                               </span>

@@ -35,6 +35,7 @@ interface ViewProduitModalProps {
   isOpen: boolean;
   produit: Produit | null;
   onClose: () => void;
+  promo?: boolean;
 }
 
 const ViewProduitModal = ({

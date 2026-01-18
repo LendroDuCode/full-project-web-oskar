@@ -1,4 +1,4 @@
-// app/(back-office)/dashboard-vendeur/messages/page.tsx
+// app/(back-office)/dashboard-admin/messages/liste-messages/page.tsx
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -97,6 +97,7 @@ interface UtilisateurBase {
   statut?: string;
 }
 
+interface SuperAdmin extends UtilisateurBase {}
 interface Agent extends UtilisateurBase {}
 interface Vendeur extends UtilisateurBase {}
 interface Utilisateur extends UtilisateurBase {}
@@ -112,7 +113,7 @@ interface Message {
   estEnvoye: boolean;
   envoyeLe: string;
   estLu: boolean;
-  dateLecture?: string;
+  dateLecture: string | null; // CORRECTION : null au lieu de string | null | undefined
   dateCreation?: string;
 }
 
@@ -122,7 +123,7 @@ interface MessageReceived {
   message: Message;
   statut: string;
   estLu: boolean;
-  dateLecture?: string;
+  dateLecture?: string | null; // CORRECTION : rendre nullable
   dateReception: string;
 }
 
@@ -131,10 +132,14 @@ const StatusBadge = ({
   est_bloque,
   est_verifie,
   is_deleted,
+  is_super_admin,
+  is_admin,
 }: {
   est_bloque: boolean;
   est_verifie: boolean;
   is_deleted?: boolean;
+  is_super_admin?: boolean;
+  is_admin?: boolean;
 }) => {
   if (is_deleted) {
     return (
@@ -159,6 +164,24 @@ const StatusBadge = ({
       <span className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
         <FontAwesomeIcon icon={faUserSlash} className="fs-12" />
         <span className="fw-medium">Non vérifié</span>
+      </span>
+    );
+  }
+
+  if (is_super_admin) {
+    return (
+      <span className="badge bg-purple bg-opacity-10 text-purple border border-purple border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
+        <FontAwesomeIcon icon={faCrown} className="fs-12" />
+        <span className="fw-medium">Super Admin</span>
+      </span>
+    );
+  }
+
+  if (is_admin) {
+    return (
+      <span className="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
+        <FontAwesomeIcon icon={faShield} className="fs-12" />
+        <span className="fw-medium">Admin</span>
       </span>
     );
   }
@@ -227,6 +250,8 @@ const MessageItem = ({
         return "info";
       case "NOTIFICATION":
         return "primary";
+      case "SUPER_ADMIN":
+        return "purple";
       default:
         return "secondary";
     }
@@ -241,6 +266,10 @@ const MessageItem = ({
         return faExclamationCircle;
       case "INFO":
         return faInfoCircle;
+      case "NOTIFICATION":
+        return faEnvelopeCircleCheck;
+      case "SUPER_ADMIN":
+        return faCrown;
       default:
         return faEnvelope;
     }
@@ -296,6 +325,12 @@ const MessageItem = ({
                     Non lu
                   </span>
                 )}
+                {message.type.toUpperCase() === "SUPER_ADMIN" && (
+                  <span className="badge bg-purple bg-opacity-10 text-purple border border-purple border-opacity-25 px-2 py-1">
+                    <FontAwesomeIcon icon={faCrown} className="fs-10 me-1" />
+                    Super Admin
+                  </span>
+                )}
               </div>
               <div className="d-flex align-items-center gap-2">
                 <small className="text-muted">
@@ -319,7 +354,9 @@ const MessageItem = ({
                 className={`badge bg-${getTypeColor()} bg-opacity-10 text-${getTypeColor()} border border-${getTypeColor()} border-opacity-25 px-3 py-1 fw-medium`}
                 style={{ fontSize: "0.7rem" }}
               >
-                {message.type.toUpperCase()}
+                {message.type.toUpperCase() === "SUPER_ADMIN"
+                  ? "SUPER ADMIN"
+                  : message.type.toUpperCase()}
               </span>
             </div>
             {message.estEnvoye && (
@@ -455,16 +492,20 @@ const StatsCard = ({
   );
 };
 
-export default function ListeMessagesVendeur() {
+export default function ListeMessages() {
   // États pour les données
+  const [superAdmins, setSuperAdmins] = useState<SuperAdmin[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [vendeurs, setVendeurs] = useState<Vendeur[]>([]);
   const [utilisateurs, setUtilisateurs] = useState<Utilisateur[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [messagesEnvoyes, setMessagesEnvoyes] = useState<Message[]>([]);
 
   // États pour le chargement
   const [loading, setLoading] = useState({
+    superAdmins: false,
     agents: false,
+    vendeurs: false,
     utilisateurs: false,
     messages: false,
     envoi: false,
@@ -492,8 +533,8 @@ export default function ListeMessagesVendeur() {
     sujet: "",
     contenu: "",
     type: "NOTIFICATION",
-    expediteurNom: "Vendeur SONEC",
-    expediteurEmail: "", // Sera rempli avec l'email du vendeur connecté
+    expediteurNom: "Agent SONEC",
+    expediteurEmail: "",
   });
 
   // Statistiques
@@ -502,8 +543,7 @@ export default function ListeMessagesVendeur() {
     totalMessages: 0,
     unreadMessages: 0,
     sentMessages: 0,
-    agents: 0,
-    utilisateurs: 0,
+    superAdmins: 0,
   });
 
   // Onglet actif
@@ -511,16 +551,16 @@ export default function ListeMessagesVendeur() {
     "users",
   );
 
-  // Profil du vendeur connecté
-  const [vendeurProfile, setVendeurProfile] = useState<Vendeur | null>(null);
+  // Profil de l'agent connecté
+  const [agentProfile, setAgentProfile] = useState<Agent | null>(null);
 
-  // Charger le profil du vendeur connecté
-  const fetchVendeurProfile = useCallback(async () => {
+  // Charger le profil de l'agent connecté
+  const fetchAgentProfile = useCallback(async () => {
     try {
-      const response = await api.get(API_ENDPOINTS.AUTH.UTILISATEUR.PROFILE);
+      const response = await api.get(API_ENDPOINTS.AUTH.AGENT.PROFILE);
       if (response.data?.type === "success" && response.data.data) {
         const profile = response.data.data;
-        setVendeurProfile(profile);
+        setAgentProfile(profile);
         setNewMessage((prev) => ({
           ...prev,
           expediteurEmail: profile.email,
@@ -528,25 +568,58 @@ export default function ListeMessagesVendeur() {
         }));
       }
     } catch (err) {
-      console.error("❌ Erreur lors du chargement du profil vendeur:", err);
-      // Profil de démonstration
-      setVendeurProfile({
-        uuid: "vendeur-1",
-        nom: "Vendeur",
-        prenoms: "SONEC",
-        email: "vendeur@sonec.com",
-        telephone: "+2250100000000",
-        est_verifie: true,
-        est_bloque: false,
-        is_deleted: false,
-        created_at: new Date().toISOString(),
-        statut: "actif",
-      });
-      setNewMessage((prev) => ({
-        ...prev,
-        expediteurEmail: "vendeur@sonec.com",
-        expediteurNom: "Vendeur SONEC",
-      }));
+      console.error("❌ Erreur lors du chargement du profil agent:", err);
+    }
+  }, []);
+
+  // Charger les super-admins
+  const fetchSuperAdmins = useCallback(async () => {
+    setLoading((prev) => ({ ...prev, superAdmins: true }));
+    try {
+      const response = await api.get<{
+        data: SuperAdmin[];
+        count: number;
+        status: string;
+      }>(API_ENDPOINTS.AUTH.ADMIN.LISTE_ADMIN);
+      setSuperAdmins(response?.data || []);
+    } catch (err: any) {
+      console.error("❌ Error fetching super admins:", err);
+      setError("Erreur lors du chargement des super-admins");
+
+      // Données de démonstration pour les super-admins
+      const demoSuperAdmins: SuperAdmin[] = [
+        {
+          uuid: "super-admin-1",
+          nom: "Admin",
+          prenoms: "Super",
+          email: "superadmin@sonec.com",
+          telephone: "+2250700000000",
+          est_verifie: true,
+          est_bloque: false,
+          is_deleted: false,
+          is_super_admin: true,
+          is_admin: true,
+          created_at: new Date().toISOString(),
+          statut: "actif",
+        },
+        {
+          uuid: "super-admin-2",
+          nom: "Admin",
+          prenoms: "Principal",
+          email: "admin.principal@sonec.com",
+          telephone: "+2250700000001",
+          est_verifie: true,
+          est_bloque: false,
+          is_deleted: false,
+          is_super_admin: true,
+          is_admin: true,
+          created_at: new Date().toISOString(),
+          statut: "actif",
+        },
+      ];
+      setSuperAdmins(demoSuperAdmins);
+    } finally {
+      setLoading((prev) => ({ ...prev, superAdmins: false }));
     }
   }, []);
 
@@ -563,37 +636,26 @@ export default function ListeMessagesVendeur() {
     } catch (err: any) {
       console.error("❌ Error fetching agents:", err);
       setError("Erreur lors du chargement des agents");
-
-      // Données de démonstration pour les agents
-      const demoAgents: Agent[] = [
-        {
-          uuid: "agent-1",
-          nom: "Dupont",
-          prenoms: "Jean",
-          email: "jean.dupont@sonec.com",
-          telephone: "+2250700000001",
-          est_verifie: true,
-          est_bloque: false,
-          is_deleted: false,
-          created_at: new Date().toISOString(),
-          statut: "actif",
-        },
-        {
-          uuid: "agent-2",
-          nom: "Martin",
-          prenoms: "Sophie",
-          email: "sophie.martin@sonec.com",
-          telephone: "+2250700000002",
-          est_verifie: true,
-          est_bloque: false,
-          is_deleted: false,
-          created_at: new Date().toISOString(),
-          statut: "actif",
-        },
-      ];
-      setAgents(demoAgents);
     } finally {
       setLoading((prev) => ({ ...prev, agents: false }));
+    }
+  }, []);
+
+  // Charger les vendeurs
+  const fetchVendeurs = useCallback(async () => {
+    setLoading((prev) => ({ ...prev, vendeurs: true }));
+    try {
+      const response = await api.get<{
+        data: Vendeur[];
+        count: number;
+        status: string;
+      }>(API_ENDPOINTS.ADMIN.VENDEURS.LIST);
+      setVendeurs(response?.data || []);
+    } catch (err: any) {
+      console.error("❌ Error fetching vendeurs:", err);
+      setError("Erreur lors du chargement des vendeurs");
+    } finally {
+      setLoading((prev) => ({ ...prev, vendeurs: false }));
     }
   }, []);
 
@@ -610,53 +672,12 @@ export default function ListeMessagesVendeur() {
     } catch (err: any) {
       console.error("❌ Error fetching utilisateurs:", err);
       setError("Erreur lors du chargement des utilisateurs");
-
-      // Données de démonstration pour les utilisateurs
-      const demoUtilisateurs: Utilisateur[] = [
-        {
-          uuid: "user-1",
-          nom: "Diallo",
-          prenoms: "Fatou",
-          email: "fatou.diallo@gmail.com",
-          telephone: "+2250500000001",
-          est_verifie: true,
-          est_bloque: false,
-          is_deleted: false,
-          created_at: new Date().toISOString(),
-          statut: "actif",
-        },
-        {
-          uuid: "user-2",
-          nom: "Traoré",
-          prenoms: "Moussa",
-          email: "moussa.traore@yahoo.com",
-          telephone: "+2250500000002",
-          est_verifie: false,
-          est_bloque: false,
-          is_deleted: false,
-          created_at: new Date().toISOString(),
-          statut: "actif",
-        },
-        {
-          uuid: "user-3",
-          nom: "Cissé",
-          prenoms: "Adama",
-          email: "adama.cisse@hotmail.com",
-          telephone: "+2250500000003",
-          est_verifie: true,
-          est_bloque: true,
-          is_deleted: false,
-          created_at: new Date().toISOString(),
-          statut: "inactif",
-        },
-      ];
-      setUtilisateurs(demoUtilisateurs);
     } finally {
       setLoading((prev) => ({ ...prev, utilisateurs: false }));
     }
   }, []);
 
-  // Charger les messages reçus
+  // Charger les messages reçus - CORRECTION
   const fetchMessagesRecus = useCallback(async () => {
     setLoading((prev) => ({ ...prev, messages: true }));
     try {
@@ -665,83 +686,85 @@ export default function ListeMessagesVendeur() {
         API_ENDPOINTS.MESSAGERIE.RECEIVED,
       );
 
-      if (!response) {
+      if (!response || response.length === 0) {
         console.warn("⚠️ Réponse API vide (messages reçus)");
         setMessages([]);
         return;
       }
 
-      // Transformer les données pour correspondre au format attendu
-      const transformedMessages = response
-        .map((item: MessageReceived) => {
-          if (!item) return null;
+      // CORRECTION : Type correct pour la réponse
+      const responseData = response as MessageReceived[];
 
-          return {
-            ...item.message,
-            estLu: item.estLu || false,
-            dateLecture: item.dateLecture || null,
+      // Transformer les données pour correspondre au format attendu
+      const transformedMessages = responseData
+        .map((item: MessageReceived) => {
+          if (!item || !item.message) return null;
+
+          // CORRECTION : Créer un objet Message avec tous les champs requis
+          const transformed: Message = {
+            uuid: item.message.uuid || "",
+            sujet: item.message.sujet || "",
+            contenu: item.message.contenu || "",
+            expediteurNom: item.message.expediteurNom || "",
+            expediteurEmail: item.message.expediteurEmail || "",
+            destinataireEmail: item.message.destinataireEmail || "",
+            type: item.message.type || "NOTIFICATION",
+            estEnvoye: item.message.estEnvoye || false,
             envoyeLe:
               item.dateReception ||
               item.message.envoyeLe ||
               new Date().toISOString(),
+            estLu: item.estLu || false,
+            dateLecture: item.dateLecture || null, // CORRECTION : null au lieu de undefined
+            dateCreation: item.message.dateCreation,
           };
+
+          return transformed;
         })
         .filter((item): item is Message => item !== null);
 
-      console.log("📨 Messages transformés:", transformedMessages);
+      console.log("📨 Messages transformés:", transformedMessages.length);
       setMessages(transformedMessages);
     } catch (err: any) {
       console.error("❌ Error fetching messages:", err);
       setError("Erreur lors du chargement des messages");
 
-      // Données de démonstration adaptées
+      // Données de démonstration adaptées avec types corrects
       const demoMessages: Message[] = [
         {
-          uuid: "msg-1",
-          sujet: "Nouvelle commande reçue",
+          uuid: "c5d30cbd-b606-4721-8ec7-5a00f7df9e87",
+          sujet: "Confirmation de votre inscription",
           contenu:
-            "Vous avez reçu une nouvelle commande sur votre boutique. Veuillez la traiter dans les plus brefs délais.",
-          expediteurNom: "Système SONEC",
-          expediteurEmail: "system@sonec.com",
-          destinataireEmail: vendeurProfile?.email || "vendeur@sonec.com",
-          type: "NOTIFICATION",
+            "Bienvenue Agent ! Votre compte SONEC a été créé avec succès. Connectez-vous dès maintenant pour découvrir nos services.",
+          expediteurNom: "Super Admin",
+          expediteurEmail: "superadmin@sonec.com",
+          destinataireEmail: agentProfile?.email || "agent@sonec.com",
+          type: "SUPER_ADMIN",
           estEnvoye: true,
           envoyeLe: new Date().toISOString(),
           estLu: false,
+          dateLecture: null, // CORRECTION : null au lieu de undefined
         },
         {
-          uuid: "msg-2",
-          sujet: "Votre produit a été approuvé",
+          uuid: "2",
+          sujet: "Notification de sécurité importante",
           contenu:
-            "Félicitations ! Votre produit 'Smartphone XYZ' a été approuvé par notre équipe et est maintenant visible par les utilisateurs.",
-          expediteurNom: "Équipe de modération",
-          expediteurEmail: "moderation@sonec.com",
-          destinataireEmail: vendeurProfile?.email || "vendeur@sonec.com",
-          type: "INFO",
+            "Nous avons détecté une activité suspecte sur votre compte. Veuillez vérifier vos activités récentes...",
+          expediteurNom: "Système de sécurité",
+          expediteurEmail: "security@sonec.com",
+          destinataireEmail: agentProfile?.email || "agent@sonec.com",
+          type: "ALERT",
           estEnvoye: true,
           envoyeLe: new Date(Date.now() - 3600000).toISOString(),
           estLu: true,
           dateLecture: new Date(Date.now() - 3500000).toISOString(),
-        },
-        {
-          uuid: "msg-3",
-          sujet: "Rappel : Paiement en attente",
-          contenu:
-            "Bonjour, vous avez un paiement en attente de traitement. Veuillez vérifier votre compte pour plus de détails.",
-          expediteurNom: "Service financier",
-          expediteurEmail: "finance@sonec.com",
-          destinataireEmail: vendeurProfile?.email || "vendeur@sonec.com",
-          type: "WARNING",
-          estEnvoye: true,
-          envoyeLe: new Date(Date.now() - 7200000).toISOString(),
-          estLu: false,
         },
       ];
       setMessages(demoMessages);
     } finally {
       setLoading((prev) => ({ ...prev, messages: false }));
     }
-  }, [vendeurProfile]);
+  }, [agentProfile]);
 
   // Charger les messages envoyés
   const fetchMessagesEnvoyes = useCallback(async () => {
@@ -749,48 +772,57 @@ export default function ListeMessagesVendeur() {
       console.log("🔄 Chargement des messages envoyés...");
       const response = await api.get<Message[]>(API_ENDPOINTS.MESSAGERIE.SENT);
 
-      if (!response) {
+      if (!response || response.length === 0) {
         console.warn("⚠️ Réponse API vide (messages envoyés)");
         setMessagesEnvoyes([]);
         return;
       }
 
-      const formattedMessages = response
-        .map((msg: Message) => {
+      // CORRECTION : S'assurer que les données sont un tableau
+      const responseData = Array.isArray(response) 
+        ? response 
+        : [];
+
+      const formattedMessages = responseData
+        .map((msg: any) => {
           if (!msg) return null;
 
           return {
-            ...msg,
+            uuid: msg.uuid || "",
+            sujet: msg.sujet || "",
+            contenu: msg.contenu || "",
+            expediteurNom: msg.expediteurNom || "Agent SONEC",
+            expediteurEmail: msg.expediteurEmail || agentProfile?.email || "",
+            destinataireEmail: msg.destinataireEmail || "",
             type: (msg.type || "notification").toUpperCase(),
+            estEnvoye: msg.estEnvoye !== undefined ? msg.estEnvoye : true,
+            envoyeLe: msg.envoyeLe || new Date().toISOString(),
             estLu: msg.estLu || false,
             dateLecture: msg.dateLecture || null,
-            envoyeLe: msg.envoyeLe || new Date().toISOString(),
-            expediteurNom: msg.expediteurNom || "Vendeur SONEC",
-            expediteurEmail: msg.expediteurEmail || vendeurProfile?.email || "",
-            estEnvoye: msg.estEnvoye !== undefined ? msg.estEnvoye : true,
-          };
+            dateCreation: msg.dateCreation,
+          } as Message;
         })
         .filter((msg): msg is Message => msg !== null);
 
-      console.log("📤 Messages envoyés transformés:", formattedMessages);
+      console.log("📤 Messages envoyés transformés:", formattedMessages.length);
       setMessagesEnvoyes(formattedMessages);
     } catch (err: any) {
       console.error("❌ Error fetching sent messages:", err);
       setError("Erreur lors du chargement des messages envoyés");
 
-      // Données de démonstration
+      // Données de démonstration avec types corrects
       const demoSentMessages: Message[] = [
         {
           uuid: "sent-1",
-          sujet: "Question sur ma commande",
+          sujet: "Demande d'assistance",
           contenu:
-            "Bonjour, j'ai une question concernant ma commande #12345. Pouvez-vous m'aider ?",
-          expediteurNom: vendeurProfile
-            ? `${vendeurProfile.prenoms} ${vendeurProfile.nom}`
-            : "Vendeur SONEC",
-          expediteurEmail: vendeurProfile?.email || "vendeur@sonec.com",
-          destinataireEmail: "jean.dupont@sonec.com",
-          type: "INFO",
+            "Bonjour Super Admin, j'ai besoin d'assistance pour gérer un utilisateur problématique...",
+          expediteurNom: agentProfile
+            ? `${agentProfile.prenoms} ${agentProfile.nom}`
+            : "Agent SONEC",
+          expediteurEmail: agentProfile?.email || "agent@sonec.com",
+          destinataireEmail: "superadmin@sonec.com",
+          type: "SUPER_ADMIN",
           estEnvoye: true,
           envoyeLe: new Date(Date.now() - 7200000).toISOString(),
           estLu: true,
@@ -798,23 +830,23 @@ export default function ListeMessagesVendeur() {
         },
         {
           uuid: "sent-2",
-          sujet: "Problème avec un client",
-          contenu:
-            "Bonjour Agent, j'ai un problème avec un client qui ne répond pas à mes messages concernant sa commande.",
-          expediteurNom: vendeurProfile
-            ? `${vendeurProfile.prenoms} ${vendeurProfile.nom}`
-            : "Vendeur SONEC",
-          expediteurEmail: vendeurProfile?.email || "vendeur@sonec.com",
-          destinataireEmail: "sophie.martin@sonec.com",
-          type: "WARNING",
+          sujet: "Rapport mensuel",
+          contenu: "Voici mon rapport d'activité pour le mois dernier...",
+          expediteurNom: agentProfile
+            ? `${agentProfile.prenoms} ${agentProfile.nom}`
+            : "Agent SONEC",
+          expediteurEmail: agentProfile?.email || "agent@sonec.com",
+          destinataireEmail: "admin.principal@sonec.com",
+          type: "SUPER_ADMIN",
           estEnvoye: true,
           envoyeLe: new Date(Date.now() - 43200000).toISOString(),
           estLu: false,
+          dateLecture: null,
         },
       ];
       setMessagesEnvoyes(demoSentMessages);
     }
-  }, [vendeurProfile]);
+  }, [agentProfile]);
 
   // Recharger les messages périodiquement
   useEffect(() => {
@@ -832,8 +864,10 @@ export default function ListeMessagesVendeur() {
   // Charger toutes les données au montage
   useEffect(() => {
     console.log("🚀 Chargement des données...");
-    fetchVendeurProfile();
+    fetchAgentProfile();
+    fetchSuperAdmins();
     fetchAgents();
+    fetchVendeurs();
     fetchUtilisateurs();
     fetchMessagesRecus();
     fetchMessagesEnvoyes();
@@ -841,7 +875,11 @@ export default function ListeMessagesVendeur() {
 
   // Mettre à jour les statistiques
   useEffect(() => {
-    const totalUsers = agents.length + utilisateurs.length;
+    const totalUsers =
+      superAdmins.length +
+      agents.length +
+      vendeurs.length +
+      utilisateurs.length;
     const totalMessages = messages.length + messagesEnvoyes.length;
     const unreadMessages = messages.filter((m) => !m.estLu).length;
 
@@ -850,23 +888,38 @@ export default function ListeMessagesVendeur() {
       totalMessages,
       unreadMessages,
       sentMessages: messagesEnvoyes.length,
-      agents: agents.length,
-      utilisateurs: utilisateurs.length,
+      superAdmins: superAdmins.length,
     });
-  }, [agents, utilisateurs, messages, messagesEnvoyes]);
+  }, [superAdmins, agents, vendeurs, utilisateurs, messages, messagesEnvoyes]);
 
-  // Combiner tous les utilisateurs (agents et utilisateurs uniquement)
+  // Combiner tous les utilisateurs
   const allUsers = useMemo(() => {
     const users = [];
 
-    // Ajouter les agents
+    if (selectedType === "all" || selectedType === "super_admin") {
+      users.push(
+        ...superAdmins.map((superAdmin) => ({
+          ...superAdmin,
+          userType: "super_admin" as const,
+        })),
+      );
+    }
+
     if (selectedType === "all" || selectedType === "agent") {
       users.push(
         ...agents.map((agent) => ({ ...agent, userType: "agent" as const })),
       );
     }
 
-    // Ajouter les utilisateurs
+    if (selectedType === "all" || selectedType === "vendeur") {
+      users.push(
+        ...vendeurs.map((vendeur) => ({
+          ...vendeur,
+          userType: "vendeur" as const,
+        })),
+      );
+    }
+
     if (selectedType === "all" || selectedType === "utilisateur") {
       users.push(
         ...utilisateurs.map((utilisateur) => ({
@@ -877,7 +930,7 @@ export default function ListeMessagesVendeur() {
     }
 
     return users;
-  }, [agents, utilisateurs, selectedType]);
+  }, [superAdmins, agents, vendeurs, utilisateurs, selectedType]);
 
   // Filtrer les utilisateurs
   const filteredUsers = useMemo(() => {
@@ -903,6 +956,10 @@ export default function ListeMessagesVendeur() {
         result = result.filter((v) => v.est_bloque);
       } else if (selectedStatus === "unverified") {
         result = result.filter((v) => !v.est_verifie);
+      } else if (selectedStatus === "super_admin") {
+        result = result.filter((v) => v.is_super_admin);
+      } else if (selectedStatus === "admin") {
+        result = result.filter((v) => v.is_admin && !v.is_super_admin);
       }
     }
 
@@ -936,13 +993,18 @@ export default function ListeMessagesVendeur() {
     prenoms?: string,
     userType?: string,
   ) => {
+    let type = "NOTIFICATION";
+    if (userType === "super_admin") {
+      type = "SUPER_ADMIN";
+    }
+
     setNewMessage((prev) => ({
       ...prev,
       destinataireEmail: email,
       sujet:
         `Message pour ${nom || ""} ${prenoms || ""}`.trim() ||
         "Message important",
-      type: "NOTIFICATION",
+      type: type,
     }));
   };
 
@@ -977,10 +1039,10 @@ export default function ListeMessagesVendeur() {
         sujet: "",
         contenu: "",
         type: "NOTIFICATION",
-        expediteurNom: vendeurProfile
-          ? `${vendeurProfile.prenoms} ${vendeurProfile.nom}`
-          : "Vendeur SONEC",
-        expediteurEmail: vendeurProfile?.email || "",
+        expediteurNom: agentProfile
+          ? `${agentProfile.prenoms} ${agentProfile.nom}`
+          : "Agent SONEC",
+        expediteurEmail: agentProfile?.email || "",
       });
 
       // Recharger les messages envoyés
@@ -993,42 +1055,6 @@ export default function ListeMessagesVendeur() {
       setError(
         err.response?.data?.message || "Erreur lors de l'envoi du message",
       );
-
-      // Simulation d'envoi réussi pour la démo
-      setSuccessMessage("Message envoyé avec succès (démo) !");
-      setTimeout(() => {
-        setSuccessMessage(null);
-        setActiveTab("sent");
-
-        // Ajouter le message aux messages envoyés (démo)
-        const newSentMessage: Message = {
-          uuid: `sent-${Date.now()}`,
-          sujet: newMessage.sujet,
-          contenu: newMessage.contenu,
-          expediteurNom: vendeurProfile
-            ? `${vendeurProfile.prenoms} ${vendeurProfile.nom}`
-            : "Vendeur SONEC",
-          expediteurEmail: vendeurProfile?.email || "vendeur@sonec.com",
-          destinataireEmail: newMessage.destinataireEmail,
-          type: newMessage.type,
-          estEnvoye: true,
-          envoyeLe: new Date().toISOString(),
-          estLu: false,
-        };
-        setMessagesEnvoyes((prev) => [newSentMessage, ...prev]);
-
-        // Réinitialiser le formulaire
-        setNewMessage({
-          destinataireEmail: "",
-          sujet: "",
-          contenu: "",
-          type: "NOTIFICATION",
-          expediteurNom: vendeurProfile
-            ? `${vendeurProfile.prenoms} ${vendeurProfile.nom}`
-            : "Vendeur SONEC",
-          expediteurEmail: vendeurProfile?.email || "",
-        });
-      }, 1000);
     } finally {
       setLoading((prev) => ({ ...prev, envoi: false }));
       setTimeout(() => {
@@ -1061,11 +1087,14 @@ export default function ListeMessagesVendeur() {
       destinataireEmail: message.expediteurEmail,
       sujet: `RE: ${message.sujet}`,
       contenu: `\n\n--- Message original ---\n${message.contenu}`,
-      type: "NOTIFICATION",
-      expediteurNom: vendeurProfile
-        ? `${vendeurProfile.prenoms} ${vendeurProfile.nom}`
-        : "Vendeur SONEC",
-      expediteurEmail: vendeurProfile?.email || "",
+      type:
+        message.type.toUpperCase() === "SUPER_ADMIN"
+          ? "SUPER_ADMIN"
+          : "NOTIFICATION",
+      expediteurNom: agentProfile
+        ? `${agentProfile.prenoms} ${agentProfile.nom}`
+        : "Agent SONEC",
+      expediteurEmail: agentProfile?.email || "",
     });
     setActiveTab("users");
   };
@@ -1073,8 +1102,12 @@ export default function ListeMessagesVendeur() {
   // Obtenir l'icône pour le type d'utilisateur
   const getUserTypeIcon = (userType: string) => {
     switch (userType) {
+      case "super_admin":
+        return faCrown;
       case "agent":
         return faUserTie;
+      case "vendeur":
+        return faStore;
       case "utilisateur":
         return faUser;
       default:
@@ -1085,8 +1118,12 @@ export default function ListeMessagesVendeur() {
   // Obtenir la couleur pour le type d'utilisateur
   const getUserTypeColor = (userType: string) => {
     switch (userType) {
+      case "super_admin":
+        return "purple";
       case "agent":
         return "primary";
+      case "vendeur":
+        return "warning";
       case "utilisateur":
         return "info";
       default:
@@ -1097,8 +1134,12 @@ export default function ListeMessagesVendeur() {
   // Obtenir le label pour le type d'utilisateur
   const getUserTypeLabel = (userType: string) => {
     switch (userType) {
+      case "super_admin":
+        return "Super Admin";
       case "agent":
         return "Agent";
+      case "vendeur":
+        return "Vendeur";
       case "utilisateur":
         return "Utilisateur";
       default:
@@ -1145,10 +1186,11 @@ export default function ListeMessagesVendeur() {
                 icon={faEnvelope}
                 className="me-3 text-primary"
               />
-              Messagerie Vendeur
+              Messagerie Agent
             </h1>
             <p className="text-muted mb-0">
-              Gérez vos messages et communiquez avec les agents et utilisateurs
+              Gérez vos messages et communiquez avec les administrateurs et
+              utilisateurs
             </p>
           </div>
           <div className="d-flex gap-3">
@@ -1162,8 +1204,6 @@ export default function ListeMessagesVendeur() {
             <button
               className="btn btn-primary d-flex align-items-center gap-2"
               onClick={() => {
-                fetchAgents();
-                fetchUtilisateurs();
                 fetchMessagesRecus();
                 fetchMessagesEnvoyes();
               }}
@@ -1178,24 +1218,34 @@ export default function ListeMessagesVendeur() {
         <div className="row g-4 mb-5">
           <div className="col-xl-2 col-lg-4 col-md-6">
             <StatsCard
+              title="Super Admins"
+              value={stats.superAdmins}
+              icon={faCrown}
+              color="purple"
+              subtitle="Administrateurs principaux"
+              trend="up"
+              isLoading={loading.superAdmins}
+            />
+          </div>
+          <div className="col-xl-2 col-lg-4 col-md-6">
+            <StatsCard
               title="Agents"
-              value={stats.agents}
+              value={agents.length}
               icon={faUserTie}
               color="primary"
-              subtitle="Agents de support"
-              trend="up"
+              subtitle="Agents actifs"
+              trend="neutral"
               isLoading={loading.agents}
             />
           </div>
           <div className="col-xl-2 col-lg-4 col-md-6">
             <StatsCard
-              title="Utilisateurs"
-              value={stats.utilisateurs}
-              icon={faUser}
-              color="info"
-              subtitle="Clients potentiels"
-              trend="neutral"
-              isLoading={loading.utilisateurs}
+              title="Utilisateurs Totaux"
+              value={stats.totalUsers}
+              icon={faUsers}
+              color="success"
+              subtitle="Tous les utilisateurs"
+              trend="up"
             />
           </div>
           <div className="col-xl-2 col-lg-4 col-md-6">
@@ -1203,7 +1253,7 @@ export default function ListeMessagesVendeur() {
               title="Messages Reçus"
               value={stats.totalMessages}
               icon={faInbox}
-              color="success"
+              color="info"
               subtitle={`${stats.unreadMessages} non lus`}
               trend="neutral"
               isLoading={loading.messages}
@@ -1216,16 +1266,6 @@ export default function ListeMessagesVendeur() {
               icon={faShareSquare}
               color="warning"
               subtitle="Ce mois"
-              trend="up"
-            />
-          </div>
-          <div className="col-xl-2 col-lg-4 col-md-6">
-            <StatsCard
-              title="Total Contacts"
-              value={stats.totalUsers}
-              icon={faUsers}
-              color="purple"
-              subtitle="Agents et utilisateurs"
               trend="up"
             />
           </div>
@@ -1310,8 +1350,8 @@ export default function ListeMessagesVendeur() {
                             Liste des destinataires
                           </h5>
                           <p className="text-muted mb-0 mt-1">
-                            Sélectionnez des agents ou utilisateurs pour leur
-                            envoyer des messages
+                            Sélectionnez des utilisateurs pour leur envoyer des
+                            messages
                           </p>
                         </div>
                         <div className="d-flex align-items-center gap-3">
@@ -1320,7 +1360,7 @@ export default function ListeMessagesVendeur() {
                               icon={faUserCheck}
                               className="me-2"
                             />
-                            {filteredUsers.length} contact(s)
+                            {filteredUsers.length} utilisateur(s)
                           </span>
                         </div>
                       </div>
@@ -1338,7 +1378,7 @@ export default function ListeMessagesVendeur() {
                             <input
                               type="text"
                               className="form-control border-start-0 ps-2 py-3"
-                              placeholder="Rechercher un contact..."
+                              placeholder="Rechercher un utilisateur..."
                               value={searchTerm}
                               onChange={(e) => setSearchTerm(e.target.value)}
                             />
@@ -1358,7 +1398,9 @@ export default function ListeMessagesVendeur() {
                               onChange={(e) => setSelectedType(e.target.value)}
                             >
                               <option value="all">Tous les types</option>
+                              <option value="super_admin">Super Admins</option>
                               <option value="agent">Agents</option>
+                              <option value="vendeur">Vendeurs</option>
                               <option value="utilisateur">Utilisateurs</option>
                             </select>
                           </div>
@@ -1379,6 +1421,8 @@ export default function ListeMessagesVendeur() {
                               }
                             >
                               <option value="all">Tous les statuts</option>
+                              <option value="super_admin">Super Admins</option>
+                              <option value="admin">Admins</option>
                               <option value="active">Actifs</option>
                               <option value="blocked">Bloqués</option>
                               <option value="unverified">Non vérifiés</option>
@@ -1419,7 +1463,7 @@ export default function ListeMessagesVendeur() {
                               </th>
                               <th className="py-3 px-4">
                                 <span className="text-muted fw-medium">
-                                  Contact
+                                  Utilisateur
                                 </span>
                               </th>
                               <th
@@ -1458,11 +1502,11 @@ export default function ListeMessagesVendeur() {
                                       className="fs-1 mb-3 opacity-25"
                                     />
                                     <h5 className="fw-semibold mb-2">
-                                      Aucun contact trouvé
+                                      Aucun utilisateur trouvé
                                     </h5>
                                     <p className="mb-0">
-                                      Ajustez vos filtres pour voir les agents
-                                      ou utilisateurs
+                                      Ajustez vos filtres ou créez un nouvel
+                                      utilisateur
                                     </p>
                                   </div>
                                 </td>
@@ -1544,6 +1588,8 @@ export default function ListeMessagesVendeur() {
                                       est_bloque={user.est_bloque}
                                       est_verifie={user.est_verifie}
                                       is_deleted={user.is_deleted}
+                                      is_super_admin={user.is_super_admin}
+                                      is_admin={user.is_admin}
                                     />
                                   </td>
                                   <td className="py-3 px-4 text-center">
@@ -1679,7 +1725,7 @@ export default function ListeMessagesVendeur() {
                               icon={faInfoCircle}
                               className="me-1"
                             />
-                            Sélectionnez un contact dans le tableau
+                            Sélectionnez un utilisateur dans le tableau
                           </small>
                         </div>
 
@@ -1728,6 +1774,7 @@ export default function ListeMessagesVendeur() {
                             <option value="ALERT">Alerte</option>
                             <option value="INFO">Information</option>
                             <option value="WARNING">Avertissement</option>
+                            <option value="SUPER_ADMIN">Super Admin</option>
                           </select>
                         </div>
 
@@ -1886,7 +1933,7 @@ export default function ListeMessagesVendeur() {
                                 {selectedMessage.sujet}
                               </h6>
                               <span
-                                className={`badge bg-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : "primary"} bg-opacity-10 text-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : "primary"} border border-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : "primary"} border-opacity-25 px-3 py-2`}
+                                className={`badge bg-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : selectedMessage.type.toUpperCase() === "SUPER_ADMIN" ? "purple" : "primary"} bg-opacity-10 text-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : selectedMessage.type.toUpperCase() === "SUPER_ADMIN" ? "purple" : "primary"} border border-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : selectedMessage.type.toUpperCase() === "SUPER_ADMIN" ? "purple" : "primary"} border-opacity-25 px-3 py-2`}
                               >
                                 {selectedMessage.type.toUpperCase()}
                               </span>
@@ -2078,7 +2125,7 @@ export default function ListeMessagesVendeur() {
                                   </td>
                                   <td className="py-3 px-4">
                                     <span
-                                      className={`badge bg-${message.type === "ALERT" ? "danger" : message.type === "WARNING" ? "warning" : "primary"} bg-opacity-10 text-${message.type === "ALERT" ? "danger" : message.type === "WARNING" ? "warning" : "primary"} border border-${message.type === "ALERT" ? "danger" : message.type === "WARNING" ? "warning" : "primary"} border-opacity-25 px-3 py-2 fw-medium`}
+                                      className={`badge bg-${message.type === "ALERT" ? "danger" : message.type === "WARNING" ? "warning" : message.type === "SUPER_ADMIN" ? "purple" : "primary"} bg-opacity-10 text-${message.type === "ALERT" ? "danger" : message.type === "WARNING" ? "warning" : message.type === "SUPER_ADMIN" ? "purple" : "primary"} border border-${message.type === "ALERT" ? "danger" : message.type === "WARNING" ? "warning" : message.type === "SUPER_ADMIN" ? "purple" : "primary"} border-opacity-25 px-3 py-2 fw-medium`}
                                     >
                                       {message.type}
                                     </span>
@@ -2120,12 +2167,16 @@ export default function ListeMessagesVendeur() {
                                             message.destinataireEmail,
                                           sujet: `RE: ${message.sujet}`,
                                           contenu: "",
-                                          type: "NOTIFICATION",
-                                          expediteurNom: vendeurProfile
-                                            ? `${vendeurProfile.prenoms} ${vendeurProfile.nom}`
-                                            : "Vendeur SONEC",
+                                          type:
+                                            message.type.toUpperCase() ===
+                                            "SUPER_ADMIN"
+                                              ? "SUPER_ADMIN"
+                                              : "NOTIFICATION",
+                                          expediteurNom: agentProfile
+                                            ? `${agentProfile.prenoms} ${agentProfile.nom}`
+                                            : "Agent SONEC",
                                           expediteurEmail:
-                                            vendeurProfile?.email || "",
+                                            agentProfile?.email || "",
                                         });
                                         setActiveTab("users");
                                       }}

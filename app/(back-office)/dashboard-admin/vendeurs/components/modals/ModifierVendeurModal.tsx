@@ -1031,7 +1031,7 @@ export default function ModifierVendeurModal({
                                 ? vendeurCreatedDate.toLocaleDateString("fr-FR")
                                 : "N/A"}
                               {vendeurUpdatedDate &&
-                                vendeurUpdatedDate > vendeurCreatedDate &&
+                                vendeurCreatedDate && vendeurUpdatedDate > vendeurCreatedDate &&
                                 ` • Dernière modification le ${vendeurUpdatedDate.toLocaleDateString("fr-FR")}`}
                               .
                             </>
@@ -1647,7 +1647,7 @@ export default function ModifierVendeurModal({
                                     className="progress-bar"
                                     role="progressbar"
                                     style={{
-                                      width: `${(passwordStrength.score / 5) * 100}%`,
+                                      width: `${"score" in passwordStrength ? (passwordStrength.score / 5) * 100 : 0}%`,
                                       backgroundColor: passwordStrength.color,
                                     }}
                                   ></div>

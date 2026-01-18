@@ -69,7 +69,7 @@ export default function CreateTypeBoutiqueModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fonction utilitaire pour générer un image_key
-  const generateImageKey = (file?: File): string => {
+  const generateImageKey = (file?: File): string | null => {
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(2, 8);
 
@@ -275,9 +275,9 @@ export default function CreateTypeBoutiqueModal({
         formData.peut_vendre_biens ? "1" : "0",
       );
 
-      // IMPORTANT: Ajouter image_key TOUJOURS, même sans fichier
-      const imageKey = generateImageKey(formData.imageFile);
-      formDataToSend.append("image_key", imageKey);
+      // CORRECTION: Passer undefined si imageFile est null
+      const imageKey = generateImageKey(formData.imageFile || undefined);
+      formDataToSend.append("image_key", imageKey || "");
       console.log("🔑 Image key généré:", imageKey);
 
       // Ajouter l'image si elle existe

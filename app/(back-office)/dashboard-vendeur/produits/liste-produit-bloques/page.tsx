@@ -234,7 +234,6 @@ export default function ProduitsBloques() {
       // Utiliser l'endpoint pour les produits bloqués
       const response = await api.get<PaginatedResponse>(
         API_ENDPOINTS.PRODUCTS.BLOCKED,
-        { params },
       );
 
       // Filtrer uniquement les produits bloqués (sécurité supplémentaire)
@@ -333,7 +332,7 @@ export default function ProduitsBloques() {
     try {
       // Note: Vérifiez si vous avez un endpoint spécifique pour débloquer
       // Sinon, utilisez l'endpoint de mise à jour
-      await api.put(API_ENDPOINTS.PRODUCTS.UPDATE(productUuid), {
+      await api.put(API_ENDPOINTS.PRODUCTS.UPDATE_STOCK_PRODUIT(productUuid), {
         estBloque: false,
       });
 
@@ -354,7 +353,7 @@ export default function ProduitsBloques() {
       const product = products.find((p) => p.uuid === productUuid);
       if (!product) return;
 
-      await api.put(API_ENDPOINTS.PRODUCTS.UPDATE_STOCK_VENDEUR(productUuid), {
+      await api.put(API_ENDPOINTS.PRODUCTS.UPDATE_STOCK_PRODUIT(productUuid), {
         disponible: disponible,
         quantite: product.quantite,
       });
@@ -438,8 +437,8 @@ export default function ProduitsBloques() {
 
   return (
     <>
-      {/* Modals */}
-      {selectedProduct && (
+      {/* Modals
+        {selectedProduct && (
         <ViewProductModal
           isOpen={showViewModal}
           product={selectedProduct}
@@ -461,6 +460,8 @@ export default function ProduitsBloques() {
           onSuccess={() => handleSuccess("Produit modifié avec succès !")}
         />
       )}
+      */}
+    
 
       <div className="p-3 p-md-4">
         <div className="card border-0 shadow-sm overflow-hidden">

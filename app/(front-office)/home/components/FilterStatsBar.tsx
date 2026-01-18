@@ -117,7 +117,7 @@ const FilterStatsBar: React.FC<FilterStatsBarProps> = ({
                         e.currentTarget.style.borderColor =
                           filter.borderColor || colors.oskar.green;
                         e.currentTarget.style.backgroundColor =
-                          colors.oskar.lightestGreen;
+                          colors.oskar.lightGrey;
                       }
                     }}
                     onMouseLeave={(e) => {

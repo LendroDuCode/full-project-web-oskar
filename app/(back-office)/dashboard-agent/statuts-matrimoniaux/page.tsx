@@ -37,9 +37,9 @@ import {
   faHeartBroken,
   faHeartCrack,
   faHandshake,
-  faExclamationTriangle, // AJOUTÉ
+  faExclamationTriangle,
 } from "@fortawesome/free-solid-svg-icons";
-import { useStatutsMatrimoniaux } from "@/hooks/useStatutsMatrimoniaux";
+import { StatutMatrimonialStatsType } from "@/app/shared/types/statut-matrimonial";
 
 // Composant de badge de statut
 const StatusBadge = ({ statut }: { statut: string }) => {
@@ -417,20 +417,114 @@ const BulkDeleteModal = ({
   );
 };
 
+// Fonction utilitaire pour comparer les valeurs avec gestion des undefined/null
+const compareValues = (
+  a: any,
+  b: any,
+  direction: "asc" | "desc" = "asc",
+): number => {
+  // Gestion des valeurs nulles ou undefined
+  if (a == null && b == null) return 0;
+  if (a == null) return direction === "asc" ? -1 : 1;
+  if (b == null) return direction === "asc" ? 1 : -1;
+
+  // Conversion des dates si nécessaire
+  let valA = a;
+  let valB = b;
+
+  // Vérifier si ce sont des chaînes de date
+  if (typeof a === "string" && typeof b === "string") {
+    const dateA = new Date(a).getTime();
+    const dateB = new Date(b).getTime();
+
+    if (!isNaN(dateA) && !isNaN(dateB)) {
+      valA = dateA;
+      valB = dateB;
+    }
+  }
+
+  // Comparaison standard
+  if (valA < valB) {
+    return direction === "asc" ? -1 : 1;
+  }
+  if (valA > valB) {
+    return direction === "asc" ? 1 : -1;
+  }
+  return 0;
+};
+
+// Interface pour les services
+interface PaginationData {
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+}
+
+// Service API pour les statuts matrimoniaux
+const statutMatrimonialService = {
+  // Récupérer tous les statuts avec pagination et filtres
+  async getStatuts(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    actif?: boolean;
+  }) {
+    const queryParams = new URLSearchParams();
+    
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.actif !== undefined) queryParams.append('actif', params.actif.toString());
+
+    const response = await fetch(`/api/admin/statuts-matrimoniaux?${queryParams.toString()}`);
+    if (!response.ok) throw new Error('Erreur lors de la récupération des statuts');
+    
+    return response.json();
+  },
+
+  // Basculer le statut actif/inactif
+  async toggleStatus(uuid: string) {
+    const response = await fetch(`/api/admin/statuts-matrimoniaux/${uuid}/toggle-status`, {
+      method: 'PATCH'
+    });
+    if (!response.ok) throw new Error('Erreur lors du changement de statut');
+    
+    return response.json();
+  },
+
+  // Définir comme statut par défaut
+  async setDefault(uuid: string) {
+    const response = await fetch(`/api/admin/statuts-matrimoniaux/${uuid}/set-default`, {
+      method: 'PATCH'
+    });
+    if (!response.ok) throw new Error('Erreur lors de la définition du statut par défaut');
+    
+    return response.json();
+  },
+
+  // Supprimer un statut
+  async deleteStatut(uuid: string) {
+    const response = await fetch(`/api/admin/statuts-matrimoniaux/${uuid}`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) throw new Error('Erreur lors de la suppression du statut');
+    
+    return response.json();
+  }
+};
+
 export default function StatutsMatrimoniauxPage() {
-  const {
-    statuts,
-    loading,
-    error,
-    pagination,
-    fetchStatuts,
-    toggleStatutStatus,
-    setStatutDefaut,
-    deleteStatut,
-    setPage,
-    setLimit,
-    refresh,
-  } = useStatutsMatrimoniaux();
+  // États pour les données
+  const [statuts, setStatuts] = useState<StatutMatrimonialStatsType[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pagination, setPagination] = useState<PaginationData>({
+    page: 1,
+    limit: 10,
+    total: 0,
+    pages: 1,
+  });
 
   // États pour les modals
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -438,7 +532,7 @@ export default function StatutsMatrimoniauxPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [selectedStatut, setSelectedStatut] =
-    useState<StatutMatrimonialType | null>(null);
+    useState<StatutMatrimonialStatsType | null>(null);
 
   // États pour la sélection multiple
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
@@ -448,7 +542,7 @@ export default function StatutsMatrimoniauxPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [sortConfig, setSortConfig] = useState<{
-    key: keyof StatutMatrimonialType;
+    key: keyof StatutMatrimonialStatsType;
     direction: "asc" | "desc";
   } | null>(null);
 
@@ -459,25 +553,151 @@ export default function StatutsMatrimoniauxPage() {
   // Options pour les éléments par page
   const itemsPerPageOptions = [5, 10, 20, 50];
 
+  // Fonction pour charger les statuts depuis l'API
+  const fetchStatuts = useCallback(async (options?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    actif?: boolean;
+  }) => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const result = await statutMatrimonialService.getStatuts({
+        page: options?.page || 1,
+        limit: options?.limit || pagination.limit,
+        search: options?.search,
+        actif: options?.actif
+      });
+
+      // Supposons que l'API retourne { data: StatutMatrimonialType[], pagination: PaginationData }
+      setStatuts(result.data || []);
+      
+      if (result.pagination) {
+        setPagination(result.pagination);
+      } else {
+        // Fallback si l'API ne retourne pas de pagination
+        setPagination({
+          page: options?.page || 1,
+          limit: options?.limit || pagination.limit,
+          total: result.data?.length || 0,
+          pages: Math.ceil((result.data?.length || 0) / (options?.limit || pagination.limit))
+        });
+      }
+      
+    } catch (err: any) {
+      setError(err.message || "Erreur lors du chargement des statuts matrimoniaux");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [pagination.limit]);
+
+  // Fonction pour basculer le statut
+  const toggleStatutStatus = useCallback(async (uuid: string) => {
+    setLoading(true);
+    try {
+      await statutMatrimonialService.toggleStatus(uuid);
+      
+      // Mettre à jour localement
+      setStatuts(prev => prev.map(statut => {
+        if (statut.uuid === uuid) {
+          return {
+            ...statut,
+            statut: statut.statut === "actif" ? "inactif" : "actif"
+          };
+        }
+        return statut;
+      }));
+      
+      return true;
+    } catch (err: any) {
+      setError(err.message || "Erreur lors du changement de statut");
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Fonction pour définir comme statut par défaut
+  const setStatutDefaut = useCallback(async (uuid: string) => {
+    setLoading(true);
+    try {
+      await statutMatrimonialService.setDefault(uuid);
+      
+      // Mettre à jour localement - définir ce statut comme défaut et les autres comme non-défaut
+      setStatuts(prev => prev.map(statut => ({
+        ...statut,
+        defaut: statut.uuid === uuid
+      })));
+      
+      return true;
+    } catch (err: any) {
+      setError(err.message || "Erreur lors de la définition du statut par défaut");
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Fonction pour supprimer un statut
+  const deleteStatut = useCallback(async (uuid: string) => {
+    setLoading(true);
+    try {
+      await statutMatrimonialService.deleteStatut(uuid);
+      
+      // Supprimer localement
+      setStatuts(prev => prev.filter(statut => statut.uuid !== uuid));
+      
+      return true;
+    } catch (err: any) {
+      setError(err.message || "Erreur lors de la suppression du statut");
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Fonctions de pagination
+  const setPage = useCallback((page: number) => {
+    setPagination(prev => ({ ...prev, page }));
+    fetchStatuts({ page });
+  }, [fetchStatuts]);
+
+  const setLimit = useCallback((limit: number) => {
+    setPagination(prev => ({ ...prev, limit, page: 1 }));
+    fetchStatuts({ limit });
+  }, [fetchStatuts]);
+
+  // Fonction de rafraîchissement
+  const refresh = useCallback(() => {
+    return fetchStatuts({
+      page: pagination.page,
+      limit: pagination.limit,
+      search: searchTerm || undefined,
+      actif: selectedStatus !== "all" ? selectedStatus === "actif" : undefined
+    });
+  }, [fetchStatuts, pagination.page, pagination.limit, searchTerm, selectedStatus]);
+
   // Charger les statuts au montage
   useEffect(() => {
     fetchStatuts();
-  }, []);
+  }, [fetchStatuts]);
 
-  // Gérer les changements de pagination et filtres
+  // Gérer les changements de recherche et filtres avec debounce
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       fetchStatuts({
-        page: pagination.page,
+        page: 1, // Retourner à la première page lors d'un nouveau filtre
         limit: pagination.limit,
         search: searchTerm || undefined,
-        actif:
-          selectedStatus !== "all" ? selectedStatus === "actif" : undefined,
+        actif: selectedStatus !== "all" ? selectedStatus === "actif" : undefined,
       });
-    }, 300);
+    }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [pagination.page, pagination.limit, searchTerm, selectedStatus]);
+  }, [searchTerm, selectedStatus, fetchStatuts, pagination.limit]);
 
   // Fonction pour formater la date
   const formatDate = useCallback((dateString: string | null | undefined) => {
@@ -495,41 +715,38 @@ export default function StatutsMatrimoniauxPage() {
     }
   }, []);
 
-  // Fonction de tri
+  // Fonction de tri améliorée
   const sortStatuts = useCallback(
-    (statutsList: StatutMatrimonialType[]) => {
+    (statutsList: StatutMatrimonialStatsType[]) => {
       if (!sortConfig || !statutsList.length) return statutsList;
 
       return [...statutsList].sort((a, b) => {
         const aValue = a[sortConfig.key];
         const bValue = b[sortConfig.key];
 
-        if (aValue < bValue) {
-          return sortConfig.direction === "asc" ? -1 : 1;
-        }
-        if (aValue > bValue) {
-          return sortConfig.direction === "asc" ? 1 : -1;
-        }
-        return 0;
+        return compareValues(aValue, bValue, sortConfig.direction);
       });
     },
     [sortConfig],
   );
 
-  const requestSort = useCallback((key: keyof StatutMatrimonialType) => {
-    let direction: "asc" | "desc" = "asc";
-    if (
-      sortConfig &&
-      sortConfig.key === key &&
-      sortConfig.direction === "asc"
-    ) {
-      direction = "desc";
-    }
-    setSortConfig({ key, direction });
-  }, []);
+  const requestSort = useCallback(
+    (key: keyof StatutMatrimonialStatsType) => {
+      let direction: "asc" | "desc" = "asc";
+      if (
+        sortConfig &&
+        sortConfig.key === key &&
+        sortConfig.direction === "asc"
+      ) {
+        direction = "desc";
+      }
+      setSortConfig({ key, direction });
+    },
+    [sortConfig],
+  );
 
   const getSortIcon = useCallback(
-    (key: keyof StatutMatrimonialType) => {
+    (key: keyof StatutMatrimonialStatsType) => {
       if (!sortConfig || sortConfig.key !== key) {
         return <FontAwesomeIcon icon={faSort} className="text-muted ms-1" />;
       }
@@ -542,18 +759,17 @@ export default function StatutsMatrimoniauxPage() {
     [sortConfig],
   );
 
-  // Filtrer et trier les statuts
+  // Filtrer et trier les statuts côté client (pour le tri seulement)
   const filteredStatuts = useMemo(() => {
+    // Note: Le filtrage principal est fait côté serveur via l'API
+    // On applique seulement le tri côté client
     return sortStatuts(statuts);
   }, [statuts, sortStatuts]);
 
-  // Calculer les éléments à afficher
+  // Calculer les éléments à afficher (déjà paginés par l'API)
   const currentItems = useMemo(() => {
-    return filteredStatuts.slice(
-      (pagination.page - 1) * pagination.limit,
-      pagination.page * pagination.limit,
-    );
-  }, [filteredStatuts, pagination.page, pagination.limit]);
+    return filteredStatuts;
+  }, [filteredStatuts]);
 
   // Gestion de la sélection multiple
   const handleRowSelect = (uuid: string) => {
@@ -712,7 +928,7 @@ export default function StatutsMatrimoniauxPage() {
   };
 
   // Fonction pour changer le statut d'un statut matrimonial
-  const handleToggleStatus = async (statutItem: StatutMatrimonialType) => {
+  const handleToggleStatus = async (statutItem: StatutMatrimonialStatsType) => {
     try {
       setLocalError(null);
       await toggleStatutStatus(statutItem.uuid);
@@ -727,7 +943,7 @@ export default function StatutsMatrimoniauxPage() {
   };
 
   // Fonction pour définir comme statut par défaut
-  const handleSetDefault = async (statutItem: StatutMatrimonialType) => {
+  const handleSetDefault = async (statutItem: StatutMatrimonialStatsType) => {
     try {
       setLocalError(null);
       await setStatutDefaut(statutItem.uuid);
@@ -746,6 +962,7 @@ export default function StatutsMatrimoniauxPage() {
     try {
       setLocalError(null);
 
+      // Tentative d'export PDF via API
       const response = await fetch(
         "/api/admin/export-statuts-matrimoniaux-pdf",
         {
@@ -756,22 +973,25 @@ export default function StatutsMatrimoniauxPage() {
         },
       );
 
-      if (!response.ok) throw new Error("Erreur lors de l'export");
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `statuts-matrimoniaux-${new Date().toISOString().split("T")[0]}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `statuts-matrimoniaux-${new Date().toISOString().split("T")[0]}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-      setSuccessMessage("Export PDF réussi");
-      setTimeout(() => setSuccessMessage(null), 3000);
+        setSuccessMessage("Export PDF réussi");
+        setTimeout(() => setSuccessMessage(null), 3000);
+      } else {
+        // Fallback CSV export
+        handleCSVExport();
+      }
     } catch (err) {
-      console.error("Erreur lors de l'export:", err);
+      console.error("Erreur lors de l'export PDF:", err);
       // Fallback CSV export
       handleCSVExport();
     }
@@ -789,11 +1009,11 @@ export default function StatutsMatrimoniauxPage() {
         ["Libellé", "Slug", "Statut", "Par défaut", "Créé le", "Modifié le"],
         ...filteredStatuts.map((s) => [
           s.libelle || "",
-          s.slug || "",
+          s.code || "",
           s.statut || "",
           s.defaut ? "Oui" : "Non",
-          formatDate(s.createdAt),
-          formatDate(s.updatedAt),
+          formatDate(s.created_at),
+          formatDate(s.updated_at),
         ]),
       ]
         .map((row) => row.map((cell) => `"${cell}"`).join(","))
@@ -831,7 +1051,7 @@ export default function StatutsMatrimoniauxPage() {
 
   // Icône selon le type de statut
   const getStatutIcon = (libelle: string) => {
-    const lowerLibelle = libelle.toLowerCase();
+    const lowerLibelle = libelle?.toLowerCase() || "";
     if (
       lowerLibelle.includes("célibataire") ||
       lowerLibelle.includes("celibataire")
@@ -861,9 +1081,144 @@ export default function StatutsMatrimoniauxPage() {
     return faHeart;
   };
 
+  // Modal de création (à implémenter)
+  const CreateModal = () => {
+    if (!showCreateModal) return null;
+    return (
+      <div
+        className="modal fade show d-block"
+        style={{
+          backgroundColor: "rgba(0,0,0,0.5)",
+          backdropFilter: "blur(2px)",
+        }}
+        tabIndex={-1}
+      >
+        <div className="modal-dialog">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">Créer un nouveau statut</h5>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setShowCreateModal(false)}
+              ></button>
+            </div>
+            <div className="modal-body">
+              <p>Modal de création à implémenter</p>
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowCreateModal(false)}
+              >
+                Annuler
+              </button>
+              <button type="button" className="btn btn-primary">
+                Créer
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Modal d'édition (à implémenter)
+  const EditModal = () => {
+    if (!showEditModal || !selectedStatut) return null;
+    return (
+      <div
+        className="modal fade show d-block"
+        style={{
+          backgroundColor: "rgba(0,0,0,0.5)",
+          backdropFilter: "blur(2px)",
+        }}
+        tabIndex={-1}
+      >
+        <div className="modal-dialog">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">Modifier le statut</h5>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setShowEditModal(false)}
+              ></button>
+            </div>
+            <div className="modal-body">
+              <p>Édition de: {selectedStatut.libelle}</p>
+              <p>Modal d'édition à implémenter</p>
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowEditModal(false)}
+              >
+                Annuler
+              </button>
+              <button type="button" className="btn btn-primary">
+                Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Modal de suppression (à implémenter)
+  const DeleteModal = () => {
+    if (!showDeleteModal || !selectedStatut) return null;
+    return (
+      <div
+        className="modal fade show d-block"
+        style={{
+          backgroundColor: "rgba(0,0,0,0.5)",
+          backdropFilter: "blur(2px)",
+        }}
+        tabIndex={-1}
+      >
+        <div className="modal-dialog">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h5 className="modal-title">Supprimer le statut</h5>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setShowDeleteModal(false)}
+              ></button>
+            </div>
+            <div className="modal-body">
+              <p>
+                Êtes-vous sûr de vouloir supprimer "{selectedStatut.libelle}" ?
+              </p>
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowDeleteModal(false)}
+              >
+                Annuler
+              </button>
+              <button type="button" className="btn btn-danger">
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <>
-      {/* Modal de suppression multiple */}
+      {/* Modals */}
+      <CreateModal />
+      <EditModal />
+      <DeleteModal />
       <BulkDeleteModal
         show={showBulkDeleteModal}
         loading={loading}
@@ -1128,11 +1483,11 @@ export default function StatutsMatrimoniauxPage() {
                           <th style={{ width: "150px" }}>
                             <button
                               className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
-                              onClick={() => requestSort("slug")}
+                              onClick={() => requestSort("code")}
                               disabled={loading}
                             >
                               Slug
-                              {getSortIcon("slug")}
+                              {getSortIcon("code")}
                             </button>
                           </th>
                           <th style={{ width: "120px" }}>
@@ -1151,7 +1506,7 @@ export default function StatutsMatrimoniauxPage() {
                           <th style={{ width: "150px" }}>
                             <button
                               className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
-                              onClick={() => requestSort("createdAt")}
+                              onClick={() => requestSort("created_at")}
                               disabled={loading}
                             >
                               <FontAwesomeIcon
@@ -1159,7 +1514,7 @@ export default function StatutsMatrimoniauxPage() {
                                 className="me-1"
                               />
                               Créé le
-                              {getSortIcon("createdAt")}
+                              {getSortIcon("created_at")}
                             </button>
                           </th>
                           <th
@@ -1219,14 +1574,14 @@ export default function StatutsMatrimoniauxPage() {
                                     />
                                   </div>
                                   <small className="text-muted">
-                                    {statutItem.slug}
+                                    {statutItem.code}
                                   </small>
                                 </div>
                               </div>
                             </td>
                             <td>
                               <code className="bg-light px-2 py-1 rounded">
-                                {statutItem.slug}
+                                {statutItem.code}
                               </code>
                             </td>
                             <td>
@@ -1254,7 +1609,7 @@ export default function StatutsMatrimoniauxPage() {
                                   className="text-muted me-2"
                                 />
                                 <small className="text-muted">
-                                  {formatDate(statutItem.createdAt)}
+                                  {formatDate(statutItem.created_at)}
                                 </small>
                               </div>
                             </td>
@@ -1266,10 +1621,10 @@ export default function StatutsMatrimoniauxPage() {
                                 <button
                                   className="btn btn-outline-warning"
                                   title="Modifier"
-                                  onClick={() =>
-                                    setSelectedStatut(statutItem) &&
-                                    setShowEditModal(true)
-                                  }
+                                  onClick={() => {
+                                    setSelectedStatut(statutItem);
+                                    setShowEditModal(true);
+                                  }}
                                   disabled={loading}
                                 >
                                   <FontAwesomeIcon icon={faEdit} />
@@ -1305,10 +1660,10 @@ export default function StatutsMatrimoniauxPage() {
                                 <button
                                   className="btn btn-outline-danger"
                                   title="Supprimer"
-                                  onClick={() =>
-                                    setSelectedStatut(statutItem) &&
-                                    setShowDeleteModal(true)
-                                  }
+                                  onClick={() => {
+                                    setSelectedStatut(statutItem);
+                                    setShowDeleteModal(true);
+                                  }}
                                   disabled={loading || statutItem.defaut}
                                 >
                                   <FontAwesomeIcon icon={faTrash} />

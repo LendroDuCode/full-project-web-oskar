@@ -460,7 +460,7 @@ export default function ProductDetailPage() {
   const handlePublish = async () => {
     try {
       setActionLoading(true);
-      await api.post(API_ENDPOINTS.PRODUCTS.PUBLISH, {
+      await api.post(API_ENDPOINTS.PRODUCTS.PUBLLIER, {
         productUuid: uuid,
         est_publie: !product.estPublie,
       });

@@ -359,7 +359,7 @@ export default function GestionStocksPage() {
         statut: don.statut,
         date_maj: don.updatedAt || don.date_debut,
         disponible: don.estPublie && !don.est_bloque,
-        prix: don.prix,
+        prix: don.prix || undefined,
         typeSpecifique: don.type_don,
         originalItem: don,
         selected: false,
@@ -398,7 +398,7 @@ export default function GestionStocksPage() {
         date_maj: produit.updatedAt || "",
         disponible: produit.estPublie && !produit.estBloque,
         prix: produit.prix,
-        typeSpecifique: produit.type,
+        typeSpecifique: produit.type || undefined,
         originalItem: produit,
         selected: false,
       });
@@ -411,10 +411,7 @@ export default function GestionStocksPage() {
   const filteredItems = useMemo(() => {
     let filtered = [...stockItems];
 
-    // Filtrer par type
-    if (activeView !== "tous") {
-      filtered = filtered.filter((item) => item.type === activeView);
-    }
+ 
 
     // Filtrer par statut de stock
     if (statutFilter !== "tous") {
@@ -678,7 +675,6 @@ export default function GestionStocksPage() {
             API_ENDPOINTS.PRODUCTS.UPDATE_STOCK_PRODUIT(selectedItem.id),
           );
           requestData = {
-            quantite: quantiteNum,
             disponible: stockDisponible,
             ...(selectedItem.originalItem as Produit),
           };

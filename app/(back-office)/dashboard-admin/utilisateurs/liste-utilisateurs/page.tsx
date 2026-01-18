@@ -38,12 +38,338 @@ import {
 
 // Import des services et hooks
 import { API_ENDPOINTS } from "@/config/api-endpoints";
-import { useUsers } from "@/hooks/useUtilisateurs";
-import type { User } from "@/services/utilisateurs/user.types";
 import { api } from "@/lib/api-client";
 import CreateUserModal from "../components/modals/CreateUserModal";
-import EditUserModal from "../components/modals/ModifierUserModal";
+import EditUserModal, {
+  UserForEdit,
+} from "../components/modals/ModifierUserModal";
 
+// Types pour les utilisateurs
+
+// Type principal User
+interface User {
+  // Identifiant unique
+  uuid: string;
+  code_utilisateur?: string;
+  
+  // Informations personnelles
+  nom: string;
+  prenoms: string;
+  email: string;
+  telephone: string;
+  date_naissance?: string;
+  lieu_naissance?: string;
+  nationalite?: string;
+  photo_profil?: string;
+  
+  // Authentification
+  mot_de_passe?: string;
+  est_verifie: boolean;
+  est_bloque: boolean;
+  is_deleted?: boolean;
+  raison_blocage?: string;
+  date_derniere_connexion?: string;
+  date_derniere_deconnexion?: string;
+  
+  // Rôles et permissions
+  role_uuid: string;
+  is_admin: boolean;
+  permissions?: string[];
+  
+  // Civilité
+  civilite_uuid?: string;
+  
+  // Statut matrimonial
+  statut_matrimonial_uuid?: string;
+  
+  // Adresse
+  adresse?: string;
+  ville?: string;
+  code_postal?: string;
+  pays?: string;
+  
+  // Informations professionnelles
+  profession?: string;
+  employeur?: string;
+  secteur_activite?: string;
+  
+  // Métadonnées
+  created_at?: string;
+  updated_at?: string;
+  deleted_at?: string;
+  created_by?: string;
+  updated_by?: string;
+  deleted_by?: string;
+  
+  // Relations (optionnelles selon le contexte)
+  civilite?: Civilite;
+  role?: Role;
+  statut_matrimonial?: StatutMatrimonial;
+  user_profile?: UserProfile;
+}
+
+// Type pour le profil utilisateur étendu
+interface UserProfile {
+  uuid: string;
+  user_uuid: string;
+  bio?: string;
+  site_web?: string;
+  reseaux_sociaux?: {
+    facebook?: string;
+    twitter?: string;
+    linkedin?: string;
+    instagram?: string;
+  };
+  preferences?: {
+    langue?: string;
+    fuseau_horaire?: string;
+    notifications_email?: boolean;
+    notifications_push?: boolean;
+    theme?: 'light' | 'dark' | 'auto';
+  };
+  statistiques?: {
+    nombre_connexions: number;
+    derniere_activite?: string;
+    temps_total_session?: number;
+  };
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Type pour les civilités
+interface Civilite {
+  uuid: string;
+  libelle: string;
+  code: string;
+  ordre?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Type pour les rôles
+interface Role {
+  uuid: string;
+  name: string;
+  description?: string;
+  permissions: string[];
+  is_default?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Type pour les statuts matrimoniaux
+interface StatutMatrimonial {
+  uuid: string;
+  libelle: string;
+  code: string;
+  description?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// Type pour les formulaires
+interface UserFormData {
+  nom: string;
+  prenoms: string;
+  email: string;
+  telephone: string;
+  date_naissance?: string;
+  lieu_naissance?: string;
+  nationalite?: string;
+  civilite_uuid?: string;
+  role_uuid: string;
+  statut_matrimonial_uuid?: string;
+  adresse?: string;
+  ville?: string;
+  code_postal?: string;
+  pays?: string;
+  profession?: string;
+  employeur?: string;
+  secteur_activite?: string;
+  est_verifie?: boolean;
+  est_bloque?: boolean;
+  is_admin?: boolean;
+  mot_de_passe?: string;
+  confirm_mot_de_passe?: string;
+}
+
+// Type pour la création d'utilisateur
+interface CreateUserData {
+  nom: string;
+  prenoms: string;
+  email: string;
+  telephone: string;
+  mot_de_passe: string;
+  confirm_mot_de_passe: string;
+  civilite_uuid?: string;
+  role_uuid: string;
+  est_verifie?: boolean;
+  est_bloque?: boolean;
+  is_admin?: boolean;
+}
+
+// Type pour la mise à jour d'utilisateur
+interface UpdateUserData {
+  nom?: string;
+  prenoms?: string;
+  email?: string;
+  telephone?: string;
+  date_naissance?: string;
+  lieu_naissance?: string;
+  nationalite?: string;
+  civilite_uuid?: string;
+  role_uuid?: string;
+  statut_matrimonial_uuid?: string;
+  adresse?: string;
+  ville?: string;
+  code_postal?: string;
+  pays?: string;
+  profession?: string;
+  employeur?: string;
+  secteur_activite?: string;
+  est_verifie?: boolean;
+  est_bloque?: boolean;
+  is_admin?: boolean;
+  mot_de_passe?: string;
+  photo_profil?: string;
+}
+
+// Type pour la réponse API
+interface ApiResponseUser {
+  success: boolean;
+  message: string;
+  data: User | User[];
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  timestamp: string;
+}
+
+// Type pour les filtres de recherche
+interface UserFilterType {
+  search?: string;
+  role_uuid?: string;
+  civilite_uuid?: string;
+  statut_matrimonial_uuid?: string;
+  est_bloque?: boolean | string;
+  est_verifie?: boolean | string;
+  is_admin?: boolean | string;
+  is_deleted?: boolean | string;
+  date_debut?: string;
+  date_fin?: string;
+  orderBy?: keyof User | 'role.name' | 'civilite.libelle';
+  orderDirection?: 'asc' | 'desc';
+  page?: number;
+  limit?: number;
+}
+
+// Type pour les statistiques utilisateur
+interface UserStatsType {
+  total: number;
+  actifs: number;
+  bloques: number;
+  non_verifies: number;
+  admins: number;
+  nouveaux_cette_semaine: number;
+  taux_activite: number;
+  repartition_par_role: Array<{
+    role: string;
+    count: number;
+    percentage: number;
+  }>;
+  croissance_mensuelle: number;
+}
+
+// Type pour l'historique des connexions
+interface UserLoginHistory {
+  uuid: string;
+  user_uuid: string;
+  ip_address: string;
+  user_agent: string;
+  device_type?: string;
+  browser?: string;
+  os?: string;
+  location?: {
+    ville?: string;
+    region?: string;
+    pays?: string;
+  };
+  status: 'success' | 'failed' | 'blocked';
+  reason?: string;
+  created_at: string;
+}
+
+// Type pour les activités utilisateur
+interface UserActivity {
+  uuid: string;
+  user_uuid: string;
+  type: 'connexion' | 'deconnexion' | 'modification' | 'creation' | 'suppression' | 'telechargement' | 'upload';
+  description: string;
+  metadata?: Record<string, any>;
+  ip_address?: string;
+  user_agent?: string;
+  created_at: string;
+}
+
+// Type pour les options de sélection
+interface UserOptionType {
+  value: string;
+  label: string;
+  email: string;
+  role?: string;
+  disabled?: boolean;
+}
+
+// Type pour l'export
+interface UserExportData {
+  uuid: string;
+  nom: string;
+  prenoms: string;
+  email: string;
+  telephone: string;
+  civilite: string;
+  role: string;
+  est_verifie: boolean;
+  est_bloque: boolean;
+  is_admin: boolean;
+  created_at: string;
+  updated_at: string;
+  derniere_connexion?: string;
+}
+
+// Type pour les notifications utilisateur
+interface UserNotification {
+  uuid: string;
+  user_uuid: string;
+  type: 'info' | 'success' | 'warning' | 'error' | 'system';
+  title: string;
+  message: string;
+  is_read: boolean;
+  action_url?: string;
+  action_label?: string;
+  metadata?: Record<string, any>;
+  created_at: string;
+  read_at?: string;
+}
+
+// Type pour les préférences utilisateur
+interface UserPreferences {
+  uuid: string;
+  user_uuid: string;
+  langue: string;
+  fuseau_horaire: string;
+  format_date: string;
+  format_heure: string;
+  notifications_email: boolean;
+  notifications_push: boolean;
+  theme: 'light' | 'dark' | 'auto';
+  email_frequency: 'immediate' | 'daily' | 'weekly';
+  created_at: string;
+  updated_at: string;
+}
 // Interface local pour le composant
 interface LocalUser extends Omit<User, "civilite" | "role"> {
   civilite?: {
@@ -52,6 +378,14 @@ interface LocalUser extends Omit<User, "civilite" | "role"> {
   role?: {
     name: string;
   };
+}
+
+// Interface pour la pagination
+interface PaginationInfo {
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
 }
 
 // Composant de statut
@@ -361,19 +695,16 @@ const Pagination = ({
 };
 
 export default function ListeUtilisateursActifsPage() {
-  // Utilisation du hook personnalisé
-  const {
-    users,
-    loading,
-    error,
-    pagination,
-    fetchUsers,
-    updateUser,
-    deleteUser,
-    setPage,
-    setLimit,
-    refresh,
-  } = useUsers();
+  // États principaux
+  const [users, setUsers] = useState<LocalUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [pagination, setPagination] = useState<PaginationInfo>({
+    page: 1,
+    limit: 10,
+    total: 0,
+    pages: 1,
+  });
 
   // États pour les modals
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -406,12 +737,152 @@ export default function ListeUtilisateursActifsPage() {
   // Options pour les éléments par page
   const itemsPerPageOptions = [5, 10, 20, 50];
 
+  // Fonction pour charger les utilisateurs
+  const fetchUsers = useCallback(async (params?: any) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const queryParams = new URLSearchParams({
+        page: String(params?.page || pagination.page),
+        limit: String(params?.limit || pagination.limit),
+        ...params,
+      });
+
+      // Nettoyer les paramètres undefined
+      Object.keys(queryParams).forEach((key) => {
+        if (queryParams.get(key) === undefined || queryParams.get(key) === null) {
+          queryParams.delete(key);
+        }
+      });
+
+      const endpoint = `${API_ENDPOINTS.ADMIN.USERS.LIST}?${queryParams.toString()}`;
+      console.log("📡 Requête API:", endpoint);
+
+      const response = await api.get(endpoint);
+
+      if (response.data && Array.isArray(response.data.data)) {
+        setUsers(response.data.data);
+        
+        // Mettre à jour la pagination si disponible
+        if (response.data.meta) {
+          setPagination({
+            page: response.data.meta.current_page || 1,
+            limit: response.data.meta.per_page || pagination.limit,
+            total: response.data.meta.total || response.data.data.length,
+            pages: response.data.meta.last_page || 1,
+          });
+        } else {
+          // Fallback si pas de métadonnées
+          setPagination(prev => ({
+            ...prev,
+            page: params?.page || prev.page,
+            limit: params?.limit || prev.limit,
+            total: response.data.data.length,
+            pages: Math.ceil(response.data.data.length / (params?.limit || prev.limit)),
+          }));
+        }
+      } else {
+        console.error("❌ Format de réponse inattendu:", response.data);
+        setError("Format de réponse inattendu du serveur");
+        setUsers([]);
+      }
+    } catch (err: any) {
+      console.error("❌ Erreur lors du chargement des utilisateurs:", err);
+      
+      let errorMessage = "Erreur lors du chargement des utilisateurs";
+      if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
+      setUsers([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [pagination.page, pagination.limit]);
+
+  // Fonction pour mettre à jour un utilisateur
+  const updateUser = async (userId: string, userData: Partial<User>) => {
+    try {
+      setLoading(true);
+      const response = await api.put(
+        API_ENDPOINTS.ADMIN.USERS.UPDATE(userId),
+        userData
+      );
+
+      if (response.data) {
+        // Mettre à jour l'utilisateur dans la liste
+        setUsers(prev => prev.map(user => 
+          user.uuid === userId ? { ...user, ...response.data } : user
+        ));
+        return response.data;
+      }
+    } catch (err: any) {
+      console.error("❌ Erreur lors de la mise à jour:", err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fonction pour supprimer un utilisateur
+  const deleteUser = async (userId: string) => {
+    try {
+      setLoading(true);
+      await api.delete(API_ENDPOINTS.ADMIN.USERS.DELETE(userId));
+      
+      // Retirer l'utilisateur de la liste
+      setUsers(prev => prev.filter(user => user.uuid !== userId));
+      
+      // Mettre à jour le total
+      setPagination(prev => ({
+        ...prev,
+        total: prev.total - 1,
+        pages: Math.ceil((prev.total - 1) / prev.limit),
+      }));
+      
+      return true;
+    } catch (err: any) {
+      console.error("❌ Erreur lors de la suppression:", err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fonction pour rafraîchir la liste
+  const refresh = () => {
+    fetchUsers({
+      page: pagination.page,
+      limit: pagination.limit,
+      search: searchTerm.trim() || undefined,
+      est_bloque: selectedStatus === "blocked" ? "true" : 
+                  selectedStatus === "active" ? "false" : undefined,
+      est_verifie: selectedStatus === "unverified" ? "false" : 
+                   selectedStatus === "active" ? "true" : undefined,
+      is_admin: selectedRole === "admin" ? "true" : 
+                selectedRole === "user" ? "false" : undefined,
+    });
+  };
+
+  // Fonctions pour la pagination
+  const setPage = (page: number) => {
+    setPagination(prev => ({ ...prev, page }));
+  };
+
+  const setLimit = (limit: number) => {
+    setPagination(prev => ({ ...prev, limit, page: 1 }));
+  };
+
   // Charger les utilisateurs au montage
   useEffect(() => {
     fetchUsers();
   }, []);
 
-  // Gérer les changements de pagination et filtres - CORRECTION ICI
+  // Gérer les changements de pagination et filtres
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -428,9 +899,13 @@ export default function ListeUtilisateursActifsPage() {
 
         // Ajout du filtre de statut si spécifié
         if (selectedStatus !== "all") {
-          params.est_bloque = selectedStatus === "blocked" ? "true" : "false";
-          if (selectedStatus === "unverified") {
+          if (selectedStatus === "blocked") {
+            params.est_bloque = "true";
+          } else if (selectedStatus === "unverified") {
             params.est_verifie = "false";
+          } else if (selectedStatus === "active") {
+            params.est_bloque = "false";
+            params.est_verifie = "true";
           }
         }
 
@@ -501,24 +976,29 @@ export default function ListeUtilisateursActifsPage() {
 
     try {
       setDeleteLoading(true);
+      let successCount = 0;
+      let errorCount = 0;
 
       // Supprimer chaque utilisateur sélectionné
       for (const userId of selectedUsers) {
-        await deleteUser(userId);
+        try {
+          await deleteUser(userId);
+          successCount++;
+        } catch (err) {
+          console.error(`Erreur pour l'utilisateur ${userId}:`, err);
+          errorCount++;
+        }
       }
 
       setShowDeleteMultipleModal(false);
       setSuccessMessage(
-        `${selectedUsers.length} utilisateur(s) supprimé(s) avec succès`,
+        `${successCount} utilisateur(s) supprimé(s) avec succès${errorCount > 0 ? ` (${errorCount} échec(s))` : ""}`,
       );
       setTimeout(() => setSuccessMessage(null), 3000);
 
       // Réinitialiser la sélection
       setSelectedUsers([]);
       setSelectAll(false);
-
-      // Rafraîchir la liste
-      refresh();
     } catch (err) {
       console.error("Erreur lors de la suppression multiple:", err);
       setInfoMessage("Erreur lors de la suppression des utilisateurs");
@@ -659,22 +1139,6 @@ export default function ListeUtilisateursActifsPage() {
     setSelectAll(!selectAll);
   };
 
-  const handleSelectAllOnPage = () => {
-    const pageUserIds = currentItems.map((user) => user.uuid);
-    const allSelected = pageUserIds.every((id) => selectedUsers.includes(id));
-
-    if (allSelected) {
-      // Désélectionner tous les utilisateurs de la page
-      setSelectedUsers((prev) =>
-        prev.filter((id) => !pageUserIds.includes(id)),
-      );
-    } else {
-      // Sélectionner tous les utilisateurs de la page
-      const newSelection = [...new Set([...selectedUsers, ...pageUserIds])];
-      setSelectedUsers(newSelection);
-    }
-  };
-
   // Actions en masse
   const handleBulkAction = async (
     action:
@@ -688,6 +1152,11 @@ export default function ListeUtilisateursActifsPage() {
     if (selectedUsers.length === 0) {
       setInfoMessage("Veuillez sélectionner au moins un utilisateur");
       setTimeout(() => setInfoMessage(null), 3000);
+      return;
+    }
+
+    if (action === "delete") {
+      setShowDeleteMultipleModal(true);
       return;
     }
 
@@ -722,11 +1191,6 @@ export default function ListeUtilisateursActifsPage() {
               await updateUser(userId, { is_admin: false } as Partial<User>);
               successCount++;
               break;
-            case "delete":
-              // Pour la suppression, on utilise la modal de confirmation
-              setShowDeleteMultipleModal(true);
-              setBulkActionLoading(false);
-              return;
           }
         } catch (err) {
           console.error(`Erreur pour l'utilisateur ${userId}:`, err);
@@ -734,15 +1198,13 @@ export default function ListeUtilisateursActifsPage() {
         }
       }
 
-      if (action !== "delete") {
-        setSuccessMessage(
-          `${successCount} utilisateur(s) ${getActionLabel(action)} avec succès${errorCount > 0 ? ` (${errorCount} échec(s))` : ""}`,
-        );
-        setTimeout(() => setSuccessMessage(null), 3000);
+      setSuccessMessage(
+        `${successCount} utilisateur(s) ${getActionLabel(action)} avec succès${errorCount > 0 ? ` (${errorCount} échec(s))` : ""}`,
+      );
+      setTimeout(() => setSuccessMessage(null), 3000);
 
-        // Rafraîchir la liste
-        refresh();
-      }
+      // Rafraîchir la liste
+      refresh();
     } catch (err) {
       console.error("Erreur lors de l'action en masse:", err);
       setInfoMessage("Erreur lors de l'action en masse");
@@ -768,7 +1230,7 @@ export default function ListeUtilisateursActifsPage() {
     }
   };
 
-  // Filtrer et trier les utilisateurs - CORRECTION ICI
+  // Filtrer et trier les utilisateurs
   const filteredUtilisateurs = sortUtilisateurs(
     users.filter((user: LocalUser) => {
       // Filtrage côté client pour les cas où l'API ne filtre pas correctement
@@ -900,14 +1362,17 @@ export default function ListeUtilisateursActifsPage() {
       {/* Modal de modification d'utilisateur */}
       <EditUserModal
         isOpen={showEditModal}
-        user={selectedUserForEdit}
+        user={selectedUserForEdit ? {
+          ...selectedUserForEdit,
+          date_naissance: selectedUserForEdit.date_naissance ?? undefined
+        } : null}
         onClose={() => {
           setShowEditModal(false);
           setSelectedUserForEdit(null);
         }}
         onSuccess={() => {
           setSuccessMessage("Utilisateur modifié avec succès");
-          refresh(); // Rafraîchir la liste
+          refresh();
           setTimeout(() => setSuccessMessage(null), 3000);
         }}
       />
@@ -947,7 +1412,7 @@ export default function ListeUtilisateursActifsPage() {
                 <div className="d-flex align-items-center gap-3">
                   <h2 className="h4 mb-0 fw-bold">Liste des Utilisateurs</h2>
                   <span className="badge bg-primary bg-opacity-10 text-primary">
-                    {filteredUtilisateurs.length} utilisateur(s){" "}
+                    {pagination.total} utilisateur(s){" "}
                     {selectedUsers.length > 0 &&
                       `(${selectedUsers.length} sélectionné(s))`}
                   </span>
@@ -965,12 +1430,12 @@ export default function ListeUtilisateursActifsPage() {
                 </button>
 
                 <button
-                  onClick={handleExport}
+                  onClick={handleCSVExport}
                   className="btn btn-outline-primary d-flex align-items-center gap-2"
                   disabled={users.length === 0 || loading}
                 >
                   <FontAwesomeIcon icon={faDownload} />
-                  Exporter PDF
+                  Exporter CSV
                 </button>
 
                 <button
@@ -994,7 +1459,7 @@ export default function ListeUtilisateursActifsPage() {
                 <button
                   type="button"
                   className="btn-close"
-                  onClick={() => {}}
+                  onClick={() => setError(null)}
                   aria-label="Close"
                 ></button>
               </div>
@@ -1216,7 +1681,7 @@ export default function ListeUtilisateursActifsPage() {
               <div className="col-md-6">
                 <div className="d-flex align-items-center gap-2">
                   <small className="text-muted">
-                    Résultats: <strong>{filteredUtilisateurs.length}</strong>{" "}
+                    Résultats: <strong>{pagination.total}</strong>{" "}
                     utilisateur(s)
                     {searchTerm && (
                       <>
@@ -1277,7 +1742,7 @@ export default function ListeUtilisateursActifsPage() {
               </div>
             ) : (
               <>
-                {filteredUtilisateurs.length === 0 ? (
+                {users.length === 0 ? (
                   <div className="text-center py-5">
                     <div
                       className="alert alert-info mx-auto"
@@ -1590,7 +2055,7 @@ export default function ListeUtilisateursActifsPage() {
                       <Pagination
                         currentPage={pagination.page}
                         totalPages={pagination.pages}
-                        totalItems={filteredUtilisateurs.length}
+                        totalItems={pagination.total}
                         itemsPerPage={pagination.limit}
                         indexOfFirstItem={
                           (pagination.page - 1) * pagination.limit

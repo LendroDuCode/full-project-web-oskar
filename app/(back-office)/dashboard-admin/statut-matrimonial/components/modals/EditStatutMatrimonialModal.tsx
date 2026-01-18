@@ -22,7 +22,6 @@ import {
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import colors from "@/app/shared/constants/colors";
-import { StatutMatrimonialType } from "@/services/statut-matrimonials/statuts-matrimoniaux.types";
 
 // Types
 interface FormData {
@@ -32,6 +31,166 @@ interface FormData {
   defaut: boolean;
 }
 
+// Types pour le statut matrimonial
+interface StatutMatrimonialType {
+  // Identifiant unique
+  uuid: string;
+  
+  // Informations principales
+  libelle: string;
+  code: string;
+  description?: string;
+  
+  // Statut et configuration
+  statut: "actif" | "inactif";
+  defaut: boolean;
+  ordre?: number;
+  
+  // Métadonnées
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy?: string;
+  updatedBy?: string;
+  
+  // Données statistiques (optionnelles)
+  nombreUtilisations?: number;
+  derniereUtilisation?: string;
+  
+  // Historique des modifications
+  historique?: Array<{
+    date: string;
+    action: string;
+    utilisateur: string;
+    details?: string;
+  }>;
+  
+  // Relations (optionnelles selon les besoins)
+  utilisateurs?: Array<{
+    uuid: string;
+    nom: string;
+    prenom: string;
+    email: string;
+  }>;
+  
+  // Validation et contraintes
+  estValide?: boolean;
+  contraintes?: {
+    minAge?: number;
+    maxAge?: number;
+    conditions?: string[];
+  };
+}
+
+// Types pour les opérations CRUD
+interface CreateStatutMatrimonialType {
+  libelle: string;
+  code: string;
+  description?: string;
+  statut?: "actif" | "inactif";
+  defaut?: boolean;
+  ordre?: number;
+}
+
+interface UpdateStatutMatrimonialType {
+  libelle?: string;
+  code?: string;
+  description?: string;
+  statut?: "actif" | "inactif";
+  defaut?: boolean;
+  ordre?: number;
+}
+
+// Type pour la réponse API
+interface ApiResponseStatutMatrimonial {
+  success: boolean;
+  message: string;
+  data: StatutMatrimonialType | StatutMatrimonialType[];
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  timestamp: string;
+}
+
+// Type pour les filtres de recherche
+interface StatutMatrimonialFilterType {
+  search?: string;
+  statut?: "actif" | "inactif" | "tous";
+  defaut?: boolean;
+  dateDebut?: string;
+  dateFin?: string;
+  orderBy?: "libelle" | "code" | "createdAt" | "ordre";
+  orderDirection?: "asc" | "desc";
+  page?: number;
+  limit?: number;
+}
+
+// Type pour les statistiques
+interface StatutMatrimonialStatsType {
+  total: number;
+  actifs: number;
+  inactifs: number;
+  parDefaut: number;
+  derniereCreation: string;
+  moyenneUtilisations: number;
+  repartitionParStatut: Array<{
+    statut: string;
+    count: number;
+    percentage: number;
+  }>;
+}
+
+// Type pour l'import/export
+interface StatutMatrimonialImportType {
+  libelle: string;
+  code: string;
+  description?: string;
+  statut: "actif" | "inactif";
+  defaut: boolean;
+  ordre: number;
+}
+
+// Type pour les erreurs de validation
+interface StatutMatrimonialValidationError {
+  field: keyof CreateStatutMatrimonialType;
+  message: string;
+  code: string;
+}
+
+// Type pour l'historique des modifications
+interface StatutMatrimonialHistoryType {
+  id: string;
+  statutId: string;
+  action: "creation" | "modification" | "suppression" | "activation" | "desactivation";
+  ancienneValeur?: Partial<StatutMatrimonialType>;
+  nouvelleValeur?: Partial<StatutMatrimonialType>;
+  utilisateurId: string;
+  utilisateurNom: string;
+  utilisateurEmail: string;
+  date: string;
+  ipAddress?: string;
+  userAgent?: string;
+}
+
+// Type pour les options de sélection
+interface StatutMatrimonialOptionType {
+  value: string;
+  label: string;
+  code: string;
+  defaut: boolean;
+  disabled?: boolean;
+}
+
+// Type pour le formulaire de suppression
+interface DeleteStatutMatrimonialType {
+  uuid: string;
+  libelle: string;
+  confirmation: string;
+  raison?: string;
+  forceDelete?: boolean;
+}
 interface EditStatutMatrimonialModalProps {
   isOpen: boolean;
   statut: StatutMatrimonialType | null;

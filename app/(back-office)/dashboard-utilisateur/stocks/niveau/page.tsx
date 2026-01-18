@@ -377,7 +377,7 @@ export default function GestionStocksUtilisateurPage() {
         date_maj: produit.updatedAt || "",
         disponible: produit.estPublie && !produit.estBloque,
         prix: produit.prix,
-        typeSpecifique: produit.type,
+        typeSpecifique: produit.type || undefined,
         originalItem: produit,
         selected: false,
       });
@@ -388,70 +388,80 @@ export default function GestionStocksUtilisateurPage() {
 
   // Filtrer et trier les items
   const filteredItems = useMemo(() => {
-    let filtered = [...stockItems];
+  let filtered = [...stockItems];
 
-    // Filtrer par type
-    if (activeView !== "tous") {
-      filtered = filtered.filter((item) => item.type === activeView);
-    }
+  // Filtrer par type
+  if (activeView !== "tous") {
+    filtered = filtered.filter((item) => {
+      // Mapper les valeurs de activeView vers les valeurs de item.type
+      const typeMapping: Record<string, "don" | "echange" | "produit"> = {
+        dons: "don",
+        echanges: "echange",
+        produits: "produit",
+      };
+      
+      const mappedType = typeMapping[activeView];
+      return mappedType ? item.type === mappedType : false;
+    });
+  }
 
-    // Filtrer par statut de stock
-    if (statutFilter !== "tous") {
-      filtered = filtered.filter((item) => {
-        const quantite = item.quantite;
-        switch (statutFilter) {
-          case "disponible":
-            return item.disponible && quantite > 0;
-          case "epuise":
-            return quantite === 0;
-          case "limite":
-            return quantite > 0 && quantite <= 10;
-          case "indisponible":
-            return !item.disponible;
-          default:
-            return true;
-        }
-      });
-    }
-
-    // Filtrer par recherche
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        (item) =>
-          item.nom.toLowerCase().includes(term) ||
-          item.categorie.toLowerCase().includes(term) ||
-          item.statut.toLowerCase().includes(term) ||
-          (item.typeSpecifique &&
-            item.typeSpecifique.toLowerCase().includes(term)),
-      );
-    }
-
-    // Trier
-    filtered.sort((a, b) => {
-      let aValue = a[sortField];
-      let bValue = b[sortField];
-
-      if (typeof aValue === "string" && typeof bValue === "string") {
-        return sortDirection === "asc"
-          ? aValue.localeCompare(bValue)
-          : bValue.localeCompare(aValue);
-      } else if (typeof aValue === "number" && typeof bValue === "number") {
-        return sortDirection === "asc" ? aValue - bValue : bValue - aValue;
-      } else {
-        return 0;
+  // Filtrer par statut de stock
+  if (statutFilter !== "tous") {
+    filtered = filtered.filter((item) => {
+      const quantite = item.quantite;
+      switch (statutFilter) {
+        case "disponible":
+          return item.disponible && quantite > 0;
+        case "epuise":
+          return quantite === 0;
+        case "limite":
+          return quantite > 0 && quantite <= 10;
+        case "indisponible":
+          return !item.disponible;
+        default:
+          return true;
       }
     });
+  }
 
-    return filtered;
-  }, [
-    stockItems,
-    activeView,
-    statutFilter,
-    searchTerm,
-    sortField,
-    sortDirection,
-  ]);
+  // Filtrer par recherche
+  if (searchTerm) {
+    const term = searchTerm.toLowerCase();
+    filtered = filtered.filter(
+      (item) =>
+        item.nom.toLowerCase().includes(term) ||
+        item.categorie.toLowerCase().includes(term) ||
+        item.statut.toLowerCase().includes(term) ||
+        (item.typeSpecifique &&
+          item.typeSpecifique.toLowerCase().includes(term)),
+    );
+  }
+
+  // Trier
+  filtered.sort((a, b) => {
+    const aValue = a[sortField];
+    const bValue = b[sortField];
+
+    if (typeof aValue === "string" && typeof bValue === "string") {
+      return sortDirection === "asc"
+        ? aValue.localeCompare(bValue)
+        : bValue.localeCompare(aValue);
+    } else if (typeof aValue === "number" && typeof bValue === "number") {
+      return sortDirection === "asc" ? aValue - bValue : bValue - aValue;
+    } else {
+      return 0;
+    }
+  });
+
+  return filtered;
+}, [
+  stockItems,
+  activeView,
+  statutFilter,
+  searchTerm,
+  sortField,
+  sortDirection,
+]);
 
   // Produits de la page courante
   const paginatedItems = useMemo(() => {

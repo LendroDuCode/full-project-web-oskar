@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import DashboardHeader from "../../../components/DashboardHeader";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faPlus,
@@ -819,7 +818,6 @@ export default function EchangesPage() {
   const handleExport = async () => {
     try {
       const response = await api.get(API_ENDPOINTS.ECHANGES.EXPORT_PDF, {
-        responseType: "blob",
       });
       const url = window.URL.createObjectURL(response);
       const link = document.createElement("a");
@@ -1011,12 +1009,7 @@ export default function EchangesPage() {
 
   return (
     <>
-      {/* Modals externes */}
-      <CreateEchangeModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onSuccess={() => handleSuccess("Échange créé avec succès !")}
-      />
+      {/* Modals externes 
       {selectedEchange && (
         <EditEchangeModal
           isOpen={showEditModal}
@@ -1038,6 +1031,13 @@ export default function EchangesPage() {
           }}
         />
       )}
+      */}
+      <CreateEchangeModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={() => handleSuccess("Échange créé avec succès !")}
+      />
+      
 
       {/* Modals de suppression intégrés */}
       <DeleteModal

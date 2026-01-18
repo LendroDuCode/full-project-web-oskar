@@ -31,12 +31,39 @@ import {
   faBan as faBanIcon,
   faCheck as faCheckIcon,
   faTrash as faTrashIcon,
+  faEye,
 } from "@fortawesome/free-solid-svg-icons";
-import { usePays } from "@/hooks/usePays";
-import type { Pays } from "@/services/pays/pays.types";
 import CreatePaysModal from "./components/modals/CreatePaysModal";
 import EditPaysModal from "./components/modals/EditPaysModal";
 import DeletePaysModal from "./components/modals/DeletePaysModal";
+
+// Type local pour Pays
+interface Pays {
+  uuid: string;
+  nom: string;
+  code: string;
+  indicatif: string;
+  statut: string;
+  created_at?: string;
+  updated_at?: string;
+  deleted_at?: string;
+  description?: string;
+  continent?: string;
+  capitale?: string;
+  langue_officielle?: string;
+  population?: number;
+  superficie?: number;
+  devise?: string;
+  domaine_internet?: string;
+}
+
+// Type pour la pagination
+interface PaginationType {
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+}
 
 // Composant de badge de statut
 const StatusBadge = ({ statut }: { statut: string }) => {
@@ -401,17 +428,18 @@ const BulkDeleteModal = ({
 
 // Composant principal
 export default function PaysPage() {
-  const {
-    pays,
-    loading,
-    error,
-    pagination,
-    fetchPays,
-    togglePaysStatus,
-    setPage,
-    setLimit,
-    refresh,
-  } = usePays();
+  // États pour les données
+  const [pays, setPays] = useState<Pays[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // États pour la pagination
+  const [pagination, setPagination] = useState<PaginationType>({
+    page: 1,
+    limit: 10,
+    total: 0,
+    pages: 1,
+  });
 
   // États pour les modals
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -438,6 +466,161 @@ export default function PaysPage() {
 
   // Options pour les éléments par page
   const itemsPerPageOptions = [5, 10, 20, 50];
+
+  // Fonction pour charger les pays
+  const fetchPays = useCallback(async (params?: any) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Construire l'URL avec les paramètres
+      const queryParams = new URLSearchParams();
+      
+      queryParams.append("page", String(params?.page || pagination.page));
+      queryParams.append("limit", String(params?.limit || pagination.limit));
+      
+      if (params?.search) queryParams.append("search", params.search);
+      if (params?.statut && params.statut !== "all") queryParams.append("statut", params.statut);
+
+      const url = `/api/pays?${queryParams.toString()}`;
+      
+      console.log("📡 Fetching pays from:", url);
+
+      const response = await fetch(url, {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Erreur ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      // Mettre à jour les données
+      if (data.data && Array.isArray(data.data)) {
+        setPays(data.data);
+      } else if (Array.isArray(data)) {
+        setPays(data);
+      } else {
+        setPays([]);
+      }
+
+      // Mettre à jour la pagination
+      if (data.meta) {
+        setPagination({
+          page: data.meta.current_page || 1,
+          limit: data.meta.per_page || pagination.limit,
+          total: data.meta.total || 0,
+          pages: data.meta.last_page || 1,
+        });
+      } else if (data.pagination) {
+        setPagination({
+          page: data.pagination.page || 1,
+          limit: data.pagination.limit || pagination.limit,
+          total: data.pagination.total || 0,
+          pages: data.pagination.pages || 1,
+        });
+      } else {
+        const total = data.data?.length || data.length || 0;
+        const pages = Math.ceil(total / (params?.limit || pagination.limit));
+        setPagination(prev => ({
+          ...prev,
+          page: params?.page || prev.page,
+          limit: params?.limit || prev.limit,
+          total,
+          pages,
+        }));
+      }
+
+    } catch (err: any) {
+      console.error("❌ Erreur lors du chargement des pays:", err);
+      setError(err.message || "Une erreur est survenue lors du chargement des pays");
+      setPays([]);
+      setPagination(prev => ({ ...prev, total: 0, pages: 1 }));
+    } finally {
+      setLoading(false);
+    }
+  }, [pagination.limit, pagination.page]);
+
+  // Fonction pour changer le statut d'un pays
+  const togglePaysStatus = useCallback(async (uuid: string) => {
+    try {
+      const response = await fetch(`/api/pays/${uuid}/toggle-status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Erreur ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      // Mettre à jour localement
+      setPays(prev => prev.map(p => 
+        p.uuid === uuid 
+          ? { ...p, statut: data.statut || (p.statut === "actif" ? "inactif" : "actif") }
+          : p
+      ));
+
+      return data;
+
+    } catch (err: any) {
+      console.error("❌ Erreur lors du changement de statut:", err);
+      throw err;
+    }
+  }, []);
+
+  // Fonction pour supprimer un pays
+  const deletePays = useCallback(async (uuid: string) => {
+    try {
+      const response = await fetch(`/api/pays/${uuid}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Erreur ${response.status}: ${response.statusText}`);
+      }
+
+      // Mettre à jour localement
+      setPays(prev => prev.filter(p => p.uuid !== uuid));
+      setPagination(prev => ({ ...prev, total: prev.total - 1 }));
+
+    } catch (err: any) {
+      console.error("❌ Erreur lors de la suppression:", err);
+      throw err;
+    }
+  }, []);
+
+  // Fonction pour changer de page
+  const setPage = useCallback((page: number) => {
+    setPagination(prev => ({ ...prev, page }));
+  }, []);
+
+  // Fonction pour changer la limite
+  const setLimit = useCallback((limit: number) => {
+    setPagination(prev => ({ ...prev, limit, page: 1 }));
+  }, []);
+
+  // Fonction pour rafraîchir
+  const refresh = useCallback(() => {
+    fetchPays({
+      page: pagination.page,
+      limit: pagination.limit,
+      search: searchTerm.trim() || undefined,
+      statut: selectedStatut !== "all" ? selectedStatut : undefined,
+    });
+  }, [fetchPays, pagination.page, pagination.limit, searchTerm, selectedStatut]);
 
   // Charger les pays au montage
   useEffect(() => {
@@ -468,7 +651,7 @@ export default function PaysPage() {
   }, [pagination.page, pagination.limit, searchTerm, selectedStatut]);
 
   // Fonction pour formater la date
-  const formatDate = useCallback((dateString: string | null | undefined) => {
+  const formatDate = useCallback((dateString?: string) => {
     if (!dateString) return "N/A";
     try {
       const date = new Date(dateString);
@@ -497,6 +680,24 @@ export default function PaysPage() {
         if (aValue == null) return 1;
         if (bValue == null) return -1;
 
+        // Gérer les dates
+        if (
+          sortConfig.key === "created_at" ||
+          sortConfig.key === "updated_at"
+        ) {
+          const dateA = new Date(aValue as string).getTime();
+          const dateB = new Date(bValue as string).getTime();
+          return sortConfig.direction === "asc" ? dateA - dateB : dateB - dateA;
+        }
+
+        // Gérer les strings
+        if (typeof aValue === "string" && typeof bValue === "string") {
+          return sortConfig.direction === "asc"
+            ? aValue.localeCompare(bValue)
+            : bValue.localeCompare(aValue);
+        }
+
+        // Gérer les autres types
         if (aValue < bValue) {
           return sortConfig.direction === "asc" ? -1 : 1;
         }
@@ -534,8 +735,26 @@ export default function PaysPage() {
 
   // Filtrer et trier les pays
   const filteredPays = useMemo(() => {
-    return sortPays(pays);
-  }, [pays, sortPays]);
+    let filtered = pays;
+
+    // Filtrer par recherche
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase().trim();
+      filtered = filtered.filter(p =>
+        p.nom?.toLowerCase().includes(term) ||
+        p.code?.toLowerCase().includes(term) ||
+        p.indicatif?.includes(term)
+      );
+    }
+
+    // Filtrer par statut
+    if (selectedStatut !== "all") {
+      filtered = filtered.filter(p => p.statut === selectedStatut);
+    }
+
+    // Trier
+    return sortPays(filtered);
+  }, [pays, searchTerm, selectedStatut, sortPays]);
 
   // Calculer les éléments à afficher
   const currentItems = useMemo(() => {
@@ -614,14 +833,14 @@ export default function PaysPage() {
     setLocalError(null);
   };
 
-  const handleOpenEditModal = (pays: Pays) => {
-    setSelectedPays(pays);
+  const handleOpenEditModal = (paysItem: Pays) => {
+    setSelectedPays(paysItem);
     setShowEditModal(true);
     setLocalError(null);
   };
 
-  const handleOpenDeleteModal = (pays: Pays) => {
-    setSelectedPays(pays);
+  const handleOpenDeleteModal = (paysItem: Pays) => {
+    setSelectedPays(paysItem);
     setShowDeleteModal(true);
     setLocalError(null);
   };
@@ -690,10 +909,14 @@ export default function PaysPage() {
       setLocalError(null);
 
       // Supprimer chaque pays sélectionné
+      const deletePromises = Array.from(selectedRows).map((uuid) =>
+        deletePays(uuid)
+      );
+
+      await Promise.all(deletePromises);
 
       setShowBulkDeleteModal(false);
       clearSelection();
-      await refresh();
 
       setSuccessMessage(`${selectedRows.size} pays supprimé(s) avec succès`);
       setTimeout(() => setSuccessMessage(null), 3000);
@@ -791,16 +1014,24 @@ export default function PaysPage() {
     setLocalError(null);
   };
 
+  // Statistiques
+  const stats = useMemo(() => {
+    const actifs = pays.filter((p) => p.statut === "actif").length;
+    const inactifs = pays.filter((p) => p.statut === "inactif").length;
+
+    return {
+      total: pays.length,
+      actifs,
+      inactifs,
+      pourcentageActifs:
+        pays.length > 0 ? Math.round((actifs / pays.length) * 100) : 0,
+    };
+  }, [pays]);
+
   return (
     <>
-      {/* Modals */}
-      <CreatePaysModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onSuccess={handlePaysCreated}
-      />
-
-      {selectedPays && (
+      {/* Modals 
+         {selectedPays && (
         <>
           <EditPaysModal
             isOpen={showEditModal}
@@ -823,6 +1054,14 @@ export default function PaysPage() {
           />
         </>
       )}
+      */}
+      <CreatePaysModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={handlePaysCreated}
+      />
+
+   
 
       {/* Modal de suppression multiple */}
       <BulkDeleteModal
@@ -834,8 +1073,9 @@ export default function PaysPage() {
       />
 
       <div className="p-3 p-md-4">
-        <div className="card border-0 shadow-sm overflow-hidden">
-          <div className="card-header bg-white border-0 py-3">
+        {/* En-tête avec titre et boutons */}
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-body">
             <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
               <div>
                 <p className="text-muted mb-1">Géographie</p>
@@ -877,61 +1117,60 @@ export default function PaysPage() {
                 </button>
               </div>
             </div>
-
-            {/* Messages d'alerte */}
-            {(error || localError) && (
-              <div
-                className="alert alert-warning alert-dismissible fade show mt-3 mb-0"
-                role="alert"
-              >
-                <FontAwesomeIcon
-                  icon={faExclamationTriangle}
-                  className="me-2"
-                />
-                <strong>Attention:</strong> {error || localError}
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => {
-                    setLocalError(null);
-                  }}
-                  aria-label="Fermer"
-                ></button>
-              </div>
-            )}
-
-            {successMessage && (
-              <div
-                className="alert alert-success alert-dismissible fade show mt-3 mb-0"
-                role="alert"
-              >
-                <FontAwesomeIcon icon={faCheckCircle} className="me-2" />
-                <strong>Succès:</strong> {successMessage}
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => setSuccessMessage(null)}
-                  aria-label="Fermer"
-                ></button>
-              </div>
-            )}
           </div>
+        </div>
 
-          {/* Barre d'actions groupées */}
-          {selectedRows.size > 0 && (
-            <BulkActionsBar
-              selectedCount={selectedRows.size}
-              onSelectAll={handleSelectAll}
-              onClearSelection={clearSelection}
-              onBulkAction={handleBulkAction}
-              isAllSelected={isAllSelected}
-              totalItems={filteredPays.length}
-              loading={loading}
-            />
-          )}
+        {/* Barre d'actions groupées */}
+        {selectedRows.size > 0 && (
+          <BulkActionsBar
+            selectedCount={selectedRows.size}
+            onSelectAll={handleSelectAll}
+            onClearSelection={clearSelection}
+            onBulkAction={handleBulkAction}
+            isAllSelected={isAllSelected}
+            totalItems={filteredPays.length}
+            loading={loading}
+          />
+        )}
 
-          {/* Filtres et recherche */}
-          <div className="p-4 border-bottom bg-light-subtle">
+        {/* Messages d'alerte */}
+        {(error || localError) && (
+          <div
+            className="alert alert-warning alert-dismissible fade show mb-4 border-0 shadow-sm"
+            role="alert"
+          >
+            <FontAwesomeIcon icon={faExclamationTriangle} className="me-2" />
+            <strong>Attention:</strong> {error || localError}
+            <button
+              type="button"
+              className="btn-close"
+              onClick={() => {
+                setLocalError(null);
+              }}
+              aria-label="Fermer"
+            ></button>
+          </div>
+        )}
+
+        {successMessage && (
+          <div
+            className="alert alert-success alert-dismissible fade show mb-4 border-0 shadow-sm"
+            role="alert"
+          >
+            <FontAwesomeIcon icon={faCheckCircle} className="me-2" />
+            <strong>Succès:</strong> {successMessage}
+            <button
+              type="button"
+              className="btn-close"
+              onClick={() => setSuccessMessage(null)}
+              aria-label="Fermer"
+            ></button>
+          </div>
+        )}
+
+        {/* Filtres et recherche */}
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-body">
             <div className="row g-3">
               <div className="col-md-6">
                 <div className="input-group">
@@ -999,6 +1238,20 @@ export default function PaysPage() {
                         | Filtrés: <strong>{filteredPays.length}</strong>
                       </>
                     )}
+                    {searchTerm && (
+                      <>
+                        {" "}
+                        pour "<strong>{searchTerm}</strong>"
+                      </>
+                    )}
+                    {selectedStatut !== "all" && (
+                      <>
+                        {" "}
+                        avec statut "<strong>
+                          {selectedStatut === "actif" ? "Actif" : "Inactif"}
+                        </strong>"
+                      </>
+                    )}
                   </small>
                 </div>
               </div>
@@ -1014,9 +1267,11 @@ export default function PaysPage() {
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Tableau des pays */}
-          <div className="table-responsive">
+        {/* Tableau des pays */}
+        <div className="card border-0 shadow-sm overflow-hidden">
+          <div className="card-body p-0">
             {loading ? (
               <div className="text-center py-5">
                 <div className="spinner-border text-primary" role="status">
@@ -1055,230 +1310,246 @@ export default function PaysPage() {
                   </div>
                 ) : (
                   <>
-                    <table className="table table-hover mb-0">
-                      <thead className="table-light">
-                        <tr>
-                          <th style={{ width: "50px" }} className="text-center">
-                            <div className="form-check d-flex justify-content-center">
-                              <input
-                                className="form-check-input"
-                                type="checkbox"
-                                checked={isPageAllSelected}
-                                onChange={handleSelectAllOnPage}
-                                title="Sélectionner/désélectionner toutes les lignes de cette page"
-                                disabled={loading}
-                              />
-                            </div>
-                          </th>
-                          <th style={{ width: "60px" }} className="text-center">
-                            #
-                          </th>
-                          <th style={{ width: "200px" }}>
-                            <button
-                              className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent d-flex align-items-center"
-                              onClick={() => requestSort("nom")}
-                              disabled={loading}
+                    <div className="table-responsive">
+                      <table className="table table-hover mb-0">
+                        <thead className="table-light">
+                          <tr>
+                            <th
+                              style={{ width: "50px" }}
+                              className="text-center"
                             >
-                              <FontAwesomeIcon
-                                icon={faGlobe}
-                                className="me-2"
-                              />
-                              Nom
-                              {getSortIcon("nom")}
-                            </button>
-                          </th>
-                          <th style={{ width: "120px" }}>
-                            <button
-                              className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent d-flex align-items-center"
-                              onClick={() => requestSort("code")}
-                              disabled={loading}
-                            >
-                              <FontAwesomeIcon icon={faCode} className="me-2" />
-                              Code
-                              {getSortIcon("code")}
-                            </button>
-                          </th>
-                          <th style={{ width: "150px" }}>
-                            <button
-                              className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent d-flex align-items-center"
-                              onClick={() => requestSort("indicatif")}
-                              disabled={loading}
-                            >
-                              <FontAwesomeIcon
-                                icon={faPhone}
-                                className="me-2"
-                              />
-                              Indicatif
-                              {getSortIcon("indicatif")}
-                            </button>
-                          </th>
-                          <th style={{ width: "120px" }}>
-                            <button
-                              className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent d-flex align-items-center"
-                              onClick={() => requestSort("statut")}
-                              disabled={loading}
-                            >
-                              Statut
-                              {getSortIcon("statut")}
-                            </button>
-                          </th>
-                          <th style={{ width: "150px" }}>
-                            <button
-                              className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent d-flex align-items-center"
-                              onClick={() => requestSort("created_at")}
-                              disabled={loading}
-                            >
-                              <FontAwesomeIcon
-                                icon={faCalendar}
-                                className="me-2"
-                              />
-                              Créé le
-                              {getSortIcon("created_at")}
-                            </button>
-                          </th>
-                          <th
-                            style={{ width: "140px" }}
-                            className="text-center"
-                          >
-                            Actions
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {currentItems.map((paysItem, index) => (
-                          <tr
-                            key={paysItem.uuid}
-                            className="align-middle"
-                            style={{
-                              backgroundColor: selectedRows.has(paysItem.uuid)
-                                ? "rgba(13, 110, 253, 0.05)"
-                                : "inherit",
-                            }}
-                          >
-                            <td className="text-center">
                               <div className="form-check d-flex justify-content-center">
                                 <input
                                   className="form-check-input"
                                   type="checkbox"
-                                  checked={selectedRows.has(paysItem.uuid)}
-                                  onChange={() =>
-                                    handleRowSelect(paysItem.uuid)
-                                  }
+                                  checked={isPageAllSelected}
+                                  onChange={handleSelectAllOnPage}
+                                  title="Sélectionner/désélectionner toutes les lignes de cette page"
                                   disabled={loading}
                                 />
                               </div>
-                            </td>
-                            <td className="text-center text-muted fw-semibold">
-                              {(pagination.page - 1) * pagination.limit +
-                                index +
-                                1}
-                            </td>
-                            <td>
-                              <div className="d-flex align-items-center">
-                                <div className="flex-shrink-0">
-                                  <div
-                                    className="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center"
-                                    style={{ width: "40px", height: "40px" }}
-                                  >
-                                    <FontAwesomeIcon icon={faGlobe} />
-                                  </div>
-                                </div>
-                                <div className="flex-grow-1 ms-3">
-                                  <div className="fw-semibold">
-                                    {paysItem.nom}
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="d-flex align-items-center">
+                            </th>
+                            <th
+                              style={{ width: "60px" }}
+                              className="text-center"
+                            >
+                              #
+                            </th>
+                            <th style={{ width: "200px" }}>
+                              <button
+                                className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent d-flex align-items-center"
+                                onClick={() => requestSort("nom")}
+                                disabled={loading}
+                              >
+                                <FontAwesomeIcon
+                                  icon={faGlobe}
+                                  className="me-2"
+                                />
+                                Nom
+                                {getSortIcon("nom")}
+                              </button>
+                            </th>
+                            <th style={{ width: "120px" }}>
+                              <button
+                                className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent d-flex align-items-center"
+                                onClick={() => requestSort("code")}
+                                disabled={loading}
+                              >
                                 <FontAwesomeIcon
                                   icon={faCode}
-                                  className="text-muted me-2"
+                                  className="me-2"
                                 />
-                                <code className="fw-bold bg-light px-2 py-1 rounded">
-                                  {paysItem.code}
-                                </code>
-                              </div>
-                            </td>
-                            <td>
-                              <div className="d-flex align-items-center">
+                                Code
+                                {getSortIcon("code")}
+                              </button>
+                            </th>
+                            <th style={{ width: "150px" }}>
+                              <button
+                                className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent d-flex align-items-center"
+                                onClick={() => requestSort("indicatif")}
+                                disabled={loading}
+                              >
                                 <FontAwesomeIcon
                                   icon={faPhone}
-                                  className="text-muted me-2"
+                                  className="me-2"
                                 />
-                                <span className="fw-semibold">
-                                  {paysItem.indicatif}
-                                </span>
-                              </div>
-                            </td>
-                            <td>
-                              <StatusBadge
-                                statut={paysItem.statut || "actif"}
-                              />
-                            </td>
-                            <td>
-                              <div className="d-flex align-items-center">
+                                Indicatif
+                                {getSortIcon("indicatif")}
+                              </button>
+                            </th>
+                            <th style={{ width: "120px" }}>
+                              <button
+                                className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent d-flex align-items-center"
+                                onClick={() => requestSort("statut")}
+                                disabled={loading}
+                              >
+                                Statut
+                                {getSortIcon("statut")}
+                              </button>
+                            </th>
+                            <th style={{ width: "150px" }}>
+                              <button
+                                className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent d-flex align-items-center"
+                                onClick={() => requestSort("created_at")}
+                                disabled={loading}
+                              >
                                 <FontAwesomeIcon
                                   icon={faCalendar}
-                                  className="text-muted me-2"
+                                  className="me-2"
                                 />
-                                <small className="text-muted">
-                                  {formatDate(paysItem.created_at)}
-                                </small>
-                              </div>
-                            </td>
-                            <td className="text-center">
-                              <div
-                                className="btn-group btn-group-sm"
-                                role="group"
-                              >
-                                <button
-                                  className="btn btn-outline-warning"
-                                  title="Modifier"
-                                  onClick={() => handleOpenEditModal(paysItem)}
-                                  disabled={loading}
-                                >
-                                  <FontAwesomeIcon icon={faEdit} />
-                                </button>
-                                <button
-                                  className={`btn ${
-                                    paysItem.statut === "actif"
-                                      ? "btn-outline-danger"
-                                      : "btn-outline-success"
-                                  }`}
-                                  title={
-                                    paysItem.statut === "actif"
-                                      ? "Désactiver"
-                                      : "Activer"
-                                  }
-                                  onClick={() => handleToggleStatus(paysItem)}
-                                  disabled={loading}
-                                >
-                                  <FontAwesomeIcon
-                                    icon={
-                                      paysItem.statut === "actif"
-                                        ? faBan
-                                        : faCheckCircle
-                                    }
-                                  />
-                                </button>
-                                <button
-                                  className="btn btn-outline-danger"
-                                  title="Supprimer"
-                                  onClick={() =>
-                                    handleOpenDeleteModal(paysItem)
-                                  }
-                                  disabled={loading}
-                                >
-                                  <FontAwesomeIcon icon={faTrash} />
-                                </button>
-                              </div>
-                            </td>
+                                Créé le
+                                {getSortIcon("created_at")}
+                              </button>
+                            </th>
+                            <th
+                              style={{ width: "140px" }}
+                              className="text-center"
+                            >
+                              Actions
+                            </th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {currentItems.map((paysItem, index) => (
+                            <tr
+                              key={paysItem.uuid}
+                              className="align-middle"
+                              style={{
+                                backgroundColor: selectedRows.has(paysItem.uuid)
+                                  ? "rgba(13, 110, 253, 0.05)"
+                                  : "inherit",
+                              }}
+                            >
+                              <td className="text-center">
+                                <div className="form-check d-flex justify-content-center">
+                                  <input
+                                    className="form-check-input"
+                                    type="checkbox"
+                                    checked={selectedRows.has(paysItem.uuid)}
+                                    onChange={() =>
+                                      handleRowSelect(paysItem.uuid)
+                                    }
+                                    disabled={loading}
+                                  />
+                                </div>
+                              </td>
+                              <td className="text-center text-muted fw-semibold">
+                                {(pagination.page - 1) * pagination.limit +
+                                  index +
+                                  1}
+                              </td>
+                              <td>
+                                <div className="d-flex align-items-center">
+                                  <div className="flex-shrink-0">
+                                    <div
+                                      className="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center"
+                                      style={{ width: "40px", height: "40px" }}
+                                    >
+                                      <FontAwesomeIcon icon={faGlobe} />
+                                    </div>
+                                  </div>
+                                  <div className="flex-grow-1 ms-3">
+                                    <div
+                                      className="fw-semibold cursor-pointer"
+                                      onClick={() => handleOpenEditModal(paysItem)}
+                                      style={{ cursor: "pointer" }}
+                                      title="Cliquez pour modifier"
+                                    >
+                                      {paysItem.nom}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td>
+                                <div className="d-flex align-items-center">
+                                  <FontAwesomeIcon
+                                    icon={faCode}
+                                    className="text-muted me-2"
+                                  />
+                                  <code className="fw-bold bg-light px-2 py-1 rounded">
+                                    {paysItem.code}
+                                  </code>
+                                </div>
+                              </td>
+                              <td>
+                                <div className="d-flex align-items-center">
+                                  <FontAwesomeIcon
+                                    icon={faPhone}
+                                    className="text-muted me-2"
+                                  />
+                                  <span className="fw-semibold">
+                                    {paysItem.indicatif}
+                                  </span>
+                                </div>
+                              </td>
+                              <td>
+                                <StatusBadge statut={paysItem.statut || "actif"} />
+                              </td>
+                              <td>
+                                <div className="d-flex align-items-center">
+                                  <FontAwesomeIcon
+                                    icon={faCalendar}
+                                    className="text-muted me-2"
+                                  />
+                                  <small className="text-muted">
+                                    {formatDate(paysItem.created_at)}
+                                  </small>
+                                </div>
+                              </td>
+                              <td className="text-center">
+                                <div
+                                  className="btn-group btn-group-sm"
+                                  role="group"
+                                >
+                                  <button
+                                    className="btn btn-outline-warning"
+                                    title="Modifier"
+                                    onClick={() =>
+                                      handleOpenEditModal(paysItem)
+                                    }
+                                    disabled={loading}
+                                  >
+                                    <FontAwesomeIcon icon={faEdit} />
+                                  </button>
+                                  <button
+                                    className={`btn ${
+                                      paysItem.statut === "actif"
+                                        ? "btn-outline-danger"
+                                        : "btn-outline-success"
+                                    }`}
+                                    title={
+                                      paysItem.statut === "actif"
+                                        ? "Désactiver"
+                                        : "Activer"
+                                    }
+                                    onClick={() => handleToggleStatus(paysItem)}
+                                    disabled={loading}
+                                  >
+                                    <FontAwesomeIcon
+                                      icon={
+                                        paysItem.statut === "actif"
+                                          ? faBan
+                                          : faCheckCircle
+                                      }
+                                    />
+                                  </button>
+                                  <button
+                                    className="btn btn-outline-danger"
+                                    title="Supprimer"
+                                    onClick={() =>
+                                      handleOpenDeleteModal(paysItem)
+                                    }
+                                    disabled={loading}
+                                  >
+                                    <FontAwesomeIcon icon={faTrash} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
 
                     {/* Pagination */}
                     {pagination.total > pagination.limit && (
@@ -1335,6 +1606,15 @@ export default function PaysPage() {
         .form-check-input:focus {
           border-color: #86b7fe;
           box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+        }
+
+        .cursor-pointer {
+          cursor: pointer;
+        }
+
+        .cursor-pointer:hover {
+          color: #0d6efd;
+          text-decoration: underline;
         }
       `}</style>
     </>

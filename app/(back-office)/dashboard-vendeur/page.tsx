@@ -82,7 +82,6 @@ import {
   faChartArea,
   faChartColumn, // Existe déjà comme faChartBar
   faChartGantt, // Non disponible dans free-solid-svg-icons
-  faChartScatter, // Non disponible dans free-solid-svg-icons
 
   // Icônes de cercles et formes
   faCircleDot,
@@ -1385,7 +1384,7 @@ const VendeurDashboard = () => {
         }>(API_ENDPOINTS.BOUTIQUES.LISTE_BOUTIQUES_CREE_PAR_VENDEUR);
         const boutiquesData = Array.isArray(boutiquesRes.data)
           ? boutiquesRes.data
-          : boutiquesRes.data.data || [];
+          : boutiquesRes.data || [];
         setBoutiques(boutiquesData);
 
         // Charger les produits
@@ -1395,7 +1394,7 @@ const VendeurDashboard = () => {
         }>(API_ENDPOINTS.PRODUCTS.VENDEUR_PRODUCTS);
         let produitsData = Array.isArray(produitsRes.data)
           ? produitsRes.data
-          : produitsRes.data.data || [];
+          : produitsRes.data || [];
 
         // Normaliser les données pour s'assurer que boutique a une structure correcte
         produitsData = produitsData.map((produit) => ({
@@ -1411,7 +1410,7 @@ const VendeurDashboard = () => {
         );
         const donsData = Array.isArray(donsRes.data)
           ? donsRes.data
-          : donsRes.data?.data || [];
+          : donsRes.data || [];
         setDons(donsData);
 
         // Charger les échanges
@@ -1420,7 +1419,7 @@ const VendeurDashboard = () => {
         );
         const echangesData = Array.isArray(echangesRes.data)
           ? echangesRes.data
-          : echangesRes.data?.data || [];
+          : echangesRes.data || [];
         setEchanges(echangesData);
 
         // Calculer les statistiques
@@ -1475,74 +1474,73 @@ const VendeurDashboard = () => {
         };
         setStats(statsData);
 
-        // Générer les activités récentes
-        const activities: RecentActivity[] = [
-          // Activités des boutiques
-          ...boutiquesData.slice(0, 2).map((boutique) => ({
-            id: boutique.uuid,
-            type: "boutique" as const,
-            action: "Boutique créée",
-            description: `Nouvelle boutique "${boutique.nom}"`,
-            date: boutique.created_at,
-            status: "success" as const,
-            icon: faStore,
-          })),
+      const activities: RecentActivity[] = [
+  // Activités des boutiques
+  ...boutiquesData.slice(0, 2).map((boutique) => ({
+    id: boutique.uuid,
+    type: "boutique" as const,
+    action: "Boutique créée",
+    description: `Nouvelle boutique "${boutique.nom}"`,
+    date: boutique.created_at,
+    status: "success" as const,
+    icon: faStore,
+  })),
 
-          // Activités des produits
-          ...produitsData.slice(0, 3).map((produit) => ({
-            id: produit.uuid,
-            type: "produit" as const,
-            action: produit.estPublie ? "Produit publié" : "Produit créé",
-            description: `Produit "${produit.libelle}"`,
-            date: produit.createdAt || new Date().toISOString(),
-            status: produit.estBloque ? "danger" : ("success" as const),
-            icon: produit.estPublie ? faGlobe : faShoppingBag,
-          })),
+  // Activités des produits
+  ...produitsData.slice(0, 3).map((produit) => ({
+    id: produit.uuid,
+    type: "produit" as const,
+    action: produit.estPublie ? "Produit publié" : "Produit créé",
+    description: `Produit "${produit.libelle}"`,
+    date: produit.createdAt || new Date().toISOString(),
+    status: (produit.estBloque ? "danger" : "success") as "danger" | "success",
+    icon: produit.estPublie ? faGlobe : faShoppingBag,
+  })),
 
-          // Activités des dons
-          ...donsData.slice(0, 2).map((don) => ({
-            id: don.uuid,
-            type: "don" as const,
-            action: don.estPublie ? "Don publié" : "Don créé",
-            description: `Don "${don.nom}"`,
-            date: don.date_debut,
-            status: don.est_bloque ? "danger" : ("info" as const),
-            icon: faGift,
-          })),
+  // Activités des dons
+  ...donsData.slice(0, 2).map((don) => ({
+    id: don.uuid,
+    type: "don" as const,
+    action: don.estPublie ? "Don publié" : "Don créé",
+    description: `Don "${don.nom}"`,
+    date: don.date_debut,
+    status: (don.est_bloque ? "danger" : "info") as "danger" | "info",
+    icon: faGift,
+  })),
 
-          // Activités des échanges
-          ...echangesData.slice(0, 2).map((echange) => ({
-            id: echange.uuid,
-            type: "echange" as const,
-            action: "Échange proposé",
-            description: `Échange "${echange.nomElementEchange}"`,
-            date: echange.dateProposition,
-            status: "warning" as const,
-            icon: faExchangeAlt,
-          })),
+  // Activités des échanges
+  ...echangesData.slice(0, 2).map((echange) => ({
+    id: echange.uuid,
+    type: "echange" as const,
+    action: "Échange proposé",
+    description: `Échange "${echange.nomElementEchange}"`,
+    date: echange.dateProposition,
+    status: "warning" as const,
+    icon: faExchangeAlt,
+  })),
 
-          // Autres activités
-          {
-            id: "1",
-            type: "commande" as const,
-            action: "Nouvelle commande",
-            description: "Commande #ORD-7890 reçue",
-            date: new Date(Date.now() - 3600000).toISOString(),
-            status: "primary" as const,
-            icon: faShoppingCart,
-          },
-          {
-            id: "2",
-            type: "avis" as const,
-            action: "Nouvel avis",
-            description: "Avis 5 étoiles sur votre produit",
-            date: new Date(Date.now() - 7200000).toISOString(),
-            status: "success" as const,
-            icon: faStar,
-          },
-        ].sort(
-          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-        );
+  // Autres activités
+  {
+    id: "1",
+    type: "commande" as const,
+    action: "Nouvelle commande",
+    description: "Commande #ORD-7890 reçue",
+    date: new Date(Date.now() - 3600000).toISOString(),
+    status: "primary" as const,
+    icon: faShoppingCart,
+  },
+  {
+    id: "2",
+    type: "avis" as const,
+    action: "Nouvel avis",
+    description: "Avis 5 étoiles sur votre produit",
+    date: new Date(Date.now() - 7200000).toISOString(),
+    status: "success" as const,
+    icon: faStar,
+  },
+].sort(
+  (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+);
 
         setRecentActivities(activities.slice(0, 6));
       } catch (error) {

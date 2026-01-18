@@ -978,7 +978,7 @@ export default function BoutiqueApercu() {
   // Actions sur les produits
   const handlePublishProduct = async (productUuid: string) => {
     try {
-      await api.post(API_ENDPOINTS.PRODUCTS.PUBLISH, {
+      await api.post(API_ENDPOINTS.PRODUCTS.PUBLLIER, {
         produitUuid: productUuid,
       });
       handleSuccess("Produit publié avec succès !");
@@ -991,7 +991,7 @@ export default function BoutiqueApercu() {
 
   const handleUnpublishProduct = async (productUuid: string) => {
     try {
-      await api.post(API_ENDPOINTS.PRODUCTS.UNPUBLISH, {
+      await api.post(API_ENDPOINTS.PRODUCTS.PUBLLIER, {
         produitUuid: productUuid,
       });
       handleSuccess("Produit dépublié avec succès !");
@@ -1012,7 +1012,7 @@ export default function BoutiqueApercu() {
       const product = boutique?.produits.find((p) => p.uuid === productUuid);
       if (!product) return;
 
-      await api.put(API_ENDPOINTS.PRODUCTS.UPDATE_STOCK_VENDEUR(productUuid), {
+      await api.put(API_ENDPOINTS.PRODUCTS.UPDATE_STOCK_PRODUIT(productUuid), {
         disponible: disponible,
         quantite: product.quantite,
       });
@@ -1112,7 +1112,7 @@ export default function BoutiqueApercu() {
       // Pour chaque produit sélectionné
       for (const productUuid of productUuids) {
         try {
-          await api.post(API_ENDPOINTS.PRODUCTS.PUBLISH, {
+          await api.post(API_ENDPOINTS.PRODUCTS.PUBLLIER, {
             produitUuid: productUuid,
           });
         } catch (err) {
@@ -1151,7 +1151,7 @@ export default function BoutiqueApercu() {
 
       for (const productUuid of productUuids) {
         try {
-          await api.post(API_ENDPOINTS.PRODUCTS.UNPUBLISH, {
+          await api.post(API_ENDPOINTS.PRODUCTS.PUBLLIER, {
             produitUuid: productUuid,
           });
         } catch (err) {
@@ -1196,7 +1196,7 @@ export default function BoutiqueApercu() {
           if (!product) continue;
 
           await api.put(
-            API_ENDPOINTS.PRODUCTS.UPDATE_STOCK_VENDEUR(productUuid),
+            API_ENDPOINTS.PRODUCTS.UPDATE_STOCK_PRODUIT(productUuid),
             {
               disponible: true,
               quantite: product.quantite,
@@ -1243,7 +1243,7 @@ export default function BoutiqueApercu() {
           if (!product) continue;
 
           await api.put(
-            API_ENDPOINTS.PRODUCTS.UPDATE_STOCK_VENDEUR(productUuid),
+            API_ENDPOINTS.PRODUCTS.UPDATE_STOCK_PRODUIT(productUuid),
             {
               disponible: false,
               quantite: product.quantite,
@@ -1374,8 +1374,8 @@ export default function BoutiqueApercu() {
 
   return (
     <>
-      {/* Modals */}
-      {selectedProduct && (
+      {/* Modals
+        {selectedProduct && (
         <EditProductModal
           isOpen={showEditModal}
           product={selectedProduct}
@@ -1398,6 +1398,8 @@ export default function BoutiqueApercu() {
         />
       )}
 
+      */}
+    
       {/* Modal de suppression en masse */}
       <BulkDeleteModal
         show={showBulkDeleteModal}

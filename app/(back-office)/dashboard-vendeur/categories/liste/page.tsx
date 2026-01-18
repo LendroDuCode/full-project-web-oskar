@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import DashboardHeader from "../../components/DashboardHeader";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faPlus,
@@ -20,6 +19,7 @@ import {
   faCalendar,
   faCheckCircle,
   faTimesCircle,
+  faInfoCircle,
   faChartBar,
   faLayerGroup,
   faBoxOpen,
@@ -807,7 +807,6 @@ export default function CategoriesPage() {
   const handleExport = async () => {
     try {
       const response = await api.get(API_ENDPOINTS.CATEGORIES.EXPORT_PDF, {
-        responseType: "blob",
       });
       const url = window.URL.createObjectURL(response);
       const link = document.createElement("a");

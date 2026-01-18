@@ -47,6 +47,7 @@ export const API_ENDPOINTS = {
     },
     UTILISATEUR: {
       LOGIN: "/auth/utilisateur/login",
+      LOGOUT: "/auth/utilisateur/logout",
       REGISTER: "/auth/utilisateur/register",
       PROFILE: "/auth/utilisateur/profile",
       UPDATE_PROFILE: "/auth/utilisateur/modifier/profile",
@@ -101,6 +102,11 @@ export const API_ENDPOINTS = {
   ADMIN: {
     USERS: {
       LIST: "/admin/liste-utilisateurs",
+      RESET_PASSWORD_REQUEST: "/admin/utilisateurs/reset-password-request",
+      RESET_PASSWORD: "/admin/utilisateurs/reset-password",
+      VERIFY_EMAIL: "/admin/utilisateurs/verify-email",
+      BASE: "/admin/utilisateurs",
+      EMPTY_TRASH: "/admin/utilisateurs/vider-corbeille",
       BLOCKED: "/admin/liste-utilisateurs-bloques",
       DELETED: "/admin/liste-utilisateurs-supprimes",
       CREATE: "/admin/creer-utilisateur-admin",
@@ -172,7 +178,7 @@ export const API_ENDPOINTS = {
     PERSONAL_DETAIL: (uuid: string) => `/annonces/perso/${uuid}`,
     CREATE: "/annonces",
     DELETE: (uuid: string) => `/annonces/${uuid}`,
-    PUBLISH: "/annonces/publier",
+    PUBLISH: (uuid: string) => `/annonces/${uuid}/publier`,
     RESTORE: (uuid: string) => `/annonces/${uuid}/restore`,
     PUBLISHED_LIST: "/annonces/liste-annoncces-publiees",
     ALL_LIST: "/annonces/liste-annonces",
@@ -224,6 +230,7 @@ export const API_ENDPOINTS = {
     ACTIFS: "/pays/actifs",
     BY_CODE: (code: string) => `/pays/by-code/${code}`,
     BY_NOM: (nom: string) => `/pays/by-nom/${nom}`,
+    TOGGLE_STATUS: (uuid: string) => `/pays/${uuid}/toggle-status`,
     DETAIL: (uuid: string) => `/pays/${uuid}`,
     CREATE: "/pays/creer",
     UPDATE: (uuid: string) => `/pays/${uuid}`,
@@ -287,6 +294,8 @@ export const API_ENDPOINTS = {
   VILLES: {
     LIST: "/villes/liste-ville",
     BY_PAYS: (paysUuid: string) => `/villes/pays/${paysUuid}`,
+    UPDATE: (uuid: string) => `/villes/${uuid}/coordonnees`,
+    DETAIL: (uuid: string) => `/villes/${uuid}`,
     BY_CODE_POSTAL: (codePostal: string) => `/villes/code-postal/${codePostal}`,
     CREATE: "/villes/creer",
     ACTIVATE: (uuid: string) => `/villes/${uuid}/active`,
@@ -422,6 +431,12 @@ export const API_ENDPOINTS = {
     LIST: "/produits",
     ALL: "/produits/tous-produits",
     PUBLISHED: "/produits/published",
+    
+    UNPUBLISH: (uuid: string) => `/produits/${uuid}/restore`,
+    PUBLISH: (uuid: string) => `/produits/${uuid}/restore`,
+    PUBLLIER: "/produits/publier",
+    DELETED: "/produits/deleted",
+    RESTORE: (uuid: string) => `/produits/${uuid}/restore`,
     LISTE_PRODUITS_UTILISATEUR: "/produits/liste-mes-utilisateur-produits",
     LISTE_PRODUITS_UTILISATEUR_BLOQUE:
       "/produits/liste-mes-utilisateur-produits",
@@ -436,12 +451,13 @@ export const API_ENDPOINTS = {
     DETAIL_FAVORIS_UTILISATEUR: "/produits/favoris",
     BY_SLUG: (slug: string) => `/produits/slug/${slug}`,
     CREATE: "/produits/creer",
-    PUBLISH: "/produits/publier",
-    UNPUBLISH: "/produits/unpublish",
     DELETE: (uuid: string) => `/produits/${uuid}`,
     UPDATE_STOCK_PRODUIT: (uuid: string) =>
       `/produits/stock-produit-vendeur/${uuid}`,
     RANDOM_DETAIL: (uuid: string) => `/produits/details/aletoire/${uuid}`,
+    BLOCK: (uuid: string) => `/produits/${uuid}/bloquer`,
+    UNBLOCK: (uuid: string) => `/produits/${uuid}/debloquer`,
+    EXPORT_PDF: "/produits/produit-export-pdf",
   },
 
   // Catégories
@@ -470,6 +486,7 @@ export const API_ENDPOINTS = {
   DONS: {
     LIST: "/dons/liste-tous-dons",
     PUBLISHED: "/dons/liste-don-publies",
+    UNPUBLISH: (uuid: string) => `/dons/${uuid}/restore`,
     VENDEUR_DONS: "/dons/liste-don-vendeur",
     USER_DONS: "/dons/liste-don-utilisateur",
     VENDEUR_BLOCKED: "/dons/liste-dons-bloques-vendeur",

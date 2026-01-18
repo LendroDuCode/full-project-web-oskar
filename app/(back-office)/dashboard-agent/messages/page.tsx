@@ -2,7 +2,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import DashboardHeader from "../../components/DashboardHeader";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faEnvelope,
@@ -88,7 +87,7 @@ interface UtilisateurBase {
   est_bloque: boolean;
   is_deleted: boolean;
   is_admin?: boolean;
-  is_super_admin?: boolean; // Nouveau champ pour les super-admins
+  is_super_admin?: boolean;
   type?: string;
   created_at?: string;
   updated_at?: string;
@@ -114,7 +113,7 @@ interface Message {
   estEnvoye: boolean;
   envoyeLe: string;
   estLu: boolean;
-  dateLecture?: string;
+  dateLecture: string | null; // CORRECTION : null au lieu de string | null | undefined
   dateCreation?: string;
 }
 
@@ -124,7 +123,7 @@ interface MessageReceived {
   message: Message;
   statut: string;
   estLu: boolean;
-  dateLecture?: string;
+  dateLecture?: string | null; // CORRECTION : rendre nullable
   dateReception: string;
 }
 
@@ -535,7 +534,7 @@ export default function ListeMessages() {
     contenu: "",
     type: "NOTIFICATION",
     expediteurNom: "Agent SONEC",
-    expediteurEmail: "", // Sera rempli avec l'email de l'agent connecté
+    expediteurEmail: "",
   });
 
   // Statistiques
@@ -577,7 +576,6 @@ export default function ListeMessages() {
   const fetchSuperAdmins = useCallback(async () => {
     setLoading((prev) => ({ ...prev, superAdmins: true }));
     try {
-      // Utiliser le nouvel endpoint LISTE_ADMIN
       const response = await api.get<{
         data: SuperAdmin[];
         count: number;
@@ -679,7 +677,7 @@ export default function ListeMessages() {
     }
   }, []);
 
-  // Charger les messages reçus
+  // Charger les messages reçus - CORRECTION
   const fetchMessagesRecus = useCallback(async () => {
     setLoading((prev) => ({ ...prev, messages: true }));
     try {
@@ -688,36 +686,50 @@ export default function ListeMessages() {
         API_ENDPOINTS.MESSAGERIE.RECEIVED,
       );
 
-      if (!response) {
+      if (!response || response.length === 0) {
         console.warn("⚠️ Réponse API vide (messages reçus)");
         setMessages([]);
         return;
       }
 
-      // Transformer les données pour correspondre au format attendu
-      const transformedMessages = response
-        .map((item: MessageReceived) => {
-          if (!item) return null;
+      // CORRECTION : Type correct pour la réponse
+      const responseData = response as MessageReceived[];
 
-          return {
-            ...item.message,
-            estLu: item.estLu || false,
-            dateLecture: item.dateLecture || null,
+      // Transformer les données pour correspondre au format attendu
+      const transformedMessages = responseData
+        .map((item: MessageReceived) => {
+          if (!item || !item.message) return null;
+
+          // CORRECTION : Créer un objet Message avec tous les champs requis
+          const transformed: Message = {
+            uuid: item.message.uuid || "",
+            sujet: item.message.sujet || "",
+            contenu: item.message.contenu || "",
+            expediteurNom: item.message.expediteurNom || "",
+            expediteurEmail: item.message.expediteurEmail || "",
+            destinataireEmail: item.message.destinataireEmail || "",
+            type: item.message.type || "NOTIFICATION",
+            estEnvoye: item.message.estEnvoye || false,
             envoyeLe:
               item.dateReception ||
               item.message.envoyeLe ||
               new Date().toISOString(),
+            estLu: item.estLu || false,
+            dateLecture: item.dateLecture || null, // CORRECTION : null au lieu de undefined
+            dateCreation: item.message.dateCreation,
           };
+
+          return transformed;
         })
         .filter((item): item is Message => item !== null);
 
-      console.log("📨 Messages transformés:", transformedMessages);
+      console.log("📨 Messages transformés:", transformedMessages.length);
       setMessages(transformedMessages);
     } catch (err: any) {
       console.error("❌ Error fetching messages:", err);
       setError("Erreur lors du chargement des messages");
 
-      // Données de démonstration adaptées
+      // Données de démonstration adaptées avec types corrects
       const demoMessages: Message[] = [
         {
           uuid: "c5d30cbd-b606-4721-8ec7-5a00f7df9e87",
@@ -731,6 +743,7 @@ export default function ListeMessages() {
           estEnvoye: true,
           envoyeLe: new Date().toISOString(),
           estLu: false,
+          dateLecture: null, // CORRECTION : null au lieu de undefined
         },
         {
           uuid: "2",
@@ -759,36 +772,45 @@ export default function ListeMessages() {
       console.log("🔄 Chargement des messages envoyés...");
       const response = await api.get<Message[]>(API_ENDPOINTS.MESSAGERIE.SENT);
 
-      if (!response) {
+      if (!response || response.length === 0) {
         console.warn("⚠️ Réponse API vide (messages envoyés)");
         setMessagesEnvoyes([]);
         return;
       }
 
-      const formattedMessages = response
-        .map((msg: Message) => {
+      // CORRECTION : S'assurer que les données sont un tableau
+      const responseData = Array.isArray(response) 
+        ? response 
+        : [];
+
+      const formattedMessages = responseData
+        .map((msg: any) => {
           if (!msg) return null;
 
           return {
-            ...msg,
-            type: (msg.type || "notification").toUpperCase(),
-            estLu: msg.estLu || false,
-            dateLecture: msg.dateLecture || null,
-            envoyeLe: msg.envoyeLe || new Date().toISOString(),
+            uuid: msg.uuid || "",
+            sujet: msg.sujet || "",
+            contenu: msg.contenu || "",
             expediteurNom: msg.expediteurNom || "Agent SONEC",
             expediteurEmail: msg.expediteurEmail || agentProfile?.email || "",
+            destinataireEmail: msg.destinataireEmail || "",
+            type: (msg.type || "notification").toUpperCase(),
             estEnvoye: msg.estEnvoye !== undefined ? msg.estEnvoye : true,
-          };
+            envoyeLe: msg.envoyeLe || new Date().toISOString(),
+            estLu: msg.estLu || false,
+            dateLecture: msg.dateLecture || null,
+            dateCreation: msg.dateCreation,
+          } as Message;
         })
         .filter((msg): msg is Message => msg !== null);
 
-      console.log("📤 Messages envoyés transformés:", formattedMessages);
+      console.log("📤 Messages envoyés transformés:", formattedMessages.length);
       setMessagesEnvoyes(formattedMessages);
     } catch (err: any) {
       console.error("❌ Error fetching sent messages:", err);
       setError("Erreur lors du chargement des messages envoyés");
 
-      // Données de démonstration
+      // Données de démonstration avec types corrects
       const demoSentMessages: Message[] = [
         {
           uuid: "sent-1",
@@ -819,6 +841,7 @@ export default function ListeMessages() {
           estEnvoye: true,
           envoyeLe: new Date(Date.now() - 43200000).toISOString(),
           estLu: false,
+          dateLecture: null,
         },
       ];
       setMessagesEnvoyes(demoSentMessages);
