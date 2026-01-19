@@ -986,16 +986,18 @@ export default function ListeAgentsActifsPage() {
 
   return (
     <>
-      *{/* Modal de création d'agent */}
-      <CreateAgentModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onSuccess={() => {
-          setSuccessMessage("Agent créé avec succès !");
-          fetchAgents();
-          setTimeout(() => setSuccessMessage(null), 3000);
-        }}
-      />
+      *
+      {/* Modal de création d'agent
+        <CreateAgentModal
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          onSuccess={() => {
+            setSuccessMessage("Agent créé avec succès !");
+            fetchAgents();
+            setTimeout(() => setSuccessMessage(null), 3000);
+          }}
+        />
+        */}
       {/* Modal de modification d'agent */}
       {/* Modal de modification d'agent */}
       <EditAgentModal

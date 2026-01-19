@@ -1085,12 +1085,19 @@ export default function ListeAgentsBloquesPage() {
 
   return (
     <>
-      {/* Modal de création d'agent */}
-      <CreateAgentModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onSuccess={handleAgentCreated}
-      />
+      {/* Modal de création d'agent
+        <CreateAgentModal
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          onSuccess={handleAgentCreated}
+        />
+
+        <CreateAgentModal
+          isOpen={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          onSuccess={handleAgentCreated}
+        />
+        */}
 
       {/* Modal de modification d'agent */}
       <EditAgentModal
