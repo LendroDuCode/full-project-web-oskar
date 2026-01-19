@@ -44,7 +44,7 @@ import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { api } from "@/lib/api-client";
 import EditAgentModal from "../components/modals/EditAgentModal";
 
-// Types pour les agents
+// Types pour les agents test
 interface Agent {
   uuid: string;
   id: string;
