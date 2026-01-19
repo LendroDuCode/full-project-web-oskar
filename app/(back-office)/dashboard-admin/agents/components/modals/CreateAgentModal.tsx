@@ -505,8 +505,16 @@ export default function CreateAgentModal({
     }));
   };
 
+  // Type pour la force du mot de passe
+  interface PasswordStrength {
+    score: number;
+    label: string;
+    color: string;
+    actualScore?: number;
+  }
+
   // Calculer la force du mot de passe
-  const getPasswordStrength = () => {
+  const getPasswordStrength = (): PasswordStrength => {
     if (!formData.mot_de_passe)
       return { score: 0, label: "Aucun", color: colors.oskar.grey };
 
@@ -522,7 +530,7 @@ export default function CreateAgentModal({
     if (/[0-9]/.test(formData.mot_de_passe)) score += 1;
     if (/[^A-Za-z0-9]/.test(formData.mot_de_passe)) score += 1;
 
-    const strengths = [
+    const strengths: PasswordStrength[] = [
       { label: "Très faible", color: "#ef4444", score: 1 },
       { label: "Faible", color: "#f97316", score: 2 },
       { label: "Moyen", color: "#eab308", score: 3 },
@@ -531,8 +539,13 @@ export default function CreateAgentModal({
       { label: "Très fort", color: colors.oskar.green, score: 6 },
     ];
 
-    const strength = strengths[Math.min(score, strengths.length - 1)];
-    return { ...strength, actualScore: score };
+    const strengthIndex = Math.min(score, strengths.length - 1);
+    const strength = strengths[strengthIndex];
+
+    return {
+      ...strength,
+      actualScore: score,
+    };
   };
 
   // Si la modal n'est pas ouverte, ne rien afficher
@@ -1110,11 +1123,21 @@ export default function CreateAgentModal({
                               <small className="fw-semibold">
                                 Force du mot de passe:
                               </small>
+                              <small
+                                className="fw-bold"
+                                style={{ color: passwordStrength.color }}
+                              >
+                                {passwordStrength.label}
+                              </small>
                             </div>
                             <div className="progress" style={{ height: "6px" }}>
                               <div
                                 className="progress-bar"
                                 role="progressbar"
+                                style={{
+                                  width: `${((passwordStrength.actualScore || 0) / 6) * 100}%`,
+                                  backgroundColor: passwordStrength.color,
+                                }}
                               ></div>
                             </div>
                           </div>
@@ -1143,6 +1166,7 @@ export default function CreateAgentModal({
                                 colors.oskar.green;
                             }}
                             onMouseLeave={(e) => {
+                              e.currentTarget.style.background = `${colors.oskar.green}10`;
                               e.currentTarget.style.borderColor = `${colors.oskar.green}30`;
                             }}
                           >
