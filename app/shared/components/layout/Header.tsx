@@ -629,7 +629,7 @@ const Header: FC = () => {
                   backgroundColor:
                     hoveredButton === "publish"
                       ? colors.oskar.greenHover
-                      : colors.oskar.green,
+                      : colors.oskar.orange,
                   color: "white",
                   padding: "0.5rem 1.25rem",
                   fontWeight: 600,
