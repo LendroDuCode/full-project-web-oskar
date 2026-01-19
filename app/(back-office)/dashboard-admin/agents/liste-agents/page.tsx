@@ -42,7 +42,6 @@ import {
 // Import des services et hooks
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { api } from "@/lib/api-client";
-import CreateAgentModal from "../components/modals/CreateAgentModal";
 import EditAgentModal from "../components/modals/EditAgentModal";
 
 // Types pour les agents

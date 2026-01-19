@@ -43,7 +43,6 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
-import CreateAgentModal from "../../agents/components/modals/CreateAgentModal";
 import EditAgentModal from "../../agents/components/modals/EditAgentModal";
 
 // Types
