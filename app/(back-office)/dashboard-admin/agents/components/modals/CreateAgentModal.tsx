@@ -64,6 +64,14 @@ interface CreateAgentModalProps {
   onSuccess?: () => void;
 }
 
+// Type pour la force du mot de passe - avec actualScore requis
+interface PasswordStrength {
+  score: number;
+  label: string;
+  color: string;
+  actualScore: number;
+}
+
 export default function CreateAgentModal({
   isOpen,
   onClose,
@@ -505,18 +513,16 @@ export default function CreateAgentModal({
     }));
   };
 
-  // Type pour la force du mot de passe
-  interface PasswordStrength {
-    score: number;
-    label: string;
-    color: string;
-    actualScore?: number;
-  }
-
   // Calculer la force du mot de passe
   const getPasswordStrength = (): PasswordStrength => {
-    if (!formData.mot_de_passe)
-      return { score: 0, label: "Aucun", color: colors.oskar.grey };
+    if (!formData.mot_de_passe) {
+      return {
+        score: 0,
+        label: "Aucun",
+        color: colors.oskar.grey,
+        actualScore: 0,
+      };
+    }
 
     let score = 0;
 
@@ -530,13 +536,18 @@ export default function CreateAgentModal({
     if (/[0-9]/.test(formData.mot_de_passe)) score += 1;
     if (/[^A-Za-z0-9]/.test(formData.mot_de_passe)) score += 1;
 
-    const strengths: PasswordStrength[] = [
-      { label: "Très faible", color: "#ef4444", score: 1 },
-      { label: "Faible", color: "#f97316", score: 2 },
-      { label: "Moyen", color: "#eab308", score: 3 },
-      { label: "Bon", color: "#84cc16", score: 4 },
-      { label: "Fort", color: "#22c55e", score: 5 },
-      { label: "Très fort", color: colors.oskar.green, score: 6 },
+    const strengths = [
+      { label: "Très faible", color: "#ef4444", score: 1, actualScore: 0 },
+      { label: "Faible", color: "#f97316", score: 2, actualScore: 0 },
+      { label: "Moyen", color: "#eab308", score: 3, actualScore: 0 },
+      { label: "Bon", color: "#84cc16", score: 4, actualScore: 0 },
+      { label: "Fort", color: "#22c55e", score: 5, actualScore: 0 },
+      {
+        label: "Très fort",
+        color: colors.oskar.green,
+        score: 6,
+        actualScore: 0,
+      },
     ];
 
     const strengthIndex = Math.min(score, strengths.length - 1);
@@ -1135,7 +1146,7 @@ export default function CreateAgentModal({
                                 className="progress-bar"
                                 role="progressbar"
                                 style={{
-                                  width: `${((passwordStrength.actualScore || 0) / 6) * 100}%`,
+                                  width: `${(passwordStrength.actualScore / 6) * 100}%`,
                                   backgroundColor: passwordStrength.color,
                                 }}
                               ></div>
