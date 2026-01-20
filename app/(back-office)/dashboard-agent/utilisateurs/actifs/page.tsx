@@ -755,10 +755,11 @@ export default function ListeUtilisateursActifsPage() {
         });
 
         // Nettoyer les paramètres undefined
-        Object.keys(queryParams).forEach((key) => {
+        Object.keys(params || {}).forEach((key) => {
           if (
-            queryParams.get(key) === undefined ||
-            queryParams.get(key) === null
+            params[key] === undefined ||
+            params[key] === null ||
+            params[key] === ""
           ) {
             queryParams.delete(key);
           }
@@ -768,35 +769,68 @@ export default function ListeUtilisateursActifsPage() {
         console.log("📡 Requête API:", endpoint);
 
         const response = await api.get(endpoint);
+        console.log("📥 Réponse API complète:", response);
+        console.log("📥 Type de réponse:", typeof response);
+        console.log("📥 Est-ce un tableau?", Array.isArray(response));
 
-        if (response.data && Array.isArray(response.data.data)) {
-          setUsers(response.data.data);
+        // Gérer différentes structures de réponse
+        let usersData: LocalUser[] = [];
+        let totalCount = 0;
+        let currentPage = 1;
+        let totalPages = 1;
+        let perPage = pagination.limit;
 
-          // Mettre à jour la pagination si disponible
-          if (response.data.meta) {
-            setPagination({
-              page: response.data.meta.current_page || 1,
-              limit: response.data.meta.per_page || pagination.limit,
-              total: response.data.meta.total || response.data.data.length,
-              pages: response.data.meta.last_page || 1,
-            });
-          } else {
-            // Fallback si pas de métadonnées
-            setPagination((prev) => ({
-              ...prev,
-              page: params?.page || prev.page,
-              limit: params?.limit || prev.limit,
-              total: response.data.data.length,
-              pages: Math.ceil(
-                response.data.data.length / (params?.limit || prev.limit),
-              ),
-            }));
+        if (Array.isArray(response)) {
+          // Cas 1: L'API retourne directement un tableau
+          usersData = response;
+          totalCount = response.length;
+          totalPages = Math.ceil(totalCount / perPage);
+        } else if (response && typeof response === "object") {
+          // Cas 2: L'API retourne un objet avec différentes structures possibles
+          if (response.data && Array.isArray(response.data)) {
+            // Structure: { data: [], ... }
+            usersData = response.data;
+
+            if (response.meta) {
+              // Structure avec métadonnées
+              totalCount = response.meta.total || response.data.length;
+              currentPage = response.meta.current_page || 1;
+              perPage = response.meta.per_page || pagination.limit;
+              totalPages =
+                response.meta.last_page || Math.ceil(totalCount / perPage);
+            } else if (response.count !== undefined) {
+              // Structure: { data: [], count: X, ... }
+              totalCount = response.count;
+              totalPages = Math.ceil(totalCount / perPage);
+            } else {
+              // Pas de métadonnées, utiliser la longueur du tableau
+              totalCount = response.data.length;
+              totalPages = Math.ceil(totalCount / perPage);
+            }
+          } else if (Array.isArray(response)) {
+            // Fallback: directement un tableau
+            usersData = response;
+            totalCount = response.length;
+            totalPages = Math.ceil(totalCount / perPage);
           }
-        } else {
-          console.error("❌ Format de réponse inattendu:", response.data);
-          setError("Format de réponse inattendu du serveur");
-          setUsers([]);
         }
+
+        console.log("📊 Données extraites:", {
+          usersCount: usersData.length,
+          totalCount,
+          currentPage,
+          perPage,
+          totalPages,
+        });
+
+        // Mettre à jour l'état
+        setUsers(usersData);
+        setPagination({
+          page: currentPage,
+          limit: perPage,
+          total: totalCount,
+          pages: totalPages,
+        });
       } catch (err: any) {
         console.error("❌ Erreur lors du chargement des utilisateurs:", err);
 
@@ -2009,7 +2043,7 @@ export default function ListeUtilisateursActifsPage() {
                                 role="group"
                               >
                                 <Link
-                                  href={`/dashboard-admin/utilisateurs/${utilisateur.uuid}`}
+                                  href={`/dashboard-agent/utilisateurs/${utilisateur.uuid}`}
                                   className="btn btn-outline-primary"
                                   title="Voir détails"
                                 >

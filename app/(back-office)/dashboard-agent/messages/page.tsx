@@ -779,9 +779,7 @@ export default function ListeMessages() {
       }
 
       // CORRECTION : S'assurer que les données sont un tableau
-      const responseData = Array.isArray(response) 
-        ? response 
-        : [];
+      const responseData = Array.isArray(response) ? response : [];
 
       const formattedMessages = responseData
         .map((msg: any) => {

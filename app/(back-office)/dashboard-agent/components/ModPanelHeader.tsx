@@ -184,7 +184,7 @@ export default function DashboardHeader({
 
   const handleSettingsClick = () => {
     setShowUserMenu(false);
-    router.push("/dashboard-agent/settings");
+    router.push("/dashboard-agent/parametres");
   };
 
   // Avatar par défaut avec les initiales
