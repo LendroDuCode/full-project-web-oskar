@@ -515,22 +515,6 @@ export default function DashboardHeaderVendeur({
                 </span>
               </button>
 
-              {/* Annonces */}
-              <button
-                onClick={handleAnnoncesClick}
-                onKeyDown={(e) => handleKeyDown(e, handleAnnoncesClick)}
-                className="btn btn-light btn-sm p-2"
-                aria-label="Mes annonces"
-                title="Mes annonces"
-                style={{ borderRadius: "8px" }}
-                disabled={loading}
-              >
-                <i
-                  className="fa-solid fa-list text-muted"
-                  aria-hidden="true"
-                ></i>
-              </button>
-
               {/* Favoris */}
               <Link
                 href="/dashboard-vendeur/favoris"
@@ -765,20 +749,6 @@ export default function DashboardHeaderVendeur({
                           aria-hidden="true"
                         ></i>
                         <span>Mon profil</span>
-                      </button>
-
-                      <button
-                        onClick={handleAnnoncesClick}
-                        onKeyDown={(e) => handleKeyDown(e, handleAnnoncesClick)}
-                        className="btn btn-link text-dark text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
-                        role="menuitem"
-                      >
-                        <i
-                          className="fa-solid fa-list text-muted"
-                          style={{ width: "20px" }}
-                          aria-hidden="true"
-                        ></i>
-                        <span>Mes annonces</span>
                       </button>
 
                       <button
