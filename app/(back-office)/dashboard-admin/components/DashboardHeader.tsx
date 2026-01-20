@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { api } from "@/lib/api-client";
+import PublishAdModal from "@/app/(front-office)/publication-annonce/page";
 import HelpModal from "./HelpModal";
 
 interface HeaderProps {
@@ -53,46 +54,101 @@ export default function DashboardHeader({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showPublishModal, setShowPublishModal] = useState(false);
 
   const router = useRouter();
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  const userMenuButtonRef = useRef<HTMLButtonElement>(null);
 
-  // Récupérer le profil de l'administrateur
+  // Fermeture du menu au clic externe
   useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const response = await api.get(API_ENDPOINTS.AUTH.ADMIN.PROFILE);
-
-        console.log("Profil reçu:", response.data);
-
-        if (response.data?.data) {
-          setProfile(response.data.data);
-        } else if (response.data) {
-          setProfile(response.data);
-        }
-      } catch (err: any) {
-        console.error("Erreur lors de la récupération du profil:", err);
-        setError(
-          err.response?.data?.message || "Impossible de charger le profil",
-        );
-      } finally {
-        setLoading(false);
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        userMenuRef.current &&
+        !userMenuRef.current.contains(event.target as Node) &&
+        userMenuButtonRef.current &&
+        !userMenuButtonRef.current.contains(event.target as Node)
+      ) {
+        setShowUserMenu(false);
       }
     };
 
-    fetchProfile();
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
   }, []);
+
+  // Navigation clavier
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && showUserMenu) {
+        setShowUserMenu(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showUserMenu]);
+
+  // Récupérer le profil de l'administrateur
+  const fetchProfile = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await api.get(API_ENDPOINTS.AUTH.ADMIN.PROFILE);
+
+      console.log("Profil reçu:", response.data);
+
+      if (response.data?.data) {
+        setProfile(response.data.data);
+      } else if (response.data) {
+        setProfile(response.data);
+      }
+    } catch (err: any) {
+      console.error("Erreur lors de la récupération du profil:", err);
+      setError(
+        err.response?.data?.message || "Impossible de charger le profil",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchProfile();
+  }, [fetchProfile]);
+
+  // Gestion des événements
+  const handlePublish = useCallback(() => {
+    setShowPublishModal(true);
+  }, []);
+
+  const handleClosePublishModal = useCallback(() => {
+    setShowPublishModal(false);
+  }, []);
+
+  const handleHelpClick = useCallback(() => {
+    setShowHelpModal(true);
+  }, []);
+
+  const handleCloseHelpModal = useCallback(() => {
+    setShowHelpModal(false);
+  }, []);
+
+  // Pour l'admin, on considère qu'il est toujours connecté
+  const handleLoginRequired = useCallback(() => {
+    // Pour l'admin, on peut rediriger vers la page de connexion admin
+    // ou simplement fermer le modal
+    handleClosePublishModal();
+  }, [handleClosePublishModal]);
 
   const handleExport = () => {
     console.log("Exporting dashboard data...");
     alert("Export fonctionnel - À implémenter");
-  };
-
-  const handlePublish = () => {
-    console.log("Publishing content...");
-    router.push("/publier-annonce");
   };
 
   const handleNotificationClick = () => {
@@ -139,31 +195,36 @@ export default function DashboardHeader({
     router.push("/dashboard-admin/settings");
   };
 
-  // Avatar par défaut avec les initiales
-  const getDefaultAvatar = (nom: string) => {
+  // Utilitaires
+  const getDefaultAvatar = useCallback((nom: string) => {
     const initials = nom ? nom.charAt(0).toUpperCase() : "A";
     return `https://ui-avatars.com/api/?name=${initials}&background=16a34a&color=fff&size=40`;
-  };
+  }, []);
 
-  // Formater le nom complet
-  const getFullName = () => {
+  const getFullName = useCallback(() => {
     if (!profile) return "Administrateur";
     return profile.nom_complet || profile.nom || "Administrateur";
-  };
+  }, [profile]);
 
-  // Récupérer l'avatar - VERSION SIMPLIFIÉE
-  const getAvatarUrl = () => {
+  const getDisplayName = useCallback(() => {
+    if (!profile) return "Administrateur";
+
+    if (profile.nom_complet) {
+      const parts = profile.nom_complet.split(" ");
+      return parts[0] || "Administrateur";
+    }
+
+    return profile.nom || "Administrateur";
+  }, [profile]);
+
+  const getAvatarUrl = useCallback(() => {
     if (!profile) return getDefaultAvatar("A");
 
     if (profile.avatar) {
-      // Si l'avatar est déjà une URL complète, la retourner
       if (profile.avatar.startsWith("http")) {
         return profile.avatar;
       }
 
-      // Sinon, construire l'URL complète
-      // Votre API retourne: "admins%2F1767959717523-285269225.png"
-      // Nous devons décoder et construire l'URL complète
       try {
         const decodedAvatar = decodeURIComponent(profile.avatar);
         return `http://localhost:3005/api/files/${decodedAvatar}`;
@@ -174,25 +235,31 @@ export default function DashboardHeader({
     }
 
     return getDefaultAvatar(profile.nom || "A");
-  };
+  }, [profile, getDefaultAvatar]);
 
-  // Obtenir le prénom pour l'affichage
-  const getDisplayName = () => {
-    if (!profile) return "Administrateur";
-
-    if (profile.nom_complet) {
-      const parts = profile.nom_complet.split(" ");
-      return parts[0] || "Administrateur";
-    }
-
-    return profile.nom || "Administrateur";
-  };
-
-  // Obtenir le rôle formaté
-  const getRoleDisplay = () => {
+  const getRoleDisplay = useCallback(() => {
     if (!profile) return "Admin";
     return profile.isSuperAdmin ? "Super Admin" : profile.role || "Admin";
+  }, [profile]);
+
+  // Gestion des touches clavier
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent, handler: () => void) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        handler();
+      }
+    },
+    [],
+  );
+
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const target = e.target as HTMLImageElement;
+    target.src = getDefaultAvatar(profile?.nom || "A");
   };
+
+  // L'admin est considéré comme toujours connecté dans ce contexte
+  const isAdminLoggedIn = !!profile;
 
   return (
     <>
@@ -283,10 +350,11 @@ export default function DashboardHeader({
 
           {/* Actions à droite - Groupe compact */}
           <div className="d-flex align-items-center gap-2 gap-md-3 ms-auto flex-shrink-0">
-            {/* Bouton Aider */}
+            {/* Bouton Aide */}
             {showHelpButton && (
               <button
-                onClick={() => setShowHelpModal(true)}
+                onClick={handleHelpClick}
+                onKeyDown={(e) => handleKeyDown(e, handleHelpClick)}
                 className="btn btn-outline-primary d-flex align-items-center gap-2 px-3 py-2"
                 aria-label="Aide et support"
                 title="Aide et support"
@@ -295,10 +363,24 @@ export default function DashboardHeader({
                   fontWeight: "500",
                   whiteSpace: "nowrap",
                   minWidth: "fit-content",
+                  transition:
+                    "background-color 0.3s, border-color 0.3s, transform 0.2s",
                 }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = "#e7f1ff";
+                  e.currentTarget.style.transform = "translateY(-1px)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "";
+                  e.currentTarget.style.transform = "translateY(0)";
+                }}
+                disabled={loading}
               >
-                <i className="fa-solid fa-question-circle"></i>
-                <span>Aider</span>
+                <i
+                  className="fa-solid fa-question-circle"
+                  aria-hidden="true"
+                ></i>
+                <span>Aide</span>
               </button>
             )}
 
@@ -306,6 +388,7 @@ export default function DashboardHeader({
             {showPublishButton && (
               <button
                 onClick={handlePublish}
+                onKeyDown={(e) => handleKeyDown(e, handlePublish)}
                 className="btn btn-success d-flex align-items-center gap-2 px-3 py-2"
                 aria-label="Publier une annonce"
                 title="Publier une annonce"
@@ -316,10 +399,23 @@ export default function DashboardHeader({
                   fontWeight: "500",
                   whiteSpace: "nowrap",
                   minWidth: "fit-content",
+                  transition:
+                    "background-color 0.3s, border-color 0.3s, transform 0.2s",
                 }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = "#15803d";
+                  e.currentTarget.style.borderColor = "#15803d";
+                  e.currentTarget.style.transform = "translateY(-1px)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = "#16a34a";
+                  e.currentTarget.style.borderColor = "#16a34a";
+                  e.currentTarget.style.transform = "translateY(0)";
+                }}
+                disabled={loading}
               >
-                <i className="fa-solid fa-plus"></i>
-                <span>Publier</span>
+                <i className="fa-solid fa-plus" aria-hidden="true"></i>
+                <span>Publier une annonce</span>
               </button>
             )}
 
@@ -329,12 +425,17 @@ export default function DashboardHeader({
               {showNotification && (
                 <button
                   onClick={handleNotificationClick}
+                  onKeyDown={(e) => handleKeyDown(e, handleNotificationClick)}
                   className="btn btn-light btn-sm position-relative p-2"
                   aria-label="Notifications"
                   title="Notifications"
                   style={{ borderRadius: "8px" }}
+                  disabled={loading}
                 >
-                  <i className="fa-regular fa-bell text-muted"></i>
+                  <i
+                    className="fa-regular fa-bell text-muted"
+                    aria-hidden="true"
+                  ></i>
                   {notificationCount > 0 && (
                     <span
                       className="position-absolute top-0 end-0 translate-middle bg-danger rounded-circle"
@@ -356,6 +457,7 @@ export default function DashboardHeader({
               {showExportButton && (
                 <button
                   onClick={handleExport}
+                  onKeyDown={(e) => handleKeyDown(e, handleExport)}
                   className="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1 px-2 py-2"
                   aria-label="Exporter les données"
                   title="Exporter"
@@ -364,8 +466,9 @@ export default function DashboardHeader({
                     whiteSpace: "nowrap",
                     borderRadius: "8px",
                   }}
+                  disabled={loading}
                 >
-                  <i className="fa-solid fa-download"></i>
+                  <i className="fa-solid fa-download" aria-hidden="true"></i>
                   <span className="d-none d-md-inline">Exporter</span>
                 </button>
               )}
@@ -374,35 +477,54 @@ export default function DashboardHeader({
             {/* Menu utilisateur avec avatar */}
             <div className="position-relative ms-1">
               <button
+                ref={userMenuButtonRef}
                 onClick={() => setShowUserMenu(!showUserMenu)}
+                onKeyDown={(e) =>
+                  handleKeyDown(e, () => setShowUserMenu(!showUserMenu))
+                }
                 className="btn p-0 d-flex align-items-center gap-2 text-decoration-none"
                 aria-expanded={showUserMenu}
                 aria-label="Menu utilisateur"
+                aria-haspopup="true"
                 style={{ whiteSpace: "nowrap" }}
                 disabled={loading}
+                id="admin-menu-button"
               >
                 <div className="d-flex align-items-center gap-2">
                   {loading ? (
                     <div
                       className="rounded-circle border border-2 border-success d-flex align-items-center justify-content-center"
                       style={{ width: "40px", height: "40px" }}
+                      aria-label="Chargement du profil"
                     >
-                      <span className="spinner-border spinner-border-sm text-success"></span>
+                      <span
+                        className="spinner-border spinner-border-sm text-success"
+                        aria-hidden="true"
+                      ></span>
                     </div>
                   ) : (
                     <div className="position-relative">
                       <img
                         src={getAvatarUrl()}
-                        alt={getFullName()}
+                        alt={`Avatar de ${getFullName()}`}
                         width={40}
                         height={40}
                         className="rounded-circle border border-2 border-success"
                         style={{ objectFit: "cover" }}
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.src = getDefaultAvatar(profile?.nom || "A");
-                        }}
+                        onError={handleImageError}
                       />
+                      {profile?.is_verified && (
+                        <div
+                          className="position-absolute bottom-0 end-0 bg-success rounded-circle border border-2 border-white d-flex align-items-center justify-content-center"
+                          style={{ width: "16px", height: "16px" }}
+                          aria-label="Compte vérifié"
+                        >
+                          <i
+                            className="fa-solid fa-check text-white"
+                            style={{ fontSize: "10px" }}
+                          ></i>
+                        </div>
+                      )}
                     </div>
                   )}
                   <div className="d-none d-xl-block text-start">
@@ -416,91 +538,159 @@ export default function DashboardHeader({
                       className="text-muted"
                       style={{ fontSize: "0.75rem", lineHeight: 1.2 }}
                     >
-                      {profile?.email || "Chargement..."}
+                      {profile?.email || "Administrateur"}
                     </div>
                   </div>
                   <i
-                    className={`fa-solid fa-chevron-down text-muted ${showUserMenu ? "rotate-180" : ""}`}
+                    className={`fa-solid fa-chevron-down text-muted transition-transform ${showUserMenu ? "rotate-180" : ""}`}
+                    aria-hidden="true"
                   ></i>
                 </div>
               </button>
 
               {/* Menu déroulant */}
               {showUserMenu && (
-                <div
-                  className="position-absolute end-0 mt-2 bg-white border rounded shadow-lg z-3"
-                  style={{ minWidth: "200px" }}
-                >
-                  {profile && (
-                    <div className="p-3 border-bottom">
-                      <div className="fw-medium">{getFullName()}</div>
-                      <div className="text-muted small">{profile.email}</div>
-                      {profile.telephone && (
-                        <div className="text-muted small mt-1">
-                          <i className="fa-solid fa-phone me-1"></i>
-                          {profile.telephone}
+                <>
+                  <div
+                    className="position-fixed top-0 left-0 w-100 h-100 z-2"
+                    onClick={() => setShowUserMenu(false)}
+                    style={{ background: "transparent" }}
+                    aria-hidden="true"
+                  />
+                  <div
+                    ref={userMenuRef}
+                    className="position-absolute end-0 mt-2 bg-white border rounded shadow-lg z-3"
+                    style={{ minWidth: "280px" }}
+                    role="menu"
+                    aria-labelledby="admin-menu-button"
+                  >
+                    {profile && (
+                      <div className="p-3 border-bottom">
+                        <div className="d-flex align-items-center gap-2 mb-2">
+                          <img
+                            src={getAvatarUrl()}
+                            alt={getFullName()}
+                            width={48}
+                            height={48}
+                            className="rounded-circle border border-2 border-success"
+                            style={{ objectFit: "cover" }}
+                            onError={handleImageError}
+                          />
+                          <div>
+                            <div className="fw-medium d-flex align-items-center">
+                              {getFullName()}
+                              {profile.is_verified && (
+                                <i
+                                  className="fa-solid fa-check-circle text-success ms-1"
+                                  title="Compte vérifié"
+                                  aria-label="Compte vérifié"
+                                ></i>
+                              )}
+                            </div>
+                            <div className="text-muted small">
+                              {profile.email}
+                            </div>
+                          </div>
                         </div>
-                      )}
-                      {profile.civilite && (
-                        <div className="text-muted small mt-1">
-                          <i className="fa-solid fa-user-tie me-1"></i>
-                          {profile.civilite.libelle}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="py-2">
-                    <button
-                      onClick={handleProfileClick}
-                      className="btn btn-link text-dark text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
-                    >
-                      <i className="fa-solid fa-user text-muted"></i>
-                      <span>Mon profil</span>
-                    </button>
-
-                    <button
-                      onClick={handleSettingsClick}
-                      className="btn btn-link text-dark text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
-                    >
-                      <i className="fa-solid fa-cog text-muted"></i>
-                      <span>Paramètres</span>
-                    </button>
-
-                    <div className="border-top my-2"></div>
-
-                    <button
-                      onClick={handleLogout}
-                      disabled={isLoggingOut}
-                      className="btn btn-link text-danger text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
-                    >
-                      {isLoggingOut ? (
-                        <>
+                        <div className="d-flex flex-wrap gap-1">
                           <span
-                            className="spinner-border spinner-border-sm"
-                            role="status"
-                          ></span>
-                          <span>Déconnexion...</span>
-                        </>
-                      ) : (
-                        <>
-                          <i className="fa-solid fa-right-from-bracket"></i>
-                          <span>Se déconnecter</span>
-                        </>
-                      )}
-                    </button>
+                            className={`badge ${profile.isSuperAdmin ? "bg-purple" : "bg-success"}`}
+                            aria-label={`Rôle: ${getRoleDisplay()}`}
+                          >
+                            <i
+                              className={`fa-solid ${profile.isSuperAdmin ? "fa-crown" : "fa-user-shield"} me-1`}
+                            ></i>
+                            {getRoleDisplay()}
+                          </span>
+                          {profile.is_verified && (
+                            <span
+                              className="badge bg-success"
+                              aria-label="Compte vérifié"
+                            >
+                              <i className="fa-solid fa-check me-1"></i>
+                              Vérifié
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="py-2">
+                      <button
+                        onClick={handleProfileClick}
+                        onKeyDown={(e) => handleKeyDown(e, handleProfileClick)}
+                        className="btn btn-link text-dark text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
+                        role="menuitem"
+                      >
+                        <i
+                          className="fa-solid fa-user text-muted"
+                          style={{ width: "20px" }}
+                          aria-hidden="true"
+                        ></i>
+                        <span>Mon profil</span>
+                      </button>
+
+                      <button
+                        onClick={handleSettingsClick}
+                        onKeyDown={(e) => handleKeyDown(e, handleSettingsClick)}
+                        className="btn btn-link text-dark text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
+                        role="menuitem"
+                      >
+                        <i
+                          className="fa-solid fa-cog text-muted"
+                          style={{ width: "20px" }}
+                          aria-hidden="true"
+                        ></i>
+                        <span>Paramètres</span>
+                      </button>
+
+                      <div className="border-top my-2" role="separator"></div>
+
+                      <button
+                        onClick={handleLogout}
+                        onKeyDown={(e) => handleKeyDown(e, handleLogout)}
+                        disabled={isLoggingOut}
+                        className="btn btn-link text-danger text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
+                        role="menuitem"
+                      >
+                        {isLoggingOut ? (
+                          <>
+                            <span
+                              className="spinner-border spinner-border-sm"
+                              role="status"
+                              style={{ width: "20px" }}
+                              aria-hidden="true"
+                            ></span>
+                            <span>Déconnexion...</span>
+                          </>
+                        ) : (
+                          <>
+                            <i
+                              className="fa-solid fa-right-from-bracket text-muted"
+                              style={{ width: "20px" }}
+                              aria-hidden="true"
+                            ></i>
+                            <span>Se déconnecter</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
-                </div>
+                </>
               )}
             </div>
           </div>
         </div>
 
-        {/* Styles */}
         <style jsx>{`
           .rotate-180 {
             transform: rotate(180deg);
+          }
+          .transition-transform {
             transition: transform 0.3s ease;
+          }
+          .z-2 {
+            z-index: 1020;
           }
           .z-3 {
             z-index: 1030;
@@ -508,14 +698,19 @@ export default function DashboardHeader({
           .hover-bg-light:hover {
             background-color: #f8f9fa;
           }
-          .hover-text-dark:hover {
-            color: #1f2937 !important;
-          }
         `}</style>
       </header>
 
+      {/* Modal de publication d'annonce */}
+      <PublishAdModal
+        visible={showPublishModal}
+        onHide={handleClosePublishModal}
+        isLoggedIn={isAdminLoggedIn}
+        onLoginRequired={handleLoginRequired}
+      />
+
       {/* Modal d'aide */}
-      <HelpModal show={showHelpModal} onClose={() => setShowHelpModal(false)} />
+      <HelpModal show={showHelpModal} onClose={handleCloseHelpModal} />
     </>
   );
 }

@@ -212,7 +212,8 @@ const MessageItem = ({
   };
 
   const getTypeColor = () => {
-    const type = message.type.toUpperCase();
+    // Vérifier si le type existe et le sécuriser
+    const type = (message.type || "").toUpperCase();
     switch (type) {
       case "ALERT":
         return "danger";
@@ -228,7 +229,8 @@ const MessageItem = ({
   };
 
   const getTypeIcon = () => {
-    const type = message.type.toUpperCase();
+    // Vérifier si le type existe et le sécuriser
+    const type = (message.type || "").toUpperCase();
     switch (type) {
       case "ALERT":
         return faBell;
@@ -567,7 +569,6 @@ export default function ListeMessages() {
   }, []);
 
   // Charger les messages reçus
-  // Charger les messages reçus
   const fetchMessagesRecus = useCallback(async () => {
     setLoading((prev) => ({ ...prev, messages: true }));
     try {
@@ -576,7 +577,9 @@ export default function ListeMessages() {
         API_ENDPOINTS.MESSAGERIE.RECEIVED,
       );
 
-      // Vérifier la structure de la réponse
+      // Vérifier et déboguer la réponse
+      console.log("📨 Réponse brute de l'API:", response);
+
       if (!response) {
         console.warn("⚠️ Réponse API vide (messages reçus)");
         setMessages([]);
@@ -584,25 +587,48 @@ export default function ListeMessages() {
       }
 
       // Transformer les données pour correspondre au format attendu
-      // Dans fetchMessagesRecus, modifiez la transformation :
-      // Mettez à jour la transformation dans fetchMessagesRecus :
       const transformedMessages = (Array.isArray(response) ? response : [])
         .map((item: any) => {
           if (!item) return null;
-          return {
-            estLu: item.estLu,
-            dateLecture: item.dateLecture || null,
-            envoyeLe: item.envoyeLe,
-            uuid: item.uuid,
-            sujet: item.sujet,
-            contenu: item.contenu,
-            expediteurNom: item.expediteurNom,
-            expediteurEmail: item.expediteurEmail,
-            destinataireEmail: item.destinataireEmail,
-            type: item.type,
-            estEnvoye: item.estEnvoye,
-            dateCreation: item.dateCreation,
-          } as Message; // <-- Ajoutez "as Message" pour le type assertion
+
+          // Si l'API retourne directement un objet Message
+          if (item.message) {
+            const msg = item.message;
+            return {
+              estLu: item.estLu || false,
+              dateLecture: item.dateLecture || null,
+              envoyeLe:
+                msg.envoyeLe || item.dateReception || new Date().toISOString(),
+              uuid: msg.uuid || item.uuid || `msg-${Date.now()}`,
+              sujet: msg.sujet || "Sans sujet",
+              contenu: msg.contenu || "",
+              expediteurNom: msg.expediteurNom || "Expéditeur inconnu",
+              expediteurEmail: msg.expediteurEmail || "inconnu@exemple.com",
+              destinataireEmail:
+                msg.destinataireEmail || "destinataire@exemple.com",
+              type: (msg.type || "notification").toUpperCase(), // Sécuriser et formater le type
+              estEnvoye: msg.estEnvoye !== undefined ? msg.estEnvoye : true,
+              dateCreation: msg.dateCreation || item.dateReception,
+            } as Message;
+          } else {
+            // Si l'API retourne directement un message sans wrapper
+            return {
+              estLu: item.estLu || false,
+              dateLecture: item.dateLecture || null,
+              envoyeLe:
+                item.envoyeLe || item.dateReception || new Date().toISOString(),
+              uuid: item.uuid || `msg-${Date.now()}`,
+              sujet: item.sujet || "Sans sujet",
+              contenu: item.contenu || "",
+              expediteurNom: item.expediteurNom || "Expéditeur inconnu",
+              expediteurEmail: item.expediteurEmail || "inconnu@exemple.com",
+              destinataireEmail:
+                item.destinataireEmail || "destinataire@exemple.com",
+              type: (item.type || "notification").toUpperCase(), // Sécuriser et formater le type
+              estEnvoye: item.estEnvoye !== undefined ? item.estEnvoye : true,
+              dateCreation: item.dateCreation || item.dateReception,
+            } as Message;
+          }
         })
         .filter((item): item is Message => item !== null);
 
@@ -612,7 +638,7 @@ export default function ListeMessages() {
       console.error("❌ Error fetching messages:", err);
       setError("Erreur lors du chargement des messages");
 
-      // Données de démonstration adaptées au nouveau format
+      // Données de démonstration avec type sécurisé
       const demoMessages: Message[] = [
         {
           uuid: "c5d30cbd-b606-4721-8ec7-5a00f7df9e87",
@@ -622,7 +648,7 @@ export default function ListeMessages() {
           expediteurNom: "N'GUESSAN Jessica Carine",
           expediteurEmail: "jessica.nguessan@agent.com",
           destinataireEmail: "admin@sonec.com",
-          type: "notification",
+          type: "NOTIFICATION", // Utiliser le format majuscule
           estEnvoye: true,
           envoyeLe: new Date().toISOString(),
           estLu: false,
@@ -635,7 +661,7 @@ export default function ListeMessages() {
           expediteurNom: "Système de sécurité",
           expediteurEmail: "security@sonec.com",
           destinataireEmail: "admin@sonec.com",
-          type: "alert",
+          type: "ALERT", // Utiliser le format majuscule
           estEnvoye: true,
           envoyeLe: new Date(Date.now() - 3600000).toISOString(),
           estLu: true,

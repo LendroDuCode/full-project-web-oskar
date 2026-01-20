@@ -57,7 +57,7 @@ export default function SidebarSuperAdmin({
     } else if (pathname.includes("/dashboard-admin/agents")) {
       setActiveNav("agents");
       setOpenMenus((prev) => ({ ...prev, agents: true }));
-    } else if (pathname.includes("/dashboard-admin/historique")) {
+    } else if (pathname.includes("/dashboard-admin/historiques")) {
       setActiveNav("history");
       setOpenMenus((prev) => ({ ...prev, history: true }));
     } else if (pathname.includes("/dashboard-admin/roles")) {
@@ -220,25 +220,20 @@ export default function SidebarSuperAdmin({
         {
           id: "history-actions",
           label: "Actions",
-          href: "/dashboard-admin/historique/actions",
+          href: "/dashboard-admin/historiques/actions",
           icon: "fa-clock-rotate-left text-primary",
         },
         {
           id: "history-logins",
           label: "Connexions",
-          href: "/dashboard-admin/historique/connexions",
+          href: "/dashboard-admin/historiques/connexions",
           icon: "fa-sign-in-alt text-info",
         },
-        {
-          id: "history-errors",
-          label: "Erreurs",
-          href: "/dashboard-admin/historique/erreurs",
-          icon: "fa-bug text-danger",
-        },
+
         {
           id: "history-audit",
           label: "Audit",
-          href: "/dashboard-admin/historique/logs-audit",
+          href: "/dashboard-admin/historiques/logs-audit",
           icon: "fa-clipboard-list text-warning",
         },
       ],

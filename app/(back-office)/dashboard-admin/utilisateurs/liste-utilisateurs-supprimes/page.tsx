@@ -48,34 +48,21 @@ import CreateUserModal from "../components/modals/CreateUserModal";
 
 // Version simplifiée pour résoudre l'erreur immédiate
 interface User {
-  // Identifiant unique
   uuid: string;
   code_utilisateur?: string;
-  
-  // Informations personnelles
   nom: string;
   prenoms: string;
   email: string;
   telephone: string;
   deleted_at?: string;
-  
-  // Authentification et statut
   est_verifie: boolean;
   est_bloque: boolean;
   is_deleted?: boolean;
-  
-  // Rôles et permissions
   role_uuid: string;
   is_admin: boolean;
-  
-  // Civilité
   civilite_uuid?: string;
-  
-  // Métadonnées
   created_at?: string;
   updated_at?: string;
-  
-  // Relations (optionnelles)
   civilite?: {
     uuid: string;
     libelle: string;
@@ -85,6 +72,7 @@ interface User {
     name: string;
   };
 }
+
 // Interface local pour le composant
 interface LocalUser extends Omit<
   User,
@@ -114,7 +102,7 @@ interface PaginationData {
 
 // Service pour gérer les utilisateurs supprimés
 const deletedUserService = {
-  // Récupérer les utilisateurs supprimés avec pagination et filtres
+  // Récupérer les utilisateurs supprimés
   async getDeletedUsers(params?: {
     page?: number;
     limit?: number;
@@ -123,47 +111,30 @@ const deletedUserService = {
     est_bloque?: string;
     est_verifie?: string;
   }) {
-    const queryParams = new URLSearchParams();
-    
-    // Paramètres par défaut pour les utilisateurs supprimés
-    queryParams.append('is_deleted', 'true');
-    
-    if (params?.page) queryParams.append('page', params.page.toString());
-    if (params?.limit) queryParams.append('limit', params.limit.toString());
-    if (params?.search) queryParams.append('search', params.search);
-    if (params?.is_admin) queryParams.append('is_admin', params.is_admin);
-    if (params?.est_bloque) queryParams.append('est_bloque', params.est_bloque);
-    if (params?.est_verifie) queryParams.append('est_verifie', params.est_verifie);
-
+    // Utiliser l'endpoint correct pour les utilisateurs supprimés
     const response = await api.get(
-      `${API_ENDPOINTS.ADMIN.USERS.BASE}?${queryParams.toString()}`
+      API_ENDPOINTS.ADMIN.USERS.DELETED, // "/admin/liste-utilisateurs-supprimes"
     );
     return response.data;
   },
 
   // Restaurer un utilisateur
   async restoreUser(uuid: string) {
-    const response = await api.post(
-      API_ENDPOINTS.ADMIN.USERS.RESTORE(uuid)
-    );
+    const response = await api.post(API_ENDPOINTS.ADMIN.USERS.RESTORE(uuid));
     return response.data;
   },
 
   // Supprimer définitivement un utilisateur
   async permanentDeleteUser(uuid: string) {
-    const response = await api.delete(
-      `${API_ENDPOINTS.ADMIN.USERS.BASE}/${uuid}/permanent`
-    );
+    const response = await api.delete(API_ENDPOINTS.ADMIN.USERS.DELETE(uuid));
     return response.data;
   },
 
-  // Vider la corbeille (supprimer tous les utilisateurs supprimés)
+  // Vider la corbeille
   async emptyTrash() {
-    const response = await api.delete(
-      API_ENDPOINTS.ADMIN.USERS.EMPTY_TRASH
-    );
+    const response = await api.delete(API_ENDPOINTS.ADMIN.USERS.EMPTY_TRASH);
     return response.data;
-  }
+  },
 };
 
 // Composant de statut amélioré
@@ -211,7 +182,7 @@ const StatusBadge = ({
   );
 };
 
-// Composant de modal de restauration amélioré
+// Composant de modal de restauration
 const RestoreModal = ({
   show,
   user,
@@ -327,7 +298,7 @@ const RestoreModal = ({
   );
 };
 
-// Composant de modal de suppression définitive amélioré
+// Composant de modal de suppression définitive
 const PermanentDeleteModal = ({
   show,
   user,
@@ -577,7 +548,7 @@ const EmptyTrashModal = ({
   );
 };
 
-// Composant de pagination amélioré
+// Composant de pagination
 const Pagination = ({
   currentPage,
   totalPages,
@@ -778,156 +749,196 @@ export default function ListeUtilisateursSupprimesPage() {
   const itemsPerPageOptions = [5, 10, 20, 50];
 
   // Fonction pour charger les utilisateurs supprimés
-  const fetchDeletedUsers = useCallback(async (params?: {
-    page?: number;
-    limit?: number;
-    search?: string;
-    is_admin?: string;
-    est_bloque?: string;
-    est_verifie?: string;
-  }) => {
+  const fetchDeletedUsers = useCallback(async () => {
     setLoading(true);
     setError(null);
-    
-    try {
-      const result = await deletedUserService.getDeletedUsers({
-        page: params?.page || pagination.page,
-        limit: params?.limit || pagination.limit,
-        search: params?.search,
-        is_admin: params?.is_admin,
-        est_bloque: params?.est_bloque,
-        est_verifie: params?.est_verifie,
-      });
 
-      // Supposons que l'API retourne { data: User[], pagination: PaginationData }
-      setUsers(result.data || []);
-      
-      if (result.pagination) {
-        setPagination(result.pagination);
-      } else {
-        // Fallback si l'API ne retourne pas de pagination
-        setPagination({
-          page: params?.page || 1,
-          limit: params?.limit || pagination.limit,
-          total: result.data?.length || 0,
-          pages: Math.ceil((result.data?.length || 0) / (params?.limit || pagination.limit))
+    try {
+      console.log(
+        "🔍 Fetching deleted users from endpoint:",
+        API_ENDPOINTS.ADMIN.USERS.DELETED,
+      );
+      const result = await api.get(API_ENDPOINTS.ADMIN.USERS.DELETED);
+
+      console.log("🔍 API Response:", result);
+
+      // Gérer différents formats de réponse
+      let usersData: LocalUser[] = [];
+      let total = 0;
+
+      if (result.data) {
+        if (Array.isArray(result.data)) {
+          usersData = result.data;
+          total = result.data.length;
+        } else if (result.data.data && Array.isArray(result.data.data)) {
+          usersData = result.data.data;
+          total = result.data.count || result.data.data.length;
+        } else {
+          usersData = [result.data];
+          total = 1;
+        }
+      }
+
+      // Appliquer les filtres côté client
+      let filteredUsers = usersData;
+
+      // Filtre par recherche
+      if (searchTerm) {
+        const searchLower = searchTerm.toLowerCase();
+        filteredUsers = filteredUsers.filter(
+          (user) =>
+            user.nom.toLowerCase().includes(searchLower) ||
+            user.prenoms.toLowerCase().includes(searchLower) ||
+            user.email.toLowerCase().includes(searchLower) ||
+            user.telephone?.toLowerCase().includes(searchLower),
+        );
+      }
+
+      // Filtre par rôle
+      if (selectedRole !== "all") {
+        filteredUsers = filteredUsers.filter((user) =>
+          selectedRole === "admin" ? user.is_admin : !user.is_admin,
+        );
+      }
+
+      // Filtre par statut
+      if (selectedStatus !== "all") {
+        if (selectedStatus === "blocked") {
+          filteredUsers = filteredUsers.filter((user) => user.est_bloque);
+        } else if (selectedStatus === "unverified") {
+          filteredUsers = filteredUsers.filter((user) => !user.est_verifie);
+        }
+      }
+
+      // Appliquer le tri
+      if (sortConfig) {
+        filteredUsers = [...filteredUsers].sort((a, b) => {
+          let aValue: any;
+          let bValue: any;
+
+          if (sortConfig.key === "role.name") {
+            aValue = a.role?.name || "";
+            bValue = b.role?.name || "";
+          } else if (sortConfig.key === "civilite.libelle") {
+            aValue = a.civilite?.libelle || "";
+            bValue = b.civilite?.libelle || "";
+          } else {
+            aValue = a[sortConfig.key as keyof LocalUser];
+            bValue = b[sortConfig.key as keyof LocalUser];
+          }
+
+          if (aValue < bValue) {
+            return sortConfig.direction === "asc" ? -1 : 1;
+          }
+          if (aValue > bValue) {
+            return sortConfig.direction === "asc" ? 1 : -1;
+          }
+          return 0;
         });
       }
-      
+
+      // Pagination côté client
+      const startIndex = (pagination.page - 1) * pagination.limit;
+      const paginatedUsers = filteredUsers.slice(
+        startIndex,
+        startIndex + pagination.limit,
+      );
+
+      setUsers(paginatedUsers);
+      setPagination((prev) => ({
+        ...prev,
+        total: filteredUsers.length,
+        pages: Math.ceil(filteredUsers.length / prev.limit),
+      }));
     } catch (err: any) {
-      setError(err.message || "Erreur lors du chargement des utilisateurs supprimés");
-      console.error(err);
+      console.error("❌ Error fetching deleted users:", err);
+      setError(
+        err.message || "Erreur lors du chargement des utilisateurs supprimés",
+      );
+      setUsers([]);
     } finally {
       setLoading(false);
     }
-  }, [pagination.page, pagination.limit]);
+  }, [
+    pagination.page,
+    pagination.limit,
+    searchTerm,
+    selectedRole,
+    selectedStatus,
+    sortConfig,
+  ]);
 
   // Fonction pour restaurer un utilisateur
-  const restoreUser = useCallback(async (uuid: string) => {
-    try {
-      const result = await deletedUserService.restoreUser(uuid);
-      
-      // Supprimer localement de la liste
-      setUsers(prev => prev.filter(user => user.uuid !== uuid));
-      
-      // Mettre à jour la pagination
-      setPagination(prev => ({
-        ...prev,
-        total: prev.total - 1,
-        pages: Math.ceil((prev.total - 1) / prev.limit)
-      }));
-      
-      return result.data;
-    } catch (err: any) {
-      throw new Error(err.message || "Erreur lors de la restauration de l'utilisateur");
-    }
-  }, []);
+  const restoreUser = useCallback(
+    async (uuid: string) => {
+      try {
+        const result = await deletedUserService.restoreUser(uuid);
+
+        // Recharger la liste
+        await fetchDeletedUsers();
+
+        return result.data;
+      } catch (err: any) {
+        throw new Error(
+          err.message || "Erreur lors de la restauration de l'utilisateur",
+        );
+      }
+    },
+    [fetchDeletedUsers],
+  );
 
   // Fonction pour supprimer définitivement un utilisateur
-  const permanentDeleteUser = useCallback(async (uuid: string) => {
-    try {
-      await deletedUserService.permanentDeleteUser(uuid);
-      
-      // Supprimer localement
-      setUsers(prev => prev.filter(user => user.uuid !== uuid));
-      
-      // Mettre à jour la pagination
-      setPagination(prev => ({
-        ...prev,
-        total: prev.total - 1,
-        pages: Math.ceil((prev.total - 1) / prev.limit)
-      }));
-      
-      return true;
-    } catch (err: any) {
-      throw new Error(err.message || "Erreur lors de la suppression définitive de l'utilisateur");
-    }
-  }, []);
+  const permanentDeleteUser = useCallback(
+    async (uuid: string) => {
+      try {
+        await deletedUserService.permanentDeleteUser(uuid);
+
+        // Recharger la liste
+        await fetchDeletedUsers();
+
+        return true;
+      } catch (err: any) {
+        throw new Error(
+          err.message ||
+            "Erreur lors de la suppression définitive de l'utilisateur",
+        );
+      }
+    },
+    [fetchDeletedUsers],
+  );
 
   // Fonction pour vider la corbeille
   const emptyTrash = useCallback(async () => {
     try {
       await deletedUserService.emptyTrash();
-      
-      // Vider localement
-      setUsers([]);
-      
-      // Réinitialiser la pagination
-      setPagination(prev => ({
-        ...prev,
-        total: 0,
-        pages: 1
-      }));
-      
+
+      // Recharger la liste
+      await fetchDeletedUsers();
+
       return true;
     } catch (err: any) {
       throw new Error(err.message || "Erreur lors du vidage de la corbeille");
     }
-  }, []);
+  }, [fetchDeletedUsers]);
 
   // Fonctions de pagination
   const setPage = useCallback((page: number) => {
-    setPagination(prev => ({ ...prev, page }));
-    fetchDeletedUsers({ page });
-  }, [fetchDeletedUsers]);
+    setPagination((prev) => ({ ...prev, page }));
+  }, []);
 
   const setLimit = useCallback((limit: number) => {
-    setPagination(prev => ({ ...prev, limit, page: 1 }));
-    fetchDeletedUsers({ limit });
-  }, [fetchDeletedUsers]);
+    setPagination((prev) => ({ ...prev, limit, page: 1 }));
+  }, []);
 
   // Fonction de rafraîchissement
   const refresh = useCallback(() => {
-    return fetchDeletedUsers({
-      page: pagination.page,
-      limit: pagination.limit,
-      search: searchTerm || undefined,
-      is_admin: selectedRole !== "all" ? selectedRole === "admin" ? "true" : "false" : undefined,
-      est_bloque: selectedStatus === "blocked" ? "true" : undefined,
-      est_verifie: selectedStatus === "unverified" ? "false" : undefined,
-    });
-  }, [fetchDeletedUsers, pagination.page, pagination.limit, searchTerm, selectedRole, selectedStatus]);
+    return fetchDeletedUsers();
+  }, [fetchDeletedUsers]);
 
-  // Charger les utilisateurs supprimés au montage
+  // Charger les utilisateurs supprimés au montage et quand les dépendances changent
   useEffect(() => {
     fetchDeletedUsers();
   }, [fetchDeletedUsers]);
-
-  // Gérer les changements de recherche et filtres avec debounce
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      fetchDeletedUsers({
-        page: 1,
-        limit: pagination.limit,
-        search: searchTerm || undefined,
-        is_admin: selectedRole !== "all" ? selectedRole === "admin" ? "true" : "false" : undefined,
-        est_bloque: selectedStatus === "blocked" ? "true" : undefined,
-        est_verifie: selectedStatus === "unverified" ? "false" : undefined,
-      });
-    }, 500);
-
-    return () => clearTimeout(timeoutId);
-  }, [searchTerm, selectedRole, selectedStatus, fetchDeletedUsers, pagination.limit]);
 
   // Fonction pour restaurer un utilisateur (avec modal)
   const handleRestoreUser = async () => {
@@ -1023,34 +1034,6 @@ export default function ListeUtilisateursSupprimesPage() {
   };
 
   // Fonction de tri
-  const sortUtilisateurs = (utilisateurs: LocalUser[]) => {
-    if (!sortConfig || !utilisateurs.length) return utilisateurs;
-
-    return [...utilisateurs].sort((a, b) => {
-      let aValue: any;
-      let bValue: any;
-
-      if (sortConfig.key === "role.name") {
-        aValue = a.role?.name || "";
-        bValue = b.role?.name || "";
-      } else if (sortConfig.key === "civilite.libelle") {
-        aValue = a.civilite?.libelle || "";
-        bValue = b.civilite?.libelle || "";
-      } else {
-        aValue = a[sortConfig.key as keyof LocalUser];
-        bValue = b[sortConfig.key as keyof LocalUser];
-      }
-
-      if (aValue < bValue) {
-        return sortConfig.direction === "asc" ? -1 : 1;
-      }
-      if (aValue > bValue) {
-        return sortConfig.direction === "asc" ? 1 : -1;
-      }
-      return 0;
-    });
-  };
-
   const requestSort = (
     key: keyof LocalUser | "role.name" | "civilite.libelle",
   ) => {
@@ -1093,7 +1076,7 @@ export default function ListeUtilisateursSupprimesPage() {
     if (selectAll) {
       setSelectedUsers([]);
     } else {
-      const allUserIds = currentItems.map((user) => user.uuid);
+      const allUserIds = users.map((user) => user.uuid);
       setSelectedUsers(allUserIds);
     }
     setSelectAll(!selectAll);
@@ -1142,19 +1125,9 @@ export default function ListeUtilisateursSupprimesPage() {
     }
   };
 
-  // Filtrer et trier les utilisateurs côté client (pour le tri seulement)
-  const filteredUtilisateurs = useMemo(() => {
-    return sortUtilisateurs(users);
-  }, [users, sortConfig]);
-
-  // Calculer les éléments à afficher (déjà paginés par l'API)
-  const currentItems = useMemo(() => {
-    return filteredUtilisateurs;
-  }, [filteredUtilisateurs]);
-
   // Fallback CSV export
   const handleCSVExport = () => {
-    if (filteredUtilisateurs.length === 0) return;
+    if (users.length === 0) return;
 
     const csvContent = [
       [
@@ -1169,7 +1142,7 @@ export default function ListeUtilisateursSupprimesPage() {
         "Créé le",
         "Supprimé le",
       ],
-      ...filteredUtilisateurs.map((u) => [
+      ...users.map((u) => [
         u.nom || "",
         u.prenoms || "",
         u.email || "",
@@ -1208,22 +1181,22 @@ export default function ListeUtilisateursSupprimesPage() {
     setSelectedRole("all");
     setSelectedStatus("all");
     setSortConfig(null);
-    setPage(1);
+    setPagination((prev) => ({ ...prev, page: 1 }));
     setSelectedUsers([]);
     setSelectAll(false);
   };
 
   // Effet pour mettre à jour selectAll quand on change de page ou de sélection
   useEffect(() => {
-    if (currentItems.length > 0) {
-      const allSelected = currentItems.every((user) =>
+    if (users.length > 0) {
+      const allSelected = users.every((user) =>
         selectedUsers.includes(user.uuid),
       );
       setSelectAll(allSelected);
     } else {
       setSelectAll(false);
     }
-  }, [selectedUsers, currentItems]);
+  }, [selectedUsers, users]);
 
   // Calculer le temps écoulé depuis la suppression
   const getTimeSinceDeletion = (deletedAt: string | null | undefined) => {
@@ -1235,7 +1208,15 @@ export default function ListeUtilisateursSupprimesPage() {
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
     if (diffDays === 0) {
-      return "Aujourd'hui";
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      if (diffHours === 0) {
+        const diffMinutes = Math.floor(diffMs / (1000 * 60));
+        if (diffMinutes === 0) {
+          return "À l'instant";
+        }
+        return `Il y a ${diffMinutes} minute${diffMinutes > 1 ? "s" : ""}`;
+      }
+      return `Il y a ${diffHours} heure${diffHours > 1 ? "s" : ""}`;
     } else if (diffDays === 1) {
       return "Hier";
     } else if (diffDays < 7) {
@@ -1286,7 +1267,7 @@ export default function ListeUtilisateursSupprimesPage() {
 
       <EmptyTrashModal
         show={showEmptyTrashModal}
-        count={users.length}
+        count={pagination.total}
         loading={emptyTrashLoading}
         onClose={() => setShowEmptyTrashModal(false)}
         onConfirm={handleEmptyTrash}
@@ -1383,7 +1364,7 @@ export default function ListeUtilisateursSupprimesPage() {
                   Exporter CSV
                 </button>
 
-                {users.length > 0 && (
+                {pagination.total > 0 && (
                   <button
                     onClick={() => setShowEmptyTrashModal(true)}
                     className="btn btn-danger d-flex align-items-center gap-2"
@@ -1464,10 +1445,7 @@ export default function ListeUtilisateursSupprimesPage() {
                     className="form-control border-start-0 ps-0"
                     placeholder="Rechercher parmi les utilisateurs supprimés..."
                     value={searchTerm}
-                    onChange={(e) => {
-                      setSearchTerm(e.target.value);
-                      setPage(1);
-                    }}
+                    onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
               </div>
@@ -1480,10 +1458,7 @@ export default function ListeUtilisateursSupprimesPage() {
                   <select
                     className="form-select border-start-0 ps-0"
                     value={selectedStatus}
-                    onChange={(e) => {
-                      setSelectedStatus(e.target.value);
-                      setPage(1);
-                    }}
+                    onChange={(e) => setSelectedStatus(e.target.value)}
                   >
                     <option value="all">Tous les statuts</option>
                     <option value="blocked">Étaient bloqués</option>
@@ -1500,10 +1475,7 @@ export default function ListeUtilisateursSupprimesPage() {
                   <select
                     className="form-select border-start-0 ps-0"
                     value={selectedRole}
-                    onChange={(e) => {
-                      setSelectedRole(e.target.value);
-                      setPage(1);
-                    }}
+                    onChange={(e) => setSelectedRole(e.target.value)}
                   >
                     <option value="all">Tous les rôles</option>
                     <option value="admin">Admins</option>
@@ -1520,10 +1492,7 @@ export default function ListeUtilisateursSupprimesPage() {
                   <select
                     className="form-select border-start-0 ps-0"
                     value={pagination.limit}
-                    onChange={(e) => {
-                      setLimit(Number(e.target.value));
-                      setPage(1);
-                    }}
+                    onChange={(e) => setLimit(Number(e.target.value))}
                   >
                     {itemsPerPageOptions.map((option) => (
                       <option key={option} value={option}>
@@ -1551,7 +1520,7 @@ export default function ListeUtilisateursSupprimesPage() {
               <div className="col-md-6">
                 <div className="d-flex align-items-center gap-2">
                   <small className="text-muted">
-                    Résultats: <strong>{filteredUtilisateurs.length}</strong>{" "}
+                    Résultats: <strong>{pagination.total}</strong>{" "}
                     utilisateur(s) supprimé(s)
                     {searchTerm && (
                       <>
@@ -1586,7 +1555,7 @@ export default function ListeUtilisateursSupprimesPage() {
               </div>
             ) : (
               <>
-                {filteredUtilisateurs.length === 0 ? (
+                {users.length === 0 ? (
                   <div className="text-center py-5">
                     <div
                       className="alert alert-info mx-auto border-0"
@@ -1599,14 +1568,31 @@ export default function ListeUtilisateursSupprimesPage() {
                         />
                       </div>
                       <h5 className="alert-heading">
-                        Aucun utilisateur supprimé
+                        {searchTerm ||
+                        selectedRole !== "all" ||
+                        selectedStatus !== "all"
+                          ? "Aucun résultat trouvé"
+                          : "Aucun utilisateur supprimé"}
                       </h5>
                       <p className="mb-0">
-                        {users.length === 0
-                          ? "La corbeille est vide. Aucun utilisateur n'a été supprimé."
-                          : "Aucun utilisateur supprimé ne correspond à vos critères de recherche"}
+                        {searchTerm ||
+                        selectedRole !== "all" ||
+                        selectedStatus !== "all"
+                          ? "Aucun utilisateur supprimé ne correspond à vos critères de recherche. Essayez de modifier vos filtres."
+                          : "La corbeille est vide. Aucun utilisateur n'a été supprimé."}
                       </p>
                       <div className="mt-3">
+                        {(searchTerm ||
+                          selectedRole !== "all" ||
+                          selectedStatus !== "all") && (
+                          <button
+                            onClick={resetFilters}
+                            className="btn btn-outline-secondary me-2"
+                          >
+                            <FontAwesomeIcon icon={faTimes} className="me-2" />
+                            Réinitialiser les filtres
+                          </button>
+                        )}
                         <Link
                           href="/dashboard-admin/utilisateurs/liste-utilisateurs"
                           className="btn btn-outline-primary"
@@ -1630,9 +1616,9 @@ export default function ListeUtilisateursSupprimesPage() {
                               <input
                                 type="checkbox"
                                 className="form-check-input"
-                                checked={selectAll && currentItems.length > 0}
+                                checked={selectAll && users.length > 0}
                                 onChange={handleSelectAll}
-                                disabled={currentItems.length === 0}
+                                disabled={users.length === 0}
                                 title={
                                   selectAll
                                     ? "Tout désélectionner"
@@ -1734,7 +1720,7 @@ export default function ListeUtilisateursSupprimesPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {currentItems.map((utilisateur, index) => (
+                        {users.map((utilisateur, index) => (
                           <tr
                             key={utilisateur.uuid}
                             className={`align-middle ${selectedUsers.includes(utilisateur.uuid) ? "table-active" : ""}`}
@@ -1837,15 +1823,18 @@ export default function ListeUtilisateursSupprimesPage() {
                               </div>
                             </td>
                             <td>
-                              <div className="d-flex align-items-center">
-                                <FontAwesomeIcon
-                                  icon={faHistory}
-                                  className="text-secondary me-2"
-                                />
-                                <small className="text-secondary fw-semibold">
-                                  {getTimeSinceDeletion(utilisateur.deleted_at)}
-                                </small>
-                                <br />
+                              <div className="d-flex flex-column">
+                                <div className="d-flex align-items-center">
+                                  <FontAwesomeIcon
+                                    icon={faHistory}
+                                    className="text-secondary me-2"
+                                  />
+                                  <small className="text-secondary fw-semibold">
+                                    {getTimeSinceDeletion(
+                                      utilisateur.deleted_at,
+                                    )}
+                                  </small>
+                                </div>
                                 <small className="text-muted">
                                   {formatDate(utilisateur.deleted_at)}
                                 </small>
@@ -1884,7 +1873,7 @@ export default function ListeUtilisateursSupprimesPage() {
                       <Pagination
                         currentPage={pagination.page}
                         totalPages={pagination.pages}
-                        totalItems={filteredUtilisateurs.length}
+                        totalItems={pagination.total}
                         itemsPerPage={pagination.limit}
                         indexOfFirstItem={
                           (pagination.page - 1) * pagination.limit

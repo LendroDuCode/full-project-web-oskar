@@ -51,7 +51,7 @@ interface User {
   // Identifiant unique
   uuid: string;
   code_utilisateur?: string;
-  
+
   // Informations personnelles
   nom: string;
   prenoms: string;
@@ -61,7 +61,7 @@ interface User {
   lieu_naissance?: string;
   nationalite?: string;
   photo_profil?: string;
-  
+
   // Authentification
   mot_de_passe?: string;
   est_verifie: boolean;
@@ -70,29 +70,29 @@ interface User {
   raison_blocage?: string;
   date_derniere_connexion?: string;
   date_derniere_deconnexion?: string;
-  
+
   // Rôles et permissions
   role_uuid: string;
   is_admin: boolean;
   permissions?: string[];
-  
+
   // Civilité
   civilite_uuid?: string;
-  
+
   // Statut matrimonial
   statut_matrimonial_uuid?: string;
-  
+
   // Adresse
   adresse?: string;
   ville?: string;
   code_postal?: string;
   pays?: string;
-  
+
   // Informations professionnelles
   profession?: string;
   employeur?: string;
   secteur_activite?: string;
-  
+
   // Métadonnées
   created_at?: string;
   updated_at?: string;
@@ -100,7 +100,7 @@ interface User {
   created_by?: string;
   updated_by?: string;
   deleted_by?: string;
-  
+
   // Relations (optionnelles selon le contexte)
   civilite?: Civilite;
   role?: Role;
@@ -125,7 +125,7 @@ interface UserProfile {
     fuseau_horaire?: string;
     notifications_email?: boolean;
     notifications_push?: boolean;
-    theme?: 'light' | 'dark' | 'auto';
+    theme?: "light" | "dark" | "auto";
   };
   statistiques?: {
     nombre_connexions: number;
@@ -260,8 +260,8 @@ interface UserFilterType {
   is_deleted?: boolean | string;
   date_debut?: string;
   date_fin?: string;
-  orderBy?: keyof User | 'role.name' | 'civilite.libelle';
-  orderDirection?: 'asc' | 'desc';
+  orderBy?: keyof User | "role.name" | "civilite.libelle";
+  orderDirection?: "asc" | "desc";
   page?: number;
   limit?: number;
 }
@@ -297,7 +297,7 @@ interface UserLoginHistory {
     region?: string;
     pays?: string;
   };
-  status: 'success' | 'failed' | 'blocked';
+  status: "success" | "failed" | "blocked";
   reason?: string;
   created_at: string;
 }
@@ -306,7 +306,14 @@ interface UserLoginHistory {
 interface UserActivity {
   uuid: string;
   user_uuid: string;
-  type: 'connexion' | 'deconnexion' | 'modification' | 'creation' | 'suppression' | 'telechargement' | 'upload';
+  type:
+    | "connexion"
+    | "deconnexion"
+    | "modification"
+    | "creation"
+    | "suppression"
+    | "telechargement"
+    | "upload";
   description: string;
   metadata?: Record<string, any>;
   ip_address?: string;
@@ -344,7 +351,7 @@ interface UserExportData {
 interface UserNotification {
   uuid: string;
   user_uuid: string;
-  type: 'info' | 'success' | 'warning' | 'error' | 'system';
+  type: "info" | "success" | "warning" | "error" | "system";
   title: string;
   message: string;
   is_read: boolean;
@@ -365,8 +372,8 @@ interface UserPreferences {
   format_heure: string;
   notifications_email: boolean;
   notifications_push: boolean;
-  theme: 'light' | 'dark' | 'auto';
-  email_frequency: 'immediate' | 'daily' | 'weekly';
+  theme: "light" | "dark" | "auto";
+  email_frequency: "immediate" | "daily" | "weekly";
   created_at: string;
   updated_at: string;
 }
@@ -738,71 +745,113 @@ export default function ListeUtilisateursActifsPage() {
   const itemsPerPageOptions = [5, 10, 20, 50];
 
   // Fonction pour charger les utilisateurs
-  const fetchUsers = useCallback(async (params?: any) => {
-    try {
-      setLoading(true);
-      setError(null);
+  const fetchUsers = useCallback(
+    async (params?: any) => {
+      try {
+        setLoading(true);
+        setError(null);
 
-      const queryParams = new URLSearchParams({
-        page: String(params?.page || pagination.page),
-        limit: String(params?.limit || pagination.limit),
-        ...params,
-      });
+        const queryParams = new URLSearchParams({
+          page: String(params?.page || pagination.page),
+          limit: String(params?.limit || pagination.limit),
+          ...params,
+        });
 
-      // Nettoyer les paramètres undefined
-      Object.keys(queryParams).forEach((key) => {
-        if (queryParams.get(key) === undefined || queryParams.get(key) === null) {
-          queryParams.delete(key);
+        // Nettoyer les paramètres undefined
+        Object.keys(params || {}).forEach((key) => {
+          if (
+            params[key] === undefined ||
+            params[key] === null ||
+            params[key] === ""
+          ) {
+            queryParams.delete(key);
+          }
+        });
+
+        const endpoint = `${API_ENDPOINTS.ADMIN.USERS.LIST}?${queryParams.toString()}`;
+        console.log("📡 Requête API:", endpoint);
+
+        const response = await api.get(endpoint);
+        console.log("📥 Réponse API complète:", response);
+        console.log("📥 Type de réponse:", typeof response);
+        console.log("📥 Est-ce un tableau?", Array.isArray(response));
+
+        // Gérer différentes structures de réponse
+        let usersData: LocalUser[] = [];
+        let totalCount = 0;
+        let currentPage = 1;
+        let totalPages = 1;
+        let perPage = pagination.limit;
+
+        if (Array.isArray(response)) {
+          // Cas 1: L'API retourne directement un tableau
+          usersData = response;
+          totalCount = response.length;
+          totalPages = Math.ceil(totalCount / perPage);
+        } else if (response && typeof response === "object") {
+          // Cas 2: L'API retourne un objet avec différentes structures possibles
+          if (response.data && Array.isArray(response.data)) {
+            // Structure: { data: [], ... }
+            usersData = response.data;
+
+            if (response.meta) {
+              // Structure avec métadonnées
+              totalCount = response.meta.total || response.data.length;
+              currentPage = response.meta.current_page || 1;
+              perPage = response.meta.per_page || pagination.limit;
+              totalPages =
+                response.meta.last_page || Math.ceil(totalCount / perPage);
+            } else if (response.count !== undefined) {
+              // Structure: { data: [], count: X, ... }
+              totalCount = response.count;
+              totalPages = Math.ceil(totalCount / perPage);
+            } else {
+              // Pas de métadonnées, utiliser la longueur du tableau
+              totalCount = response.data.length;
+              totalPages = Math.ceil(totalCount / perPage);
+            }
+          } else if (Array.isArray(response)) {
+            // Fallback: directement un tableau
+            usersData = response;
+            totalCount = response.length;
+            totalPages = Math.ceil(totalCount / perPage);
+          }
         }
-      });
 
-      const endpoint = `${API_ENDPOINTS.ADMIN.USERS.LIST}?${queryParams.toString()}`;
-      console.log("📡 Requête API:", endpoint);
+        console.log("📊 Données extraites:", {
+          usersCount: usersData.length,
+          totalCount,
+          currentPage,
+          perPage,
+          totalPages,
+        });
 
-      const response = await api.get(endpoint);
+        // Mettre à jour l'état
+        setUsers(usersData);
+        setPagination({
+          page: currentPage,
+          limit: perPage,
+          total: totalCount,
+          pages: totalPages,
+        });
+      } catch (err: any) {
+        console.error("❌ Erreur lors du chargement des utilisateurs:", err);
 
-      if (response.data && Array.isArray(response.data.data)) {
-        setUsers(response.data.data);
-        
-        // Mettre à jour la pagination si disponible
-        if (response.data.meta) {
-          setPagination({
-            page: response.data.meta.current_page || 1,
-            limit: response.data.meta.per_page || pagination.limit,
-            total: response.data.meta.total || response.data.data.length,
-            pages: response.data.meta.last_page || 1,
-          });
-        } else {
-          // Fallback si pas de métadonnées
-          setPagination(prev => ({
-            ...prev,
-            page: params?.page || prev.page,
-            limit: params?.limit || prev.limit,
-            total: response.data.data.length,
-            pages: Math.ceil(response.data.data.length / (params?.limit || prev.limit)),
-          }));
+        let errorMessage = "Erreur lors du chargement des utilisateurs";
+        if (err.response?.data?.message) {
+          errorMessage = err.response.data.message;
+        } else if (err.message) {
+          errorMessage = err.message;
         }
-      } else {
-        console.error("❌ Format de réponse inattendu:", response.data);
-        setError("Format de réponse inattendu du serveur");
+
+        setError(errorMessage);
         setUsers([]);
+      } finally {
+        setLoading(false);
       }
-    } catch (err: any) {
-      console.error("❌ Erreur lors du chargement des utilisateurs:", err);
-      
-      let errorMessage = "Erreur lors du chargement des utilisateurs";
-      if (err.response?.data?.message) {
-        errorMessage = err.response.data.message;
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-      
-      setError(errorMessage);
-      setUsers([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [pagination.page, pagination.limit]);
+    },
+    [pagination.page, pagination.limit],
+  );
 
   // Fonction pour mettre à jour un utilisateur
   const updateUser = async (userId: string, userData: Partial<User>) => {
@@ -810,14 +859,16 @@ export default function ListeUtilisateursActifsPage() {
       setLoading(true);
       const response = await api.put(
         API_ENDPOINTS.ADMIN.USERS.UPDATE(userId),
-        userData
+        userData,
       );
 
       if (response.data) {
         // Mettre à jour l'utilisateur dans la liste
-        setUsers(prev => prev.map(user => 
-          user.uuid === userId ? { ...user, ...response.data } : user
-        ));
+        setUsers((prev) =>
+          prev.map((user) =>
+            user.uuid === userId ? { ...user, ...response.data } : user,
+          ),
+        );
         return response.data;
       }
     } catch (err: any) {
@@ -833,17 +884,17 @@ export default function ListeUtilisateursActifsPage() {
     try {
       setLoading(true);
       await api.delete(API_ENDPOINTS.ADMIN.USERS.DELETE(userId));
-      
+
       // Retirer l'utilisateur de la liste
-      setUsers(prev => prev.filter(user => user.uuid !== userId));
-      
+      setUsers((prev) => prev.filter((user) => user.uuid !== userId));
+
       // Mettre à jour le total
-      setPagination(prev => ({
+      setPagination((prev) => ({
         ...prev,
         total: prev.total - 1,
         pages: Math.ceil((prev.total - 1) / prev.limit),
       }));
-      
+
       return true;
     } catch (err: any) {
       console.error("❌ Erreur lors de la suppression:", err);
@@ -859,22 +910,34 @@ export default function ListeUtilisateursActifsPage() {
       page: pagination.page,
       limit: pagination.limit,
       search: searchTerm.trim() || undefined,
-      est_bloque: selectedStatus === "blocked" ? "true" : 
-                  selectedStatus === "active" ? "false" : undefined,
-      est_verifie: selectedStatus === "unverified" ? "false" : 
-                   selectedStatus === "active" ? "true" : undefined,
-      is_admin: selectedRole === "admin" ? "true" : 
-                selectedRole === "user" ? "false" : undefined,
+      est_bloque:
+        selectedStatus === "blocked"
+          ? "true"
+          : selectedStatus === "active"
+            ? "false"
+            : undefined,
+      est_verifie:
+        selectedStatus === "unverified"
+          ? "false"
+          : selectedStatus === "active"
+            ? "true"
+            : undefined,
+      is_admin:
+        selectedRole === "admin"
+          ? "true"
+          : selectedRole === "user"
+            ? "false"
+            : undefined,
     });
   };
 
   // Fonctions pour la pagination
   const setPage = (page: number) => {
-    setPagination(prev => ({ ...prev, page }));
+    setPagination((prev) => ({ ...prev, page }));
   };
 
   const setLimit = (limit: number) => {
-    setPagination(prev => ({ ...prev, limit, page: 1 }));
+    setPagination((prev) => ({ ...prev, limit, page: 1 }));
   };
 
   // Charger les utilisateurs au montage
@@ -1362,10 +1425,14 @@ export default function ListeUtilisateursActifsPage() {
       {/* Modal de modification d'utilisateur */}
       <EditUserModal
         isOpen={showEditModal}
-        user={selectedUserForEdit ? {
-          ...selectedUserForEdit,
-          date_naissance: selectedUserForEdit.date_naissance ?? undefined
-        } : null}
+        user={
+          selectedUserForEdit
+            ? {
+                ...selectedUserForEdit,
+                date_naissance: selectedUserForEdit.date_naissance ?? undefined,
+              }
+            : null
+        }
         onClose={() => {
           setShowEditModal(false);
           setSelectedUserForEdit(null);

@@ -1,250 +1,1116 @@
-// app/page.tsx
-'use client';
+// app/(back-office)/dashboard-admin/villes/page.tsx
+"use client";
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import Image from 'next/image';
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faPlus,
+  faEdit,
+  faEye,
+  faTrash,
+  faRefresh,
+  faDownload,
+  faSearch,
+  faFilter,
+  faSort,
+  faSortUp,
+  faSortDown,
+  faCity,
+  faCheck,
+  faFlag,
+  faPhone,
+  faCalendar,
+  faCheckCircle,
+  faTimesCircle,
+  faBan,
+  faGlobe,
+  faMapMarkerAlt,
+  faInfoCircle,
+  faExclamationTriangle,
+} from "@fortawesome/free-solid-svg-icons";
+import { api } from "@/lib/api-client";
+import { API_ENDPOINTS } from "@/config/api-endpoints";
 
-export default function HomePage() {
-  const [count, setCount] = useState(0);
-  const [isClient, setIsClient] = useState(false);
+// Types
+interface Pays {
+  uuid: string;
+  code: string;
+  nom: string;
+  indicatif: string;
+  statut: string;
+}
 
-  // Détecter si on est côté client
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
+interface Ville {
+  uuid: string;
+  nom: string;
+  code_postal: string;
+  statut: "actif" | "inactif";
+  created_at: string;
+  updated_at: string;
+  pays_uuid: string;
+  pays: Pays;
+  is_deleted: boolean;
+  deleted_at?: string | null;
+}
 
-  // Données de démonstration
-  const features = [
-    {
-      id: 1,
-      title: 'Routing App',
-      description: 'Système de routing basé sur le système de fichiers',
-      icon: '🚀'
-    },
-    {
-      id: 2,
-      title: 'Server Components',
-      description: 'Composants serveur par défaut pour de meilleures performances',
-      icon: '⚡'
-    },
-    {
-      id: 3,
-      title: 'Optimisation d\'images',
-      description: 'Optimisation automatique avec le composant Image',
-      icon: '🖼️'
-    }
-  ];
-
+// Composant de badge de statut
+const StatusBadge = ({ statut }: { statut: string }) => {
+  if (statut === "actif") {
+    return (
+      <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 d-inline-flex align-items-center gap-1">
+        <FontAwesomeIcon icon={faCheckCircle} className="fs-12" />
+        <span>Actif</span>
+      </span>
+    );
+  }
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
-              <span className="font-bold text-white">N</span>
-            </div>
-            <span className="text-xl font-bold">Next.js App</span>
+    <span className="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 d-inline-flex align-items-center gap-1">
+      <FontAwesomeIcon icon={faTimesCircle} className="fs-12" />
+      <span>Inactif</span>
+    </span>
+  );
+};
+
+// Barre d'actions groupées
+const BulkActionsBar = ({
+  selectedCount,
+  onSelectAll,
+  onClearSelection,
+  onBulkAction,
+  isAllSelected,
+  totalItems,
+  loading,
+}: {
+  selectedCount: number;
+  onSelectAll: () => void;
+  onClearSelection: () => void;
+  onBulkAction: (action: string) => void;
+  isAllSelected: boolean;
+  totalItems: number;
+  loading: boolean;
+}) => {
+  if (selectedCount === 0) return null;
+  return (
+    <div className="bg-primary bg-opacity-10 border-primary border-start border-5 p-3 mb-3 rounded">
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+        <div className="d-flex align-items-center gap-3">
+          <div
+            className="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center"
+            style={{ width: "40px", height: "40px" }}
+          >
+            <FontAwesomeIcon icon={faCheck} />
           </div>
-          
-          <nav className="hidden md:flex items-center gap-6">
-            <Link href="/" className="text-sm font-medium transition-colors hover:text-blue-600">
-              Accueil
-            </Link>
-            <Link href="/about" className="text-sm font-medium text-gray-600 transition-colors hover:text-blue-600">
-              À propos
-            </Link>
-            <Link href="/contact" className="text-sm font-medium text-gray-600 transition-colors hover:text-blue-600">
-              Contact
-            </Link>
-          </nav>
-          
-          <button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700">
-            Commencer
+          <div>
+            <h6 className="mb-0 fw-bold">
+              {selectedCount} ville(s) sélectionnée(s)
+            </h6>
+            <small className="text-muted">
+              {isAllSelected
+                ? "Toutes les villes sont sélectionnées"
+                : `${selectedCount} sur ${totalItems} villes sélectionnées`}
+            </small>
+          </div>
+        </div>
+        <div className="d-flex flex-wrap gap-2">
+          <button
+            className="btn btn-outline-primary btn-sm"
+            onClick={onSelectAll}
+            disabled={loading}
+          >
+            {isAllSelected ? "Tout désélectionner" : "Tout sélectionner"}
+          </button>
+          <button
+            className="btn btn-success btn-sm d-flex align-items-center gap-2"
+            onClick={() => onBulkAction("activate")}
+            disabled={loading}
+          >
+            <FontAwesomeIcon icon={faCheckCircle} />
+            Activer
+          </button>
+          <button
+            className="btn btn-warning btn-sm d-flex align-items-center gap-2"
+            onClick={() => onBulkAction("deactivate")}
+            disabled={loading}
+          >
+            <FontAwesomeIcon icon={faBan} />
+            Désactiver
+          </button>
+          <button
+            className="btn btn-danger btn-sm d-flex align-items-center gap-2"
+            onClick={() => onBulkAction("delete")}
+            disabled={loading}
+          >
+            <FontAwesomeIcon icon={faTrash} />
+            Supprimer
+          </button>
+          <button
+            className="btn btn-outline-secondary btn-sm"
+            onClick={onClearSelection}
+            disabled={loading}
+          >
+            <FontAwesomeIcon icon={faBan} />
+            Annuler
           </button>
         </div>
-      </header>
+      </div>
+    </div>
+  );
+};
 
-      {/* Hero Section */}
-      <main className="container mx-auto px-4 py-12 md:py-24">
-        <section className="mx-auto max-w-4xl text-center">
-          <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl md:text-6xl">
-            Bienvenue sur votre{' '}
-            <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              application Next.js
-            </span>
-          </h1>
-          
-          <p className="mx-auto mt-6 max-w-2xl text-lg text-gray-600">
-            Une page de démarrage moderne avec Tailwind CSS, composants interactifs
-            et toutes les fonctionnalités essentielles de Next.js 14.
-          </p>
-          
-          <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-6 py-3 text-base font-medium text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              Explorer le tableau de bord
-            </Link>
-            <Link
-              href="/docs"
-              className="inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-6 py-3 text-base font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              Lire la documentation
-            </Link>
+// Modal de suppression multiple
+const BulkDeleteModal = ({
+  show,
+  loading,
+  count,
+  onClose,
+  onConfirm,
+}: {
+  show: boolean;
+  loading: boolean;
+  count: number;
+  onClose: () => void;
+  onConfirm: () => void;
+}) => {
+  if (!show) return null;
+  return (
+    <div
+      className="modal fade show d-block"
+      style={{
+        backgroundColor: "rgba(0,0,0,0.5)",
+        backdropFilter: "blur(2px)",
+      }}
+      tabIndex={-1}
+    >
+      <div className="modal-dialog modal-dialog-centered">
+        <div className="modal-content border-0 shadow-lg">
+          <div className="modal-header border-0 bg-danger text-white rounded-top-3">
+            <h5 className="modal-title fw-bold">
+              <FontAwesomeIcon icon={faTrash} className="me-2" />
+              Suppression multiple
+            </h5>
+            <button
+              type="button"
+              className="btn-close btn-close-white"
+              onClick={onClose}
+              disabled={loading}
+            ></button>
           </div>
-        </section>
-
-        {/* Features Section */}
-        <section className="mt-20">
-          <div className="mx-auto max-w-7xl">
-            <div className="text-center">
-              <h2 className="text-3xl font-bold text-gray-900">Fonctionnalités principales</h2>
-              <p className="mt-4 text-lg text-gray-600">
-                Découvrez les capacités puissantes de Next.js 14
-              </p>
+          <div className="modal-body p-4">
+            <div className="alert alert-warning mb-3 border-0">
+              <FontAwesomeIcon icon={faExclamationTriangle} className="me-2" />
+              <strong>Attention :</strong> Cette action est définitive
             </div>
-            
-            <div className="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
-              {features.map((feature) => (
-                <div
-                  key={feature.id}
-                  className="relative rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:shadow-md hover:-translate-y-1"
-                >
-                  <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-blue-50 text-2xl">
-                    {feature.icon}
-                  </div>
-                  <h3 className="text-xl font-semibold text-gray-900">{feature.title}</h3>
-                  <p className="mt-2 text-gray-600">{feature.description}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Counter Component */}
-        <section className="mt-20">
-          <div className="mx-auto max-w-2xl rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 p-8 md:p-12">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900">Composant interactif</h2>
-              <p className="mt-2 text-gray-600">
-                Exemple de composant client avec useState et useEffect
-              </p>
-              
-              <div className="mt-8">
-                <div className="inline-flex items-center gap-4 rounded-lg bg-white px-6 py-4 shadow-sm">
-                  <span className="text-lg font-medium text-gray-700">Compteur :</span>
-                  <span className="text-3xl font-bold text-blue-600">{count}</span>
-                  
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setCount(count - 1)}
-                      className="rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200"
-                    >
-                      -
-                    </button>
-                    <button
-                      onClick={() => setCount(count + 1)}
-                      className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-                    >
-                      +
-                    </button>
-                    <button
-                      onClick={() => setCount(0)}
-                      className="rounded-md bg-red-100 px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-200"
-                    >
-                      Reset
-                    </button>
-                  </div>
-                </div>
-                
-                <p className="mt-4 text-sm text-gray-500">
-                  {isClient ? 'Côté client ✓' : 'Côté serveur...'}
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Data Fetching Example */}
-        <section className="mt-20">
-          <div className="mx-auto max-w-4xl">
-            <h2 className="text-2xl font-bold text-gray-900 text-center">Récupération de données</h2>
-            <p className="mt-2 text-gray-600 text-center">
-              Exemple de récupération de données côté client
+            <p className="mb-3">
+              Êtes-vous sûr de vouloir supprimer{" "}
+              <strong>{count} ville(s)</strong> ?
             </p>
-            
-            <div className="mt-8">
-              {/* Vous pouvez remplacer cette section par un vrai fetch API */}
-              <div className="rounded-xl border border-gray-200 bg-white p-6">
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">Liste des utilisateurs (exemple)</h3>
-                  <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-800">
-                    API Ready
-                  </span>
-                </div>
-                
-                <div className="space-y-3">
-                  {[
-                    { id: 1, name: 'Jean Dupont', role: 'Admin', status: 'Actif' },
-                    { id: 2, name: 'Marie Curie', role: 'Éditeur', status: 'Actif' },
-                    { id: 3, name: 'Paul Martin', role: 'Utilisateur', status: 'Inactif' }
-                  ].map((user) => (
-                    <div key={user.id} className="flex items-center justify-between rounded-lg border border-gray-100 p-4 hover:bg-gray-50">
-                      <div>
-                        <h4 className="font-medium text-gray-900">{user.name}</h4>
-                        <p className="text-sm text-gray-500">{user.role}</p>
-                      </div>
-                      <span className={`rounded-full px-3 py-1 text-xs font-medium ${user.status === 'Actif' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                        {user.status}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+            <div className="text-danger">
+              <small>
+                Cette action est irréversible. Toutes les données associées
+                seront perdues.
+              </small>
             </div>
           </div>
-        </section>
-      </main>
-
-      {/* Footer */}
-      <footer className="mt-20 border-t bg-white">
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex flex-col md:flex-row justify-between items-center">
-            <div className="mb-4 md:mb-0">
-              <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600">
-                  <span className="font-bold text-white">N</span>
-                </div>
-                <span className="text-lg font-bold">Next.js App</span>
-              </div>
-              <p className="mt-2 text-sm text-gray-600">
-                Construit avec Next.js 14 et Tailwind CSS
-              </p>
-            </div>
-            
-            <div className="flex gap-6">
-              <Link href="/privacy" className="text-sm text-gray-600 hover:text-blue-600">
-                Confidentialité
-              </Link>
-              <Link href="/terms" className="text-sm text-gray-600 hover:text-blue-600">
-                Conditions
-              </Link>
-              <Link href="https://nextjs.org" className="text-sm text-gray-600 hover:text-blue-600" target="_blank">
-                Documentation Next.js
-              </Link>
-            </div>
-          </div>
-          
-          <div className="mt-8 border-t pt-8 text-center">
-            <p className="text-sm text-gray-500">
-              © {new Date().getFullYear()} Votre application Next.js. Tous droits réservés.
-            </p>
+          <div className="modal-footer border-0">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onClose}
+              disabled={loading}
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={onConfirm}
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-2"></span>
+                  Suppression en cours...
+                </>
+              ) : (
+                <>
+                  <FontAwesomeIcon icon={faTrash} className="me-2" />
+                  Supprimer les villes
+                </>
+              )}
+            </button>
           </div>
         </div>
-      </footer>
+      </div>
     </div>
+  );
+};
+
+// Composant de pagination
+const Pagination = ({
+  currentPage,
+  totalPages,
+  totalItems,
+  itemsPerPage,
+  indexOfFirstItem,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  itemsPerPage: number;
+  indexOfFirstItem: number;
+  onPageChange: (page: number) => void;
+}) => {
+  const indexOfLastItem = Math.min(currentPage * itemsPerPage, totalItems);
+  const renderPageNumbers = () => {
+    const pages = [];
+    const maxVisiblePages = 5;
+    if (totalPages <= maxVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      let start = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+      let end = Math.min(totalPages, start + maxVisiblePages - 1);
+      if (end - start + 1 < maxVisiblePages) {
+        start = Math.max(1, end - maxVisiblePages + 1);
+      }
+      if (start > 1) {
+        pages.push(1);
+        if (start > 2) pages.push("...");
+      }
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+      if (end < totalPages) {
+        if (end < totalPages - 1) pages.push("...");
+        pages.push(totalPages);
+      }
+    }
+    return pages;
+  };
+
+  return (
+    <div className="p-4 border-top">
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+        <div className="text-muted">
+          Affichage de{" "}
+          <span className="fw-semibold">{indexOfFirstItem + 1}</span> à{" "}
+          <span className="fw-semibold">{indexOfLastItem}</span> sur{" "}
+          <span className="fw-semibold">{totalItems}</span> villes
+        </div>
+        <nav aria-label="Pagination">
+          <ul className="pagination mb-0">
+            <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
+              <button
+                className="page-link"
+                onClick={() => onPageChange(1)}
+                disabled={currentPage === 1}
+                aria-label="Première page"
+              >
+                «
+              </button>
+            </li>
+            <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
+              <button
+                className="page-link"
+                onClick={() => onPageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                aria-label="Page précédente"
+              >
+                ‹
+              </button>
+            </li>
+            {renderPageNumbers().map((pageNum, index) => (
+              <li
+                key={index}
+                className={`page-item ${
+                  pageNum === currentPage ? "active" : ""
+                } ${pageNum === "..." ? "disabled" : ""}`}
+              >
+                {pageNum === "..." ? (
+                  <span className="page-link">...</span>
+                ) : (
+                  <button
+                    className="page-link"
+                    onClick={() => onPageChange(pageNum as number)}
+                  >
+                    {pageNum}
+                  </button>
+                )}
+              </li>
+            ))}
+            <li
+              className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}
+            >
+              <button
+                className="page-link"
+                onClick={() => onPageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                aria-label="Page suivante"
+              >
+                ›
+              </button>
+            </li>
+            <li
+              className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}
+            >
+              <button
+                className="page-link"
+                onClick={() => onPageChange(totalPages)}
+                disabled={currentPage === totalPages}
+                aria-label="Dernière page"
+              >
+                »
+              </button>
+            </li>
+          </ul>
+        </nav>
+        <div className="d-flex align-items-center gap-2">
+          <span className="text-muted">Page :</span>
+          <input
+            type="number"
+            min="1"
+            max={totalPages}
+            value={currentPage}
+            onChange={(e) => {
+              const value = parseInt(e.target.value);
+              if (value >= 1 && value <= totalPages) {
+                onPageChange(value);
+              }
+            }}
+            className="form-control form-control-sm text-center"
+            style={{ width: "70px" }}
+          />
+          <span className="text-muted">sur {totalPages}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default function VillesPage() {
+  // États
+  const [villes, setVilles] = useState<Ville[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Sélection multiple
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+  const [isAllSelected, setIsAllSelected] = useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+
+  // Pagination
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    pages: 1,
+  });
+
+  // Filtres et recherche
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [selectedCountry, setSelectedCountry] = useState<string>("all");
+  const [sortConfig, setSortConfig] = useState<{
+    key: keyof Ville | "pays.nom";
+    direction: "asc" | "desc";
+  } | null>(null);
+
+  // Options
+  const itemsPerPageOptions = [5, 10, 20, 50];
+
+  // Charger les villes
+  const fetchVilles = useCallback(
+    async (params?: { page?: number; limit?: number; search?: string }) => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const queryParams = new URLSearchParams();
+        queryParams.append("page", String(params?.page || pagination.page));
+        queryParams.append("limit", String(params?.limit || pagination.limit));
+        if (params?.search) queryParams.append("search", params.search);
+
+        const response = await api.get(
+          `${API_ENDPOINTS.VILLES.LIST}?${queryParams.toString()}`,
+        );
+
+        // ✅ Gestion du format { data: [...], total: number }
+        let villesData: Ville[] = [];
+        let totalCount = 0;
+
+        if (
+          response &&
+          typeof response === "object" &&
+          !Array.isArray(response) &&
+          "data" in response
+        ) {
+          villesData = response.data;
+          totalCount = response.total || villesData.length;
+        } else if (Array.isArray(response)) {
+          // Cas fallback si l'API retourne directement un tableau
+          villesData = response;
+          totalCount = villesData.length;
+        } else {
+          throw new Error("Format de réponse non reconnu");
+        }
+
+        setVilles(villesData);
+        setPagination((prev) => ({
+          ...prev,
+          page: params?.page || prev.page,
+          limit: params?.limit || prev.limit,
+          total: totalCount,
+          pages: Math.ceil(totalCount / (params?.limit || prev.limit)) || 1,
+        }));
+      } catch (err: any) {
+        console.error("❌ Erreur chargement villes:", err);
+        setError(err.message || "Erreur lors du chargement des villes");
+        setVilles([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [pagination.page, pagination.limit],
+  );
+
+  // Charger au montage
+  useEffect(() => {
+    fetchVilles();
+  }, [fetchVilles]);
+
+  // Recherche avec debounce
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      fetchVilles({
+        page: 1,
+        limit: pagination.limit,
+        search: searchTerm.trim() || undefined,
+      });
+    }, 300);
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm, fetchVilles, pagination.limit]);
+
+  // Utils
+  const formatDate = (dateString: string | null | undefined) => {
+    if (!dateString) return "N/A";
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "Date invalide";
+      return new Intl.DateTimeFormat("fr-FR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }).format(date);
+    } catch {
+      return "N/A";
+    }
+  };
+
+  // Tri
+  const sortVilles = (villesList: Ville[]) => {
+    if (!sortConfig || !villesList.length) return villesList;
+    return [...villesList].sort((a, b) => {
+      let aValue: any, bValue: any;
+      if (sortConfig.key === "pays.nom") {
+        aValue = a.pays?.nom || "";
+        bValue = b.pays?.nom || "";
+      } else {
+        aValue = a[sortConfig.key];
+        bValue = b[sortConfig.key];
+      }
+      if (aValue == null) aValue = "";
+      if (bValue == null) bValue = "";
+      if (aValue < bValue) return sortConfig.direction === "asc" ? -1 : 1;
+      if (aValue > bValue) return sortConfig.direction === "asc" ? 1 : -1;
+      return 0;
+    });
+  };
+
+  const requestSort = (key: keyof Ville | "pays.nom") => {
+    let direction: "asc" | "desc" = "asc";
+    if (
+      sortConfig &&
+      sortConfig.key === key &&
+      sortConfig.direction === "asc"
+    ) {
+      direction = "desc";
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIcon = (key: keyof Ville | "pays.nom") => {
+    if (!sortConfig || sortConfig.key !== key) {
+      return <FontAwesomeIcon icon={faSort} className="text-muted ms-1" />;
+    }
+    return sortConfig.direction === "asc" ? (
+      <FontAwesomeIcon icon={faSortUp} className="text-primary ms-1" />
+    ) : (
+      <FontAwesomeIcon icon={faSortDown} className="text-primary ms-1" />
+    );
+  };
+
+  // Filtres côté client
+  const filteredVilles = useMemo(() => {
+    let result = [...villes];
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(
+        (v) =>
+          v.nom.toLowerCase().includes(term) ||
+          v.code_postal.includes(searchTerm),
+      );
+    }
+    if (selectedStatus !== "all") {
+      result = result.filter((v) => v.statut === selectedStatus);
+    }
+    if (selectedCountry !== "all") {
+      result = result.filter((v) => v.pays_uuid === selectedCountry);
+    }
+    return sortVilles(result);
+  }, [villes, searchTerm, selectedStatus, selectedCountry, sortConfig]);
+
+  const currentItems = useMemo(() => {
+    return filteredVilles.slice(
+      (pagination.page - 1) * pagination.limit,
+      pagination.page * pagination.limit,
+    );
+  }, [filteredVilles, pagination.page, pagination.limit]);
+
+  // Pays uniques pour le filtre
+  const uniqueCountries = useMemo(() => {
+    const countries = new Map<string, Pays>();
+    villes.forEach((v) => {
+      if (v.pays) {
+        countries.set(v.pays.uuid, v.pays);
+      }
+    });
+    return Array.from(countries.values());
+  }, [villes]);
+
+  // Gestion de la sélection
+  const handleRowSelect = (uuid: string) => {
+    const newSelected = new Set(selectedRows);
+    if (newSelected.has(uuid)) {
+      newSelected.delete(uuid);
+    } else {
+      newSelected.add(uuid);
+    }
+    setSelectedRows(newSelected);
+    updateAllSelectedStatus(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedRows(new Set());
+      setIsAllSelected(false);
+    } else {
+      const allUuids = new Set(filteredVilles.map((v) => v.uuid));
+      setSelectedRows(allUuids);
+      setIsAllSelected(true);
+    }
+  };
+
+  const updateAllSelectedStatus = (selectedSet: Set<string>) => {
+    const allUuids = new Set(filteredVilles.map((v) => v.uuid));
+    setIsAllSelected(
+      selectedSet.size === allUuids.size &&
+        Array.from(allUuids).every((uuid) => selectedSet.has(uuid)),
+    );
+  };
+
+  const clearSelection = () => {
+    setSelectedRows(new Set());
+    setIsAllSelected(false);
+  };
+
+  // Actions en masse
+  const handleBulkAction = async (actionId: string) => {
+    if (selectedRows.size === 0) return;
+
+    if (actionId === "delete") {
+      setShowBulkDeleteModal(true);
+      return;
+    }
+
+    try {
+      // Simuler l'action (vous pouvez intégrer votre API ici)
+      setSuccessMessage(
+        `${selectedRows.size} ville(s) ${actionId === "activate" ? "activée(s)" : "désactivée(s)"} avec succès`,
+      );
+      setTimeout(() => setSuccessMessage(null), 3000);
+      clearSelection();
+    } catch (err: any) {
+      setError("Erreur lors de l'action en masse");
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    try {
+      setSuccessMessage(
+        `${selectedRows.size} ville(s) supprimée(s) avec succès`,
+      );
+      setTimeout(() => setSuccessMessage(null), 3000);
+      setShowBulkDeleteModal(false);
+      clearSelection();
+    } catch (err: any) {
+      setError("Erreur lors de la suppression");
+    }
+  };
+
+  // Export CSV
+  const handleCSVExport = () => {
+    if (filteredVilles.length === 0) {
+      setError("Aucune ville à exporter");
+      return;
+    }
+    try {
+      const csvContent = [
+        ["Nom", "Code postal", "Pays", "Indicatif", "Statut", "Créée le"],
+        ...filteredVilles.map((v) => [
+          v.nom || "",
+          v.code_postal || "",
+          v.pays?.nom || "",
+          v.pays?.indicatif || "",
+          v.statut || "",
+          formatDate(v.created_at),
+        ]),
+      ]
+        .map((row) => row.map((cell) => `"${cell}"`).join(","))
+        .join("\n");
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `villes-${new Date().toISOString().split("T")[0]}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setSuccessMessage("Export CSV réussi");
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err) {
+      setError("Erreur lors de l'export CSV");
+    }
+  };
+
+  // Réinitialiser les filtres
+  const resetFilters = () => {
+    setSearchTerm("");
+    setSelectedStatus("all");
+    setSelectedCountry("all");
+    setSortConfig(null);
+    setPagination((prev) => ({ ...prev, page: 1 }));
+    clearSelection();
+  };
+
+  return (
+    <>
+      {/* Modal de suppression multiple */}
+      <BulkDeleteModal
+        show={showBulkDeleteModal}
+        loading={loading}
+        count={selectedRows.size}
+        onClose={() => setShowBulkDeleteModal(false)}
+        onConfirm={handleBulkDelete}
+      />
+
+      <div className="p-3 p-md-4">
+        {/* Messages */}
+        {error && (
+          <div
+            className="alert alert-warning alert-dismissible fade show mb-3"
+            role="alert"
+          >
+            <FontAwesomeIcon icon={faExclamationTriangle} className="me-2" />
+            <strong>Attention:</strong> {error}
+            <button
+              type="button"
+              className="btn-close"
+              onClick={() => setError(null)}
+            ></button>
+          </div>
+        )}
+        {successMessage && (
+          <div
+            className="alert alert-success alert-dismissible fade show mb-3"
+            role="alert"
+          >
+            <FontAwesomeIcon icon={faCheckCircle} className="me-2" />
+            <strong>Succès:</strong> {successMessage}
+            <button
+              type="button"
+              className="btn-close"
+              onClick={() => setSuccessMessage(null)}
+            ></button>
+          </div>
+        )}
+
+        <div className="card border-0 shadow-sm overflow-hidden">
+          <div className="card-header bg-white border-0 py-3">
+            <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+              <div>
+                <p className="text-muted mb-1">Gestion Géographique</p>
+                <div className="d-flex align-items-center gap-3">
+                  <h2 className="h4 mb-0 fw-bold">Liste des Villes</h2>
+                  <span className="badge bg-primary bg-opacity-10 text-primary">
+                    {pagination.total} ville(s)
+                    {selectedRows.size > 0 &&
+                      ` (${selectedRows.size} sélectionnée(s))`}
+                  </span>
+                </div>
+              </div>
+              <div className="d-flex flex-wrap gap-2">
+                <button
+                  onClick={() => fetchVilles()}
+                  className="btn btn-outline-secondary d-flex align-items-center gap-2"
+                  disabled={loading}
+                >
+                  <FontAwesomeIcon icon={faRefresh} spin={loading} />
+                  Rafraîchir
+                </button>
+                <button
+                  onClick={handleCSVExport}
+                  className="btn btn-outline-primary d-flex align-items-center gap-2"
+                  disabled={villes.length === 0 || loading}
+                >
+                  <FontAwesomeIcon icon={faDownload} />
+                  Exporter CSV
+                </button>
+                <button
+                  onClick={() => alert("Fonctionnalité en développement")}
+                  className="btn btn-success d-flex align-items-center gap-2"
+                >
+                  <FontAwesomeIcon icon={faPlus} />
+                  Nouvelle Ville
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Barre d'actions en masse */}
+          <BulkActionsBar
+            selectedCount={selectedRows.size}
+            onSelectAll={handleSelectAll}
+            onClearSelection={clearSelection}
+            onBulkAction={handleBulkAction}
+            isAllSelected={isAllSelected}
+            totalItems={filteredVilles.length}
+            loading={loading}
+          />
+
+          {/* Filtres */}
+          <div className="p-4 border-bottom bg-light-subtle">
+            <div className="row g-3">
+              <div className="col-md-4">
+                <div className="input-group">
+                  <span className="input-group-text bg-white border-end-0">
+                    <FontAwesomeIcon icon={faSearch} className="text-muted" />
+                  </span>
+                  <input
+                    type="text"
+                    className="form-control border-start-0 ps-0"
+                    placeholder="Rechercher par nom, code postal..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="col-md-3">
+                <div className="input-group">
+                  <span className="input-group-text bg-white border-end-0">
+                    <FontAwesomeIcon icon={faFilter} className="text-muted" />
+                  </span>
+                  <select
+                    className="form-select border-start-0 ps-0"
+                    value={selectedStatus}
+                    onChange={(e) => setSelectedStatus(e.target.value)}
+                  >
+                    <option value="all">Tous les statuts</option>
+                    <option value="actif">Actives</option>
+                    <option value="inactif">Inactives</option>
+                  </select>
+                </div>
+              </div>
+              <div className="col-md-3">
+                <div className="input-group">
+                  <span className="input-group-text bg-white border-end-0">
+                    <FontAwesomeIcon icon={faFlag} className="text-muted" />
+                  </span>
+                  <select
+                    className="form-select border-start-0 ps-0"
+                    value={selectedCountry}
+                    onChange={(e) => setSelectedCountry(e.target.value)}
+                  >
+                    <option value="all">Tous les pays</option>
+                    {uniqueCountries.map((pays) => (
+                      <option key={pays.uuid} value={pays.uuid}>
+                        {pays.nom}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="col-md-2">
+                <div className="input-group">
+                  <span className="input-group-text bg-white border-end-0">
+                    <FontAwesomeIcon icon={faFilter} className="text-muted" />
+                  </span>
+                  <select
+                    className="form-select border-start-0 ps-0"
+                    value={pagination.limit}
+                    onChange={(e) =>
+                      setPagination((prev) => ({
+                        ...prev,
+                        limit: Number(e.target.value),
+                        page: 1,
+                      }))
+                    }
+                  >
+                    {itemsPerPageOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option} / page
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tableau */}
+          <div className="table-responsive">
+            {loading ? (
+              <div className="text-center py-5">
+                <div className="spinner-border text-primary" role="status">
+                  <span className="visually-hidden">Chargement...</span>
+                </div>
+                <p className="mt-3">Chargement des villes...</p>
+              </div>
+            ) : filteredVilles.length === 0 ? (
+              <div className="text-center py-5">
+                <div
+                  className="alert alert-info mx-auto"
+                  style={{ maxWidth: "500px" }}
+                >
+                  <FontAwesomeIcon
+                    icon={faCity}
+                    className="fs-1 mb-3 text-info"
+                  />
+                  <h5>Aucune ville trouvée</h5>
+                  <p className="mb-0">
+                    {villes.length === 0
+                      ? "Aucune ville dans la base de données."
+                      : "Aucune ville ne correspond à vos critères."}
+                  </p>
+                  <button
+                    onClick={resetFilters}
+                    className="btn btn-outline-primary mt-3"
+                  >
+                    <FontAwesomeIcon icon={faFilter} className="me-2" />
+                    Réinitialiser les filtres
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <table className="table table-hover mb-0">
+                  <thead className="table-light">
+                    <tr>
+                      <th style={{ width: "50px" }} className="text-center">
+                        <div className="form-check d-flex justify-content-center">
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            checked={isAllSelected && currentItems.length > 0}
+                            onChange={handleSelectAll}
+                            disabled={currentItems.length === 0}
+                          />
+                        </div>
+                      </th>
+                      <th style={{ width: "60px" }} className="text-center">
+                        #
+                      </th>
+                      <th style={{ width: "200px" }}>
+                        <button
+                          className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
+                          onClick={() => requestSort("nom")}
+                        >
+                          <FontAwesomeIcon icon={faCity} className="me-1" />
+                          Nom de la ville
+                          {getSortIcon("nom")}
+                        </button>
+                      </th>
+                      <th style={{ width: "120px" }}>
+                        <button
+                          className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
+                          onClick={() => requestSort("code_postal")}
+                        >
+                          <FontAwesomeIcon
+                            icon={faMapMarkerAlt}
+                            className="me-1"
+                          />
+                          Code postal
+                          {getSortIcon("code_postal")}
+                        </button>
+                      </th>
+                      <th style={{ width: "150px" }}>
+                        <button
+                          className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
+                          onClick={() => requestSort("pays.nom")}
+                        >
+                          <FontAwesomeIcon icon={faFlag} className="me-1" />
+                          Pays
+                          {getSortIcon("pays.nom")}
+                        </button>
+                      </th>
+                      <th style={{ width: "100px" }}>
+                        <button
+                          className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
+                          onClick={() => requestSort("statut")}
+                        >
+                          Statut
+                          {getSortIcon("statut")}
+                        </button>
+                      </th>
+                      <th style={{ width: "150px" }}>
+                        <button
+                          className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
+                          onClick={() => requestSort("created_at")}
+                        >
+                          <FontAwesomeIcon icon={faCalendar} className="me-1" />
+                          Créée le
+                          {getSortIcon("created_at")}
+                        </button>
+                      </th>
+                      <th style={{ width: "120px" }} className="text-center">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentItems.map((ville, index) => (
+                      <tr
+                        key={ville.uuid}
+                        className="align-middle"
+                        style={{
+                          backgroundColor: selectedRows.has(ville.uuid)
+                            ? "rgba(13, 110, 253, 0.05)"
+                            : "inherit",
+                        }}
+                      >
+                        <td className="text-center">
+                          <div className="form-check d-flex justify-content-center">
+                            <input
+                              className="form-check-input"
+                              type="checkbox"
+                              checked={selectedRows.has(ville.uuid)}
+                              onChange={() => handleRowSelect(ville.uuid)}
+                            />
+                          </div>
+                        </td>
+                        <td className="text-center text-muted fw-semibold">
+                          {(pagination.page - 1) * pagination.limit + index + 1}
+                        </td>
+                        <td>
+                          <div className="fw-semibold">{ville.nom}</div>
+                          <small className="text-muted">
+                            {ville.code_postal}
+                          </small>
+                        </td>
+                        <td>
+                          <code className="bg-light px-2 py-1 rounded">
+                            {ville.code_postal}
+                          </code>
+                        </td>
+                        <td>
+                          <div className="d-flex align-items-center gap-2">
+                            <FontAwesomeIcon
+                              icon={faGlobe}
+                              className="text-muted"
+                            />
+                            <span>{ville.pays?.nom || "N/A"}</span>
+                          </div>
+                          <small className="text-muted">
+                            {ville.pays?.indicatif || ""}
+                          </small>
+                        </td>
+                        <td>
+                          <StatusBadge statut={ville.statut} />
+                        </td>
+                        <td>
+                          <small className="text-muted">
+                            {formatDate(ville.created_at)}
+                          </small>
+                        </td>
+                        <td className="text-center">
+                          <div className="btn-group btn-group-sm" role="group">
+                            <button
+                              className="btn btn-outline-primary"
+                              title="Voir détails"
+                            >
+                              <FontAwesomeIcon icon={faEye} />
+                            </button>
+                            <button
+                              className="btn btn-outline-warning"
+                              title="Modifier"
+                            >
+                              <FontAwesomeIcon icon={faEdit} />
+                            </button>
+                            <button
+                              className="btn btn-outline-danger"
+                              title="Supprimer"
+                            >
+                              <FontAwesomeIcon icon={faTrash} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {/* Pagination */}
+                {pagination.total > pagination.limit && (
+                  <Pagination
+                    currentPage={pagination.page}
+                    totalPages={pagination.pages}
+                    totalItems={filteredVilles.length}
+                    itemsPerPage={pagination.limit}
+                    indexOfFirstItem={(pagination.page - 1) * pagination.limit}
+                    onPageChange={(page) =>
+                      setPagination((prev) => ({ ...prev, page }))
+                    }
+                  />
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <style jsx>{`
+        .btn-group-sm > .btn {
+          padding: 0.25rem 0.5rem;
+          font-size: 0.875rem;
+        }
+        .table > :not(caption) > * > * {
+          padding: 0.75rem 0.5rem;
+          vertical-align: middle;
+        }
+        .badge {
+          font-size: 0.75rem;
+          padding: 0.25rem 0.5rem;
+        }
+        .form-check-input:checked {
+          background-color: #0d6efd;
+          border-color: #0d6efd;
+        }
+        .table-active {
+          background-color: rgba(13, 110, 253, 0.05) !important;
+        }
+      `}</style>
+    </>
   );
 }

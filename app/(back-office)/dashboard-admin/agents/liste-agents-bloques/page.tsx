@@ -40,12 +40,27 @@ import {
   faUserShield,
   faUsers,
   faInfoCircle,
+  faArrowLeft,
+  faFileExport,
+  faSync,
+  faEllipsisV,
+  faUserLock,
+  faUserTimes,
 } from "@fortawesome/free-solid-svg-icons";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
-import EditAgentModal from "../../agents/components/modals/EditAgentModal";
 
 // Types
+interface Civilite {
+  libelle: string;
+  uuid: string;
+}
+
+interface Role {
+  name: string;
+  uuid: string;
+}
+
 interface Agent {
   uuid: string;
   nom: string;
@@ -57,6 +72,7 @@ interface Agent {
   est_verifie: boolean;
   est_bloque: boolean;
   is_admin: boolean;
+  is_deleted: boolean;
   matricule?: string;
   date_embauche?: string;
   departement?: string;
@@ -66,143 +82,148 @@ interface Agent {
   ville?: string;
   code_postal?: string;
   commentaire?: string;
-  created_at?: string;
-  updated_at?: string;
-  civilite?: {
-    libelle: string;
-  };
-  role?: {
-    name: string;
-  };
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string;
+  civilite?: Civilite;
+  role?: Role;
+  statut?: string;
+  avatar?: string;
+  indicatif?: string;
 }
 
 // Composant de statut
 const StatusBadge = ({ est_bloque }: { est_bloque: boolean }) => {
   if (est_bloque) {
     return (
-      <span className="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 d-inline-flex align-items-center gap-1">
+      <span className="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
         <FontAwesomeIcon icon={faBan} className="fs-12" />
-        <span>Bloqué</span>
+        <span className="fw-semibold">Bloqué</span>
       </span>
     );
   }
 
   return (
-    <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 d-inline-flex align-items-center gap-1">
+    <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
       <FontAwesomeIcon icon={faUserCheck} className="fs-12" />
-      <span>Actif</span>
+      <span className="fw-semibold">Actif</span>
     </span>
   );
 };
 
-// Composant de modal de suppression
-const DeleteModal = ({
+// Composant de modal de confirmation
+const ConfirmationModal = ({
   show,
-  agent,
+  title,
+  message,
+  confirmText,
+  cancelText = "Annuler",
   loading,
   onClose,
   onConfirm,
-  type = "single",
-  count = 0,
+  variant = "danger",
 }: {
   show: boolean;
-  agent: Agent | null;
+  title: string;
+  message: string;
+  confirmText: string;
+  cancelText?: string;
   loading: boolean;
   onClose: () => void;
   onConfirm: () => void;
-  type?: "single" | "multiple";
-  count?: number;
+  variant?: "danger" | "success" | "warning" | "info";
 }) => {
   if (!show) return null;
+
+  const variantColors = {
+    danger: {
+      bg: "bg-danger",
+      text: "text-white",
+      icon: faExclamationTriangle,
+    },
+    success: {
+      bg: "bg-success",
+      text: "text-white",
+      icon: faCheckCircle,
+    },
+    warning: {
+      bg: "bg-warning",
+      text: "text-dark",
+      icon: faExclamationTriangle,
+    },
+    info: {
+      bg: "bg-info",
+      text: "text-white",
+      icon: faInfoCircle,
+    },
+  };
+
+  const colors = variantColors[variant];
 
   return (
     <div
       className="modal fade show d-block"
-      style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+      style={{
+        backgroundColor: "rgba(0,0,0,0.5)",
+        backdropFilter: "blur(3px)",
+      }}
       tabIndex={-1}
-      role="dialog"
-      aria-modal="true"
     >
       <div className="modal-dialog modal-dialog-centered">
-        <div className="modal-content">
-          <div className="modal-header">
-            <h5 className="modal-title text-danger" id="deleteModalTitle">
-              <FontAwesomeIcon icon={faTrash} className="me-2" />
-              {type === "multiple"
-                ? "Suppression multiple"
-                : "Confirmer la suppression"}
+        <div className="modal-content border-0 shadow-lg">
+          <div className={`modal-header ${colors.bg} ${colors.text} border-0`}>
+            <h5 className="modal-title">
+              <FontAwesomeIcon icon={colors.icon} className="me-2" />
+              {title}
             </h5>
             <button
               type="button"
-              className="btn-close"
+              className="btn-close btn-close-white"
               onClick={onClose}
               disabled={loading}
               aria-label="Fermer"
             ></button>
           </div>
-          <div className="modal-body">
-            {type === "single" && agent ? (
-              <>
-                <p>
-                  Êtes-vous sûr de vouloir supprimer l'agent{" "}
-                  <strong>
-                    {agent.nom} {agent.prenoms}
-                  </strong>{" "}
-                  ({agent.email}) ?
+          <div className="modal-body p-4">
+            <div className="d-flex align-items-start">
+              <div
+                className={`rounded-circle p-3 ${colors.bg} bg-opacity-10 me-3`}
+              >
+                <FontAwesomeIcon
+                  icon={colors.icon}
+                  className={`${colors.text.replace("text-", "text-")}`}
+                />
+              </div>
+              <div>
+                <h6 className="mb-2">{message}</h6>
+                <p className="text-muted mb-0">
+                  Cette action ne peut pas être annulée.
                 </p>
-                <p className="text-danger mb-0">
-                  <small>
-                    Cette action est irréversible. Toutes les données associées
-                    à cet agent seront perdues.
-                  </small>
-                </p>
-              </>
-            ) : (
-              <>
-                <p>
-                  Êtes-vous sûr de vouloir supprimer <strong>{count}</strong>{" "}
-                  agent(s) sélectionné(s) ?
-                </p>
-                <p className="text-danger mb-0">
-                  <small>
-                    Cette action est irréversible. Toutes les données associées
-                    à ces agents seront perdues.
-                  </small>
-                </p>
-              </>
-            )}
+              </div>
+            </div>
           </div>
-          <div className="modal-footer">
+          <div className="modal-footer border-0">
             <button
               type="button"
-              className="btn btn-secondary"
+              className="btn btn-outline-secondary"
               onClick={onClose}
               disabled={loading}
             >
-              Annuler
+              {cancelText}
             </button>
             <button
               type="button"
-              className="btn btn-danger"
+              className={`btn ${colors.bg} ${colors.text}`}
               onClick={onConfirm}
               disabled={loading}
             >
               {loading ? (
                 <>
-                  <span
-                    className="spinner-border spinner-border-sm me-2"
-                    role="status"
-                    aria-hidden="true"
-                  ></span>
-                  Suppression...
+                  <span className="spinner-border spinner-border-sm me-2"></span>
+                  Traitement...
                 </>
               ) : (
-                <>
-                  <FontAwesomeIcon icon={faTrash} className="me-2" />
-                  {type === "multiple"
-                    ? `Supprimer ${count} agent(s)`
-                    : "Supprimer définitivement"}
-                </>
+                confirmText
               )}
             </button>
           </div>
@@ -265,13 +286,12 @@ const Pagination = ({
   };
 
   return (
-    <div className="p-4 border-top">
+    <div className="p-4 border-top bg-light">
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
         <div className="text-muted">
-          Affichage de{" "}
-          <span className="fw-semibold">{indexOfFirstItem + 1}</span> à{" "}
+          <span className="fw-semibold">{indexOfFirstItem + 1}</span> -{" "}
           <span className="fw-semibold">{indexOfLastItem}</span> sur{" "}
-          <span className="fw-semibold">{totalItems}</span> agents
+          <span className="fw-semibold">{totalItems}</span> agent(s)
         </div>
 
         <nav aria-label="Pagination">
@@ -311,8 +331,6 @@ const Pagination = ({
                   <button
                     className="page-link"
                     onClick={() => onPageChange(pageNum as number)}
-                    aria-label={`Page ${pageNum}`}
-                    aria-current={pageNum === currentPage ? "page" : undefined}
                   >
                     {pageNum}
                   </button>
@@ -363,7 +381,6 @@ const Pagination = ({
             }}
             className="form-control form-control-sm text-center"
             style={{ width: "70px" }}
-            aria-label="Numéro de page"
           />
           <span className="text-muted">sur {totalPages}</span>
         </div>
@@ -389,18 +406,15 @@ export default function ListeAgentsBloquesPage() {
   });
 
   // États pour les modals
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showUnblockModal, setShowUnblockModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showDeleteMultipleModal, setShowDeleteMultipleModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
+  const [showBulkUnblockModal, setShowBulkUnblockModal] = useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
-  const [selectedAgentForEdit, setSelectedAgentForEdit] =
-    useState<Agent | null>(null);
 
   // États pour les filtres et recherche
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRole, setSelectedRole] = useState<string>("all");
-  const [selectedStatus, setSelectedStatus] = useState<string>("blocked");
   const [sortConfig, setSortConfig] = useState<{
     key: keyof Agent | "role.name" | "civilite.libelle";
     direction: "asc" | "desc";
@@ -409,13 +423,12 @@ export default function ListeAgentsBloquesPage() {
   // États pour la sélection multiple
   const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
   const [selectAll, setSelectAll] = useState(false);
-  const [bulkActionLoading, setBulkActionLoading] = useState(false);
-  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
   // Options pour les éléments par page
   const itemsPerPageOptions = [5, 10, 20, 50];
 
-  // Fonction pour charger les agents bloqués
+  // ✅ CORRIGÉ : Fonction pour charger les agents bloqués
   const fetchBlockedAgents = useCallback(
     async (params?: {
       page?: number;
@@ -427,96 +440,49 @@ export default function ListeAgentsBloquesPage() {
         setLoading(true);
         setError(null);
 
-        const queryParams = new URLSearchParams();
-        queryParams.append(
-          "page",
-          (params?.page || pagination.page).toString(),
-        );
-        queryParams.append(
-          "limit",
-          (params?.limit || pagination.limit).toString(),
-        );
-        if (params?.search) queryParams.append("search", params.search);
-        if (params?.role && params.role !== "all")
-          queryParams.append("role", params.role);
-
-        // Toujours filtrer par agents bloqués
-        queryParams.append("est_bloque", "true");
-
-        const queryString = queryParams.toString();
-        const endpoint = queryString
-          ? `${API_ENDPOINTS.ADMIN.AGENTS.LIST}?${queryString}`
-          : `${API_ENDPOINTS.ADMIN.AGENTS.LIST}?est_bloque=true`;
+        // ✅ CORRECTION : Utiliser la route spécifique pour les agents bloqués
+        const endpoint = API_ENDPOINTS.ADMIN.AGENTS.BLOCKED; // "/admin/liste-agents-bloques"
 
         console.log("📡 Fetching blocked agents from:", endpoint);
 
-        const response = await api.get(endpoint);
+        // ✅ CORRECTION : L'API retourne directement { data: [...], count: X, status: "success" }
+        const response = await api.get<{
+          data: Agent[];
+          count: number;
+          status: string;
+        }>(endpoint);
 
-        console.log("🔍 DEBUG - Full API Response:", {
-          response,
-          responseData: response.data,
-          responseDataType: typeof response.data,
-          isArray: Array.isArray(response.data),
-          firstItem: response.data?.[0],
-          length: response.data?.length,
+        console.log("✅ API Response structure:", {
+          hasData: !!response.data,
+          dataIsArray: Array.isArray(response.data),
+          dataLength: response.data?.length,
+          count: response.count,
+          status: response.status,
         });
 
-        // VOTRE API PROXY RETOURNE DIRECTEMENT UN TABLEAU
-        let agentsData: Agent[] = [];
-        let totalCount = 0;
+        // ✅ CORRECTION : Votre API retourne response.data qui contient déjà les agents
+        // Structure: { data: [...], count: 2, status: "success" }
+        const agentsData = response.data || [];
+        const totalCount = response.count || 0;
 
-        if (Array.isArray(response.data)) {
-          agentsData = response.data;
-          totalCount = response.data.length;
-          console.log(
-            "✅ API returned array directly, count:",
-            agentsData.length,
-          );
-        } else if (response.data && typeof response.data === "object") {
-          if ("data" in response.data && Array.isArray(response.data.data)) {
-            agentsData = response.data.data;
-            totalCount = response.data.count || response.data.data.length;
-            console.log(
-              "✅ API returned structured object, count:",
-              agentsData.length,
-            );
-          } else if (
-            "agents" in response.data &&
-            Array.isArray(response.data.agents)
-          ) {
-            agentsData = response.data.agents;
-            totalCount = response.data.count || response.data.agents.length;
-            console.log(
-              "✅ API returned agents object, count:",
-              agentsData.length,
-            );
-          }
-        }
-
-        console.log("📊 Final parsed data:", {
-          agentsCount: agentsData.length,
-          totalCount,
+        console.log("📊 Agents data loaded:", {
+          count: agentsData.length,
           firstAgent: agentsData[0],
         });
 
-        if (agentsData.length > 0) {
-          setAgents(agentsData);
-          setPagination((prev) => ({
-            ...prev,
-            page: params?.page || prev.page,
-            limit: params?.limit || prev.limit,
-            total: totalCount,
-            pages: Math.ceil(totalCount / (params?.limit || prev.limit)) || 1,
-          }));
-        } else {
-          console.log("📭 No agents found");
-          setAgents([]);
-          setPagination((prev) => ({
-            ...prev,
-            total: 0,
-            pages: 1,
-          }));
-        }
+        // Filtrer uniquement les agents bloqués (sécurité supplémentaire)
+        const blockedAgents = agentsData.filter(
+          (agent) => agent.est_bloque === true,
+        );
+
+        setAgents(blockedAgents);
+        setPagination((prev) => ({
+          ...prev,
+          page: params?.page || 1,
+          limit: params?.limit || prev.limit,
+          total: totalCount,
+          pages: Math.ceil(totalCount / (params?.limit || prev.limit)) || 1,
+        }));
       } catch (err: any) {
         console.error("🚨 Error fetching blocked agents:", {
           message: err.message,
@@ -534,11 +500,12 @@ export default function ListeAgentsBloquesPage() {
 
         setError(errorMessage);
         setAgents([]);
+        setPagination((prev) => ({ ...prev, total: 0, pages: 1 }));
       } finally {
         setLoading(false);
       }
     },
-    [pagination.page, pagination.limit],
+    [],
   );
 
   // Charger les agents au montage
@@ -546,30 +513,11 @@ export default function ListeAgentsBloquesPage() {
     fetchBlockedAgents();
   }, []);
 
-  // Gérer les changements de pagination et filtres
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      fetchBlockedAgents({
-        page: pagination.page,
-        limit: pagination.limit,
-        search: searchTerm.trim() || undefined,
-        role: selectedRole !== "all" ? selectedRole : undefined,
-      });
-    }, 300);
-
-    return () => clearTimeout(timeoutId);
-  }, [
-    pagination.page,
-    pagination.limit,
-    searchTerm,
-    selectedRole,
-    fetchBlockedAgents,
-  ]);
-
-  // Fonction pour débloquer un agent
+  // ✅ CORRIGÉ : Fonction pour débloquer un agent
   const handleUnblockAgent = async (agent: Agent) => {
     try {
-      setLoading(true);
+      setActionLoading(true);
+      setError(null);
 
       console.log("🔓 Unblocking agent:", agent.uuid);
 
@@ -579,86 +527,34 @@ export default function ListeAgentsBloquesPage() {
 
       console.log("✅ Unblock response:", response);
 
-      if (response.data?.status === "success") {
-        // Retirer de la sélection si sélectionné
-        setSelectedAgents((prev) => prev.filter((id) => id !== agent.uuid));
+      // Mettre à jour localement
+      setAgents((prev) => prev.filter((a) => a.uuid !== agent.uuid));
+      setPagination((prev) => ({ ...prev, total: prev.total - 1 }));
 
-        // Rafraîchir la liste
-        await fetchBlockedAgents();
+      setSuccessMessage(
+        `Agent ${agent.nom} ${agent.prenoms} débloqué avec succès`,
+      );
+      setTimeout(() => setSuccessMessage(null), 3000);
 
-        setSuccessMessage(
-          `Agent ${agent.nom} ${agent.prenoms} débloqué avec succès`,
-        );
-        setTimeout(() => setSuccessMessage(null), 3000);
-      } else {
-        setError("Erreur lors du déblocage de l'agent");
-      }
+      setShowUnblockModal(false);
+      setSelectedAgent(null);
     } catch (err: any) {
       console.error("❌ Error unblocking agent:", err);
       setError(
         err.response?.data?.message || "Erreur lors du déblocage de l'agent",
       );
-      setTimeout(() => setError(null), 3000);
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
-  // Fonction pour débloquer plusieurs agents
-  const handleBulkUnblock = async () => {
-    if (selectedAgents.length === 0) {
-      setInfoMessage("Veuillez sélectionner au moins un agent");
-      setTimeout(() => setInfoMessage(null), 3000);
-      return;
-    }
-
-    try {
-      setBulkActionLoading(true);
-      let successCount = 0;
-      let errorCount = 0;
-
-      for (const agentId of selectedAgents) {
-        try {
-          const response = await api.post(
-            API_ENDPOINTS.ADMIN.AGENTS.UNBLOCK(agentId),
-          );
-
-          if (response.data?.status === "success") {
-            successCount++;
-          } else {
-            errorCount++;
-          }
-        } catch (err) {
-          console.error(`Erreur pour l'agent ${agentId}:`, err);
-          errorCount++;
-        }
-      }
-
-      setSuccessMessage(
-        `${successCount} agent(s) débloqué(s) avec succès${errorCount > 0 ? ` (${errorCount} échec(s))` : ""}`,
-      );
-      setTimeout(() => setSuccessMessage(null), 3000);
-
-      // Rafraîchir la liste
-      await fetchBlockedAgents();
-
-      // Réinitialiser la sélection
-      setSelectedAgents([]);
-      setSelectAll(false);
-    } catch (err) {
-      console.error("Erreur lors du déblocage en masse:", err);
-      setInfoMessage("Erreur lors du déblocage en masse");
-    } finally {
-      setBulkActionLoading(false);
-    }
-  };
-
-  // Fonction pour supprimer un agent
+  // ✅ CORRIGÉ : Fonction pour supprimer un agent
   const handleDeleteAgent = async () => {
     if (!selectedAgent) return;
 
     try {
-      setDeleteLoading(true);
+      setActionLoading(true);
+      setError(null);
 
       console.log("🗑️ Deleting agent:", selectedAgent.uuid);
 
@@ -668,14 +564,17 @@ export default function ListeAgentsBloquesPage() {
 
       console.log("✅ Delete response:", response);
 
+      // Mettre à jour localement
+      setAgents((prev) => prev.filter((a) => a.uuid !== selectedAgent.uuid));
+      setPagination((prev) => ({ ...prev, total: prev.total - 1 }));
+
+      setSuccessMessage(
+        `Agent ${selectedAgent.nom} ${selectedAgent.prenoms} supprimé avec succès`,
+      );
+      setTimeout(() => setSuccessMessage(null), 3000);
+
       setShowDeleteModal(false);
       setSelectedAgent(null);
-
-      // Rafraîchir la liste
-      await fetchBlockedAgents();
-
-      setSuccessMessage("Agent supprimé avec succès");
-      setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
       console.error("❌ Error deleting agent:", err);
       setError(
@@ -683,100 +582,129 @@ export default function ListeAgentsBloquesPage() {
           "Erreur lors de la suppression de l'agent",
       );
     } finally {
-      setDeleteLoading(false);
+      setActionLoading(false);
     }
   };
 
-  // Fonction pour supprimer plusieurs agents
-  const handleDeleteMultipleAgents = async () => {
-    if (selectedAgents.length === 0) return;
+  // ✅ CORRIGÉ : Fonction pour débloquer plusieurs agents
+  const handleBulkUnblock = async () => {
+    if (selectedAgents.length === 0) {
+      setInfoMessage("Veuillez sélectionner au moins un agent");
+      setTimeout(() => setInfoMessage(null), 3000);
+      return;
+    }
 
     try {
-      setDeleteLoading(true);
+      setActionLoading(true);
+      setError(null);
+
       let successCount = 0;
-      let errorCount = 0;
+      const errors: string[] = [];
+
+      for (const agentId of selectedAgents) {
+        try {
+          await api.post(API_ENDPOINTS.ADMIN.AGENTS.UNBLOCK(agentId));
+          successCount++;
+        } catch (err: any) {
+          console.error(`❌ Error unblocking agent ${agentId}:`, err);
+          errors.push(
+            `Agent ${agentId}: ${err.response?.data?.message || err.message}`,
+          );
+        }
+      }
+
+      // Mettre à jour localement
+      setAgents((prev) => prev.filter((a) => !selectedAgents.includes(a.uuid)));
+      setPagination((prev) => ({ ...prev, total: prev.total - successCount }));
+
+      if (successCount === selectedAgents.length) {
+        setSuccessMessage(`${successCount} agent(s) débloqué(s) avec succès`);
+      } else {
+        setSuccessMessage(
+          `${successCount} agent(s) débloqué(s) sur ${selectedAgents.length}`,
+        );
+        if (errors.length > 0) {
+          setInfoMessage(`Erreurs: ${errors.join("; ")}`);
+        }
+      }
+
+      setTimeout(() => {
+        setSuccessMessage(null);
+        setInfoMessage(null);
+      }, 5000);
+
+      // Réinitialiser la sélection
+      setSelectedAgents([]);
+      setSelectAll(false);
+      setShowBulkUnblockModal(false);
+    } catch (err) {
+      console.error("❌ Error in bulk unblock:", err);
+      setError("Erreur lors du déblocage en masse");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // ✅ CORRIGÉ : Fonction pour supprimer plusieurs agents
+  const handleBulkDelete = async () => {
+    if (selectedAgents.length === 0) {
+      setInfoMessage("Veuillez sélectionner au moins un agent");
+      setTimeout(() => setInfoMessage(null), 3000);
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      setError(null);
+
+      let successCount = 0;
+      const errors: string[] = [];
 
       for (const agentId of selectedAgents) {
         try {
           await api.delete(API_ENDPOINTS.ADMIN.AGENTS.DELETE(agentId));
           successCount++;
-        } catch (err) {
-          console.error(`Erreur pour l'agent ${agentId}:`, err);
-          errorCount++;
+        } catch (err: any) {
+          console.error(`❌ Error deleting agent ${agentId}:`, err);
+          errors.push(
+            `Agent ${agentId}: ${err.response?.data?.message || err.message}`,
+          );
         }
       }
 
-      setShowDeleteMultipleModal(false);
-      setSuccessMessage(
-        `${successCount} agent(s) supprimé(s) avec succès${errorCount > 0 ? ` (${errorCount} échec(s))` : ""}`,
-      );
-      setTimeout(() => setSuccessMessage(null), 3000);
+      // Mettre à jour localement
+      setAgents((prev) => prev.filter((a) => !selectedAgents.includes(a.uuid)));
+      setPagination((prev) => ({ ...prev, total: prev.total - successCount }));
+
+      if (successCount === selectedAgents.length) {
+        setSuccessMessage(`${successCount} agent(s) supprimé(s) avec succès`);
+      } else {
+        setSuccessMessage(
+          `${successCount} agent(s) supprimé(s) sur ${selectedAgents.length}`,
+        );
+        if (errors.length > 0) {
+          setInfoMessage(`Erreurs: ${errors.join("; ")}`);
+        }
+      }
+
+      setTimeout(() => {
+        setSuccessMessage(null);
+        setInfoMessage(null);
+      }, 5000);
 
       // Réinitialiser la sélection
       setSelectedAgents([]);
       setSelectAll(false);
-
-      // Rafraîchir la liste
-      await fetchBlockedAgents();
+      setShowBulkDeleteModal(false);
     } catch (err) {
-      console.error("Erreur lors de la suppression multiple:", err);
-      setInfoMessage("Erreur lors de la suppression des agents");
+      console.error("❌ Error in bulk delete:", err);
+      setError("Erreur lors de la suppression en masse");
     } finally {
-      setDeleteLoading(false);
+      setActionLoading(false);
     }
   };
 
-  // Fonction pour ouvrir le modal de suppression
-  const openDeleteModal = (agent: Agent) => {
-    setSelectedAgent(agent);
-    setShowDeleteModal(true);
-  };
-
-  // Fonction pour exporter les agents bloqués
-  // Fonction pour exporter les agents bloqués
-  const handleExport = async () => {
-    try {
-      console.log("📄 Exporting blocked agents...");
-
-      // Option 1: If your API wrapper supports responseType
-      // Check your API wrapper implementation first
-
-      // Option 2: Use fetch directly for binary data
-      const response = await fetch(
-        API_ENDPOINTS.ADMIN.AGENTS.EXPORT_BLOCKED_PDF,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`, // Add auth if needed
-            // Add other headers as needed
-          },
-        },
-      );
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `agents-bloques-${new Date().toISOString().split("T")[0]}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-      setSuccessMessage("Export PDF réussi");
-      setTimeout(() => setSuccessMessage(null), 3000);
-    } catch (err) {
-      console.error("❌ Error exporting PDF:", err);
-      // Fallback CSV export
-      handleCSVExport();
-    }
-  };
-
-  // Fallback CSV export
+  // Fonction pour exporter en CSV
   const handleCSVExport = () => {
     if (agents.length === 0) {
       setError("Aucun agent à exporter");
@@ -787,34 +715,32 @@ export default function ListeAgentsBloquesPage() {
     try {
       const csvContent = [
         [
-          "Matricule",
+          "UUID",
           "Nom",
           "Prénoms",
           "Email",
           "Téléphone",
           "Civilité",
           "Rôle",
-          "Département",
-          "Fonction",
-          "Date d'embauche",
           "Statut",
-          "Créé le",
-          "Bloqué le",
-        ],
-        ...filteredAgents.map((a) => [
-          a.matricule || "N/A",
-          a.nom || "",
-          a.prenoms || "",
-          a.email || "",
-          a.telephone || "",
-          a.civilite?.libelle || "Non spécifié",
-          a.role?.name || "Agent",
-          a.departement || "N/A",
-          a.fonction || "N/A",
-          a.date_embauche ? formatDate(a.date_embauche) : "N/A",
+          "Admin",
           "Bloqué",
-          formatDate(a.created_at),
-          formatDate(a.updated_at),
+          "Date de création",
+          "Dernière mise à jour",
+        ],
+        ...agents.map((agent) => [
+          agent.uuid || "",
+          agent.nom || "",
+          agent.prenoms || "",
+          agent.email || "",
+          agent.telephone || "",
+          agent.civilite?.libelle || "Non spécifié",
+          agent.role?.name || "Agent",
+          agent.est_bloque ? "Bloqué" : "Actif",
+          agent.is_admin ? "Oui" : "Non",
+          agent.est_bloque ? "Oui" : "Non",
+          formatDate(agent.created_at),
+          formatDate(agent.updated_at),
         ]),
       ]
         .map((row) => row.map((cell) => `"${cell}"`).join(","))
@@ -843,23 +769,7 @@ export default function ListeAgentsBloquesPage() {
   };
 
   // Fonction pour formater la date
-  const formatDate = (dateString: string | null | undefined) => {
-    if (!dateString) return "N/A";
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return "Date invalide";
-      return new Intl.DateTimeFormat("fr-FR", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      }).format(date);
-    } catch {
-      return "N/A";
-    }
-  };
-
-  // Fonction pour formater la date avec heure
-  const formatDateTime = (dateString: string | null | undefined) => {
+  const formatDate = (dateString: string) => {
     if (!dateString) return "N/A";
     try {
       const date = new Date(dateString);
@@ -895,7 +805,6 @@ export default function ListeAgentsBloquesPage() {
         bValue = b[sortConfig.key as keyof Agent];
       }
 
-      // Gérer les valeurs null/undefined
       if (aValue == null) aValue = "";
       if (bValue == null) bValue = "";
 
@@ -953,62 +862,23 @@ export default function ListeAgentsBloquesPage() {
     setSelectAll(!selectAll);
   };
 
-  const handleSelectAllOnPage = () => {
-    const pageAgentIds = currentItems.map((agent) => agent.uuid);
-    const allSelected = pageAgentIds.every((id) => selectedAgents.includes(id));
-
-    if (allSelected) {
-      // Désélectionner tous les agents de la page
-      setSelectedAgents((prev) =>
-        prev.filter((id) => !pageAgentIds.includes(id)),
-      );
-    } else {
-      // Sélectionner tous les agents de la page
-      const newSelection = [...new Set([...selectedAgents, ...pageAgentIds])];
-      setSelectedAgents(newSelection);
-    }
+  // Réinitialiser les filtres
+  const resetFilters = () => {
+    setSearchTerm("");
+    setSelectedRole("all");
+    setSortConfig(null);
+    setPagination((prev) => ({ ...prev, page: 1 }));
+    setSelectedAgents([]);
+    setSelectAll(false);
   };
 
-  // Actions en masse
-  const handleBulkAction = async (action: "unblock" | "delete") => {
-    if (selectedAgents.length === 0) {
-      setInfoMessage("Veuillez sélectionner au moins un agent");
-      setTimeout(() => setInfoMessage(null), 3000);
-      return;
-    }
-
-    try {
-      setBulkActionLoading(true);
-
-      switch (action) {
-        case "unblock":
-          await handleBulkUnblock();
-          break;
-        case "delete":
-          // Pour la suppression, on utilise la modal de confirmation
-          setShowDeleteMultipleModal(true);
-          setBulkActionLoading(false);
-          return;
-      }
-    } catch (err) {
-      console.error("Erreur lors de l'action en masse:", err);
-      setInfoMessage("Erreur lors de l'action en masse");
-    } finally {
-      setBulkActionLoading(false);
-    }
-  };
-
-  // Filtrer et trier les agents
   // Filtrer et trier les agents
   const filteredAgents = sortAgents(
     agents.filter((agent) => {
-      // Toujours filtrer par statut bloqué
-      if (agent.est_bloque !== true) return false;
-
       // Filtre par rôle
       if (selectedRole !== "all") {
-        if (selectedRole === "admin" && agent.is_admin !== true) return false;
-        if (selectedRole === "agent" && agent.is_admin !== false) return false;
+        if (selectedRole === "admin" && !agent.is_admin) return false;
+        if (selectedRole === "agent" && agent.is_admin) return false;
       }
 
       // Filtre par recherche
@@ -1019,9 +889,7 @@ export default function ListeAgentsBloquesPage() {
           agent.prenoms?.toLowerCase().includes(searchLower) ||
           agent.email?.toLowerCase().includes(searchLower) ||
           agent.telephone?.includes(searchTerm) ||
-          agent.matricule?.toLowerCase().includes(searchLower) ||
-          agent.fonction?.toLowerCase().includes(searchLower) ||
-          agent.departement?.toLowerCase().includes(searchLower);
+          agent.matricule?.toLowerCase().includes(searchLower);
 
         if (!matchesSearch) return false;
       }
@@ -1035,31 +903,7 @@ export default function ListeAgentsBloquesPage() {
     pagination.page * pagination.limit,
   );
 
-  // Réinitialiser les filtres
-  const resetFilters = () => {
-    setSearchTerm("");
-    setSelectedRole("all");
-    setSortConfig(null);
-    setPagination((prev) => ({ ...prev, page: 1 }));
-    setSelectedAgents([]);
-    setSelectAll(false);
-  };
-
-  // Fonction appelée après création réussie
-  const handleAgentCreated = () => {
-    setSuccessMessage("Agent créé avec succès !");
-    fetchBlockedAgents();
-    setTimeout(() => setSuccessMessage(null), 3000);
-  };
-
-  // Fonction appelée après modification réussie
-  const handleAgentUpdated = () => {
-    setSuccessMessage("Agent modifié avec succès !");
-    fetchBlockedAgents();
-    setTimeout(() => setSuccessMessage(null), 3000);
-  };
-
-  // Effet pour mettre à jour selectAll quand on change de page ou de sélection
+  // Effet pour mettre à jour selectAll
   useEffect(() => {
     if (currentItems.length > 0) {
       const allSelected = currentItems.every((agent) =>
@@ -1071,187 +915,163 @@ export default function ListeAgentsBloquesPage() {
     }
   }, [selectedAgents, currentItems]);
 
-  // Afficher les données pour débogage
-  console.log("🔍 Current agents state:", {
-    agentsCount: agents.length,
-    filteredCount: filteredAgents.length,
-    currentItemsCount: currentItems.length,
-    pagination,
-    loading,
-    error,
-    selectedAgentsCount: selectedAgents.length,
-  });
-
   return (
     <>
-      {/* Modal de création d'agent
-        <CreateAgentModal
-          isOpen={showCreateModal}
-          onClose={() => setShowCreateModal(false)}
-          onSuccess={handleAgentCreated}
-        />
-
-        <CreateAgentModal
-          isOpen={showCreateModal}
-          onClose={() => setShowCreateModal(false)}
-          onSuccess={handleAgentCreated}
-        />
-        */}
-
-      {/* Modal de modification d'agent */}
-      <EditAgentModal
-        isOpen={showEditModal}
-        agent={selectedAgentForEdit}
+      {/* Modal de déblocage */}
+      <ConfirmationModal
+        show={showUnblockModal}
+        title="Débloquer l'agent"
+        message={`Êtes-vous sûr de vouloir débloquer l'agent ${selectedAgent?.nom} ${selectedAgent?.prenoms} ?`}
+        confirmText="Débloquer"
+        loading={actionLoading}
         onClose={() => {
-          setShowEditModal(false);
-          setSelectedAgentForEdit(null);
+          setShowUnblockModal(false);
+          setSelectedAgent(null);
         }}
-        onSuccess={handleAgentUpdated}
+        onConfirm={() => selectedAgent && handleUnblockAgent(selectedAgent)}
+        variant="success"
       />
 
-      {/* Modal de suppression simple */}
-      <DeleteModal
+      {/* Modal de suppression */}
+      <ConfirmationModal
         show={showDeleteModal}
-        agent={selectedAgent}
-        loading={deleteLoading}
+        title="Supprimer l'agent"
+        message={`Êtes-vous sûr de vouloir supprimer définitivement l'agent ${selectedAgent?.nom} ${selectedAgent?.prenoms} ?`}
+        confirmText="Supprimer définitivement"
+        loading={actionLoading}
         onClose={() => {
           setShowDeleteModal(false);
           setSelectedAgent(null);
         }}
         onConfirm={handleDeleteAgent}
-        type="single"
+        variant="danger"
+      />
+
+      {/* Modal de déblocage multiple */}
+      <ConfirmationModal
+        show={showBulkUnblockModal}
+        title="Débloquer plusieurs agents"
+        message={`Êtes-vous sûr de vouloir débloquer ${selectedAgents.length} agent(s) sélectionné(s) ?`}
+        confirmText={`Débloquer ${selectedAgents.length} agent(s)`}
+        loading={actionLoading}
+        onClose={() => setShowBulkUnblockModal(false)}
+        onConfirm={handleBulkUnblock}
+        variant="success"
       />
 
       {/* Modal de suppression multiple */}
-      <DeleteModal
-        show={showDeleteMultipleModal}
-        agent={null}
-        loading={deleteLoading}
-        onClose={() => {
-          setShowDeleteMultipleModal(false);
-        }}
-        onConfirm={handleDeleteMultipleAgents}
-        type="multiple"
-        count={selectedAgents.length}
+      <ConfirmationModal
+        show={showBulkDeleteModal}
+        title="Supprimer plusieurs agents"
+        message={`Êtes-vous sûr de vouloir supprimer définitivement ${selectedAgents.length} agent(s) sélectionné(s) ?`}
+        confirmText={`Supprimer ${selectedAgents.length} agent(s)`}
+        loading={actionLoading}
+        onClose={() => setShowBulkDeleteModal(false)}
+        onConfirm={handleBulkDelete}
+        variant="danger"
       />
 
       <div className="p-3 p-md-4">
+        {/* Messages d'alerte */}
+        {error && (
+          <div
+            className="alert alert-danger alert-dismissible fade show mb-4"
+            role="alert"
+          >
+            <FontAwesomeIcon icon={faExclamationTriangle} className="me-2" />
+            <strong>Erreur:</strong> {error}
+            <button
+              type="button"
+              className="btn-close"
+              onClick={() => setError(null)}
+            ></button>
+          </div>
+        )}
+
+        {successMessage && (
+          <div
+            className="alert alert-success alert-dismissible fade show mb-4"
+            role="alert"
+          >
+            <FontAwesomeIcon icon={faCheckCircle} className="me-2" />
+            <strong>Succès:</strong> {successMessage}
+            <button
+              type="button"
+              className="btn-close"
+              onClick={() => setSuccessMessage(null)}
+            ></button>
+          </div>
+        )}
+
+        {infoMessage && (
+          <div
+            className="alert alert-info alert-dismissible fade show mb-4"
+            role="alert"
+          >
+            <FontAwesomeIcon icon={faInfoCircle} className="me-2" />
+            <strong>Information:</strong> {infoMessage}
+            <button
+              type="button"
+              className="btn-close"
+              onClick={() => setInfoMessage(null)}
+            ></button>
+          </div>
+        )}
+
         <div className="card border-0 shadow-sm overflow-hidden">
           <div className="card-header bg-white border-0 py-3">
             <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
               <div>
-                <p className="text-muted mb-1">Gestion des Agents Bloqués</p>
                 <div className="d-flex align-items-center gap-3">
-                  <h2 className="h4 mb-0 fw-bold">Liste des Agents Bloqués</h2>
+                  <h2 className="h4 mb-0 fw-bold">
+                    <FontAwesomeIcon
+                      icon={faUserLock}
+                      className="me-2 text-danger"
+                    />
+                    Liste des Agents Bloqués
+                  </h2>
                   <span className="badge bg-danger bg-opacity-10 text-danger border border-danger">
                     {pagination.total} agent(s) bloqué(s)
-                    {selectedAgents.length > 0 &&
-                      ` (${selectedAgents.length} sélectionné(s))`}
+                    {selectedAgents.length > 0 && (
+                      <span className="ms-2 badge bg-primary">
+                        {selectedAgents.length} sélectionné(s)
+                      </span>
+                    )}
                   </span>
                 </div>
+                <p className="text-muted mb-0 mt-2">
+                  Gérez les agents qui ont été bloqués du système
+                </p>
               </div>
 
               <div className="d-flex flex-wrap gap-2">
-                <Link
-                  href="/dashboard-admin/agents/liste-agents"
-                  className="btn btn-outline-primary d-flex align-items-center gap-2"
-                  aria-label="Voir les agents actifs"
-                >
-                  <FontAwesomeIcon icon={faUser} />
-                  Voir les agents actifs
-                </Link>
-
                 <button
                   onClick={() => fetchBlockedAgents()}
                   className="btn btn-outline-secondary d-flex align-items-center gap-2"
                   disabled={loading}
-                  aria-label="Rafraîchir la liste"
                 >
-                  <FontAwesomeIcon icon={faRefresh} spin={loading} />
+                  <FontAwesomeIcon icon={faSync} spin={loading} />
                   Rafraîchir
                 </button>
 
                 <button
-                  onClick={handleExport}
+                  onClick={handleCSVExport}
                   className="btn btn-outline-primary d-flex align-items-center gap-2"
                   disabled={agents.length === 0 || loading}
-                  aria-label="Exporter les données"
                 >
-                  <FontAwesomeIcon icon={faDownload} />
-                  Exporter PDF
+                  <FontAwesomeIcon icon={faFileExport} />
+                  Exporter CSV
                 </button>
 
-                <button
-                  onClick={() => setShowCreateModal(true)}
-                  className="btn btn-success d-flex align-items-center gap-2"
-                  disabled={loading}
-                  aria-label="Créer un nouvel agent"
+                <Link
+                  href="/dashboard-admin/agents/liste-agents"
+                  className="btn btn-outline-success d-flex align-items-center gap-2"
                 >
-                  <FontAwesomeIcon icon={faPlus} />
-                  Nouvel Agent
-                </button>
+                  <FontAwesomeIcon icon={faArrowLeft} />
+                  Retour aux agents
+                </Link>
               </div>
             </div>
-
-            {/* Messages d'alerte */}
-            {error && (
-              <div
-                className="alert alert-warning alert-dismissible fade show mt-3 mb-0"
-                role="alert"
-              >
-                <div className="d-flex align-items-center">
-                  <FontAwesomeIcon
-                    icon={faExclamationTriangle}
-                    className="me-2"
-                  />
-                  <div>
-                    <strong>Attention:</strong> {error}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => setError(null)}
-                  aria-label="Fermer l'alerte"
-                ></button>
-              </div>
-            )}
-
-            {successMessage && (
-              <div
-                className="alert alert-success alert-dismissible fade show mt-3 mb-0"
-                role="alert"
-              >
-                <div className="d-flex align-items-center">
-                  <FontAwesomeIcon icon={faCheckCircle} className="me-2" />
-                  <div>
-                    <strong>Succès:</strong> {successMessage}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => setSuccessMessage(null)}
-                  aria-label="Fermer l'alerte"
-                ></button>
-              </div>
-            )}
-
-            {infoMessage && (
-              <div
-                className="alert alert-info alert-dismissible fade show mt-3 mb-0"
-                role="alert"
-              >
-                <FontAwesomeIcon icon={faInfoCircle} className="me-2" />
-                <strong>Information:</strong> {infoMessage}
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => setInfoMessage(null)}
-                  aria-label="Fermer l'alerte"
-                ></button>
-              </div>
-            )}
           </div>
 
           {/* Barre d'actions en masse */}
@@ -1268,22 +1088,20 @@ export default function ListeAgentsBloquesPage() {
                 <div className="d-flex flex-wrap gap-2">
                   <button
                     className="btn btn-sm btn-outline-success d-flex align-items-center gap-1"
-                    onClick={() => handleBulkAction("unblock")}
-                    disabled={bulkActionLoading}
-                    aria-label="Débloquer les agents sélectionnés"
+                    onClick={() => setShowBulkUnblockModal(true)}
+                    disabled={actionLoading}
                   >
                     <FontAwesomeIcon icon={faUnlock} />
-                    <span>Débloquer</span>
+                    <span>Débloquer la sélection</span>
                   </button>
 
                   <button
                     className="btn btn-sm btn-outline-danger d-flex align-items-center gap-1"
-                    onClick={() => handleBulkAction("delete")}
-                    disabled={bulkActionLoading}
-                    aria-label="Supprimer les agents sélectionnés"
+                    onClick={() => setShowBulkDeleteModal(true)}
+                    disabled={actionLoading}
                   >
                     <FontAwesomeIcon icon={faTrash} />
-                    <span>Supprimer</span>
+                    <span>Supprimer la sélection</span>
                   </button>
 
                   <button
@@ -1292,11 +1110,10 @@ export default function ListeAgentsBloquesPage() {
                       setSelectedAgents([]);
                       setSelectAll(false);
                     }}
-                    disabled={bulkActionLoading}
-                    aria-label="Annuler la sélection"
+                    disabled={actionLoading}
                   >
                     <FontAwesomeIcon icon={faTimes} />
-                    <span>Annuler</span>
+                    <span>Annuler la sélection</span>
                   </button>
                 </div>
               </div>
@@ -1314,13 +1131,13 @@ export default function ListeAgentsBloquesPage() {
                   <input
                     type="text"
                     className="form-control border-start-0 ps-0"
-                    placeholder="Rechercher par nom, prénom, email, téléphone ou matricule..."
+                    placeholder="Rechercher par nom, prénom, email ou téléphone..."
                     value={searchTerm}
                     onChange={(e) => {
                       setSearchTerm(e.target.value);
                       setPagination((prev) => ({ ...prev, page: 1 }));
                     }}
-                    aria-label="Rechercher des agents bloqués"
+                    disabled={loading}
                   />
                 </div>
               </div>
@@ -1329,7 +1146,7 @@ export default function ListeAgentsBloquesPage() {
                 <div className="input-group">
                   <span className="input-group-text bg-white border-end-0">
                     <FontAwesomeIcon
-                      icon={faBriefcase}
+                      icon={faUserShield}
                       className="text-muted"
                     />
                   </span>
@@ -1340,16 +1157,16 @@ export default function ListeAgentsBloquesPage() {
                       setSelectedRole(e.target.value);
                       setPagination((prev) => ({ ...prev, page: 1 }));
                     }}
-                    aria-label="Filtrer par rôle"
+                    disabled={loading}
                   >
                     <option value="all">Tous les rôles</option>
-                    <option value="agent">Agents</option>
                     <option value="admin">Admins</option>
+                    <option value="agent">Agents</option>
                   </select>
                 </div>
               </div>
 
-              <div className="col-md-3">
+              <div className="col-md-2">
                 <div className="input-group">
                   <span className="input-group-text bg-white border-end-0">
                     <FontAwesomeIcon icon={faFilter} className="text-muted" />
@@ -1357,14 +1174,14 @@ export default function ListeAgentsBloquesPage() {
                   <select
                     className="form-select border-start-0 ps-0"
                     value={pagination.limit}
-                    onChange={(e) =>
+                    onChange={(e) => {
                       setPagination((prev) => ({
                         ...prev,
                         limit: Number(e.target.value),
                         page: 1,
-                      }))
-                    }
-                    aria-label="Nombre d'éléments par page"
+                      }));
+                    }}
+                    disabled={loading}
                   >
                     {itemsPerPageOptions.map((option) => (
                       <option key={option} value={option}>
@@ -1374,27 +1191,30 @@ export default function ListeAgentsBloquesPage() {
                   </select>
                 </div>
               </div>
+
+              <div className="col-md-1">
+                <button
+                  onClick={resetFilters}
+                  className="btn btn-outline-secondary w-100 d-flex align-items-center justify-content-center gap-2"
+                  disabled={loading}
+                  title="Réinitialiser les filtres"
+                >
+                  <FontAwesomeIcon icon={faTimes} />
+                  <span className="d-none d-md-inline">Reset</span>
+                </button>
+              </div>
             </div>
 
             <div className="row mt-3">
               <div className="col-md-6">
                 <div className="d-flex align-items-center gap-2">
                   <small className="text-muted">
-                    Total: <strong>{pagination.total}</strong> agents bloqués
+                    Résultats: <strong>{filteredAgents.length}</strong> agent(s)
+                    bloqué(s)
                     {searchTerm && (
                       <>
                         {" "}
                         pour "<strong>{searchTerm}</strong>"
-                      </>
-                    )}
-                    {selectedRole !== "all" && (
-                      <>
-                        {" "}
-                        avec rôle "
-                        <strong>
-                          {selectedRole === "admin" ? "Admins" : "Agents"}
-                        </strong>
-                        "
                       </>
                     )}
                   </small>
@@ -1408,28 +1228,16 @@ export default function ListeAgentsBloquesPage() {
                       {selectedAgents.length} sélectionné(s)
                     </small>
                   )}
-                  <button
-                    onClick={resetFilters}
-                    className="btn btn-sm btn-outline-secondary"
-                    disabled={loading}
-                    aria-label="Réinitialiser les filtres"
-                  >
-                    Réinitialiser les filtres
-                  </button>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Tableau des agents */}
+          {/* Tableau des agents bloqués */}
           <div className="table-responsive">
             {loading ? (
               <div className="text-center py-5">
-                <div
-                  className="spinner-border text-primary"
-                  role="status"
-                  aria-hidden="true"
-                >
+                <div className="spinner-border text-secondary" role="status">
                   <span className="visually-hidden">Chargement...</span>
                 </div>
                 <p className="mt-3">Chargement des agents bloqués...</p>
@@ -1439,34 +1247,32 @@ export default function ListeAgentsBloquesPage() {
                 {filteredAgents.length === 0 ? (
                   <div className="text-center py-5">
                     <div
-                      className="alert alert-info mx-auto"
+                      className="alert alert-info mx-auto border-0"
                       style={{ maxWidth: "500px" }}
                     >
-                      <div className="d-flex flex-column align-items-center">
+                      <div className="bg-info bg-opacity-10 rounded-circle p-4 d-inline-block mb-3">
                         <FontAwesomeIcon
-                          icon={faSearch}
-                          className="fs-1 mb-3 text-info"
+                          icon={faUserTimes}
+                          className="fs-1 text-info"
                         />
-                        <h5 className="alert-heading mb-2">
-                          {agents.length === 0
-                            ? "Aucun agent bloqué"
-                            : "Aucun résultat"}
-                        </h5>
-                        <p className="mb-0 text-center">
-                          {agents.length === 0
-                            ? "Aucun agent n'est actuellement bloqué dans le système."
-                            : "Aucun agent bloqué ne correspond à vos critères de recherche."}
-                        </p>
-                        {searchTerm && (
-                          <button
-                            onClick={resetFilters}
-                            className="btn btn-outline-primary mt-3"
-                            aria-label="Effacer la recherche"
-                          >
-                            <FontAwesomeIcon icon={faFilter} className="me-2" />
-                            Effacer la recherche
-                          </button>
-                        )}
+                      </div>
+                      <h5 className="alert-heading">Aucun agent bloqué</h5>
+                      <p className="mb-0">
+                        {agents.length === 0
+                          ? "Aucun agent n'est actuellement bloqué dans le système."
+                          : "Aucun agent bloqué ne correspond à vos critères de recherche"}
+                      </p>
+                      <div className="mt-3">
+                        <Link
+                          href="/dashboard-admin/agents/liste-agents"
+                          className="btn btn-outline-primary"
+                        >
+                          <FontAwesomeIcon
+                            icon={faArrowLeft}
+                            className="me-2"
+                          />
+                          Retour aux agents actifs
+                        </Link>
                       </div>
                     </div>
                   </div>
@@ -1488,11 +1294,6 @@ export default function ListeAgentsBloquesPage() {
                                     ? "Tout désélectionner"
                                     : "Tout sélectionner"
                                 }
-                                aria-label={
-                                  selectAll
-                                    ? "Tout désélectionner"
-                                    : "Tout sélectionner"
-                                }
                               />
                             </div>
                           </th>
@@ -1501,9 +1302,8 @@ export default function ListeAgentsBloquesPage() {
                           </th>
                           <th style={{ width: "180px" }}>
                             <button
-                              className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
+                              className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent d-flex align-items-center"
                               onClick={() => requestSort("nom")}
-                              aria-label={`Trier par nom ${sortConfig?.key === "nom" ? (sortConfig.direction === "asc" ? "croissant" : "décroissant") : ""}`}
                             >
                               Nom & Prénoms
                               {getSortIcon("nom")}
@@ -1511,9 +1311,8 @@ export default function ListeAgentsBloquesPage() {
                           </th>
                           <th style={{ width: "200px" }}>
                             <button
-                              className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
+                              className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent d-flex align-items-center"
                               onClick={() => requestSort("email")}
-                              aria-label={`Trier par email ${sortConfig?.key === "email" ? (sortConfig.direction === "asc" ? "croissant" : "décroissant") : ""}`}
                             >
                               <FontAwesomeIcon
                                 icon={faEnvelope}
@@ -1525,9 +1324,8 @@ export default function ListeAgentsBloquesPage() {
                           </th>
                           <th style={{ width: "150px" }}>
                             <button
-                              className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
+                              className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent d-flex align-items-center"
                               onClick={() => requestSort("telephone")}
-                              aria-label={`Trier par téléphone ${sortConfig?.key === "telephone" ? (sortConfig.direction === "asc" ? "croissant" : "décroissant") : ""}`}
                             >
                               <FontAwesomeIcon
                                 icon={faPhone}
@@ -1538,22 +1336,21 @@ export default function ListeAgentsBloquesPage() {
                             </button>
                           </th>
                           <th style={{ width: "120px" }}>
-                            <span className="fw-semibold">
-                              <FontAwesomeIcon
-                                icon={faBriefcase}
-                                className="me-1"
-                              />
+                            <button
+                              className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
+                              onClick={() => requestSort("role.name")}
+                            >
                               Rôle
-                            </span>
+                              {getSortIcon("role.name")}
+                            </button>
                           </th>
                           <th style={{ width: "120px" }}>
                             <span className="fw-semibold">Statut</span>
                           </th>
                           <th style={{ width: "150px" }}>
                             <button
-                              className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
+                              className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent d-flex align-items-center"
                               onClick={() => requestSort("updated_at")}
-                              aria-label={`Trier par date de blocage ${sortConfig?.key === "updated_at" ? (sortConfig.direction === "asc" ? "croissant" : "décroissant") : ""}`}
                             >
                               <FontAwesomeIcon
                                 icon={faCalendar}
@@ -1584,7 +1381,6 @@ export default function ListeAgentsBloquesPage() {
                                   className="form-check-input"
                                   checked={selectedAgents.includes(agent.uuid)}
                                   onChange={() => handleSelectAgent(agent.uuid)}
-                                  aria-label={`Sélectionner ${agent.nom} ${agent.prenoms}`}
                                 />
                               </div>
                             </td>
@@ -1597,7 +1393,7 @@ export default function ListeAgentsBloquesPage() {
                               <div className="d-flex align-items-center">
                                 <div className="flex-shrink-0">
                                   <div
-                                    className="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center"
+                                    className="bg-danger bg-opacity-10 text-danger rounded-circle d-flex align-items-center justify-content-center"
                                     style={{ width: "40px", height: "40px" }}
                                   >
                                     <FontAwesomeIcon icon={faUser} />
@@ -1652,9 +1448,7 @@ export default function ListeAgentsBloquesPage() {
                               </span>
                             </td>
                             <td>
-                              <StatusBadge
-                                est_bloque={agent.est_bloque || false}
-                              />
+                              <StatusBadge est_bloque={agent.est_bloque} />
                             </td>
                             <td>
                               <div className="d-flex align-items-center">
@@ -1663,7 +1457,7 @@ export default function ListeAgentsBloquesPage() {
                                   className="text-muted me-2"
                                 />
                                 <small className="text-muted">
-                                  {formatDateTime(agent.updated_at)}
+                                  {formatDate(agent.updated_at)}
                                 </small>
                               </div>
                             </td>
@@ -1671,46 +1465,33 @@ export default function ListeAgentsBloquesPage() {
                               <div
                                 className="btn-group btn-group-sm"
                                 role="group"
-                                aria-label={`Actions pour ${agent.nom} ${agent.prenoms}`}
                               >
                                 <Link
                                   href={`/dashboard-admin/agents/${agent.uuid}`}
                                   className="btn btn-outline-primary"
                                   title="Voir détails"
-                                  aria-label="Voir les détails"
                                 >
                                   <FontAwesomeIcon icon={faEye} />
                                 </Link>
-
-                                <button
-                                  className="btn btn-outline-warning"
-                                  title="Modifier"
-                                  onClick={() => {
-                                    setSelectedAgentForEdit(agent);
-                                    setShowEditModal(true);
-                                  }}
-                                  disabled={loading}
-                                  aria-label="Modifier l'agent"
-                                >
-                                  <FontAwesomeIcon icon={faEdit} />
-                                </button>
-
                                 <button
                                   className="btn btn-outline-success"
                                   title="Débloquer"
-                                  onClick={() => handleUnblockAgent(agent)}
-                                  disabled={loading}
-                                  aria-label="Débloquer l'agent"
+                                  onClick={() => {
+                                    setSelectedAgent(agent);
+                                    setShowUnblockModal(true);
+                                  }}
+                                  disabled={actionLoading}
                                 >
                                   <FontAwesomeIcon icon={faUnlock} />
                                 </button>
-
                                 <button
                                   className="btn btn-outline-danger"
                                   title="Supprimer"
-                                  onClick={() => openDeleteModal(agent)}
-                                  disabled={loading}
-                                  aria-label="Supprimer l'agent"
+                                  onClick={() => {
+                                    setSelectedAgent(agent);
+                                    setShowDeleteModal(true);
+                                  }}
+                                  disabled={actionLoading}
                                 >
                                   <FontAwesomeIcon icon={faTrash} />
                                 </button>
@@ -1744,46 +1525,33 @@ export default function ListeAgentsBloquesPage() {
         </div>
       </div>
 
-      {/* Styles inline */}
       <style jsx>{`
         .btn-group-sm > .btn {
           padding: 0.25rem 0.5rem;
           font-size: 0.875rem;
         }
-
         .font-monospace {
           font-family:
             "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier,
             monospace;
         }
-
         .table > :not(caption) > * > * {
           padding: 0.75rem 0.5rem;
           vertical-align: middle;
         }
-
         .table-active {
           background-color: rgba(13, 110, 253, 0.05) !important;
         }
-
         .form-check-input:checked {
           background-color: #0d6efd;
           border-color: #0d6efd;
         }
-
         .form-check-input:focus {
           border-color: #86b7fe;
           box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
         }
-
         .fs-11 {
           font-size: 11px !important;
-        }
-
-        .text-truncate {
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
         }
       `}</style>
     </>
