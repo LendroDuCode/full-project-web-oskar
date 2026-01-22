@@ -73,11 +73,6 @@ const nextConfig = {
     },
   },
 
-  // Désactiver Turbopack pour plus de stabilité
-  experimental: {
-    turbo: false,
-  },
-
   // Désactiver strict mode
   reactStrictMode: false,
 
