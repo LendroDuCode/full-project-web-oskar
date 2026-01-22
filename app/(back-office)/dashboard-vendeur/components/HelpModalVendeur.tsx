@@ -1,7 +1,20 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Modal, Button, Tab, Nav, Card, Accordion } from "react-bootstrap";
+import {
+  Modal,
+  Button,
+  Tab,
+  Nav,
+  Card,
+  ProgressBar,
+  Row,
+  Col,
+  Badge,
+  ListGroup,
+  Alert,
+  Accordion,
+} from "react-bootstrap";
 
 interface HelpModalVendeurProps {
   show: boolean;
@@ -12,7 +25,7 @@ export default function HelpModalVendeur({
   show,
   onClose,
 }: HelpModalVendeurProps) {
-  const [activeTab, setActiveTab] = useState("guide");
+  const [activeTab, setActiveTab] = useState("overview");
 
   // Fermeture avec la touche Escape
   useEffect(() => {
@@ -26,764 +39,2054 @@ export default function HelpModalVendeur({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [show, onClose]);
 
-  // SVGs pour embellir
-  const StoreSVG = () => (
-    <svg
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className="me-2"
-    >
-      <path
-        d="M3 9L12 2L21 9V20C21 20.5304 20.7893 21.0391 20.4142 21.4142C20.0391 21.7893 19.5304 22 19 22H5C4.46957 22 3.96086 21.7893 3.58579 21.4142C3.21071 21.0391 3 20.5304 3 20V9Z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M9 22V12H15V22"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-
-  const BullhornSVG = () => (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className="me-2"
-    >
-      <path
-        d="M18 8C19.6569 8 21 9.34315 21 11C21 12.6569 19.6569 14 18 14"
-        stroke="#16a34a"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <path
-        d="M2 10L2 14L4.5 14C5.16304 14 5.79893 14.2634 6.26777 14.7322C6.73661 15.2011 7 15.837 7 16.5L7 18.5C7 19.163 6.73661 19.7989 6.26777 20.2678C5.79893 20.7366 5.16304 21 4.5 21H3C2.73478 21 2.48043 20.8946 2.29289 20.7071C2.10536 20.5196 2 20.2652 2 20L2 10Z"
-        stroke="#16a34a"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M10 8L22 5L19 11L22 17L10 14V8Z"
-        stroke="#16a34a"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-
-  const ChartLineSVG = () => (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className="me-2"
-    >
-      <path
-        d="M21 21H4V4"
-        stroke="#0d6efd"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M6 15L10.5 10.5L14.5 14.5L19 9"
-        stroke="#0d6efd"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M16 6H20V10"
-        stroke="#0d6efd"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-
-  const CheckCircleSVG = () => (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className="me-2"
-    >
-      <path
-        d="M22 11.08V12C21.9988 14.1564 21.3005 16.2547 20.0093 17.9818C18.7182 19.709 16.9033 20.9725 14.8354 21.5839C12.7674 22.1953 10.5573 22.1219 8.53447 21.3746C6.51168 20.6273 4.78465 19.2461 3.61096 17.4371C2.43727 15.628 1.87979 13.4881 2.02168 11.3363C2.16356 9.18455 2.99721 7.13631 4.39828 5.49706C5.79935 3.85781 7.69279 2.71537 9.79619 2.24013C11.8996 1.7649 14.1003 1.98232 16.07 2.86"
-        stroke="#198754"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M22 4L12 14.01L9 11.01"
-        stroke="#198754"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-
-  const LightbulbSVG = () => (
-    <svg
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className="me-3"
-    >
-      <path
-        d="M9.663 17H14.337M12 3V2M18.364 5.636L19.071 4.929M21 12H22M4 12H3M6.343 5.343L5.636 4.636M8.464 15.535L12 12M15.535 15.535L12 12M12 21C16.9706 21 21 16.9706 21 12C21 7.02944 16.9706 3 12 3C7.02944 3 3 7.02944 3 12C3 16.9706 7.02944 21 12 21Z"
-        stroke="#0dcaf0"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-
-  const BookSVG = () => (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className="me-2"
-    >
-      <path
-        d="M4 19.5C4 18.837 4.26339 18.2011 4.73223 17.7322C5.20107 17.2634 5.83696 17 6.5 17H20"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M6.5 2H20V22H6.5C5.83696 22 5.20107 21.7366 4.73223 21.2678C4.26339 20.7989 4 20.163 4 19.5V4.5C4 3.83696 4.26339 3.20107 4.73223 2.73223C5.20107 2.26339 5.83696 2 6.5 2Z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-
-  const NewspaperSVG = () => (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className="me-2"
-    >
-      <path
-        d="M19 20H5C3.89543 20 3 19.1046 3 18L3 6C3 4.89543 3.89543 4 5 4L15 4C16.1046 4 17 4.89543 17 6V18C17 19.1046 17.8954 20 19 20ZM17 8H21C21.5523 8 22 8.44772 22 9V19C22 20.1046 21.1046 21 20 21H17V8Z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-
-  const QuestionSVG = () => (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className="me-2"
-    >
-      <path
-        d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M9.08984 9C9.32495 8.33167 9.789 7.76811 10.3998 7.40913C11.0106 7.05016 11.7287 6.91894 12.427 7.03871C13.1253 7.15849 13.7588 7.52152 14.2149 8.06353C14.671 8.60553 14.9209 9.29152 14.9198 10C14.9198 12 11.9198 13 11.9198 13"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M12 17H12.01"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
+  // Statistiques de progression simulées
+  const userProgress = {
+    sales: 75,
+    listings: 60,
+    ratings: 90,
+    response: 85,
+    exchanges: 40,
+    donations: 25,
+  };
 
   return (
     <Modal
       show={show}
       onHide={onClose}
-      size="lg"
+      size="xl"
       centered
       backdrop="static"
       keyboard={false}
+      dialogClassName="modal-90w"
       aria-labelledby="help-modal-title"
-      className="border-0 shadow-lg"
+      className="border-0"
     >
-      {/* Header avec gradient */}
-      <Modal.Header className="border-0 bg-gradient-to-r from-success to-emerald-600 text-white position-relative">
-        <div className="position-absolute top-0 end-0 opacity-25 me-3">
-          <StoreSVG />
+      {/* Header avec fond vert transparent */}
+      <div className="bg-success bg-opacity-10 position-relative border-bottom">
+        <div className="container-fluid py-4">
+          <div className="row align-items-center">
+            <div className="col">
+              <h4 className="mb-0 text-success fw-bold">
+                <i className="fas fa-store me-2"></i>
+                Centre d'Expertise Vendeur OSKAR
+              </h4>
+              <small className="text-success text-opacity-75">
+                Guide complet pour maîtriser les ventes, échanges et dons
+              </small>
+            </div>
+            <div className="col-auto">
+              <Button
+                variant="link"
+                onClick={onClose}
+                className="text-success p-0"
+                aria-label="Fermer"
+              >
+                <i className="fas fa-times fa-lg"></i>
+              </Button>
+            </div>
+          </div>
         </div>
-        <Modal.Title id="help-modal-title" className="h5 fw-bold">
-          <i className="fa-solid fa-circle-question me-2"></i>
-          Centre d'aide Vendeur OSKAR
-        </Modal.Title>
-        <Button
-          variant="link"
-          onClick={onClose}
-          className="position-absolute top-0 end-0 p-3 text-white"
-          aria-label="Fermer"
-        >
-          <i className="fa-solid fa-times fs-5"></i>
-        </Button>
-      </Modal.Header>
 
-      <Modal.Body className="p-0">
-        <Tab.Container
+        {/* Navigation horizontale */}
+        <Nav
+          variant="pills"
+          className="px-4 pb-3"
           activeKey={activeTab}
-          onSelect={(k) => setActiveTab(k || "guide")}
+          onSelect={(k) => setActiveTab(k || "overview")}
         >
-          {/* Navigation stylisée */}
-          <Nav
-            variant="pills"
-            className="px-4 pt-3 bg-light border-bottom"
-            style={{ gap: "1px" }}
-          >
-            <Nav.Item>
-              <Nav.Link
-                eventKey="guide"
-                className={`rounded-3 px-4 py-2 border-0 ${activeTab === "guide" ? "bg-success text-white shadow-sm" : "bg-white text-dark border"}`}
-              >
-                <BookSVG />
-                Guide d'utilisation
-              </Nav.Link>
-            </Nav.Item>
-            <Nav.Item>
-              <Nav.Link
-                eventKey="annonces"
-                className={`rounded-3 px-4 py-2 border-0 ${activeTab === "annonces" ? "bg-success text-white shadow-sm" : "bg-white text-dark border"}`}
-              >
-                <NewspaperSVG />
-                Gestion des annonces
-              </Nav.Link>
-            </Nav.Item>
-            <Nav.Item>
-              <Nav.Link
-                eventKey="faq"
-                className={`rounded-3 px-4 py-2 border-0 ${activeTab === "faq" ? "bg-success text-white shadow-sm" : "bg-white text-dark border"}`}
-              >
-                <QuestionSVG />
-                FAQ
-              </Nav.Link>
-            </Nav.Item>
-          </Nav>
+          <Nav.Item className="me-2 mb-2">
+            <Nav.Link
+              eventKey="overview"
+              className={`rounded-pill px-4 py-2 ${activeTab === "overview" ? "bg-success text-white shadow-sm" : "bg-white text-success border-success"}`}
+            >
+              <i className="fas fa-home me-2"></i>
+              Vue d'ensemble
+            </Nav.Link>
+          </Nav.Item>
+          <Nav.Item className="me-2 mb-2">
+            <Nav.Link
+              eventKey="sales"
+              className={`rounded-pill px-4 py-2 ${activeTab === "sales" ? "bg-primary text-white shadow-sm" : "bg-white text-primary border-primary"}`}
+            >
+              <i className="fas fa-shopping-bag me-2"></i>
+              Guide des Ventes
+            </Nav.Link>
+          </Nav.Item>
+          <Nav.Item className="me-2 mb-2">
+            <Nav.Link
+              eventKey="exchanges"
+              className={`rounded-pill px-4 py-2 ${activeTab === "exchanges" ? "bg-warning text-white shadow-sm" : "bg-white text-warning border-warning"}`}
+            >
+              <i className="fas fa-exchange-alt me-2"></i>
+              Guide des Échanges
+            </Nav.Link>
+          </Nav.Item>
+          <Nav.Item className="me-2 mb-2">
+            <Nav.Link
+              eventKey="donations"
+              className={`rounded-pill px-4 py-2 ${activeTab === "donations" ? "bg-info text-white shadow-sm" : "bg-white text-info border-info"}`}
+            >
+              <i className="fas fa-heart me-2"></i>
+              Guide des Dons
+            </Nav.Link>
+          </Nav.Item>
+          <Nav.Item className="mb-2">
+            <Nav.Link
+              eventKey="performance"
+              className={`rounded-pill px-4 py-2 ${activeTab === "performance" ? "bg-dark text-white shadow-sm" : "bg-white text-dark border-dark"}`}
+            >
+              <i className="fas fa-chart-line me-2"></i>
+              Performance
+            </Nav.Link>
+          </Nav.Item>
+        </Nav>
+      </div>
 
-          {/* Contenu avec animations */}
-          <Tab.Content
-            className="p-4"
-            style={{ maxHeight: "500px", overflowY: "auto" }}
-          >
-            {/* Onglet Guide */}
-            <Tab.Pane eventKey="guide" className="fade">
-              <div className="text-center mb-4">
-                <div className="d-inline-block p-3 bg-success bg-opacity-10 rounded-circle mb-3">
-                  <StoreSVG />
-                </div>
-                <h4 className="text-success fw-bold mb-3">
-                  Bienvenue sur votre espace Vendeur
-                </h4>
-                <p className="text-muted lead">
-                  Gérez vos annonces, communiquez avec les acheteurs et
-                  maximisez vos ventes
-                </p>
-              </div>
+      <Modal.Body className="p-0 bg-light">
+        <Tab.Container activeKey={activeTab}>
+          <Tab.Content className="min-vh-50">
+            {/* Vue d'ensemble */}
+            <Tab.Pane eventKey="overview" className="fade">
+              <div className="container-fluid py-5">
+                <Row className="mb-5">
+                  <Col lg={8}>
+                    <div className="mb-5">
+                      <h2 className="fw-bold mb-4 text-success">
+                        Bienvenue dans votre Espace Vendeur OSKAR
+                      </h2>
+                      <p className="text-dark fs-5 mb-4">
+                        OSKAR révolutionne la manière dont vous gérez vos
+                        transactions en ligne. Notre plateforme unique vous
+                        permet non seulement de vendre, mais aussi d'échanger
+                        vos articles et de faire des dons solidaires, le tout
+                        dans un environnement sécurisé et optimisé pour votre
+                        succès.
+                      </p>
 
-              <div className="row g-4 mb-4">
-                {/* Carte Publication */}
-                <div className="col-md-6">
-                  <Card className="border-0 shadow-sm h-100 hover-lift">
-                    <Card.Body className="p-4">
-                      <div className="d-flex align-items-center mb-3">
-                        <div className="bg-success bg-opacity-10 p-3 rounded-circle">
-                          <BullhornSVG />
-                        </div>
-                        <h5 className="ms-3 mb-0 text-success fw-bold">
-                          Publication d'annonces
+                      <div className="bg-success bg-opacity-10 p-4 rounded-3 mb-4">
+                        <h5 className="text-success fw-bold mb-3">
+                          <i className="fas fa-lightbulb me-2"></i>
+                          Pourquoi choisir OSKAR comme vendeur ?
                         </h5>
-                      </div>
-                      <ul className="list-unstyled mb-0">
-                        {[
-                          "Cliquez sur 'Publier une annonce'",
-                          "Remplissez le formulaire détaillé",
-                          "Ajoutez des photos de qualité",
-                          "Fixez un prix compétitif",
-                          "Choisissez la bonne catégorie",
-                        ].map((item, idx) => (
-                          <li
-                            key={idx}
-                            className="mb-2 d-flex align-items-start"
-                          >
-                            <CheckCircleSVG />
-                            <span className="text-dark">{item}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </Card.Body>
-                  </Card>
-                </div>
-
-                {/* Carte Gestion */}
-                <div className="col-md-6">
-                  <Card className="border-0 shadow-sm h-100 hover-lift">
-                    <Card.Body className="p-4">
-                      <div className="d-flex align-items-center mb-3">
-                        <div className="bg-primary bg-opacity-10 p-3 rounded-circle">
-                          <ChartLineSVG />
-                        </div>
-                        <h5 className="ms-3 mb-0 text-primary fw-bold">
-                          Gestion des ventes
-                        </h5>
-                      </div>
-                      <ul className="list-unstyled mb-0">
-                        {[
-                          "Suivez vos annonces en ligne",
-                          "Gérez les demandes d'achat",
-                          "Consultez vos statistiques",
-                          "Répondez aux messages rapidement",
-                          "Mettez à jour vos prix régulièrement",
-                        ].map((item, idx) => (
-                          <li
-                            key={idx}
-                            className="mb-2 d-flex align-items-start"
-                          >
-                            <CheckCircleSVG />
-                            <span className="text-dark">{item}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </Card.Body>
-                  </Card>
-                </div>
-              </div>
-
-              {/* Section Astuce */}
-              <Card className="border-0 bg-info bg-opacity-10">
-                <Card.Body className="p-4">
-                  <div className="d-flex align-items-start">
-                    <div className="flex-shrink-0">
-                      <LightbulbSVG />
-                    </div>
-                    <div className="flex-grow-1 ms-3">
-                      <h5 className="text-info fw-bold mb-3">
-                        <i className="fa-solid fa-lightbulb me-2"></i>
-                        Astuces pour augmenter vos ventes
-                      </h5>
-                      <div className="row">
-                        <div className="col-md-6">
-                          <ul className="text-dark mb-3 mb-md-0">
-                            <li className="mb-2">
-                              Vérifiez régulièrement vos annonces
-                            </li>
-                            <li className="mb-2">
-                              Répondez dans les 24 heures
-                            </li>
-                            <li>Mettez à jour les photos périodiquement</li>
-                          </ul>
-                        </div>
-                        <div className="col-md-6">
-                          <ul className="text-dark">
-                            <li className="mb-2">
-                              Proposez un prix compétitif
-                            </li>
-                            <li className="mb-2">
-                              Soyez transparent sur l'état
-                            </li>
-                            <li>Activez les notifications</li>
-                          </ul>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </Card.Body>
-              </Card>
-            </Tab.Pane>
-
-            {/* Onglet Annonces */}
-            <Tab.Pane eventKey="annonces" className="fade">
-              <div className="text-center mb-4">
-                <h4 className="text-success fw-bold mb-3">
-                  Gestion complète de vos annonces
-                </h4>
-                <p className="text-muted">
-                  Optimisez la visibilité et maximisez les chances de vente de
-                  vos produits
-                </p>
-              </div>
-
-              <Accordion defaultActiveKey="0" className="mb-4">
-                {/* Création */}
-                <Accordion.Item
-                  eventKey="0"
-                  className="border-0 mb-3 shadow-sm"
-                >
-                  <Accordion.Header className="bg-light">
-                    <div className="d-flex align-items-center">
-                      <div className="bg-success bg-opacity-10 p-2 rounded-circle me-3">
-                        <i className="fa-solid fa-plus-circle text-success"></i>
-                      </div>
-                      <h6 className="mb-0 fw-bold">
-                        Créer une annonce efficace
-                      </h6>
-                    </div>
-                  </Accordion.Header>
-                  <Accordion.Body className="bg-white">
-                    <div className="row">
-                      {[
-                        {
-                          title: "Photos",
-                          desc: "Minimum 3 photos claires et bien éclairées",
-                          icon: "fa-camera",
-                        },
-                        {
-                          title: "Titre",
-                          desc: "Descriptif et précis (10-15 mots)",
-                          icon: "fa-heading",
-                        },
-                        {
-                          title: "Description",
-                          desc: "Détaillée avec état et caractéristiques",
-                          icon: "fa-align-left",
-                        },
-                        {
-                          title: "Prix",
-                          desc: "Comparé avec le marché actuel",
-                          icon: "fa-tag",
-                        },
-                      ].map((item, idx) => (
-                        <div key={idx} className="col-md-6 mb-3">
-                          <div className="d-flex align-items-start">
-                            <div className="bg-success bg-opacity-10 p-2 rounded-circle me-3">
-                              <i
-                                className={`fa-solid ${item.icon} text-success`}
-                              ></i>
-                            </div>
-                            <div>
-                              <strong className="d-block text-dark">
-                                {item.title}
-                              </strong>
-                              <small className="text-muted">{item.desc}</small>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </Accordion.Body>
-                </Accordion.Item>
-
-                {/* Optimisation */}
-                <Accordion.Item
-                  eventKey="1"
-                  className="border-0 mb-3 shadow-sm"
-                >
-                  <Accordion.Header className="bg-light">
-                    <div className="d-flex align-items-center">
-                      <div className="bg-warning bg-opacity-10 p-2 rounded-circle me-3">
-                        <i className="fa-solid fa-rocket text-warning"></i>
-                      </div>
-                      <h6 className="mb-0 fw-bold">Optimiser la visibilité</h6>
-                    </div>
-                  </Accordion.Header>
-                  <Accordion.Body className="bg-white">
-                    <div className="row">
-                      <div className="col-md-6">
-                        <Card className="border-success border-2">
-                          <Card.Body>
-                            <h6 className="text-success fw-bold">
-                              <i className="fa-solid fa-check-circle me-2"></i>
-                              Gratuit
-                            </h6>
-                            <ul className="mt-3 mb-0">
-                              <li className="mb-2">Mise à jour régulière</li>
-                              <li className="mb-2">
-                                Réponse rapide aux messages
-                              </li>
-                              <li className="mb-2">Mots-clés pertinents</li>
-                              <li>Photos supplémentaires</li>
-                            </ul>
-                          </Card.Body>
-                        </Card>
-                      </div>
-                      <div className="col-md-6">
-                        <Card className="border-warning border-2">
-                          <Card.Body>
-                            <h6 className="text-warning fw-bold">
-                              <i className="fa-solid fa-crown me-2"></i>
-                              Premium
-                            </h6>
-                            <ul className="mt-3 mb-0">
-                              <li className="mb-2">
-                                Mise en avant prioritaire
-                              </li>
-                              <li className="mb-2">Badge Premium visible</li>
-                              <li className="mb-2">Statistiques détaillées</li>
-                              <li>Support prioritaire</li>
-                            </ul>
-                          </Card.Body>
-                        </Card>
-                      </div>
-                    </div>
-                  </Accordion.Body>
-                </Accordion.Item>
-
-                {/* Suivi */}
-                <Accordion.Item eventKey="2" className="border-0 shadow-sm">
-                  <Accordion.Header className="bg-light">
-                    <div className="d-flex align-items-center">
-                      <div className="bg-info bg-opacity-10 p-2 rounded-circle me-3">
-                        <i className="fa-solid fa-chart-bar text-info"></i>
-                      </div>
-                      <h6 className="mb-0 fw-bold">Suivi des performances</h6>
-                    </div>
-                  </Accordion.Header>
-                  <Accordion.Body className="bg-white">
-                    <div className="d-flex align-items-center mb-3">
-                      <div className="bg-info bg-opacity-10 p-3 rounded-circle me-3">
-                        <i className="fa-solid fa-eye text-info fs-4"></i>
-                      </div>
-                      <div>
-                        <h6 className="mb-1">Suivi en temps réel</h6>
-                        <p className="text-muted mb-0">
-                          Consultez les statistiques de vos annonces directement
-                          depuis votre tableau de bord
+                        <p className="mb-0">
+                          Contrairement aux plateformes traditionnelles, OSKAR
+                          vous offre une approche tri-dimensionnelle : générez
+                          des revenus directs par les ventes, renouvelez votre
+                          inventaire sans dépenser via les échanges, et
+                          contribuez à l'économie circulaire grâce aux dons tout
+                          en bénéficiant d'avantages fiscaux.
                         </p>
                       </div>
                     </div>
-                    <div className="row">
-                      {[
-                        "Nombre de vues par annonce",
-                        "Demandes d'informations reçues",
-                        "Statistiques de vente mensuelles",
-                        "Notifications pour nouvelles interactions",
-                        "Taux de conversion",
-                      ].map((item, idx) => (
-                        <div key={idx} className="col-md-6 mb-2">
-                          <div className="d-flex align-items-center">
-                            <i className="fa-solid fa-chevron-right text-success me-2"></i>
-                            <span>{item}</span>
+
+                    <Row className="g-4 mb-5">
+                      <Col md={4}>
+                        <Card className="border-success border-2 shadow-sm h-100">
+                          <Card.Body className="p-4">
+                            <div className="d-flex align-items-center mb-3">
+                              <div className="bg-success bg-opacity-10 p-3 rounded-circle">
+                                <i className="fas fa-coins fa-2x text-success"></i>
+                              </div>
+                              <div className="ms-3">
+                                <h5 className="mb-0 fw-bold">
+                                  Ventes Lucratives
+                                </h5>
+                                <small className="text-muted">
+                                  Revenus optimisés
+                                </small>
+                              </div>
+                            </div>
+                            <p className="text-dark mb-3">
+                              Notre système de vente intelligent analyse le
+                              marché en temps réel pour vous suggérer les prix
+                              les plus compétitifs. Les commissions sont
+                              réduites pour les vendeurs actifs, et notre
+                              système de paiement sécurisé garantit des
+                              transactions sans risque.
+                            </p>
+                            <Badge bg="success" className="rounded-pill">
+                              <i className="fas fa-rocket me-1"></i>
+                              Conversion élevée
+                            </Badge>
+                          </Card.Body>
+                        </Card>
+                      </Col>
+
+                      <Col md={4}>
+                        <Card className="border-warning border-2 shadow-sm h-100">
+                          <Card.Body className="p-4">
+                            <div className="d-flex align-items-center mb-3">
+                              <div className="bg-warning bg-opacity-10 p-3 rounded-circle">
+                                <i className="fas fa-exchange-alt fa-2x text-warning"></i>
+                              </div>
+                              <div className="ms-3">
+                                <h5 className="mb-0 fw-bold">
+                                  Échanges Intelligents
+                                </h5>
+                                <small className="text-muted">
+                                  Renouvellement gratuit
+                                </small>
+                              </div>
+                            </div>
+                            <p className="text-dark mb-3">
+                              L'échange OSKAR utilise une IA avancée pour
+                              évaluer avec précision la valeur de vos articles
+                              et trouver des correspondances parfaites. C'est la
+                              solution idéale pour renouveler votre stock sans
+                              débourser d'argent et sans commission sur la
+                              transaction.
+                            </p>
+                            <Badge bg="warning" className="rounded-pill">
+                              <i className="fas fa-sync me-1"></i>
+                              Économie circulaire
+                            </Badge>
+                          </Card.Body>
+                        </Card>
+                      </Col>
+
+                      <Col md={4}>
+                        <Card className="border-info border-2 shadow-sm h-100">
+                          <Card.Body className="p-4">
+                            <div className="d-flex align-items-center mb-3">
+                              <div className="bg-info bg-opacity-10 p-3 rounded-circle">
+                                <i className="fas fa-hands-helping fa-2x text-info"></i>
+                              </div>
+                              <div className="ms-3">
+                                <h5 className="mb-0 fw-bold">Dons Rémunérés</h5>
+                                <small className="text-muted">
+                                  Impact social et fiscal
+                                </small>
+                              </div>
+                            </div>
+                            <p className="text-dark mb-3">
+                              Transformez vos invendus en actes de générosité
+                              récompensés. OSKAR vous fournit un certificat de
+                              don fiscal, augmente votre visibilité avec un
+                              badge solidaire, et vous connecte avec des
+                              associations vérifiées. Votre générosité est
+                              valorisée et reconnue.
+                            </p>
+                            <Badge bg="info" className="rounded-pill">
+                              <i className="fas fa-award me-1"></i>
+                              Reconnaissance sociale
+                            </Badge>
+                          </Card.Body>
+                        </Card>
+                      </Col>
+                    </Row>
+
+                    <Card className="border-0 shadow-sm mb-4">
+                      <Card.Body className="p-4">
+                        <h5 className="fw-bold mb-4 text-success">
+                          <i className="fas fa-road me-2"></i>
+                          Parcours de Démarrage Recommandé
+                        </h5>
+                        <p className="text-dark mb-4">
+                          Pour maximiser vos résultats sur OSKAR, nous
+                          recommandons cette progression étape par étape. Chaque
+                          niveau débloque de nouvelles fonctionnalités et
+                          avantages.
+                        </p>
+
+                        <ListGroup variant="flush">
+                          {[
+                            {
+                              step: "1",
+                              title: "Profil Vendeur Complet",
+                              desc: "Complétez toutes les informations de votre profil, y compris vos méthodes de paiement préférées et vos préférences de livraison.",
+                              icon: "fa-user-check",
+                            },
+                            {
+                              step: "2",
+                              title: "Premières Publications",
+                              desc: "Commencez avec 3-5 annonces de qualité en suivant nos recommandations de photos et descriptions.",
+                              icon: "fa-bullhorn",
+                            },
+                            {
+                              step: "3",
+                              title: "Optimisation des Prix",
+                              desc: "Utilisez notre outil d'analyse de marché pour ajuster vos prix et augmenter votre compétitivité.",
+                              icon: "fa-chart-line",
+                            },
+                            {
+                              step: "4",
+                              title: "Diversification",
+                              desc: "Explorez les options d'échange et de don pour maximiser la valeur de votre inventaire.",
+                              icon: "fa-layer-group",
+                            },
+                            {
+                              step: "5",
+                              title: "Performance Avancée",
+                              desc: "Analysez vos statistiques détaillées et implémentez nos stratégies pro pour booster vos résultats.",
+                              icon: "fa-trophy",
+                            },
+                          ].map((item, index) => (
+                            <ListGroup.Item
+                              key={index}
+                              className="border-0 py-3"
+                            >
+                              <div className="d-flex align-items-start">
+                                <div
+                                  className={`rounded-circle p-3 me-3 ${index < 2 ? "bg-success text-white" : "bg-light"}`}
+                                >
+                                  <i className={`fas ${item.icon}`}></i>
+                                </div>
+                                <div className="flex-grow-1">
+                                  <div className="d-flex align-items-center mb-2">
+                                    <Badge
+                                      bg={index < 2 ? "success" : "secondary"}
+                                      className="me-2"
+                                    >
+                                      Étape {item.step}
+                                    </Badge>
+                                    <h6 className="mb-0 fw-bold">
+                                      {item.title}
+                                    </h6>
+                                  </div>
+                                  <p className="text-muted mb-0">{item.desc}</p>
+                                </div>
+                                {index < 2 ? (
+                                  <Badge bg="success" className="rounded-pill">
+                                    <i className="fas fa-check me-1"></i>
+                                    Complété
+                                  </Badge>
+                                ) : (
+                                  <Badge
+                                    bg="light"
+                                    text="dark"
+                                    className="rounded-pill"
+                                  >
+                                    En attente
+                                  </Badge>
+                                )}
+                              </div>
+                            </ListGroup.Item>
+                          ))}
+                        </ListGroup>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+
+                  <Col lg={4}>
+                    <Card
+                      className="border-0 shadow-sm sticky-top"
+                      style={{ top: "20px" }}
+                    >
+                      <Card.Body className="p-4">
+                        <h5 className="fw-bold mb-4 text-success">
+                          <i className="fas fa-chart-simple me-2"></i>
+                          Votre Progression Globale
+                        </h5>
+                        <p className="text-muted mb-4">
+                          Suivez votre évolution sur les différentes dimensions
+                          de la plateforme OSKAR. Ces indicateurs vous aident à
+                          identifier les domaines à améliorer.
+                        </p>
+
+                        <div className="mb-4">
+                          <div className="d-flex justify-content-between mb-2">
+                            <span className="text-dark">
+                              <i className="fas fa-shopping-cart me-1 text-primary"></i>
+                              Compétence Ventes
+                            </span>
+                            <span className="fw-bold">
+                              {userProgress.sales}%
+                            </span>
                           </div>
+                          <ProgressBar
+                            now={userProgress.sales}
+                            variant="primary"
+                            className="mb-3"
+                          />
+
+                          <div className="d-flex justify-content-between mb-2">
+                            <span className="text-dark">
+                              <i className="fas fa-bullhorn me-1 text-success"></i>
+                              Qualité Annonces
+                            </span>
+                            <span className="fw-bold">
+                              {userProgress.listings}%
+                            </span>
+                          </div>
+                          <ProgressBar
+                            now={userProgress.listings}
+                            variant="success"
+                            className="mb-3"
+                          />
+
+                          <div className="d-flex justify-content-between mb-2">
+                            <span className="text-dark">
+                              <i className="fas fa-star me-1 text-warning"></i>
+                              Satisfaction Clients
+                            </span>
+                            <span className="fw-bold">
+                              {userProgress.ratings}%
+                            </span>
+                          </div>
+                          <ProgressBar
+                            now={userProgress.ratings}
+                            variant="warning"
+                            className="mb-3"
+                          />
+
+                          <div className="d-flex justify-content-between mb-2">
+                            <span className="text-dark">
+                              <i className="fas fa-reply me-1 text-info"></i>
+                              Rapidité Réponse
+                            </span>
+                            <span className="fw-bold">
+                              {userProgress.response}%
+                            </span>
+                          </div>
+                          <ProgressBar
+                            now={userProgress.response}
+                            variant="info"
+                            className="mb-3"
+                          />
+
+                          <div className="d-flex justify-content-between mb-2">
+                            <span className="text-dark">
+                              <i className="fas fa-exchange-alt me-1 text-danger"></i>
+                              Maîtrise Échanges
+                            </span>
+                            <span className="fw-bold">
+                              {userProgress.exchanges}%
+                            </span>
+                          </div>
+                          <ProgressBar
+                            now={userProgress.exchanges}
+                            variant="danger"
+                            className="mb-3"
+                          />
+
+                          <div className="d-flex justify-content-between mb-2">
+                            <span className="text-dark">
+                              <i className="fas fa-heart me-1 text-purple"></i>
+                              Engagement Dons
+                            </span>
+                            <span className="fw-bold">
+                              {userProgress.donations}%
+                            </span>
+                          </div>
+                          <ProgressBar
+                            now={userProgress.donations}
+                            className="mb-3"
+                            style={{ backgroundColor: "#6f42c1" }}
+                          />
                         </div>
-                      ))}
-                    </div>
-                  </Accordion.Body>
-                </Accordion.Item>
-              </Accordion>
+
+                        <Alert
+                          variant="success"
+                          className="border-0 bg-success bg-opacity-10"
+                        >
+                          <i className="fas fa-trophy me-2 text-success"></i>
+                          <strong>Niveau actuel : Vendeur Intermédiaire</strong>
+                          <p className="mb-0 mt-1">
+                            Continuez sur cette voie pour débloquer le statut
+                            "Vendeur Premium" avec des commissions réduites.
+                          </p>
+                        </Alert>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                </Row>
+              </div>
             </Tab.Pane>
 
-            {/* Onglet FAQ */}
-            <Tab.Pane eventKey="faq" className="fade">
-              <div className="text-center mb-4">
-                <div className="d-inline-block p-3 bg-success bg-opacity-10 rounded-circle mb-3">
-                  <i className="fa-solid fa-question-circle text-success fs-1"></i>
-                </div>
-                <h4 className="text-success fw-bold mb-3">
-                  Questions Fréquemment Posées
-                </h4>
-                <p className="text-muted">
-                  Trouvez rapidement les réponses à vos interrogations
-                </p>
-              </div>
+            {/* Guide Ventes */}
+            <Tab.Pane eventKey="sales" className="fade">
+              <div className="container-fluid py-5">
+                <Row>
+                  <Col lg={8}>
+                    <div className="mb-5">
+                      <h2 className="fw-bold mb-3 text-primary">
+                        <i className="fas fa-shopping-bag me-2"></i>
+                        Expertise Ventes Avancée
+                      </h2>
+                      <p className="text-dark fs-5">
+                        La vente sur OSKAR va bien au-delà de la simple
+                        publication d'annonces. C'est un écosystème complet
+                        conçu pour maximiser votre rentabilité tout en
+                        minimisant vos efforts.
+                      </p>
 
-              <div className="row g-4">
-                {[
-                  {
-                    question: "Comment devenir vendeur vérifié ?",
-                    answer:
-                      "La vérification se fait automatiquement après quelques ventes réussies. Vous pouvez accélérer le processus en complétant votre profil avec des documents d'identité.",
-                    icon: "fa-shield-check",
-                  },
-                  {
-                    question: "Quelles sont les commissions sur les ventes ?",
-                    answer:
-                      "Vendeurs standard : 5% de commission. Vendeurs premium : 3% seulement. Aucun frais de publication.",
-                    icon: "fa-percentage",
-                  },
-                  {
-                    question: "Comment gérer les retours ou litiges ?",
-                    answer:
-                      "OSKAR dispose d'un système de médiation. Notre équipe examine chaque situation pour trouver une solution équitable.",
-                    icon: "fa-balance-scale",
-                  },
-                  {
-                    question:
-                      "Puis-je vendre des produits neufs et d'occasion ?",
-                    answer:
-                      "Oui, vous pouvez vendre les deux types. Indiquez clairement l'état et choisissez la catégorie appropriée.",
-                    icon: "fa-boxes",
-                  },
-                  {
-                    question: "Comment contacter le support ?",
-                    answer:
-                      "Email: support@oskar.com | Téléphone: +33 1 23 45 67 89 | Chat: disponible 9h-18h | Formulaire dans votre espace",
-                    icon: "fa-headset",
-                  },
-                  {
-                    question: "Quels sont les avantages du compte Premium ?",
-                    answer:
-                      "Mise en avant prioritaire, badge visible, statistiques avancées, support prioritaire et commissions réduites.",
-                    icon: "fa-crown",
-                  },
-                ].map((item, idx) => (
-                  <div key={idx} className="col-md-6">
-                    <Card className="border-0 shadow-sm h-100 hover-lift">
+                      <div className="bg-primary bg-opacity-10 p-4 rounded-3 mb-4">
+                        <h5 className="text-primary fw-bold mb-3">
+                          <i className="fas fa-crown me-2"></i>
+                          Le Secret des Vendeurs Succès OSKAR
+                        </h5>
+                        <p className="mb-0">
+                          Les vendeurs les plus performants sur notre plateforme
+                          combinent trois éléments clés : une stratégie de prix
+                          dynamique, une communication proactive, et une
+                          optimisation constante basée sur les données
+                          analytiques que nous fournissons gratuitement.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="row g-4">
+                      <div className="col-12">
+                        <Card className="border-primary border-2 shadow-sm">
+                          <Card.Body className="p-4">
+                            <h4 className="fw-bold mb-4 text-primary">
+                              <i className="fas fa-chart-line me-2"></i>
+                              Stratégies de Prix Scientifiques
+                            </h4>
+                            <p className="text-dark mb-4">
+                              Notre algorithme analyse en temps réel des
+                              milliers de données pour vous suggérer la
+                              stratégie de prix optimale selon le type de
+                              produit, la saisonnalité, et la demande du marché.
+                            </p>
+
+                            <Row className="g-4">
+                              {[
+                                {
+                                  title: "Analyse Concurrence Dynamique",
+                                  desc: "Surveillance automatique des prix concurrents avec alertes en temps réel pour ajustements stratégiques",
+                                  icon: "fa-search-dollar",
+                                },
+                                {
+                                  title: "Prix Psychologique Intelligent",
+                                  desc: "Optimisation automatique des prix finaux (ex: 199€ au lieu de 200€) pour maximiser l'attractivité",
+                                  icon: "fa-brain",
+                                },
+                                {
+                                  title: "Stratégie Bundle Avancée",
+                                  desc: "Suggestions automatiques de packages de produits complémentaires pour augmenter le panier moyen",
+                                  icon: "fa-boxes",
+                                },
+                                {
+                                  title: "Négociation Assistée",
+                                  desc: "Outils intégrés pour gérer les offres avec marge de négociation calculée automatiquement",
+                                  icon: "fa-handshake",
+                                },
+                              ].map((item, idx) => (
+                                <Col md={6} key={idx}>
+                                  <div className="d-flex align-items-start p-3 bg-primary bg-opacity-5 rounded-3 h-100">
+                                    <i
+                                      className={`fas ${item.icon} fa-2x text-primary me-3`}
+                                    ></i>
+                                    <div>
+                                      <h6 className="fw-bold mb-2 text-primary">
+                                        {item.title}
+                                      </h6>
+                                      <small className="text-dark">
+                                        {item.desc}
+                                      </small>
+                                    </div>
+                                  </div>
+                                </Col>
+                              ))}
+                            </Row>
+                          </Card.Body>
+                        </Card>
+                      </div>
+
+                      <div className="col-12 mt-4">
+                        <Card className="border-success border-2 shadow-sm">
+                          <Card.Body className="p-4">
+                            <h4 className="fw-bold mb-4 text-success">
+                              <i className="fas fa-camera me-2"></i>
+                              Standards Photographiques Professionnels
+                            </h4>
+                            <p className="text-dark mb-4">
+                              La qualité des photos est le facteur numéro 1 de
+                              conversion sur OSKAR. Nos études montrent que les
+                              annonces avec des photos professionnelles voient
+                              leur taux de conversion augmenter de 300%.
+                            </p>
+
+                            <Row className="g-4">
+                              <Col md={6}>
+                                <div className="bg-success bg-opacity-5 p-4 rounded-3 h-100">
+                                  <h6 className="fw-bold text-success mb-3">
+                                    <i className="fas fa-check-circle me-2"></i>
+                                    Checklist Photo Obligatoire
+                                  </h6>
+                                  <ListGroup variant="flush">
+                                    <ListGroup.Item className="border-0 py-2 bg-transparent">
+                                      <i className="fas fa-sun text-warning me-2"></i>
+                                      <strong>
+                                        Lumière naturelle abondante :
+                                      </strong>{" "}
+                                      Évitez les flashs et lumières
+                                      artificielles
+                                    </ListGroup.Item>
+                                    <ListGroup.Item className="border-0 py-2 bg-transparent">
+                                      <i className="fas fa-th-large text-success me-2"></i>
+                                      <strong>Fond neutre unifié :</strong>{" "}
+                                      Blanc ou gris clair sans distractions
+                                    </ListGroup.Item>
+                                    <ListGroup.Item className="border-0 py-2 bg-transparent">
+                                      <i className="fas fa-arrows-alt text-primary me-2"></i>
+                                      <strong>5 angles minimum :</strong> Face,
+                                      dos, côtés, dessus, et détail
+                                      caractéristique
+                                    </ListGroup.Item>
+                                  </ListGroup>
+                                </div>
+                              </Col>
+
+                              <Col md={6}>
+                                <div className="bg-warning bg-opacity-5 p-4 rounded-3 h-100">
+                                  <h6 className="fw-bold text-warning mb-3">
+                                    <i className="fas fa-star me-2"></i>
+                                    Techniques Avancées Pro
+                                  </h6>
+                                  <ListGroup variant="flush">
+                                    <ListGroup.Item className="border-0 py-2 bg-transparent">
+                                      <i className="fas fa-exclamation-triangle text-warning me-2"></i>
+                                      <strong>
+                                        Transparence des défauts :
+                                      </strong>{" "}
+                                      Photos spécifiques de chaque imperfection
+                                    </ListGroup.Item>
+                                    <ListGroup.Item className="border-0 py-2 bg-transparent">
+                                      <i className="fas fa-ruler-combined text-info me-2"></i>
+                                      <strong>Photo avec échelle :</strong>{" "}
+                                      Inclure un objet de référence pour la
+                                      taille
+                                    </ListGroup.Item>
+                                    <ListGroup.Item className="border-0 py-2 bg-transparent">
+                                      <i className="fas fa-expand-alt text-success me-2"></i>
+                                      <strong>Détails logos/marques :</strong>{" "}
+                                      Gros plans sur les éléments distinctifs
+                                    </ListGroup.Item>
+                                  </ListGroup>
+                                </div>
+                              </Col>
+                            </Row>
+                          </Card.Body>
+                        </Card>
+                      </div>
+                    </div>
+                  </Col>
+
+                  <Col lg={4}>
+                    <Card className="border-primary border-2 shadow-sm mb-4">
                       <Card.Body className="p-4">
-                        <div className="d-flex align-items-start mb-3">
-                          <div className="bg-success bg-opacity-10 p-3 rounded-circle me-3">
-                            <i
-                              className={`fa-solid ${item.icon} text-success`}
-                            ></i>
-                          </div>
-                          <div>
-                            <h6 className="fw-bold text-dark mb-2">
-                              {item.question}
-                            </h6>
-                            <p className="text-muted mb-0">{item.answer}</p>
-                          </div>
+                        <h5 className="fw-bold mb-4 text-primary">
+                          <i className="fas fa-percentage me-2"></i>
+                          Structure des Commissions
+                        </h5>
+                        <p className="text-dark mb-4">
+                          Les commissions sur OSKAR sont progressives et
+                          récompensent l'engagement et la performance. Plus vous
+                          êtes actif, moins vous payez de commissions.
+                        </p>
+
+                        <table className="table table-borderless">
+                          <thead>
+                            <tr className="border-bottom">
+                              <th>Niveau Vendeur</th>
+                              <th className="text-end">Commission</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td>
+                                <Badge bg="secondary" className="me-2">
+                                  Débutant
+                                </Badge>
+                                <small className="text-muted">
+                                  0-10 ventes
+                                </small>
+                              </td>
+                              <td className="text-end fw-bold">7%</td>
+                            </tr>
+                            <tr>
+                              <td>
+                                <Badge bg="primary" className="me-2">
+                                  Intermédiaire
+                                </Badge>
+                                <small className="text-muted">
+                                  11-50 ventes
+                                </small>
+                              </td>
+                              <td className="text-end fw-bold">5%</td>
+                            </tr>
+                            <tr>
+                              <td>
+                                <Badge bg="warning" className="me-2">
+                                  Premium
+                                </Badge>
+                                <small className="text-muted">
+                                  51-200 ventes
+                                </small>
+                              </td>
+                              <td className="text-end fw-bold">3%</td>
+                            </tr>
+                            <tr>
+                              <td>
+                                <Badge bg="success" className="me-2">
+                                  Expert
+                                </Badge>
+                                <small className="text-muted">
+                                  200+ ventes
+                                </small>
+                              </td>
+                              <td className="text-end fw-bold">2%</td>
+                            </tr>
+                          </tbody>
+                        </table>
+
+                        <Alert
+                          variant="info"
+                          className="mt-3 border-0 bg-info bg-opacity-10"
+                        >
+                          <i className="fas fa-info-circle me-2"></i>
+                          <small>
+                            Les commissions sont calculées uniquement sur le
+                            prix final de vente, hors frais de livraison. Aucun
+                            frais de mise en ligne ou d'abonnement.
+                          </small>
+                        </Alert>
+                      </Card.Body>
+                    </Card>
+
+                    <Card className="border-warning border-2 shadow-sm">
+                      <Card.Body className="p-4">
+                        <h5 className="fw-bold mb-4 text-warning">
+                          <i className="fas fa-bolt me-2"></i>
+                          Meilleures Pratiques Certifiées
+                        </h5>
+                        <p className="text-dark mb-4">
+                          Ces pratiques ont été validées par l'analyse des
+                          données de milliers de vendeurs performants sur OSKAR.
+                        </p>
+
+                        <ListGroup variant="flush">
+                          {[
+                            "Réponse moyenne < 2 heures (augmente les ventes de 40%)",
+                            "Mise à jour hebdomadaire des annonces (visibilité +25%)",
+                            "Utilisation de 15+ mots-clés pertinents (trafic +60%)",
+                            "Notifications push activées (conversions +30%)",
+                            "Livraison gratuite proposée (panier moyen +22%)",
+                            "Évaluations demandées systématiquement (confiance +45%)",
+                          ].map((item, idx) => (
+                            <ListGroup.Item key={idx} className="border-0 py-2">
+                              <div className="d-flex align-items-start">
+                                <Badge bg="warning" className="me-2 mt-1">
+                                  {idx + 1}
+                                </Badge>
+                                <span className="text-dark">{item}</span>
+                              </div>
+                            </ListGroup.Item>
+                          ))}
+                        </ListGroup>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                </Row>
+              </div>
+            </Tab.Pane>
+
+            {/* Guide Échanges */}
+            <Tab.Pane eventKey="exchanges" className="fade">
+              <div className="container-fluid py-5">
+                <Row className="align-items-center mb-5">
+                  <Col lg={8}>
+                    <h2 className="fw-bold mb-4 text-warning">
+                      <i className="fas fa-exchange-alt me-2"></i>
+                      Système d'Échange Intelligent OSKAR
+                    </h2>
+                    <p className="text-dark fs-5 mb-4">
+                      L'échange sur OSKAR n'est pas un simple troc. C'est un
+                      système sophistiqué qui utilise l'intelligence
+                      artificielle pour évaluer avec précision la valeur des
+                      articles et trouver des correspondances parfaites, créant
+                      ainsi une véritable économie circulaire sans frais de
+                      transaction.
+                    </p>
+
+                    <div className="bg-warning bg-opacity-10 p-4 rounded-3">
+                      <h5 className="text-warning fw-bold mb-3">
+                        <i className="fas fa-lightbulb me-2"></i>
+                        Pourquoi l'Échange OSKAR est Unique ?
+                      </h5>
+                      <p className="mb-0">
+                        Contrairement aux systèmes d'échange traditionnels,
+                        OSKAR utilise un algorithme propriétaire qui analyse
+                        plus de 50 paramètres (état, demande, saisonnalité,
+                        rareté, etc.) pour déterminer l'équivalence exacte entre
+                        articles. Ce système élimine les déséquilibres et
+                        garantit la satisfaction des deux parties.
+                      </p>
+                    </div>
+                  </Col>
+
+                  <Col lg={4} className="text-center">
+                    <div className="bg-warning bg-opacity-10 p-5 rounded-circle d-inline-block">
+                      <i className="fas fa-sync fa-4x text-warning"></i>
+                    </div>
+                  </Col>
+                </Row>
+
+                <Row className="g-4 mb-5">
+                  <Col md={4}>
+                    <Card className="border-warning border-2 shadow-sm h-100">
+                      <Card.Body className="p-4 text-center">
+                        <div className="bg-warning bg-opacity-10 p-3 rounded-circle d-inline-block mb-4">
+                          <i className="fas fa-search fa-2x text-warning"></i>
+                        </div>
+                        <h5 className="fw-bold mb-3 text-warning">
+                          Recherche Automatique
+                        </h5>
+                        <p className="text-dark">
+                          Notre IA analyse en permanence le catalogue OSKAR pour
+                          trouver des articles correspondant exactement à la
+                          valeur du vôtre, en tenant compte de vos préférences
+                          personnelles et historiques.
+                        </p>
+                        <Badge bg="warning" className="mt-2">
+                          <i className="fas fa-robot me-1"></i>
+                          Matching intelligent
+                        </Badge>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+
+                  <Col md={4}>
+                    <Card className="border-warning border-2 shadow-sm h-100">
+                      <Card.Body className="p-4 text-center">
+                        <div className="bg-warning bg-opacity-10 p-3 rounded-circle d-inline-block mb-4">
+                          <i className="fas fa-balance-scale fa-2x text-warning"></i>
+                        </div>
+                        <h5 className="fw-bold mb-3 text-warning">
+                          Évaluation Précise
+                        </h5>
+                        <p className="text-dark">
+                          Système de notation basé sur le marché actuel, l'état
+                          réel, la demande saisonnière, et les tendances.
+                          L'évaluation est transparente et peut être consultée à
+                          tout moment.
+                        </p>
+                        <Badge bg="warning" className="mt-2">
+                          <i className="fas fa-chart-bar me-1"></i>
+                          50+ paramètres analysés
+                        </Badge>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+
+                  <Col md={4}>
+                    <Card className="border-warning border-2 shadow-sm h-100">
+                      <Card.Body className="p-4 text-center">
+                        <div className="bg-warning bg-opacity-10 p-3 rounded-circle d-inline-block mb-4">
+                          <i className="fas fa-shield-alt fa-2x text-warning"></i>
+                        </div>
+                        <h5 className="fw-bold mb-3 text-warning">
+                          Médiation Sécurisée
+                        </h5>
+                        <p className="text-dark">
+                          OSKAR agit comme médiateur tiers pour garantir
+                          l'échange équitable. En cas de litige, notre équipe
+                          intervient pour trouver une solution satisfaisante
+                          pour toutes les parties concernées.
+                        </p>
+                        <Badge bg="warning" className="mt-2">
+                          <i className="fas fa-user-shield me-1"></i>
+                          Protection garantie
+                        </Badge>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                </Row>
+
+                <div className="mt-5">
+                  <Card className="border-warning border-2 shadow-sm">
+                    <Card.Body className="p-4">
+                      <h4 className="fw-bold mb-4 text-warning">
+                        <i className="fas fa-question-circle me-2"></i>
+                        FAQ Complète sur les Échanges
+                      </h4>
+                      <p className="text-dark mb-4">
+                        Les questions les plus fréquentes sur notre système
+                        d'échange, avec des réponses détaillées pour vous aider
+                        à maîtriser cette fonctionnalité unique.
+                      </p>
+
+                      <Accordion>
+                        <Accordion.Item eventKey="0">
+                          <Accordion.Header>
+                            <div className="d-flex align-items-center">
+                              <i className="fas fa-search-dollar me-3 text-warning"></i>
+                              <div>
+                                <h6 className="mb-0">
+                                  Comment évalue-t-on la valeur des articles ?
+                                </h6>
+                                <small className="text-muted">
+                                  Système d'évaluation détaillé
+                                </small>
+                              </div>
+                            </div>
+                          </Accordion.Header>
+                          <Accordion.Body>
+                            <p className="text-dark">
+                              Notre système utilise un algorithme propriétaire
+                              qui analyse simultanément :
+                            </p>
+                            <ul className="text-dark">
+                              <li>
+                                <strong>Prix moyen du marché :</strong> Analyse
+                                historique des ventes similaires
+                              </li>
+                              <li>
+                                <strong>État objectif :</strong> Évaluation
+                                technique basée sur nos critères standardisés
+                              </li>
+                              <li>
+                                <strong>Demande actuelle :</strong> Tendances de
+                                recherche et d'achat en temps réel
+                              </li>
+                              <li>
+                                <strong>Saisonnalité :</strong> Variation de
+                                valeur selon la période de l'année
+                              </li>
+                              <li>
+                                <strong>Rareté :</strong> Disponibilité et
+                                fréquence d'apparition sur le marché
+                              </li>
+                              <li>
+                                <strong>Accessoires inclus :</strong> Valeur
+                                ajoutée des éléments complémentaires
+                              </li>
+                            </ul>
+                          </Accordion.Body>
+                        </Accordion.Item>
+
+                        <Accordion.Item eventKey="1">
+                          <Accordion.Header>
+                            <div className="d-flex align-items-center">
+                              <i className="fas fa-balance-scale me-3 text-warning"></i>
+                              <div>
+                                <h6 className="mb-0">
+                                  Que faire en cas de déséquilibre de valeur ?
+                                </h6>
+                                <small className="text-muted">
+                                  Solutions pour les écarts de valeur
+                                </small>
+                              </div>
+                            </div>
+                          </Accordion.Header>
+                          <Accordion.Body>
+                            <p className="text-dark">
+                              OSKAR propose plusieurs solutions intelligentes
+                              pour gérer les écarts de valeur :
+                            </p>
+                            <ul className="text-dark">
+                              <li>
+                                <strong>Compensation monétaire :</strong>{" "}
+                                Paiement complémentaire calculé automatiquement
+                              </li>
+                              <li>
+                                <strong>Échange multi-parties :</strong>{" "}
+                                Impliquer un troisième article pour équilibrer
+                              </li>
+                              <li>
+                                <strong>Crédit OSKAR :</strong> Solde utilisable
+                                sur toute la plateforme
+                              </li>
+                              <li>
+                                <strong>Renégociation :</strong> Outils intégrés
+                                pour ajuster les termes
+                              </li>
+                              <li>
+                                <strong>Option d'achat :</strong> Combinaison
+                                échange + achat partiel
+                              </li>
+                            </ul>
+                          </Accordion.Body>
+                        </Accordion.Item>
+
+                        <Accordion.Item eventKey="2">
+                          <Accordion.Header>
+                            <div className="d-flex align-items-center">
+                              <i className="fas fa-truck me-3 text-warning"></i>
+                              <div>
+                                <h6 className="mb-0">
+                                  Comment fonctionne la livraison pour les
+                                  échanges ?
+                                </h6>
+                                <small className="text-muted">
+                                  Logistique des échanges
+                                </small>
+                              </div>
+                            </div>
+                          </Accordion.Header>
+                          <Accordion.Body>
+                            <p className="text-dark">
+                              La logistique des échanges est simplifiée et
+                              sécurisée :
+                            </p>
+                            <ul className="text-dark">
+                              <li>
+                                <strong>Frais partagés :</strong> Les coûts de
+                                livraison sont divisés équitablement
+                              </li>
+                              <li>
+                                <strong>Livraison simultanée :</strong> Les
+                                articles sont expédiés en même temps
+                              </li>
+                              <li>
+                                <strong>Tracking intégré :</strong> Suivi en
+                                temps réel des deux colis
+                              </li>
+                              <li>
+                                <strong>Points relais :</strong> Réseau de 5000+
+                                points de retrait disponibles
+                              </li>
+                              <li>
+                                <strong>Assurance incluse :</strong> Couverture
+                                complète pendant le transport
+                              </li>
+                              <li>
+                                <strong>Validation avant réception :</strong>{" "}
+                                Photos de confirmation obligatoires
+                              </li>
+                            </ul>
+                          </Accordion.Body>
+                        </Accordion.Item>
+
+                        <Accordion.Item eventKey="3">
+                          <Accordion.Header>
+                            <div className="d-flex align-items-center">
+                              <i className="fas fa-money-bill-wave me-3 text-warning"></i>
+                              <div>
+                                <h6 className="mb-0">
+                                  Quels sont les frais associés aux échanges ?
+                                </h6>
+                                <small className="text-muted">
+                                  Transparence tarifaire
+                                </small>
+                              </div>
+                            </div>
+                          </Accordion.Header>
+                          <Accordion.Body>
+                            <p className="text-dark">
+                              La politique tarifaire des échanges est conçue
+                              pour être avantageuse et transparente :
+                            </p>
+                            <ul className="text-dark">
+                              <li>
+                                <strong>Commission échange :</strong> 0% - Les
+                                échanges sont exonérés de commission
+                              </li>
+                              <li>
+                                <strong>Frais de service :</strong> 2€ fixe par
+                                échange réussi
+                              </li>
+                              <li>
+                                <strong>Frais de médiation :</strong> Inclus
+                                dans les frais de service
+                              </li>
+                              <li>
+                                <strong>Assurance :</strong> Incluse
+                                gratuitement
+                              </li>
+                              <li>
+                                <strong>Premium :</strong> Forfait mensuel 9,99€
+                                pour échanges illimités
+                              </li>
+                              <li>
+                                <strong>Premier échange :</strong> Totalement
+                                gratuit pour tous les nouveaux vendeurs
+                              </li>
+                            </ul>
+                          </Accordion.Body>
+                        </Accordion.Item>
+                      </Accordion>
+                    </Card.Body>
+                  </Card>
+                </div>
+
+                <Row className="mt-5">
+                  <Col>
+                    <Card className="border-0 shadow-sm bg-warning bg-opacity-5">
+                      <Card.Body className="p-4">
+                        <h5 className="fw-bold mb-3 text-warning">
+                          <i className="fas fa-lightbulb me-2"></i>
+                          Stratégies d'Échange Avancées
+                        </h5>
+                        <Row className="g-3">
+                          {[
+                            {
+                              strategy: "Échange Progressif",
+                              desc: "Commencez par des articles de faible valeur pour monter en gamme progressivement",
+                              icon: "fa-arrow-up",
+                            },
+                            {
+                              strategy: "Bundle d'Échange",
+                              desc: "Combine plusieurs articles de moindre valeur contre un article de plus grande valeur",
+                              icon: "fa-layer-group",
+                            },
+                            {
+                              strategy: "Échange Saisonnier",
+                              desc: "Profitez des variations saisonnières pour échanger au meilleur moment",
+                              icon: "fa-calendar-alt",
+                            },
+                            {
+                              strategy: "Échange Spécialisé",
+                              desc: "Spécialisez-vous dans un type d'article pour devenir référent et faciliter les échanges",
+                              icon: "fa-star",
+                            },
+                          ].map((item, idx) => (
+                            <Col md={6} key={idx}>
+                              <div className="border border-warning border-opacity-25 rounded-3 p-3 bg-white">
+                                <div className="d-flex align-items-center mb-2">
+                                  <i
+                                    className={`fas ${item.icon} text-warning me-2`}
+                                  ></i>
+                                  <h6 className="mb-0 fw-bold text-warning">
+                                    {item.strategy}
+                                  </h6>
+                                </div>
+                                <small className="text-dark">{item.desc}</small>
+                              </div>
+                            </Col>
+                          ))}
+                        </Row>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                </Row>
+              </div>
+            </Tab.Pane>
+
+            {/* Guide Dons */}
+            <Tab.Pane eventKey="donations" className="fade">
+              <div className="container-fluid py-5">
+                <div className="mb-5">
+                  <div className="text-center mb-4">
+                    <div className="bg-info bg-opacity-10 p-4 rounded-circle d-inline-block mb-4">
+                      <i className="fas fa-hands-helping fa-4x text-info"></i>
+                    </div>
+                    <h2 className="fw-bold mb-3 text-info">
+                      Programme de Dons Solidaires OSKAR
+                    </h2>
+                    <p className="text-dark fs-5">
+                      Transformez vos invendus en actes de générosité
+                      récompensés. Le programme de dons OSKAR crée une synergie
+                      unique entre engagement social et avantages pratiques pour
+                      les vendeurs.
+                    </p>
+                  </div>
+
+                  <div className="bg-info bg-opacity-10 p-4 rounded-3">
+                    <h5 className="text-info fw-bold mb-3">
+                      <i className="fas fa-medal me-2"></i>
+                      La Philosophie du Don OSKAR
+                    </h5>
+                    <p className="text-dark mb-0">
+                      Chez OSKAR, nous croyons que la générosité doit être
+                      récompensée et facilitée. Notre programme transforme le
+                      don d'invendus en une expérience positive qui bénéficie à
+                      tous : le vendeur obtient des avantages concrets, les
+                      associations reçoivent des articles de qualité, et la
+                      communauté renforce ses valeurs de solidarité.
+                    </p>
+                  </div>
+                </div>
+
+                <Row className="g-4 mb-5">
+                  <Col lg={8}>
+                    <Card className="border-info border-2 shadow-sm h-100">
+                      <Card.Body className="p-4">
+                        <h4 className="fw-bold mb-4 text-info">
+                          <i className="fas fa-gift me-2"></i>
+                          Avantages Concrets pour les Vendeurs Donateurs
+                        </h4>
+                        <p className="text-dark mb-4">
+                          Faire un don sur OSKAR n'est pas seulement un acte de
+                          générosité, c'est aussi une décision stratégique qui
+                          vous apporte des bénéfices tangibles et mesurables.
+                        </p>
+
+                        <Row>
+                          <Col md={6}>
+                            <ListGroup variant="flush">
+                              <ListGroup.Item className="border-0 py-3">
+                                <div className="d-flex align-items-start">
+                                  <i className="fas fa-file-invoice-dollar text-info fa-lg mt-1 me-3"></i>
+                                  <div>
+                                    <strong className="d-block text-info">
+                                      Certificat de Don Fiscal
+                                    </strong>
+                                    <small className="text-dark">
+                                      Reçu fiscal officiel déductible de vos
+                                      impôts à hauteur de 66% de la valeur du
+                                      don (dans la limite de 20% du revenu
+                                      imposable)
+                                    </small>
+                                  </div>
+                                </div>
+                              </ListGroup.Item>
+
+                              <ListGroup.Item className="border-0 py-3">
+                                <div className="d-flex align-items-start">
+                                  <i className="fas fa-star text-info fa-lg mt-1 me-3"></i>
+                                  <div>
+                                    <strong className="d-block text-info">
+                                      Badge Solidaire Visible
+                                    </strong>
+                                    <small className="text-dark">
+                                      Badge spécial sur votre profil augmentant
+                                      la confiance des acheteurs de 35% et
+                                      améliorant votre classement dans les
+                                      recherches
+                                    </small>
+                                  </div>
+                                </div>
+                              </ListGroup.Item>
+                            </ListGroup>
+                          </Col>
+
+                          <Col md={6}>
+                            <ListGroup variant="flush">
+                              <ListGroup.Item className="border-0 py-3">
+                                <div className="d-flex align-items-start">
+                                  <i className="fas fa-users text-info fa-lg mt-1 me-3"></i>
+                                  <div>
+                                    <strong className="d-block text-info">
+                                      Communauté Engagée
+                                    </strong>
+                                    <small className="text-dark">
+                                      Accès au réseau exclusif des donateurs
+                                      OSKAR avec opportunités de networking et
+                                      avantages communautaires
+                                    </small>
+                                  </div>
+                                </div>
+                              </ListGroup.Item>
+
+                              <ListGroup.Item className="border-0 py-3">
+                                <div className="d-flex align-items-start">
+                                  <i className="fas fa-recycle text-info fa-lg mt-1 me-3"></i>
+                                  <div>
+                                    <strong className="d-block text-info">
+                                      Économie Circulaire
+                                    </strong>
+                                    <small className="text-dark">
+                                      Contribution mesurable à la réduction du
+                                      gaspillage avec rapport d'impact
+                                      environnemental personnalisé
+                                    </small>
+                                  </div>
+                                </div>
+                              </ListGroup.Item>
+                            </ListGroup>
+                          </Col>
+                        </Row>
+
+                        <div className="mt-4 bg-info bg-opacity-5 p-3 rounded-3">
+                          <h6 className="text-info fw-bold mb-2">
+                            <i className="fas fa-chart-line me-2"></i>
+                            Impact Mesurable des Dons
+                          </h6>
+                          <p className="text-dark mb-0 small">
+                            Selon nos données, les vendeurs qui font
+                            régulièrement des dons voient leurs ventes augmenter
+                            de 28% en moyenne, grâce à l'amélioration de leur
+                            réputation et de leur visibilité.
+                          </p>
                         </div>
                       </Card.Body>
                     </Card>
-                  </div>
-                ))}
+                  </Col>
+
+                  <Col lg={4}>
+                    <Card className="border-info border-2 shadow-sm h-100">
+                      <Card.Body className="p-4">
+                        <h5 className="fw-bold mb-4 text-info">
+                          <i className="fas fa-check-circle me-2"></i>
+                          Catégories de Dons Acceptées
+                        </h5>
+                        <p className="text-dark mb-4">
+                          OSKAR accepte une large variété d'articles en bon
+                          état. Voici les principales catégories avec leurs
+                          spécifications :
+                        </p>
+
+                        <div className="row g-2">
+                          {[
+                            {
+                              category: "Électronique",
+                              desc: "Fonctionnel, moins de 5 ans",
+                            },
+                            {
+                              category: "Vêtements",
+                              desc: "Propre, sans taches ni déchirures",
+                            },
+                            {
+                              category: "Meubles",
+                              desc: "Structure solide, prêt à utiliser",
+                            },
+                            {
+                              category: "Livres",
+                              desc: "Pages intactes, couverture en bon état",
+                            },
+                            {
+                              category: "Jouets",
+                              desc: "Complet, sans pièces manquantes",
+                            },
+                            {
+                              category: "Équipement",
+                              desc: "Fonctionnel, sécurité vérifiée",
+                            },
+                            {
+                              category: "Décoration",
+                              desc: "Esthétique, bon état général",
+                            },
+                            {
+                              category: "Sport",
+                              desc: "Sécurité vérifiée, bon état",
+                            },
+                            { category: "Art", desc: "Authenticité vérifiée" },
+                          ].map((item, idx) => (
+                            <Col xs={6} key={idx}>
+                              <div className="border border-info border-opacity-25 rounded-2 p-2 bg-white">
+                                <div className="text-info fw-bold small">
+                                  {item.category}
+                                </div>
+                                <div className="text-muted extra-small">
+                                  {item.desc}
+                                </div>
+                              </div>
+                            </Col>
+                          ))}
+                        </div>
+
+                        <Alert
+                          variant="info"
+                          className="mt-4 border-0 bg-info bg-opacity-10"
+                        >
+                          <i className="fas fa-info-circle me-2"></i>
+                          <small className="text-dark">
+                            Tous les articles sont vérifiés par notre équipe
+                            avant d'être proposés aux associations. La
+                            non-conformité entraîne le retour de l'article à vos
+                            frais.
+                          </small>
+                        </Alert>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                </Row>
+
+                <Card className="border-info border-2 shadow-sm">
+                  <Card.Body className="p-4">
+                    <h4 className="fw-bold mb-4 text-info">
+                      <i className="fas fa-list-ol me-2"></i>
+                      Processus de Don Détail par Détail
+                    </h4>
+                    <p className="text-dark mb-5">
+                      Le processus de don OSKAR est conçu pour être simple,
+                      transparent et sécurisé. Chaque étape est optimisée pour
+                      minimiser vos efforts tout en maximisant l'impact social
+                      de votre générosité.
+                    </p>
+
+                    <Row className="text-center">
+                      {[
+                        {
+                          step: "1",
+                          title: "Sélection Initiale",
+                          desc: "Identification des articles éligibles au don dans votre inventaire",
+                          details:
+                            "Notre système vous suggère automatiquement les articles les plus demandés par les associations",
+                        },
+                        {
+                          step: "2",
+                          title: "Validation Technique",
+                          desc: "Vérification détaillée par notre équipe spécialisée",
+                          details:
+                            "Contrôle de qualité, vérification fonctionnelle, et évaluation objective de l'état",
+                        },
+                        {
+                          step: "3",
+                          title: "Mise en Ligne",
+                          desc: "Publication sur le marché des dons OSKAR",
+                          details:
+                            "Votre article est visible uniquement par les associations partenaires vérifiées",
+                        },
+                        {
+                          step: "4",
+                          title: "Attribution Intelligente",
+                          desc: "Sélection automatique de l'association la plus pertinente",
+                          details:
+                            "Algorithme de matching basé sur les besoins, la localisation, et la spécialité",
+                        },
+                        {
+                          step: "5",
+                          title: "Suivi Complet",
+                          desc: "Traçabilité et impact mesuré",
+                          details:
+                            "Certificat de don, rapport d'impact, et remerciements personnalisés",
+                        },
+                      ].map((item, idx) => (
+                        <Col key={idx} className="mb-4 mb-lg-0">
+                          <div className="position-relative">
+                            <div className="bg-info bg-opacity-10 p-3 rounded-circle d-inline-block mb-3">
+                              <span className="badge bg-info position-absolute top-0 start-100 translate-middle">
+                                {item.step}
+                              </span>
+                              <i className="fas fa-check text-info"></i>
+                            </div>
+                            <h6 className="fw-bold text-info mb-2">
+                              {item.title}
+                            </h6>
+                            <div className="bg-light p-2 rounded-2">
+                              <small className="text-dark d-block mb-1">
+                                {item.desc}
+                              </small>
+                              <small className="text-muted extra-small">
+                                {item.details}
+                              </small>
+                            </div>
+                          </div>
+                        </Col>
+                      ))}
+                    </Row>
+
+                    <div className="mt-5 bg-info bg-opacity-5 p-4 rounded-3">
+                      <h6 className="text-info fw-bold mb-3">
+                        <i className="fas fa-clock me-2"></i>
+                        Délais et Engagements
+                      </h6>
+                      <Row>
+                        <Col md={4}>
+                          <div className="text-center p-3">
+                            <div className="text-info fw-bold fs-4">24-48h</div>
+                            <small className="text-dark">
+                              Validation technique
+                            </small>
+                          </div>
+                        </Col>
+                        <Col md={4}>
+                          <div className="text-center p-3">
+                            <div className="text-info fw-bold fs-4">
+                              7 jours max
+                            </div>
+                            <small className="text-dark">
+                              Attribution association
+                            </small>
+                          </div>
+                        </Col>
+                        <Col md={4}>
+                          <div className="text-center p-3">
+                            <div className="text-info fw-bold fs-4">
+                              30 jours
+                            </div>
+                            <small className="text-dark">
+                              Certificat fiscal
+                            </small>
+                          </div>
+                        </Col>
+                      </Row>
+                    </div>
+                  </Card.Body>
+                </Card>
+
+                <Row className="mt-5">
+                  <Col>
+                    <Card className="border-0 shadow-sm bg-info bg-opacity-5">
+                      <Card.Body className="p-4">
+                        <h5 className="fw-bold mb-3 text-info">
+                          <i className="fas fa-hand-holding-heart me-2"></i>
+                          Associations Partenaires Certifiées
+                        </h5>
+                        <p className="text-dark mb-4">
+                          OSKAR collabore exclusivement avec des associations
+                          vérifiées et certifiées pour garantir que vos dons ont
+                          un impact réel et mesurable.
+                        </p>
+
+                        <Row className="g-3">
+                          {[
+                            {
+                              name: "Solidarité Équitable",
+                              focus: "Réinsertion professionnelle",
+                              impact: "2 500+ personnes aidées",
+                            },
+                            {
+                              name: "Éco-Citoyens",
+                              focus: "Transition écologique",
+                              impact: "45 tonnes de déchets évitées",
+                            },
+                            {
+                              name: "Éducation Pour Tous",
+                              focus: "Accès à l'éducation",
+                              impact: "800+ kits éducatifs distribués",
+                            },
+                            {
+                              name: "Logement Digne",
+                              focus: "Aide au logement",
+                              impact: "150 familles relogées",
+                            },
+                          ].map((org, idx) => (
+                            <Col md={6} key={idx}>
+                              <div className="border border-info border-opacity-25 rounded-3 p-3 bg-white">
+                                <div className="d-flex align-items-center mb-2">
+                                  <div className="bg-info bg-opacity-10 p-2 rounded-circle me-3">
+                                    <i className="fas fa-hands-helping text-info"></i>
+                                  </div>
+                                  <div>
+                                    <h6 className="mb-0 fw-bold text-info">
+                                      {org.name}
+                                    </h6>
+                                    <small className="text-muted">
+                                      {org.focus}
+                                    </small>
+                                  </div>
+                                </div>
+                                <div className="text-success small">
+                                  <i className="fas fa-chart-line me-1"></i>
+                                  {org.impact}
+                                </div>
+                              </div>
+                            </Col>
+                          ))}
+                        </Row>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                </Row>
+              </div>
+            </Tab.Pane>
+
+            {/* Performance */}
+            <Tab.Pane eventKey="performance" className="fade">
+              <div className="container-fluid py-5">
+                <h2 className="fw-bold mb-5 text-dark">
+                  <i className="fas fa-chart-line me-2"></i>
+                  Tableau de Bord Performance
+                </h2>
+
+                <Row className="g-4 mb-5">
+                  <Col md={3}>
+                    <Card className="border-0 shadow-sm">
+                      <Card.Body className="text-center p-4">
+                        <div className="text-primary mb-3">
+                          <i className="fas fa-eye fa-2x"></i>
+                        </div>
+                        <h3 className="fw-bold mb-1">1,254</h3>
+                        <small className="text-muted">Vues cette semaine</small>
+                        <div className="text-success small mt-2">
+                          <i className="fas fa-arrow-up me-1"></i>
+                          +12% vs semaine dernière
+                        </div>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+
+                  <Col md={3}>
+                    <Card className="border-0 shadow-sm">
+                      <Card.Body className="text-center p-4">
+                        <div className="text-success mb-3">
+                          <i className="fas fa-shopping-cart fa-2x"></i>
+                        </div>
+                        <h3 className="fw-bold mb-1">42</h3>
+                        <small className="text-muted">Ventes ce mois</small>
+                        <div className="text-success small mt-2">
+                          <i className="fas fa-arrow-up me-1"></i>
+                          +8% vs mois dernier
+                        </div>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+
+                  <Col md={3}>
+                    <Card className="border-0 shadow-sm">
+                      <Card.Body className="text-center p-4">
+                        <div className="text-warning mb-3">
+                          <i className="fas fa-exchange-alt fa-2x"></i>
+                        </div>
+                        <h3 className="fw-bold mb-1">18</h3>
+                        <small className="text-muted">Échanges réussis</small>
+                        <div className="text-success small mt-2">
+                          <i className="fas fa-arrow-up me-1"></i>
+                          +15% vs période précédente
+                        </div>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+
+                  <Col md={3}>
+                    <Card className="border-0 shadow-sm">
+                      <Card.Body className="text-center p-4">
+                        <div className="text-info mb-3">
+                          <i className="fas fa-star fa-2x"></i>
+                        </div>
+                        <h3 className="fw-bold mb-1">4.8</h3>
+                        <small className="text-muted">Note moyenne</small>
+                        <div className="text-success small mt-2">
+                          <i className="fas fa-arrow-up me-1"></i>
+                          +0.2 vs dernier trimestre
+                        </div>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                </Row>
+
+                <Row>
+                  <Col lg={8}>
+                    <Card className="border-0 shadow-sm mb-4">
+                      <Card.Body className="p-4">
+                        <h5 className="fw-bold mb-4">
+                          Performance par Catégorie Détail
+                        </h5>
+                        <p className="text-dark mb-4">
+                          Analyse comparative de vos performances selon les
+                          différentes catégories d'articles. Ces données vous
+                          permettent d'identifier vos points forts et les
+                          opportunités d'amélioration.
+                        </p>
+
+                        <div className="table-responsive">
+                          <table className="table table-hover">
+                            <thead>
+                              <tr>
+                                <th>Catégorie</th>
+                                <th className="text-end">Vues</th>
+                                <th className="text-end">Ventes</th>
+                                <th className="text-end">Taux Conversion</th>
+                                <th className="text-end">Revenu Moyen</th>
+                                <th className="text-end">Statut</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr>
+                                <td>
+                                  <i className="fas fa-laptop text-primary me-2"></i>
+                                  Électronique
+                                </td>
+                                <td className="text-end">2,145</td>
+                                <td className="text-end">24</td>
+                                <td className="text-end">
+                                  <Badge bg="success">1.12%</Badge>
+                                </td>
+                                <td className="text-end">189€</td>
+                                <td className="text-end">
+                                  <i className="fas fa-arrow-up text-success"></i>
+                                  <small className="text-success ms-1">
+                                    Optimale
+                                  </small>
+                                </td>
+                              </tr>
+                              <tr>
+                                <td>
+                                  <i className="fas fa-tshirt text-success me-2"></i>
+                                  Vêtements
+                                </td>
+                                <td className="text-end">1,845</td>
+                                <td className="text-end">18</td>
+                                <td className="text-end">
+                                  <Badge bg="warning">0.98%</Badge>
+                                </td>
+                                <td className="text-end">45€</td>
+                                <td className="text-end">
+                                  <i className="fas fa-minus text-warning"></i>
+                                  <small className="text-warning ms-1">
+                                    Stable
+                                  </small>
+                                </td>
+                              </tr>
+                              <tr>
+                                <td>
+                                  <i className="fas fa-couch text-warning me-2"></i>
+                                  Meubles
+                                </td>
+                                <td className="text-end">1,210</td>
+                                <td className="text-end">12</td>
+                                <td className="text-end">
+                                  <Badge bg="warning">0.99%</Badge>
+                                </td>
+                                <td className="text-end">320€</td>
+                                <td className="text-end">
+                                  <i className="fas fa-arrow-up text-success"></i>
+                                  <small className="text-success ms-1">
+                                    Croissance
+                                  </small>
+                                </td>
+                              </tr>
+                              <tr>
+                                <td>
+                                  <i className="fas fa-book text-info me-2"></i>
+                                  Livres
+                                </td>
+                                <td className="text-end">956</td>
+                                <td className="text-end">15</td>
+                                <td className="text-end">
+                                  <Badge bg="success">1.57%</Badge>
+                                </td>
+                                <td className="text-end">22€</td>
+                                <td className="text-end">
+                                  <i className="fas fa-arrow-up text-success"></i>
+                                  <small className="text-success ms-1">
+                                    Excellente
+                                  </small>
+                                </td>
+                              </tr>
+                              <tr>
+                                <td>
+                                  <i className="fas fa-basketball-ball text-danger me-2"></i>
+                                  Sport
+                                </td>
+                                <td className="text-end">745</td>
+                                <td className="text-end">8</td>
+                                <td className="text-end">
+                                  <Badge bg="danger">1.07%</Badge>
+                                </td>
+                                <td className="text-end">85€</td>
+                                <td className="text-end">
+                                  <i className="fas fa-arrow-down text-danger"></i>
+                                  <small className="text-danger ms-1">
+                                    À améliorer
+                                  </small>
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </Card.Body>
+                    </Card>
+
+                    <Card className="border-0 shadow-sm">
+                      <Card.Body className="p-4">
+                        <h5 className="fw-bold mb-4">
+                          Évolution Mensuelle des Performances
+                        </h5>
+                        <p className="text-dark mb-4">
+                          Suivez votre progression mois par mois pour identifier
+                          les tendances et ajuster votre stratégie en
+                          conséquence.
+                        </p>
+
+                        <div className="bg-light p-4 rounded-3">
+                          <Row className="text-center">
+                            {[
+                              {
+                                month: "Jan",
+                                sales: 38,
+                                views: 1850,
+                                rating: 4.7,
+                              },
+                              {
+                                month: "Fév",
+                                sales: 42,
+                                views: 2100,
+                                rating: 4.8,
+                              },
+                              {
+                                month: "Mar",
+                                sales: 45,
+                                views: 2250,
+                                rating: 4.8,
+                              },
+                              {
+                                month: "Avr",
+                                sales: 40,
+                                views: 2150,
+                                rating: 4.9,
+                              },
+                              {
+                                month: "Mai",
+                                sales: 48,
+                                views: 2400,
+                                rating: 4.8,
+                              },
+                              {
+                                month: "Juin",
+                                sales: 42,
+                                views: 2254,
+                                rating: 4.8,
+                              },
+                            ].map((data, idx) => (
+                              <Col key={idx}>
+                                <div className="mb-3">
+                                  <div className="text-dark fw-bold">
+                                    {data.month}
+                                  </div>
+                                  <div className="text-success">
+                                    {data.sales} ventes
+                                  </div>
+                                  <div className="text-primary">
+                                    {data.views.toLocaleString()} vues
+                                  </div>
+                                  <div className="text-warning">
+                                    {data.rating}★
+                                  </div>
+                                </div>
+                              </Col>
+                            ))}
+                          </Row>
+                        </div>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+
+                  <Col lg={4}>
+                    <Card className="border-0 shadow-sm mb-4">
+                      <Card.Body className="p-4">
+                        <h5 className="fw-bold mb-4">
+                          <i className="fas fa-bullseye me-2 text-primary"></i>
+                          Recommandations d'Amélioration
+                        </h5>
+                        <p className="text-dark mb-4">
+                          Basé sur l'analyse de vos performances, voici les
+                          actions prioritaires pour optimiser vos résultats sur
+                          OSKAR.
+                        </p>
+
+                        <ListGroup variant="flush">
+                          {[
+                            {
+                              priority: "Haute",
+                              action:
+                                "Augmentez les photos des produits électroniques",
+                              impact: "Conversion +25% estimée",
+                              icon: "fa-camera",
+                            },
+                            {
+                              priority: "Haute",
+                              action: "Réduisez les prix des vêtements de 10%",
+                              impact: "Ventes +15% estimées",
+                              icon: "fa-tag",
+                            },
+                            {
+                              priority: "Moyenne",
+                              action:
+                                "Ajoutez plus de descriptions aux meubles",
+                              impact: "Engagement +30% estimé",
+                              icon: "fa-align-left",
+                            },
+                            {
+                              priority: "Moyenne",
+                              action: "Répondez plus rapidement aux demandes",
+                              impact: "Satisfaction +20% estimée",
+                              icon: "fa-reply",
+                            },
+                            {
+                              priority: "Basse",
+                              action:
+                                "Explorez les options d'échange pour le sport",
+                              impact: "Liquidité +40% estimée",
+                              icon: "fa-exchange-alt",
+                            },
+                          ].map((tip, idx) => (
+                            <ListGroup.Item key={idx} className="border-0 py-3">
+                              <div className="d-flex align-items-start">
+                                <Badge
+                                  bg={
+                                    tip.priority === "Haute"
+                                      ? "danger"
+                                      : tip.priority === "Moyenne"
+                                        ? "warning"
+                                        : "secondary"
+                                  }
+                                  className="me-2 mt-1"
+                                >
+                                  {tip.priority}
+                                </Badge>
+                                <div className="flex-grow-1">
+                                  <div className="d-flex align-items-center mb-1">
+                                    <i
+                                      className={`fas ${tip.icon} me-2 text-primary`}
+                                    ></i>
+                                    <span className="fw-bold">
+                                      {tip.action}
+                                    </span>
+                                  </div>
+                                  <small className="text-success">
+                                    <i className="fas fa-chart-line me-1"></i>
+                                    {tip.impact}
+                                  </small>
+                                </div>
+                              </div>
+                            </ListGroup.Item>
+                          ))}
+                        </ListGroup>
+                      </Card.Body>
+                    </Card>
+
+                    <Card className="border-0 shadow-sm">
+                      <Card.Body className="p-4">
+                        <h5 className="fw-bold mb-4">
+                          <i className="fas fa-trophy me-2 text-warning"></i>
+                          Comparatif avec la Moyenne OSKAR
+                        </h5>
+                        <p className="text-dark mb-4">
+                          Voyez comment vous vous positionnez par rapport à la
+                          moyenne des vendeurs sur notre plateforme.
+                        </p>
+
+                        <div className="mb-4">
+                          <div className="d-flex justify-content-between mb-2">
+                            <span>Taux de réponse</span>
+                            <div>
+                              <span className="fw-bold">85%</span>
+                              <small className="text-success ms-2">
+                                +10% vs moyenne
+                              </small>
+                            </div>
+                          </div>
+                          <ProgressBar
+                            now={85}
+                            variant="success"
+                            className="mb-3"
+                          />
+
+                          <div className="d-flex justify-content-between mb-2">
+                            <span>Photos par annonce</span>
+                            <div>
+                              <span className="fw-bold">6</span>
+                              <small className="text-success ms-2">
+                                +1 vs moyenne
+                              </small>
+                            </div>
+                          </div>
+                          <ProgressBar
+                            now={75}
+                            variant="primary"
+                            className="mb-3"
+                          />
+
+                          <div className="d-flex justify-content-between mb-2">
+                            <span>Mots par description</span>
+                            <div>
+                              <span className="fw-bold">180</span>
+                              <small className="text-warning ms-2">
+                                -20 vs moyenne
+                              </small>
+                            </div>
+                          </div>
+                          <ProgressBar
+                            now={70}
+                            variant="warning"
+                            className="mb-3"
+                          />
+
+                          <div className="d-flex justify-content-between mb-2">
+                            <span>Prix compétitifs</span>
+                            <div>
+                              <span className="fw-bold">92%</span>
+                              <small className="text-success ms-2">
+                                +7% vs moyenne
+                              </small>
+                            </div>
+                          </div>
+                          <ProgressBar now={92} variant="info" />
+                        </div>
+
+                        <Alert
+                          variant="success"
+                          className="border-0 bg-success bg-opacity-10"
+                        >
+                          <i className="fas fa-award me-2"></i>
+                          <strong>Classement : Top 30% des vendeurs</strong>
+                          <p className="mb-0 mt-1 small">
+                            Vous performez mieux que 70% des vendeurs OSKAR.
+                            Continuez ainsi pour atteindre le top 10% !
+                          </p>
+                        </Alert>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                </Row>
               </div>
             </Tab.Pane>
           </Tab.Content>
         </Tab.Container>
       </Modal.Body>
 
-      {/* Footer avec actions */}
-      <Modal.Footer className="border-top bg-light py-3 px-4">
-        <div className="d-flex justify-content-between align-items-center w-100">
-          <div className="d-flex align-items-center">
-            <div className="bg-success bg-opacity-10 p-2 rounded-circle me-3">
-              <i className="fa-solid fa-phone text-success"></i>
+      <Modal.Footer className="border-top bg-white py-4">
+        <div className="container-fluid">
+          <div className="row align-items-center">
+            <div className="col">
+              <div className="d-flex align-items-center">
+                <div className="bg-success bg-opacity-10 p-3 rounded-circle me-3">
+                  <i className="fas fa-headset fa-lg text-success"></i>
+                </div>
+                <div>
+                  <small className="text-muted d-block">
+                    Support Expert Disponible
+                  </small>
+                  <div>
+                    <span className="fw-bold text-dark me-3">
+                      support@oskar.com
+                    </span>
+                    <span className="text-dark">+33 1 23 45 67 89</span>
+                  </div>
+                  <small className="text-success">
+                    <i className="fas fa-clock me-1"></i>
+                    Réponse garantie sous 2 heures
+                  </small>
+                </div>
+              </div>
             </div>
-            <div>
-              <small className="text-muted d-block">Support disponible</small>
-              <strong className="text-dark">+33 1 23 45 67 89</strong>
+            <div className="col-auto">
+              <div className="d-flex gap-3">
+                <Button
+                  variant="outline-secondary"
+                  onClick={onClose}
+                  className="px-4 py-2"
+                >
+                  <i className="fas fa-times me-2"></i>
+                  Fermer le Guide
+                </Button>
+                <Button
+                  variant="success"
+                  onClick={() => window.open("/seller-academy", "_blank")}
+                  className="px-4 py-2"
+                >
+                  <i className="fas fa-graduation-cap me-2"></i>
+                  Accéder à l'Académie
+                </Button>
+              </div>
             </div>
-          </div>
-          <div className="d-flex gap-3">
-            <Button
-              variant="outline-secondary"
-              onClick={onClose}
-              className="px-4 py-2"
-            >
-              <i className="fa-solid fa-times me-2"></i>
-              Fermer
-            </Button>
-            <Button
-              variant="success"
-              onClick={() => window.open("/documentation-vendeur", "_blank")}
-              className="px-4 py-2"
-            >
-              <i className="fa-solid fa-book-open me-2"></i>
-              Documentation
-            </Button>
           </div>
         </div>
       </Modal.Footer>
 
       <style jsx>{`
-        .hover-lift {
-          transition:
-            transform 0.2s ease,
-            box-shadow 0.2s ease;
+        .modal-90w {
+          max-width: 90%;
         }
 
-        .hover-lift:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1) !important;
+        .min-vh-50 {
+          min-height: 50vh;
         }
 
-        .bg-gradient-to-r {
-          background: linear-gradient(135deg, #198754 0%, #146c43 100%);
+        .sticky-top {
+          position: sticky;
+          top: 20px;
+          z-index: 1020;
         }
 
-        .modal-header {
-          border-radius: 0.5rem 0.5rem 0 0 !important;
+        .extra-small {
+          font-size: 0.75rem;
         }
 
         .nav-pills .nav-link.active {
-          box-shadow: 0 4px 6px rgba(25, 135, 84, 0.2);
-        }
-
-        .accordion-button:not(.collapsed) {
-          background-color: rgba(25, 135, 84, 0.05);
-          color: #198754;
-        }
-
-        .accordion-button:focus {
-          box-shadow: 0 0 0 0.25rem rgba(25, 135, 84, 0.25);
-        }
-
-        .fade {
-          animation: fadeIn 0.3s ease-in;
-        }
-
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
 
         @media (max-width: 768px) {
-          .modal-dialog {
-            margin: 1rem;
+          .modal-90w {
+            max-width: 95%;
+            margin: 10px auto;
           }
 
           .nav-pills {
-            flex-direction: column;
-            gap: 8px !important;
+            overflow-x: auto;
+            flex-wrap: nowrap;
+            padding-bottom: 10px;
           }
 
           .nav-pills .nav-link {
-            width: 100%;
-            text-align: center;
+            white-space: nowrap;
           }
         }
       `}</style>

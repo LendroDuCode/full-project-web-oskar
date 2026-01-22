@@ -30,9 +30,16 @@ import {
   faLayerGroup,
   faChartLine,
   faSpinner,
+  faUserTag,
+  faShop,
+  faArrowRight,
+  faExternalLinkAlt,
+  faShoppingBag,
+  faUsers,
 } from "@fortawesome/free-solid-svg-icons";
 import { api } from "@/lib/api-client";
 import colors from "@/app/shared/constants/colors";
+import Link from "next/link";
 
 interface ProduitUtilisateur {
   id: number;
@@ -54,7 +61,32 @@ interface ProduitUtilisateur {
     description: string;
     image: string;
   };
-  source: {
+  // Propriétés mises à jour pour gérer les deux cas
+  utilisateur?: {
+    uuid: string;
+    nom: string;
+    prenoms: string;
+    avatar: string;
+    email: string;
+    telephone?: string;
+    is_admin?: boolean;
+    role?: {
+      name: string;
+    };
+  };
+  boutique?: {
+    uuid: string;
+    nom: string;
+    logo: string | null;
+    slug: string;
+    description: string | null;
+    statut: string;
+    typeBoutique?: {
+      libelle: string;
+    };
+  };
+  // Pour compatibilité avec l'ancienne structure
+  source?: {
     type: string;
     infos: {
       uuid: string;
@@ -67,7 +99,7 @@ interface ProduitUtilisateur {
 }
 
 interface SortConfig {
-  key: keyof ProduitUtilisateur;
+  key: keyof ProduitUtilisateur | "sourceType" | "ownerName";
   direction: "asc" | "desc";
 }
 
@@ -98,6 +130,7 @@ export default function ListeProduitsCreeUtilisateur() {
   // Filtres
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [publishFilter, setPublishFilter] = useState<string>("all");
+  const [sourceFilter, setSourceFilter] = useState<string>("all"); // Nouveau filtre: utilisateur/boutique
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 1000000]);
 
   // Stats
@@ -109,6 +142,8 @@ export default function ListeProduitsCreeUtilisateur() {
     unpublishedCount: 0,
     totalQuantity: 0,
     withImageCount: 0,
+    userProducts: 0,
+    boutiqueProducts: 0,
   });
 
   // Informations utilisateur
@@ -117,6 +152,7 @@ export default function ListeProduitsCreeUtilisateur() {
     nom: string;
     prenoms: string;
     avatar: string;
+    email: string;
   } | null>(null);
 
   // Charger les produits - VERSION CORRIGÉE
@@ -158,32 +194,67 @@ export default function ListeProduitsCreeUtilisateur() {
           console.log(`✅ ${produitsData.length} produit(s) trouvé(s)`);
           console.log("📦 Premier produit:", produitsData[0]);
 
+          // Normaliser les données des produits
+          const normalizedProduits = produitsData.map((produit: any) => {
+            // Si le produit a une propriété 'source', la décomposer
+            if (produit.source) {
+              if (
+                produit.source.type === "utilisateur" &&
+                produit.source.infos
+              ) {
+                return {
+                  ...produit,
+                  utilisateur: produit.source.infos,
+                  boutique: undefined,
+                };
+              } else if (
+                produit.source.type === "boutique" &&
+                produit.source.infos
+              ) {
+                return {
+                  ...produit,
+                  boutique: produit.source.infos,
+                  utilisateur: undefined,
+                };
+              }
+            }
+            return produit;
+          });
+
+          console.log("📦 Produits normalisés:", normalizedProduits);
+
           // Mettre à jour les états
-          setProduits(produitsData);
+          setProduits(normalizedProduits);
 
           if (utilisateurData) {
             setUtilisateurInfo(utilisateurData);
           }
 
           // Calculer les stats
-          const total = produitsData.length;
-          const totalValue = produitsData.reduce(
+          const total = normalizedProduits.length;
+          const totalValue = normalizedProduits.reduce(
             (sum: number, produit: ProduitUtilisateur) =>
               sum + parseFloat(produit.prix) * produit.quantite,
             0,
           );
           const averagePrice = total > 0 ? totalValue / total : 0;
-          const publishedCount = produitsData.filter(
+          const publishedCount = normalizedProduits.filter(
             (p: ProduitUtilisateur) => p.estPublie,
           ).length;
           const unpublishedCount = total - publishedCount;
-          const totalQuantity = produitsData.reduce(
+          const totalQuantity = normalizedProduits.reduce(
             (sum: number, produit: ProduitUtilisateur) =>
               sum + produit.quantite,
             0,
           );
-          const withImageCount = produitsData.filter(
+          const withImageCount = normalizedProduits.filter(
             (p: ProduitUtilisateur) => p.image,
+          ).length;
+          const userProducts = normalizedProduits.filter(
+            (p: ProduitUtilisateur) => p.utilisateur,
+          ).length;
+          const boutiqueProducts = normalizedProduits.filter(
+            (p: ProduitUtilisateur) => p.boutique,
           ).length;
 
           setStats({
@@ -194,6 +265,8 @@ export default function ListeProduitsCreeUtilisateur() {
             unpublishedCount,
             totalQuantity,
             withImageCount,
+            userProducts,
+            boutiqueProducts,
           });
 
           // Mettre à jour la pagination
@@ -201,17 +274,17 @@ export default function ListeProduitsCreeUtilisateur() {
             setPagination({
               page: paginationData.page || 1,
               limit: paginationData.limit || 10,
-              total: paginationData.total || produitsData.length,
+              total: paginationData.total || normalizedProduits.length,
               pages:
                 paginationData.totalPages ||
-                Math.ceil(produitsData.length / 10),
+                Math.ceil(normalizedProduits.length / 10),
             });
           } else {
             setPagination({
               page: 1,
               limit: 10,
-              total: produitsData.length,
-              pages: Math.ceil(produitsData.length / 10),
+              total: normalizedProduits.length,
+              pages: Math.ceil(normalizedProduits.length / 10),
             });
           }
         } else {
@@ -223,8 +296,29 @@ export default function ListeProduitsCreeUtilisateur() {
       // Format alternatif: produits directement dans data
       else if (Array.isArray(response.data)) {
         console.log("✅ Format détecté: tableau direct");
-        setProduits(response.data);
-        calculateStats(response.data);
+        const normalizedProduits = response.data.map((produit: any) => {
+          if (produit.source) {
+            if (produit.source.type === "utilisateur" && produit.source.infos) {
+              return {
+                ...produit,
+                utilisateur: produit.source.infos,
+                boutique: undefined,
+              };
+            } else if (
+              produit.source.type === "boutique" &&
+              produit.source.infos
+            ) {
+              return {
+                ...produit,
+                boutique: produit.source.infos,
+                utilisateur: undefined,
+              };
+            }
+          }
+          return produit;
+        });
+        setProduits(normalizedProduits);
+        calculateStats(normalizedProduits);
       }
       // Format alternatif: produits dans une propriété 'produits'
       else if (
@@ -232,8 +326,34 @@ export default function ListeProduitsCreeUtilisateur() {
         Array.isArray(response.data.produits)
       ) {
         console.log("✅ Format détecté: produits direct");
-        setProduits(response.data.produits);
-        calculateStats(response.data.produits);
+        const normalizedProduits = response.data.produits.map(
+          (produit: any) => {
+            if (produit.source) {
+              if (
+                produit.source.type === "utilisateur" &&
+                produit.source.infos
+              ) {
+                return {
+                  ...produit,
+                  utilisateur: produit.source.infos,
+                  boutique: undefined,
+                };
+              } else if (
+                produit.source.type === "boutique" &&
+                produit.source.infos
+              ) {
+                return {
+                  ...produit,
+                  boutique: produit.source.infos,
+                  utilisateur: undefined,
+                };
+              }
+            }
+            return produit;
+          },
+        );
+        setProduits(normalizedProduits);
+        calculateStats(normalizedProduits);
       } else {
         console.error("❌ Format de réponse inattendu:", response.data);
         throw new Error("Format de réponse API non reconnu");
@@ -281,6 +401,8 @@ export default function ListeProduitsCreeUtilisateur() {
       0,
     );
     const withImageCount = produitsList.filter((p) => p.image).length;
+    const userProducts = produitsList.filter((p) => p.utilisateur).length;
+    const boutiqueProducts = produitsList.filter((p) => p.boutique).length;
 
     setStats({
       total,
@@ -290,6 +412,8 @@ export default function ListeProduitsCreeUtilisateur() {
       unpublishedCount,
       totalQuantity,
       withImageCount,
+      userProducts,
+      boutiqueProducts,
     });
   };
 
@@ -302,6 +426,8 @@ export default function ListeProduitsCreeUtilisateur() {
       unpublishedCount: 0,
       totalQuantity: 0,
       withImageCount: 0,
+      userProducts: 0,
+      boutiqueProducts: 0,
     });
   };
 
@@ -310,6 +436,7 @@ export default function ListeProduitsCreeUtilisateur() {
     console.log("🔍 Filtrage des produits...");
     console.log("📦 Produits totaux:", produits.length);
     console.log("🔍 Terme de recherche:", searchTerm);
+    console.log("🔍 Filtre source:", sourceFilter);
 
     let result = produits.filter((produit) => {
       // Filtre par recherche
@@ -319,7 +446,18 @@ export default function ListeProduitsCreeUtilisateur() {
         (produit.description &&
           produit.description.toLowerCase().includes(searchLower)) ||
         produit.prix.toString().includes(searchTerm) ||
-        produit.categorie.libelle.toLowerCase().includes(searchLower);
+        produit.categorie.libelle.toLowerCase().includes(searchLower) ||
+        (produit.utilisateur &&
+          (`${produit.utilisateur.prenoms} ${produit.utilisateur.nom}`
+            .toLowerCase()
+            .includes(searchLower) ||
+            produit.utilisateur.email.toLowerCase().includes(searchLower))) ||
+        (produit.boutique &&
+          (produit.boutique.nom.toLowerCase().includes(searchLower) ||
+            (produit.boutique.description &&
+              produit.boutique.description
+                .toLowerCase()
+                .includes(searchLower))));
 
       // Filtre par statut
       const matchesStatus =
@@ -331,12 +469,24 @@ export default function ListeProduitsCreeUtilisateur() {
         (publishFilter === "published" && produit.estPublie) ||
         (publishFilter === "unpublished" && !produit.estPublie);
 
+      // Filtre par source (utilisateur/boutique)
+      const matchesSource =
+        sourceFilter === "all" ||
+        (sourceFilter === "utilisateur" && produit.utilisateur) ||
+        (sourceFilter === "boutique" && produit.boutique);
+
       // Filtre par prix
       const prixNumber = parseFloat(produit.prix);
       const matchesPrice =
         prixNumber >= priceRange[0] && prixNumber <= priceRange[1];
 
-      return matchesSearch && matchesStatus && matchesPublish && matchesPrice;
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesPublish &&
+        matchesSource &&
+        matchesPrice
+      );
     });
 
     console.log("✅ Produits filtrés:", result.length);
@@ -345,8 +495,34 @@ export default function ListeProduitsCreeUtilisateur() {
     if (sortConfig) {
       console.log("🔀 Tri par:", sortConfig.key, sortConfig.direction);
       result.sort((a, b) => {
-        const aValue = a[sortConfig.key];
-        const bValue = b[sortConfig.key];
+        const aValue = a[sortConfig.key as keyof ProduitUtilisateur];
+        const bValue = b[sortConfig.key as keyof ProduitUtilisateur];
+
+        // Tri par type de source
+        if (sortConfig.key === "sourceType") {
+          const aType = a.utilisateur ? "utilisateur" : "boutique";
+          const bType = b.utilisateur ? "utilisateur" : "boutique";
+          return sortConfig.direction === "asc"
+            ? aType.localeCompare(bType)
+            : bType.localeCompare(aType);
+        }
+
+        // Tri par nom du propriétaire
+        if (sortConfig.key === "ownerName") {
+          const aName = a.utilisateur
+            ? `${a.utilisateur.prenoms} ${a.utilisateur.nom}`
+            : a.boutique
+              ? a.boutique.nom
+              : "";
+          const bName = b.utilisateur
+            ? `${b.utilisateur.prenoms} ${b.utilisateur.nom}`
+            : b.boutique
+              ? b.boutique.nom
+              : "";
+          return sortConfig.direction === "asc"
+            ? aName.localeCompare(bName)
+            : bName.localeCompare(aName);
+        }
 
         if (aValue == null && bValue == null) return 0;
         if (aValue == null) return 1;
@@ -392,6 +568,7 @@ export default function ListeProduitsCreeUtilisateur() {
     searchTerm,
     statusFilter,
     publishFilter,
+    sourceFilter,
     priceRange,
     sortConfig,
     pagination.limit,
@@ -410,7 +587,7 @@ export default function ListeProduitsCreeUtilisateur() {
     return items;
   }, [filteredProduits, pagination.page, pagination.limit]);
 
-  const requestSort = (key: keyof ProduitUtilisateur) => {
+  const requestSort = (key: SortConfig["key"]) => {
     let direction: "asc" | "desc" = "asc";
     if (
       sortConfig &&
@@ -422,7 +599,7 @@ export default function ListeProduitsCreeUtilisateur() {
     setSortConfig({ key, direction });
   };
 
-  const getSortIcon = (key: keyof ProduitUtilisateur) => {
+  const getSortIcon = (key: SortConfig["key"]) => {
     if (!sortConfig || sortConfig.key !== key) {
       return (
         <FontAwesomeIcon
@@ -483,6 +660,78 @@ export default function ListeProduitsCreeUtilisateur() {
 
     // Image par défaut avec les initiales du produit
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(produit.libelle)}&background=007bff&color=fff&size=80&bold=true`;
+  };
+
+  // Récupérer l'image de l'utilisateur
+  const getUserImage = (produit: ProduitUtilisateur) => {
+    if (produit.utilisateur?.avatar) {
+      return produit.utilisateur.avatar;
+    }
+
+    // Initiales de l'utilisateur
+    const name = produit.utilisateur
+      ? `${produit.utilisateur.prenoms} ${produit.utilisateur.nom}`
+      : "Utilisateur";
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=6c757d&color=fff&size=48`;
+  };
+
+  // Récupérer l'image de la boutique
+  const getBoutiqueImage = (produit: ProduitUtilisateur) => {
+    if (produit.boutique?.logo) {
+      return produit.boutique.logo;
+    }
+
+    // Initiales de la boutique
+    const name = produit.boutique?.nom || "Boutique";
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=20c997&color=fff&size=48`;
+  };
+
+  // Obtenir le lien du profil
+  const getProfileLink = (produit: ProduitUtilisateur) => {
+    if (produit.utilisateur) {
+      return `/profiles/utilisateurs/${produit.utilisateur.uuid}`;
+    }
+    if (produit.boutique) {
+      return `/boutiques/${produit.boutique.uuid}`;
+    }
+    return "#";
+  };
+
+  // Obtenir le type de source
+  const getSourceType = (produit: ProduitUtilisateur) => {
+    if (produit.utilisateur) {
+      return "utilisateur";
+    }
+    if (produit.boutique) {
+      return "boutique";
+    }
+    return "inconnu";
+  };
+
+  // Obtenir le nom du propriétaire
+  const getOwnerName = (produit: ProduitUtilisateur) => {
+    if (produit.utilisateur) {
+      return `${produit.utilisateur.prenoms} ${produit.utilisateur.nom}`;
+    }
+    if (produit.boutique) {
+      return produit.boutique.nom;
+    }
+    return "Inconnu";
+  };
+
+  // Obtenir l'email du propriétaire
+  const getOwnerEmail = (produit: ProduitUtilisateur) => {
+    if (produit.utilisateur) {
+      return produit.utilisateur.email;
+    }
+    if (produit.boutique && produit.boutique.description) {
+      // Peut contenir des infos de contact
+      return (
+        produit.boutique.description.substring(0, 50) +
+        (produit.boutique.description.length > 50 ? "..." : "")
+      );
+    }
+    return "Non spécifié";
   };
 
   const getStatusBadge = (statut: string) => {
@@ -568,6 +817,14 @@ export default function ListeProduitsCreeUtilisateur() {
 
   const handleViewDetails = (produit: ProduitUtilisateur) => {
     console.log("Voir détails:", produit);
+
+    let ownerInfo = "";
+    if (produit.utilisateur) {
+      ownerInfo = `\nPropriétaire: ${produit.utilisateur.prenoms} ${produit.utilisateur.nom}\nEmail: ${produit.utilisateur.email}`;
+    } else if (produit.boutique) {
+      ownerInfo = `\nBoutique: ${produit.boutique.nom}\nStatut: ${produit.boutique.statut}`;
+    }
+
     alert(
       `Détails du produit:\n\n` +
         `Nom: ${produit.libelle}\n` +
@@ -576,9 +833,19 @@ export default function ListeProduitsCreeUtilisateur() {
         `Statut: ${produit.statut}\n` +
         `Publié: ${produit.estPublie ? "Oui" : "Non"}\n` +
         `Catégorie: ${produit.categorie.libelle}\n` +
-        `Date de création: ${formatDate(produit.createdAt)}\n` +
+        `Type: ${produit.utilisateur ? "Produit utilisateur" : "Produit boutique"}` +
+        ownerInfo +
+        `\nDate de création: ${formatDate(produit.createdAt)}\n` +
         `Dernière modification: ${formatDate(produit.updatedAt)}`,
     );
+  };
+
+  // Naviguer vers le profil
+  const handleViewProfile = (produit: ProduitUtilisateur) => {
+    const link = getProfileLink(produit);
+    if (link !== "#") {
+      window.open(link, "_blank");
+    }
   };
 
   // Actions en masse
@@ -672,6 +939,9 @@ export default function ListeProduitsCreeUtilisateur() {
       "Statut",
       "Publié",
       "Catégorie",
+      "Type Propriétaire",
+      "Propriétaire",
+      "Email",
       "Date création",
       "Date modification",
     ];
@@ -688,6 +958,9 @@ export default function ListeProduitsCreeUtilisateur() {
           produit.statut,
           produit.estPublie ? "Oui" : "Non",
           escapeCsv(produit.categorie.libelle),
+          produit.utilisateur ? "Utilisateur" : "Boutique",
+          escapeCsv(getOwnerName(produit)),
+          escapeCsv(getOwnerEmail(produit)),
           produit.createdAt ? formatDate(produit.createdAt) : "",
           produit.updatedAt ? formatDate(produit.updatedAt) : "",
         ].join(","),
@@ -719,6 +992,7 @@ export default function ListeProduitsCreeUtilisateur() {
     setSearchTerm("");
     setStatusFilter("all");
     setPublishFilter("all");
+    setSourceFilter("all");
     setPriceRange([0, 1000000]);
     setSortConfig(null);
     setPagination((prev) => ({ ...prev, page: 1 }));
@@ -787,6 +1061,9 @@ export default function ListeProduitsCreeUtilisateur() {
                   <p className="text-muted mb-0">
                     <FontAwesomeIcon icon={faUser} className="me-2" />
                     {utilisateurInfo.prenoms} {utilisateurInfo.nom}
+                    <span className="ms-2 badge bg-primary">
+                      {utilisateurInfo.email}
+                    </span>
                   </p>
                 )}
               </div>
@@ -1006,15 +1283,12 @@ export default function ListeProduitsCreeUtilisateur() {
                       backgroundColor: `${colors.oskar.purple}20`,
                     }}
                   >
-                    <FontAwesomeIcon
-                      icon={faLayerGroup}
-                      className="text-purple"
-                    />
+                    <FontAwesomeIcon icon={faUserTag} className="text-purple" />
                   </div>
                   <div>
-                    <div className="text-muted small">Quantité totale</div>
-                    <div className="fw-bold fs-4">{stats.totalQuantity}</div>
-                    <div className="text-muted small">En stock</div>
+                    <div className="text-muted small">Utilisateur</div>
+                    <div className="fw-bold fs-4">{stats.userProducts}</div>
+                    <div className="text-muted small">Produits</div>
                   </div>
                 </div>
               </div>
@@ -1038,14 +1312,12 @@ export default function ListeProduitsCreeUtilisateur() {
                       backgroundColor: `${colors.oskar.orange}20`,
                     }}
                   >
-                    <FontAwesomeIcon icon={faImage} className="text-orange" />
+                    <FontAwesomeIcon icon={faShop} className="text-orange" />
                   </div>
                   <div>
-                    <div className="text-muted small">Avec images</div>
-                    <div className="fw-bold fs-4">{stats.withImageCount}</div>
-                    <div className="text-muted small">
-                      {stats.total - stats.withImageCount} sans image
-                    </div>
+                    <div className="text-muted small">Boutique</div>
+                    <div className="fw-bold fs-4">{stats.boutiqueProducts}</div>
+                    <div className="text-muted small">Produits</div>
                   </div>
                 </div>
               </div>
@@ -1093,7 +1365,7 @@ export default function ListeProduitsCreeUtilisateur() {
       <div className="card border-0 shadow-sm mb-4">
         <div className="card-body">
           <div className="row g-3">
-            <div className="col-md-4">
+            <div className="col-md-3">
               <div className="input-group">
                 <span className="input-group-text bg-white border-end-0">
                   <FontAwesomeIcon icon={faSearch} className="text-muted" />
@@ -1101,7 +1373,7 @@ export default function ListeProduitsCreeUtilisateur() {
                 <input
                   type="text"
                   className="form-control border-start-0"
-                  placeholder="Rechercher par nom, catégorie..."
+                  placeholder="Rechercher par nom, propriétaire..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   aria-label="Rechercher des produits"
@@ -1156,7 +1428,25 @@ export default function ListeProduitsCreeUtilisateur() {
               </div>
             </div>
 
-            <div className="col-md-4">
+            <div className="col-md-2">
+              <div className="input-group">
+                <span className="input-group-text bg-white border-end-0">
+                  <FontAwesomeIcon icon={faUser} className="text-muted" />
+                </span>
+                <select
+                  className="form-select border-start-0"
+                  value={sourceFilter}
+                  onChange={(e) => setSourceFilter(e.target.value)}
+                  aria-label="Filtrer par source"
+                >
+                  <option value="all">Toutes sources</option>
+                  <option value="utilisateur">Utilisateur</option>
+                  <option value="boutique">Boutique</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="col-md-3">
               <div className="input-group">
                 <span className="input-group-text bg-white border-end-0">
                   <FontAwesomeIcon
@@ -1192,6 +1482,17 @@ export default function ListeProduitsCreeUtilisateur() {
                     <>
                       {" "}
                       pour "<strong>{searchTerm}</strong>"
+                    </>
+                  )}
+                  {sourceFilter !== "all" && (
+                    <>
+                      {" "}
+                      • Source:{" "}
+                      <strong>
+                        {sourceFilter === "utilisateur"
+                          ? "Utilisateur"
+                          : "Boutique"}
+                      </strong>
                     </>
                   )}
                 </small>
@@ -1284,6 +1585,7 @@ export default function ListeProduitsCreeUtilisateur() {
               {(searchTerm ||
                 statusFilter !== "all" ||
                 publishFilter !== "all" ||
+                sourceFilter !== "all" ||
                 priceRange[1] < maxPrice) && (
                 <button onClick={resetFilters} className="btn btn-primary me-2">
                   <FontAwesomeIcon icon={faTimes} className="me-2" />
@@ -1319,7 +1621,7 @@ export default function ListeProduitsCreeUtilisateur() {
                         </div>
                       </th>
                       <th style={{ width: "100px" }} className="text-center">
-                        Image
+                        Produit
                       </th>
                       <th style={{ width: "250px" }}>
                         <button
@@ -1327,10 +1629,18 @@ export default function ListeProduitsCreeUtilisateur() {
                           onClick={() => requestSort("libelle")}
                         >
                           <FontAwesomeIcon icon={faTag} className="me-1" />
-                          Produit {getSortIcon("libelle")}
+                          Détails {getSortIcon("libelle")}
                         </button>
                       </th>
-                      <th style={{ width: "150px" }}>Catégorie</th>
+                      <th style={{ width: "200px" }}>
+                        <button
+                          className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
+                          onClick={() => requestSort("ownerName")}
+                        >
+                          <FontAwesomeIcon icon={faUser} className="me-1" />
+                          Propriétaire {getSortIcon("ownerName")}
+                        </button>
+                      </th>
                       <th style={{ width: "120px" }}>
                         <button
                           className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
@@ -1420,6 +1730,15 @@ export default function ListeProduitsCreeUtilisateur() {
                           <div className="mt-2">
                             <small className="text-muted">
                               <FontAwesomeIcon
+                                icon={faLayerGroup}
+                                className="me-1"
+                              />
+                              {produit.categorie.libelle}
+                            </small>
+                          </div>
+                          <div>
+                            <small className="text-muted">
+                              <FontAwesomeIcon
                                 icon={faCalendar}
                                 className="me-1"
                               />
@@ -1429,29 +1748,82 @@ export default function ListeProduitsCreeUtilisateur() {
                         </td>
                         <td>
                           <div className="d-flex align-items-center">
-                            {produit.categorie.image && (
+                            <div className="position-relative">
                               <img
-                                src={produit.categorie.image}
-                                alt={produit.categorie.libelle}
-                                className="rounded me-2"
+                                src={
+                                  produit.utilisateur
+                                    ? getUserImage(produit)
+                                    : getBoutiqueImage(produit)
+                                }
+                                alt={getOwnerName(produit)}
+                                className="rounded-circle border cursor-pointer"
                                 style={{
-                                  width: "32px",
-                                  height: "32px",
+                                  width: "48px",
+                                  height: "48px",
                                   objectFit: "cover",
+                                  cursor: "pointer",
                                 }}
+                                onClick={() => handleViewProfile(produit)}
+                                title={`Voir profil ${produit.utilisateur ? "utilisateur" : "boutique"}`}
                                 onError={(e) => {
                                   (e.target as HTMLImageElement).src =
-                                    `https://ui-avatars.com/api/?name=${encodeURIComponent(produit.categorie.libelle)}&background=6c757d&color=fff&size=32`;
+                                    produit.utilisateur
+                                      ? `https://ui-avatars.com/api/?name=${encodeURIComponent(getOwnerName(produit))}&background=6c757d&color=fff&size=48`
+                                      : `https://ui-avatars.com/api/?name=${encodeURIComponent(getOwnerName(produit))}&background=20c997&color=fff&size=48`;
                                 }}
                               />
-                            )}
-                            <div>
-                              <div className="fw-medium">
-                                {produit.categorie.libelle}
+                              <div className="position-absolute bottom-0 end-0 translate-middle">
+                                <span
+                                  className={`badge ${produit.utilisateur ? "bg-info" : "bg-success"} rounded-circle p-1`}
+                                  style={{ fontSize: "0.6rem" }}
+                                  title={
+                                    produit.utilisateur
+                                      ? "Utilisateur"
+                                      : "Boutique"
+                                  }
+                                >
+                                  <FontAwesomeIcon
+                                    icon={produit.utilisateur ? faUser : faShop}
+                                  />
+                                </span>
                               </div>
-                              <small className="text-muted">
-                                {produit.categorie.type}
+                            </div>
+                            <div className="ms-3">
+                              <div
+                                className="fw-medium cursor-pointer hover-text-primary"
+                                onClick={() => handleViewProfile(produit)}
+                                style={{ cursor: "pointer" }}
+                                title={`Voir profil ${produit.utilisateur ? "utilisateur" : "boutique"}`}
+                              >
+                                {getOwnerName(produit)}
+                                <FontAwesomeIcon
+                                  icon={faExternalLinkAlt}
+                                  className="ms-1 text-muted"
+                                  style={{ fontSize: "0.7rem" }}
+                                />
+                              </div>
+                              <small className="text-muted d-block">
+                                {produit.utilisateur
+                                  ? "Utilisateur"
+                                  : "Boutique"}
                               </small>
+                              <small className="text-muted">
+                                {getOwnerEmail(produit)}
+                              </small>
+                              {produit.utilisateur?.role && (
+                                <div className="mt-1">
+                                  <span className="badge bg-secondary bg-opacity-10 text-secondary">
+                                    {produit.utilisateur.role.name}
+                                  </span>
+                                </div>
+                              )}
+                              {produit.boutique?.typeBoutique && (
+                                <div className="mt-1">
+                                  <span className="badge bg-success bg-opacity-10 text-success">
+                                    {produit.boutique.typeBoutique.libelle}
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -1463,6 +1835,7 @@ export default function ListeProduitsCreeUtilisateur() {
                         </td>
                         <td>
                           <div className="fw-semibold">{produit.quantite}</div>
+                          <small className="text-muted">en stock</small>
                         </td>
                         <td>{getStatusBadge(produit.statut)}</td>
                         <td>
@@ -1488,6 +1861,7 @@ export default function ListeProduitsCreeUtilisateur() {
                           <div className="fw-medium">
                             {formatDate(produit.updatedAt)}
                           </div>
+                          <small className="text-muted">modifié</small>
                         </td>
                         <td>
                           <div className="btn-group btn-group-sm" role="group">
@@ -1533,6 +1907,20 @@ export default function ListeProduitsCreeUtilisateur() {
                               aria-label={`Supprimer ${produit.libelle}`}
                             >
                               <FontAwesomeIcon icon={faTrash} />
+                            </button>
+                          </div>
+                          <div className="mt-2">
+                            <button
+                              className="btn btn-sm btn-outline-secondary w-100"
+                              title="Voir profil propriétaire"
+                              onClick={() => handleViewProfile(produit)}
+                              aria-label={`Voir profil de ${getOwnerName(produit)}`}
+                            >
+                              <FontAwesomeIcon
+                                icon={faArrowRight}
+                                className="me-1"
+                              />
+                              Profil
                             </button>
                           </div>
                         </td>
@@ -1688,16 +2076,16 @@ export default function ListeProduitsCreeUtilisateur() {
                 <div className="col-md-6">
                   <ul className="mb-0">
                     <li>
-                      <strong>Images :</strong> Les produits avec des images
-                      réelles sont marqués d'un badge vert
+                      <strong>Propriétaire :</strong> Cliquez sur l'image ou le
+                      nom pour voir le profil complet (utilisateur ou boutique)
+                    </li>
+                    <li>
+                      <strong>Type de produit :</strong> Les produits peuvent
+                      appartenir à un utilisateur individuel ou à une boutique
                     </li>
                     <li>
                       <strong>Publier/Dépublier :</strong> Contrôlez la
                       visibilité de vos produits sur la plateforme
-                    </li>
-                    <li>
-                      <strong>Éditer :</strong> Modifiez les informations de vos
-                      produits existants
                     </li>
                   </ul>
                 </div>
@@ -1705,15 +2093,15 @@ export default function ListeProduitsCreeUtilisateur() {
                   <ul className="mb-0">
                     <li>
                       <strong>Export :</strong> Téléchargez la liste de vos
-                      produits au format CSV
+                      produits au format CSV avec toutes les informations
                     </li>
                     <li>
-                      <strong>Filtres avancés :</strong> Recherchez par nom,
-                      catégorie, statut, prix et état de publication
+                      <strong>Filtres avancés :</strong> Filtrez par type de
+                      propriétaire (utilisateur ou boutique)
                     </li>
                     <li>
-                      <strong>Actions groupées :</strong> Sélectionnez plusieurs
-                      produits pour des actions en masse
+                      <strong>Badges :</strong> Les badges de couleur indiquent
+                      le type de propriétaire et le statut
                     </li>
                   </ul>
                 </div>
@@ -1767,6 +2155,13 @@ export default function ListeProduitsCreeUtilisateur() {
         }
         .spinner-border {
           animation-duration: 0.75s;
+        }
+        .cursor-pointer {
+          cursor: pointer;
+        }
+        .hover-text-primary:hover {
+          color: #0d6efd !important;
+          text-decoration: underline;
         }
       `}</style>
     </div>

@@ -523,39 +523,40 @@ export default function RolesPage() {
       setLoading(true);
       setError(null);
 
-      const queryParams = new URLSearchParams();
-      queryParams.append("page", (params?.page || page).toString());
-      queryParams.append("limit", (params?.limit || limit).toString());
+      const response = await api.get(API_ENDPOINTS.ROLES.LIST);
 
-      if (params?.filters) {
-        Object.entries(params.filters).forEach(([key, value]) => {
-          if (value) {
-            queryParams.append(key, String(value));
-          }
-        });
-      }
+      console.log("📦 API Response:", response); // Debug log
 
-      const response = await api.get(
-        `${API_ENDPOINTS.ROLES.LIST}?${queryParams.toString()}`,
-      );
+      // Vérifier si la réponse est un tableau
+      if (Array.isArray(response)) {
+        // L'API retourne directement un tableau
+        const rolesData = response as Role[];
+        setRoles(rolesData);
+        setTotal(rolesData.length);
+        setPages(Math.ceil(rolesData.length / (params?.limit || limit)));
 
-      if (response && response.data) {
-        setRoles(Array.isArray(response.data) ? response.data : []);
+        console.log(`✅ Loaded ${rolesData.length} roles`);
+      } else if (response && response.data && Array.isArray(response.data)) {
+        // L'API retourne une structure paginée { data: [], total: X, pages: Y }
+        setRoles(response.data);
         setTotal(response.total || response.data.length || 0);
         setPages(
           response.pages ||
             Math.ceil((response.data.length || 0) / (params?.limit || limit)),
         );
 
-        if (params?.page) setPage(params.page);
-        if (params?.limit) setLimit(params.limit);
+        console.log(`✅ Loaded ${response.data.length} roles (paginated)`);
       } else {
+        console.error("❌ Invalid API response structure:", response);
         setRoles([]);
         setTotal(0);
         setPages(1);
       }
+
+      if (params?.page) setPage(params.page);
+      if (params?.limit) setLimit(params.limit);
     } catch (err: any) {
-      console.error("Erreur lors du chargement des rôles:", err);
+      console.error("❌ Erreur lors du chargement des rôles:", err);
       setError(err.message || "Erreur lors du chargement des rôles");
       setRoles([]);
       setTotal(0);
@@ -814,10 +815,6 @@ export default function RolesPage() {
 
   return (
     <>
-
-
-
-
       {/* Modal de suppression */}
       <DeleteModal
         show={showDeleteModal}

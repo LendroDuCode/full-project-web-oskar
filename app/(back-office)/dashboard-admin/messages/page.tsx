@@ -107,7 +107,7 @@ interface Message {
   estEnvoye: boolean;
   envoyeLe: string;
   estLu: boolean;
-  dateLecture?: string | null; // <-- Modifiez cette ligne
+  dateLecture: string | null;
   dateCreation?: string;
 }
 
@@ -212,7 +212,6 @@ const MessageItem = ({
   };
 
   const getTypeColor = () => {
-    // Vérifier si le type existe et le sécuriser
     const type = (message.type || "").toUpperCase();
     switch (type) {
       case "ALERT":
@@ -229,7 +228,6 @@ const MessageItem = ({
   };
 
   const getTypeIcon = () => {
-    // Vérifier si le type existe et le sécuriser
     const type = (message.type || "").toUpperCase();
     switch (type) {
       case "ALERT":
@@ -259,7 +257,7 @@ const MessageItem = ({
       )}
 
       <div
-        className={`list-group-item list-group-item-action border-0 py-4 px-4 ${isSelected ? "bg-primary bg-opacity-10 selected-message" : "hover-bg-light"} ${!message.estLu ? "unread-message" : ""}`}
+        className={`list-group-item list-group-item-action border-0 py-3 px-3 ${isSelected ? "bg-primary bg-opacity-10 selected-message" : "hover-bg-light"} ${!message.estLu ? "unread-message" : ""}`}
         onClick={() => onSelect(message)}
         style={{
           cursor: "pointer",
@@ -273,11 +271,11 @@ const MessageItem = ({
           marginBottom: "4px",
         }}
       >
-        <div className="d-flex justify-content-between align-items-start mb-3">
+        <div className="d-flex justify-content-between align-items-start mb-2">
           <div className="d-flex align-items-center gap-3">
             <div
               className={`bg-${getTypeColor()} bg-opacity-10 text-${getTypeColor()} rounded-circle d-flex align-items-center justify-content-center`}
-              style={{ width: "48px", height: "48px" }}
+              style={{ width: "40px", height: "40px" }}
             >
               <FontAwesomeIcon
                 icon={getTypeIcon()}
@@ -286,7 +284,10 @@ const MessageItem = ({
             </div>
             <div className="d-flex flex-column">
               <div className="d-flex align-items-center gap-2 mb-1">
-                <h6 className="mb-0 fw-bold text-dark">
+                <h6
+                  className="mb-0 fw-bold text-dark"
+                  style={{ fontSize: "0.9rem" }}
+                >
                   {message.expediteurNom}
                 </h6>
                 {!message.estLu && (
@@ -296,13 +297,15 @@ const MessageItem = ({
                   </span>
                 )}
               </div>
-              <div className="d-flex align-items-center gap-2">
-                <small className="text-muted">
+              <div className="d-flex align-items-center gap-2 flex-wrap">
+                <small className="text-muted" style={{ fontSize: "0.75rem" }}>
                   <FontAwesomeIcon icon={faUser} className="me-1 fs-11" />
                   {message.expediteurEmail}
                 </small>
-                <span className="text-muted">•</span>
-                <small className="text-muted">
+                <span className="text-muted" style={{ fontSize: "0.75rem" }}>
+                  •
+                </span>
+                <small className="text-muted" style={{ fontSize: "0.75rem" }}>
                   À: {message.destinataireEmail}
                 </small>
               </div>
@@ -310,19 +313,22 @@ const MessageItem = ({
           </div>
           <div className="d-flex flex-column align-items-end gap-2">
             <div className="d-flex align-items-center gap-2">
-              <small className="text-muted">
+              <small className="text-muted" style={{ fontSize: "0.75rem" }}>
                 <FontAwesomeIcon icon={faClock} className="me-1" />
                 {formatDate(message.envoyeLe)}
               </small>
               <span
-                className={`badge bg-${getTypeColor()} bg-opacity-10 text-${getTypeColor()} border border-${getTypeColor()} border-opacity-25 px-3 py-1 fw-medium`}
-                style={{ fontSize: "0.7rem" }}
+                className={`badge bg-${getTypeColor()} bg-opacity-10 text-${getTypeColor()} border border-${getTypeColor()} border-opacity-25 px-2 py-1 fw-medium`}
+                style={{ fontSize: "0.65rem" }}
               >
                 {message.type.toUpperCase()}
               </span>
             </div>
             {message.estEnvoye && (
-              <small className="text-success fw-medium">
+              <small
+                className="text-success fw-medium"
+                style={{ fontSize: "0.75rem" }}
+              >
                 <FontAwesomeIcon icon={faCheckCircle} className="me-1" />
                 Envoyé
               </small>
@@ -330,13 +336,16 @@ const MessageItem = ({
           </div>
         </div>
 
-        <h6 className="fw-bold mb-2 text-dark">{message.sujet}</h6>
+        <h6 className="fw-bold mb-2 text-dark" style={{ fontSize: "0.9rem" }}>
+          {message.sujet}
+        </h6>
 
         <p
           className="mb-0 text-muted fs-14 line-clamp-2"
           style={{
+            fontSize: "0.8rem",
             maxWidth: "600px",
-            lineHeight: "1.5",
+            lineHeight: "1.4",
             WebkitLineClamp: 2,
             WebkitBoxOrient: "vertical",
             overflow: "hidden",
@@ -354,8 +363,9 @@ const MessageItem = ({
                 e.stopPropagation();
                 onSelect(message);
               }}
+              style={{ fontSize: "0.8rem" }}
             >
-              <FontAwesomeIcon icon={faEye} />
+              <FontAwesomeIcon icon={faEye} style={{ fontSize: "0.8rem" }} />
               <span>Voir</span>
             </button>
             <button
@@ -364,14 +374,22 @@ const MessageItem = ({
                 e.stopPropagation();
                 // Gérer la réponse plus tard
               }}
+              style={{ fontSize: "0.8rem" }}
             >
-              <FontAwesomeIcon icon={faReply} />
+              <FontAwesomeIcon icon={faReply} style={{ fontSize: "0.8rem" }} />
               <span>Répondre</span>
             </button>
           </div>
           {message.estEnvoye && !message.estLu && (
-            <span className="badge bg-light text-dark border border-secondary-subtle px-3 py-1">
-              <FontAwesomeIcon icon={faClock} className="me-1" />
+            <span
+              className="badge bg-light text-dark border border-secondary-subtle px-2 py-1"
+              style={{ fontSize: "0.75rem" }}
+            >
+              <FontAwesomeIcon
+                icon={faClock}
+                className="me-1"
+                style={{ fontSize: "0.7rem" }}
+              />
               En attente de lecture
             </span>
           )}
@@ -389,6 +407,7 @@ const StatsCard = ({
   color,
   subtitle,
   trend,
+  isLoading,
 }: {
   title: string;
   value: number;
@@ -396,6 +415,7 @@ const StatsCard = ({
   color: string;
   subtitle?: string;
   trend?: "up" | "down" | "neutral";
+  isLoading?: boolean;
 }) => {
   const getTrendIcon = () => {
     switch (trend) {
@@ -414,22 +434,41 @@ const StatsCard = ({
 
   return (
     <div className="card border-0 shadow-sm h-100 stats-card">
-      <div className="card-body">
+      <div className="card-body p-3">
         <div className="d-flex align-items-center">
           <div
-            className={`bg-${color} bg-opacity-10 text-${color} rounded-3 p-3 me-3`}
+            className={`bg-${color} bg-opacity-10 text-${color} rounded-3 p-2 me-3`}
             style={{ borderRadius: "12px" }}
           >
-            <FontAwesomeIcon icon={icon} className="fs-3" />
+            <FontAwesomeIcon icon={icon} className="fs-2" />
           </div>
           <div className="flex-grow-1">
             <div className="d-flex align-items-center gap-2 mb-1">
-              <h3 className="mb-0 fw-bold">{value.toLocaleString()}</h3>
+              <h3 className="mb-0 fw-bold" style={{ fontSize: "1.25rem" }}>
+                {isLoading ? (
+                  <span
+                    className="spinner-border spinner-border-sm me-2"
+                    role="status"
+                  >
+                    <span className="visually-hidden">Chargement...</span>
+                  </span>
+                ) : (
+                  value.toLocaleString()
+                )}
+              </h3>
               {trend && getTrendIcon()}
             </div>
-            <p className="text-muted mb-1 fw-medium">{title}</p>
+            <p
+              className="text-muted mb-1 fw-medium"
+              style={{ fontSize: "0.8rem" }}
+            >
+              {title}
+            </p>
             {subtitle && (
-              <small className="text-muted d-flex align-items-center gap-1">
+              <small
+                className="text-muted d-flex align-items-center gap-1"
+                style={{ fontSize: "0.7rem" }}
+              >
                 <FontAwesomeIcon icon={faInfoCircle} className="fs-11" />
                 {subtitle}
               </small>
@@ -497,23 +536,6 @@ export default function ListeMessages() {
     "users",
   );
 
-  // Fonction de test pour voir la structure exacte de la réponse
-  const testApiStructure = useCallback(async () => {
-    try {
-      console.log("🧪 Test de la structure de l'API...");
-
-      // Tester les messages reçus
-      const receivedResponse = await api.get(API_ENDPOINTS.MESSAGERIE.RECEIVED);
-      console.log("📨 Structure de /messagerie/recus:", receivedResponse);
-
-      // Tester les messages envoyés
-      const sentResponse = await api.get(API_ENDPOINTS.MESSAGERIE.SENT);
-      console.log("📤 Structure de /messagerie/envoyes:", sentResponse);
-    } catch (err) {
-      console.error("❌ Erreur lors du test:", err);
-    }
-  }, []);
-
   // Charger les agents
   const fetchAgents = useCallback(async () => {
     setLoading((prev) => ({ ...prev, agents: true }));
@@ -577,7 +599,6 @@ export default function ListeMessages() {
         API_ENDPOINTS.MESSAGERIE.RECEIVED,
       );
 
-      // Vérifier et déboguer la réponse
       console.log("📨 Réponse brute de l'API:", response);
 
       if (!response) {
@@ -606,7 +627,7 @@ export default function ListeMessages() {
               expediteurEmail: msg.expediteurEmail || "inconnu@exemple.com",
               destinataireEmail:
                 msg.destinataireEmail || "destinataire@exemple.com",
-              type: (msg.type || "notification").toUpperCase(), // Sécuriser et formater le type
+              type: (msg.type || "notification").toUpperCase(),
               estEnvoye: msg.estEnvoye !== undefined ? msg.estEnvoye : true,
               dateCreation: msg.dateCreation || item.dateReception,
             } as Message;
@@ -624,7 +645,7 @@ export default function ListeMessages() {
               expediteurEmail: item.expediteurEmail || "inconnu@exemple.com",
               destinataireEmail:
                 item.destinataireEmail || "destinataire@exemple.com",
-              type: (item.type || "notification").toUpperCase(), // Sécuriser et formater le type
+              type: (item.type || "notification").toUpperCase(),
               estEnvoye: item.estEnvoye !== undefined ? item.estEnvoye : true,
               dateCreation: item.dateCreation || item.dateReception,
             } as Message;
@@ -648,10 +669,11 @@ export default function ListeMessages() {
           expediteurNom: "N'GUESSAN Jessica Carine",
           expediteurEmail: "jessica.nguessan@agent.com",
           destinataireEmail: "admin@sonec.com",
-          type: "NOTIFICATION", // Utiliser le format majuscule
+          type: "NOTIFICATION",
           estEnvoye: true,
           envoyeLe: new Date().toISOString(),
           estLu: false,
+          dateLecture: null,
         },
         {
           uuid: "2",
@@ -661,7 +683,7 @@ export default function ListeMessages() {
           expediteurNom: "Système de sécurité",
           expediteurEmail: "security@sonec.com",
           destinataireEmail: "admin@sonec.com",
-          type: "ALERT", // Utiliser le format majuscule
+          type: "ALERT",
           estEnvoye: true,
           envoyeLe: new Date(Date.now() - 3600000).toISOString(),
           estLu: true,
@@ -695,7 +717,7 @@ export default function ListeMessages() {
             ...msg,
             type: (msg.type || "notification").toUpperCase(),
             estLu: msg.estLu || false,
-            dateLecture: msg.dateLecture || null, // <-- Utilisez null au lieu de undefined
+            dateLecture: msg.dateLecture || null,
             envoyeLe: msg.envoyeLe || new Date().toISOString(),
             expediteurNom: msg.expediteurNom || "Administrateur SONEC",
             expediteurEmail: msg.expediteurEmail || "admin@sonec.com",
@@ -737,7 +759,7 @@ export default function ListeMessages() {
           estEnvoye: true,
           envoyeLe: new Date(Date.now() - 43200000).toISOString(),
           estLu: false,
-          dateLecture: null, // <-- Utilisez null ici aussi
+          dateLecture: null,
         },
       ];
       setMessagesEnvoyes(demoSentMessages);
@@ -765,9 +787,6 @@ export default function ListeMessages() {
     fetchUtilisateurs();
     fetchMessagesRecus();
     fetchMessagesEnvoyes();
-
-    // Tester la structure de l'API (débogage)
-    // testApiStructure();
   }, []);
 
   // Mettre à jour les statistiques
@@ -934,21 +953,17 @@ export default function ListeMessages() {
     }
   };
 
-  // Marquer un message comme lu (fonction corrigée)
+  // Marquer un message comme lu
   const handleMarkAsRead = async (messageId: string) => {
     try {
-      // NOTE: L'endpoint MARK_READ n'existe pas dans votre API
-      // Si vous voulez cette fonctionnalité, vous devez l'implémenter côté backend
       console.warn("⚠️ L'endpoint MARK_READ n'est pas disponible");
 
-      // Pour l'instant, on met juste à jour l'état local
       setMessages((prev) =>
         prev.map((msg) =>
           msg.uuid === messageId ? { ...msg, estLu: true } : msg,
         ),
       );
 
-      // Si le message sélectionné est celui-ci, le mettre à jour aussi
       if (selectedMessage?.uuid === messageId) {
         setSelectedMessage((prev) => (prev ? { ...prev, estLu: true } : null));
       }
@@ -1014,17 +1029,8 @@ export default function ListeMessages() {
 
   // Grouper les messages par date pour les séparateurs
   const groupedMessages = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const lastWeek = new Date(today);
-    lastWeek.setDate(lastWeek.getDate() - 7);
-
     return messages.map((message, index) => {
-      const messageDate = new Date(message.envoyeLe);
-      const showSeparator = index > 0 && index % 3 === 0; // Montrer un séparateur tous les 3 messages
-
+      const showSeparator = index > 0 && index % 3 === 0;
       return {
         message,
         showSeparator,
@@ -1032,20 +1038,40 @@ export default function ListeMessages() {
     });
   }, [messages]);
 
+  // Format date pour affichage
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "Date inconnue";
+      return date.toLocaleDateString("fr-FR", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return "Date inconnue";
+    }
+  };
+
   return (
     <>
-      <div className="container-fluid px-4 py-4">
+      <div className="container-fluid px-3 py-3">
         {/* Header avec titre et actions */}
         <div className="d-flex justify-content-between align-items-center mb-4">
           <div>
-            <h1 className="h2 fw-bold text-dark mb-1">
+            <h1
+              className="h2 fw-bold text-dark mb-1"
+              style={{ fontSize: "1.5rem" }}
+            >
               <FontAwesomeIcon
                 icon={faEnvelope}
                 className="me-3 text-primary"
               />
               Messagerie
             </h1>
-            <p className="text-muted mb-0">
+            <p className="text-muted mb-0" style={{ fontSize: "0.9rem" }}>
               Gérez vos messages et communiquez avec vos utilisateurs
             </p>
           </div>
@@ -1053,6 +1079,7 @@ export default function ListeMessages() {
             <button
               className="btn btn-outline-primary d-flex align-items-center gap-2"
               onClick={() => setActiveTab("users")}
+              style={{ fontSize: "0.85rem" }}
             >
               <FontAwesomeIcon icon={faUserPen} />
               Nouveau message
@@ -1063,6 +1090,7 @@ export default function ListeMessages() {
                 fetchMessagesRecus();
                 fetchMessagesEnvoyes();
               }}
+              style={{ fontSize: "0.85rem" }}
             >
               <FontAwesomeIcon icon={faHistory} />
               Actualiser
@@ -1071,7 +1099,7 @@ export default function ListeMessages() {
         </div>
 
         {/* Cartes de statistiques améliorées */}
-        <div className="row g-4 mb-5">
+        <div className="row g-3 mb-4">
           <div className="col-xl-3 col-lg-6">
             <StatsCard
               title="Utilisateurs Totaux"
@@ -1080,6 +1108,9 @@ export default function ListeMessages() {
               color="primary"
               subtitle="Agents, Vendeurs, Utilisateurs"
               trend="up"
+              isLoading={
+                loading.agents || loading.vendeurs || loading.utilisateurs
+              }
             />
           </div>
           <div className="col-xl-3 col-lg-6">
@@ -1090,6 +1121,7 @@ export default function ListeMessages() {
               color="info"
               subtitle={`${stats.unreadMessages} non lus`}
               trend="neutral"
+              isLoading={loading.messages}
             />
           </div>
           <div className="col-xl-3 col-lg-6">
@@ -1098,7 +1130,7 @@ export default function ListeMessages() {
               value={stats.sentMessages}
               icon={faShareSquare}
               color="success"
-              subtitle="Ce mois"
+              subtitle="Messages envoyés"
               trend="up"
             />
           </div>
@@ -1116,7 +1148,7 @@ export default function ListeMessages() {
 
         {/* Onglets principaux améliorés */}
         <div className="card border-0 shadow-lg mb-4 overflow-hidden">
-          <div className="card-header bg-white border-0 py-4 px-4">
+          <div className="card-header bg-white border-0 py-3 px-3">
             <ul
               className="nav nav-tabs nav-tabs-custom border-0 d-flex justify-content-between"
               role="tablist"
@@ -1124,25 +1156,30 @@ export default function ListeMessages() {
             >
               <li className="nav-item flex-grow-1" role="presentation">
                 <button
-                  className={`nav-link w-100 ${activeTab === "users" ? "active" : ""} d-flex align-items-center justify-content-center gap-2 py-3`}
+                  className={`nav-link w-100 ${activeTab === "users" ? "active" : ""} d-flex align-items-center justify-content-center gap-2 py-2`}
                   onClick={() => setActiveTab("users")}
+                  style={{ fontSize: "0.85rem" }}
                 >
                   <div className="d-flex flex-column align-items-center">
                     <FontAwesomeIcon icon={faUsers} className="fs-5 mb-1" />
-                    <span className="fw-semibold">Destinataires</span>
+                    <span className="fw-semibold">Contacts</span>
                   </div>
                 </button>
               </li>
               <li className="nav-item flex-grow-1" role="presentation">
                 <button
-                  className={`nav-link w-100 ${activeTab === "received" ? "active" : ""} d-flex align-items-center justify-content-center gap-2 py-3`}
+                  className={`nav-link w-100 ${activeTab === "received" ? "active" : ""} d-flex align-items-center justify-content-center gap-2 py-2`}
                   onClick={() => setActiveTab("received")}
+                  style={{ fontSize: "0.85rem" }}
                 >
                   <div className="d-flex flex-column align-items-center position-relative">
                     <FontAwesomeIcon icon={faInbox} className="fs-5 mb-1" />
                     <span className="fw-semibold">Messages reçus</span>
                     {stats.unreadMessages > 0 && (
-                      <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                      <span
+                        className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                        style={{ fontSize: "0.65rem" }}
+                      >
                         {stats.unreadMessages}
                       </span>
                     )}
@@ -1151,8 +1188,9 @@ export default function ListeMessages() {
               </li>
               <li className="nav-item flex-grow-1" role="presentation">
                 <button
-                  className={`nav-link w-100 ${activeTab === "sent" ? "active" : ""} d-flex align-items-center justify-content-center gap-2 py-3`}
+                  className={`nav-link w-100 ${activeTab === "sent" ? "active" : ""} d-flex align-items-center justify-content-center gap-2 py-2`}
                   onClick={() => setActiveTab("sent")}
+                  style={{ fontSize: "0.85rem" }}
                 >
                   <div className="d-flex flex-column align-items-center">
                     <FontAwesomeIcon
@@ -1166,43 +1204,52 @@ export default function ListeMessages() {
             </ul>
           </div>
 
-          <div className="card-body p-4">
-            {/* Onglet: Destinataires */}
+          <div className="card-body p-3">
+            {/* Onglet: Contacts */}
             {activeTab === "users" && (
-              <div className="row g-4">
+              <div className="row g-3">
                 <div className="col-lg-8">
                   <div className="card border-0 shadow-sm h-100">
-                    <div className="card-header bg-white border-0 py-4 px-4">
+                    <div className="card-header bg-white border-0 py-3 px-3">
                       <div className="d-flex justify-content-between align-items-center">
                         <div>
-                          <h5 className="mb-0 fw-bold text-dark">
+                          <h5
+                            className="mb-0 fw-bold text-dark"
+                            style={{ fontSize: "1rem" }}
+                          >
                             <FontAwesomeIcon
                               icon={faUsers}
                               className="me-2 text-primary"
                             />
-                            Liste des destinataires
+                            Liste des contacts
                           </h5>
-                          <p className="text-muted mb-0 mt-1">
-                            Sélectionnez des utilisateurs pour leur envoyer des
+                          <p
+                            className="text-muted mb-0 mt-1"
+                            style={{ fontSize: "0.8rem" }}
+                          >
+                            Sélectionnez des contacts pour leur envoyer des
                             messages
                           </p>
                         </div>
                         <div className="d-flex align-items-center gap-3">
-                          <span className="badge bg-primary bg-opacity-10 text-primary px-3 py-2">
+                          <span
+                            className="badge bg-primary bg-opacity-10 text-primary px-3 py-2"
+                            style={{ fontSize: "0.8rem" }}
+                          >
                             <FontAwesomeIcon
                               icon={faUserCheck}
                               className="me-2"
                             />
-                            {filteredUsers.length} utilisateur(s)
+                            {filteredUsers.length} contact(s)
                           </span>
                         </div>
                       </div>
 
                       {/* Filtres améliorés */}
-                      <div className="row g-3 mt-4">
+                      <div className="row g-2 mt-3">
                         <div className="col-lg-6">
-                          <div className="input-group input-group-lg shadow-sm">
-                            <span className="input-group-text bg-white border-end-0 ps-4">
+                          <div className="input-group input-group-sm shadow-sm">
+                            <span className="input-group-text bg-white border-end-0 ps-3">
                               <FontAwesomeIcon
                                 icon={faSearch}
                                 className="text-muted"
@@ -1210,25 +1257,30 @@ export default function ListeMessages() {
                             </span>
                             <input
                               type="text"
-                              className="form-control border-start-0 ps-2 py-3"
-                              placeholder="Rechercher un utilisateur..."
+                              className="form-control border-start-0 ps-2 py-2"
+                              placeholder="Rechercher un contact..."
                               value={searchTerm}
                               onChange={(e) => setSearchTerm(e.target.value)}
+                              style={{ fontSize: "0.85rem" }}
                             />
                           </div>
                         </div>
                         <div className="col-lg-3">
-                          <div className="input-group input-group-lg shadow-sm">
-                            <label className="input-group-text bg-white border-end-0">
+                          <div className="input-group input-group-sm shadow-sm">
+                            <label
+                              className="input-group-text bg-white border-end-0"
+                              style={{ fontSize: "0.85rem" }}
+                            >
                               <FontAwesomeIcon
                                 icon={faUserTag}
                                 className="text-muted"
                               />
                             </label>
                             <select
-                              className="form-select border-start-0 py-3"
+                              className="form-select border-start-0 py-2"
                               value={selectedType}
                               onChange={(e) => setSelectedType(e.target.value)}
+                              style={{ fontSize: "0.85rem" }}
                             >
                               <option value="all">Tous les types</option>
                               <option value="agent">Agents</option>
@@ -1238,19 +1290,23 @@ export default function ListeMessages() {
                           </div>
                         </div>
                         <div className="col-lg-3">
-                          <div className="input-group input-group-lg shadow-sm">
-                            <label className="input-group-text bg-white border-end-0">
+                          <div className="input-group input-group-sm shadow-sm">
+                            <label
+                              className="input-group-text bg-white border-end-0"
+                              style={{ fontSize: "0.85rem" }}
+                            >
                               <FontAwesomeIcon
                                 icon={faFilter}
                                 className="text-muted"
                               />
                             </label>
                             <select
-                              className="form-select border-start-0 py-3"
+                              className="form-select border-start-0 py-2"
                               value={selectedStatus}
                               onChange={(e) =>
                                 setSelectedStatus(e.target.value)
                               }
+                              style={{ fontSize: "0.85rem" }}
                             >
                               <option value="all">Tous les statuts</option>
                               <option value="active">Actifs</option>
@@ -1263,13 +1319,19 @@ export default function ListeMessages() {
                     </div>
 
                     <div className="card-body p-0">
-                      <div className="table-responsive">
+                      <div
+                        className="table-responsive"
+                        style={{ maxHeight: "500px", overflowY: "auto" }}
+                      >
                         <table className="table table-hover align-middle mb-0">
-                          <thead className="table-light">
+                          <thead
+                            className="table-light sticky-top"
+                            style={{ top: 0 }}
+                          >
                             <tr>
                               <th
-                                className="py-3 px-4"
-                                style={{ width: "60px" }}
+                                className="py-2 px-3"
+                                style={{ width: "50px", fontSize: "0.8rem" }}
                               >
                                 <div className="form-check">
                                   <input
@@ -1286,35 +1348,38 @@ export default function ListeMessages() {
                                 </div>
                               </th>
                               <th
-                                className="py-3 px-4"
-                                style={{ width: "80px" }}
+                                className="py-2 px-3"
+                                style={{ width: "60px", fontSize: "0.8rem" }}
                               >
                                 <span className="text-muted fw-medium">#</span>
                               </th>
-                              <th className="py-3 px-4">
+                              <th
+                                className="py-2 px-3"
+                                style={{ fontSize: "0.8rem" }}
+                              >
                                 <span className="text-muted fw-medium">
-                                  Utilisateur
+                                  Contact
                                 </span>
                               </th>
                               <th
-                                className="py-3 px-4"
-                                style={{ width: "140px" }}
+                                className="py-2 px-3"
+                                style={{ width: "120px", fontSize: "0.8rem" }}
                               >
                                 <span className="text-muted fw-medium">
                                   Type
                                 </span>
                               </th>
                               <th
-                                className="py-3 px-4"
-                                style={{ width: "140px" }}
+                                className="py-2 px-3"
+                                style={{ width: "120px", fontSize: "0.8rem" }}
                               >
                                 <span className="text-muted fw-medium">
                                   Statut
                                 </span>
                               </th>
                               <th
-                                className="py-3 px-4 text-center"
-                                style={{ width: "120px" }}
+                                className="py-2 px-3 text-center"
+                                style={{ width: "100px", fontSize: "0.8rem" }}
                               >
                                 <span className="text-muted fw-medium">
                                   Actions
@@ -1325,18 +1390,24 @@ export default function ListeMessages() {
                           <tbody>
                             {filteredUsers.length === 0 ? (
                               <tr>
-                                <td colSpan={6} className="text-center py-5">
-                                  <div className="text-muted py-5">
+                                <td colSpan={6} className="text-center py-4">
+                                  <div className="text-muted py-3">
                                     <FontAwesomeIcon
                                       icon={faUsers}
                                       className="fs-1 mb-3 opacity-25"
                                     />
-                                    <h5 className="fw-semibold mb-2">
-                                      Aucun utilisateur trouvé
+                                    <h5
+                                      className="fw-semibold mb-2"
+                                      style={{ fontSize: "0.9rem" }}
+                                    >
+                                      Aucun contact trouvé
                                     </h5>
-                                    <p className="mb-0">
-                                      Ajustez vos filtres ou créez un nouvel
-                                      utilisateur
+                                    <p
+                                      className="mb-0"
+                                      style={{ fontSize: "0.8rem" }}
+                                    >
+                                      Ajustez vos filtres ou vérifiez vos
+                                      permissions
                                     </p>
                                   </div>
                                 </td>
@@ -1347,7 +1418,7 @@ export default function ListeMessages() {
                                   key={`${user.userType}-${user.uuid}`}
                                   className="align-middle"
                                 >
-                                  <td className="py-3 px-4">
+                                  <td className="py-2 px-3">
                                     <div className="form-check">
                                       <input
                                         type="checkbox"
@@ -1361,18 +1432,22 @@ export default function ListeMessages() {
                                       />
                                     </div>
                                   </td>
-                                  <td className="py-3 px-4">
-                                    <span className="text-muted fw-semibold">
+                                  <td className="py-2 px-3">
+                                    <span
+                                      className="text-muted fw-semibold"
+                                      style={{ fontSize: "0.8rem" }}
+                                    >
                                       {index + 1}
                                     </span>
                                   </td>
-                                  <td className="py-3 px-4">
+                                  <td className="py-2 px-3">
                                     <div className="d-flex align-items-center">
                                       <div
-                                        className={`bg-${getUserTypeColor(user.userType)} bg-opacity-10 text-${getUserTypeColor(user.userType)} rounded-circle d-flex align-items-center justify-content-center me-3`}
+                                        className={`bg-${getUserTypeColor(user.userType)} bg-opacity-10 text-${getUserTypeColor(user.userType)} rounded-circle d-flex align-items-center justify-content-center me-2`}
                                         style={{
-                                          width: "44px",
-                                          height: "44px",
+                                          width: "36px",
+                                          height: "36px",
+                                          minWidth: "36px",
                                         }}
                                       >
                                         <FontAwesomeIcon
@@ -1380,20 +1455,41 @@ export default function ListeMessages() {
                                           className="fs-5"
                                         />
                                       </div>
-                                      <div>
-                                        <div className="fw-bold text-dark">
+                                      <div
+                                        className="flex-grow-1"
+                                        style={{ minWidth: 0 }}
+                                      >
+                                        <div
+                                          className="fw-bold text-dark text-truncate"
+                                          style={{ fontSize: "0.85rem" }}
+                                        >
                                           {user.email}
                                         </div>
-                                        <div className="d-flex align-items-center gap-2">
-                                          <small className="text-muted">
+                                        <div className="d-flex align-items-center gap-2 flex-wrap">
+                                          <small
+                                            className="text-muted text-truncate"
+                                            style={{
+                                              fontSize: "0.75rem",
+                                              maxWidth: "200px",
+                                            }}
+                                          >
                                             {user.nom} {user.prenoms}
                                           </small>
                                           {user.telephone && (
                                             <>
-                                              <span className="text-muted">
+                                              <span
+                                                className="text-muted"
+                                                style={{ fontSize: "0.75rem" }}
+                                              >
                                                 •
                                               </span>
-                                              <small className="text-muted">
+                                              <small
+                                                className="text-muted text-truncate"
+                                                style={{
+                                                  fontSize: "0.75rem",
+                                                  maxWidth: "120px",
+                                                }}
+                                              >
                                                 <FontAwesomeIcon
                                                   icon={faPhone}
                                                   className="me-1"
@@ -1406,23 +1502,24 @@ export default function ListeMessages() {
                                       </div>
                                     </div>
                                   </td>
-                                  <td className="py-3 px-4">
+                                  <td className="py-2 px-3">
                                     <span
-                                      className={`badge bg-${getUserTypeColor(user.userType)} bg-opacity-10 text-${getUserTypeColor(user.userType)} border border-${getUserTypeColor(user.userType)} border-opacity-25 px-3 py-2 fw-medium`}
+                                      className={`badge bg-${getUserTypeColor(user.userType)} bg-opacity-10 text-${getUserTypeColor(user.userType)} border border-${getUserTypeColor(user.userType)} border-opacity-25 px-2 py-1 fw-medium`}
+                                      style={{ fontSize: "0.7rem" }}
                                     >
                                       {getUserTypeLabel(user.userType)}
                                     </span>
                                   </td>
-                                  <td className="py-3 px-4">
+                                  <td className="py-2 px-3">
                                     <StatusBadge
                                       est_bloque={user.est_bloque}
                                       est_verifie={user.est_verifie}
                                       is_deleted={user.is_deleted}
                                     />
                                   </td>
-                                  <td className="py-3 px-4 text-center">
+                                  <td className="py-2 px-3 text-center">
                                     <button
-                                      className="btn btn-sm btn-primary d-flex align-items-center justify-content-center gap-1 px-3 py-2"
+                                      className="btn btn-sm btn-primary d-flex align-items-center justify-content-center gap-1 px-2 py-1"
                                       title="Envoyer un message"
                                       onClick={() =>
                                         selectUserForMessage(
@@ -1431,8 +1528,12 @@ export default function ListeMessages() {
                                           user.prenoms,
                                         )
                                       }
+                                      style={{ fontSize: "0.75rem" }}
                                     >
-                                      <FontAwesomeIcon icon={faPaperPlane} />
+                                      <FontAwesomeIcon
+                                        icon={faPaperPlane}
+                                        style={{ fontSize: "0.7rem" }}
+                                      />
                                       <span className="d-none d-md-inline">
                                         Message
                                       </span>
@@ -1450,25 +1551,37 @@ export default function ListeMessages() {
 
                 <div className="col-lg-4">
                   <div
-                    className="card border-0 shadow-sm h-100 sticky-top"
+                    className="card border-0 shadow-sm h-100"
                     style={{ top: "20px" }}
                   >
-                    <div className="card-header bg-white border-0 py-4 px-4">
-                      <h5 className="mb-0 fw-bold text-dark">
-                        <FontAwesomeIcon
-                          icon={faPaperPlane}
-                          className="me-2 text-primary"
-                        />
-                        Nouveau message
-                      </h5>
-                      <p className="text-muted mb-0 mt-1">
-                        Rédigez et envoyez un message personnalisé
-                      </p>
+                    <div className="card-header bg-white border-0 py-3 px-3">
+                      <div className="d-flex align-items-center gap-3 mb-2">
+                        <div className="bg-primary bg-opacity-10 rounded-circle p-2">
+                          <FontAwesomeIcon
+                            icon={faPaperPlane}
+                            className="text-primary fs-4"
+                          />
+                        </div>
+                        <div>
+                          <h5
+                            className="mb-0 fw-bold text-dark"
+                            style={{ fontSize: "0.95rem" }}
+                          >
+                            Nouveau message
+                          </h5>
+                          <p
+                            className="text-muted mb-0"
+                            style={{ fontSize: "0.8rem" }}
+                          >
+                            Rédigez et envoyez un message
+                          </p>
+                        </div>
+                      </div>
                     </div>
                     <div className="card-body">
                       {successMessage && (
                         <div
-                          className="alert alert-success alert-dismissible fade show mb-4"
+                          className="alert alert-success alert-dismissible fade show mb-3"
                           role="alert"
                         >
                           <div className="d-flex align-items-center">
@@ -1477,10 +1590,18 @@ export default function ListeMessages() {
                               className="me-2 fs-4"
                             />
                             <div>
-                              <h6 className="alert-heading mb-1">
+                              <h6
+                                className="alert-heading mb-1"
+                                style={{ fontSize: "0.85rem" }}
+                              >
                                 Message envoyé !
                               </h6>
-                              <p className="mb-0">{successMessage}</p>
+                              <p
+                                className="mb-0"
+                                style={{ fontSize: "0.8rem" }}
+                              >
+                                {successMessage}
+                              </p>
                             </div>
                           </div>
                           <button
@@ -1493,7 +1614,7 @@ export default function ListeMessages() {
 
                       {error && (
                         <div
-                          className="alert alert-danger alert-dismissible fade show mb-4"
+                          className="alert alert-danger alert-dismissible fade show mb-3"
                           role="alert"
                         >
                           <div className="d-flex align-items-center">
@@ -1502,8 +1623,18 @@ export default function ListeMessages() {
                               className="me-2 fs-4"
                             />
                             <div>
-                              <h6 className="alert-heading mb-1">Erreur</h6>
-                              <p className="mb-0">{error}</p>
+                              <h6
+                                className="alert-heading mb-1"
+                                style={{ fontSize: "0.85rem" }}
+                              >
+                                Erreur
+                              </h6>
+                              <p
+                                className="mb-0"
+                                style={{ fontSize: "0.8rem" }}
+                              >
+                                {error}
+                              </p>
                             </div>
                           </div>
                           <button
@@ -1520,8 +1651,11 @@ export default function ListeMessages() {
                           handleSendMessage();
                         }}
                       >
-                        <div className="mb-4">
-                          <label className="form-label fw-semibold text-dark mb-2">
+                        <div className="mb-3">
+                          <label
+                            className="form-label fw-semibold text-dark mb-2"
+                            style={{ fontSize: "0.85rem" }}
+                          >
                             <FontAwesomeIcon
                               icon={faUser}
                               className="me-2 text-muted"
@@ -1530,8 +1664,8 @@ export default function ListeMessages() {
                           </label>
                           <input
                             type="email"
-                            className="form-control form-control-lg border-2 py-3"
-                            placeholder="email@exemple.com"
+                            className="form-control form-control-sm border-2 py-2"
+                            placeholder="contact@exemple.com"
                             value={newMessage.destinataireEmail}
                             onChange={(e) =>
                               setNewMessage((prev) => ({
@@ -1540,18 +1674,25 @@ export default function ListeMessages() {
                               }))
                             }
                             required
+                            style={{ fontSize: "0.85rem" }}
                           />
-                          <small className="text-muted d-block mt-2">
+                          <small
+                            className="text-muted d-block mt-1"
+                            style={{ fontSize: "0.75rem" }}
+                          >
                             <FontAwesomeIcon
                               icon={faInfoCircle}
                               className="me-1"
                             />
-                            Sélectionnez un utilisateur dans le tableau
+                            Sélectionnez un contact dans le tableau
                           </small>
                         </div>
 
-                        <div className="mb-4">
-                          <label className="form-label fw-semibold text-dark mb-2">
+                        <div className="mb-3">
+                          <label
+                            className="form-label fw-semibold text-dark mb-2"
+                            style={{ fontSize: "0.85rem" }}
+                          >
                             <FontAwesomeIcon
                               icon={faEdit}
                               className="me-2 text-muted"
@@ -1560,7 +1701,7 @@ export default function ListeMessages() {
                           </label>
                           <input
                             type="text"
-                            className="form-control form-control-lg border-2 py-3"
+                            className="form-control form-control-sm border-2 py-2"
                             placeholder="Sujet du message"
                             value={newMessage.sujet}
                             onChange={(e) =>
@@ -1570,11 +1711,15 @@ export default function ListeMessages() {
                               }))
                             }
                             required
+                            style={{ fontSize: "0.85rem" }}
                           />
                         </div>
 
-                        <div className="mb-4">
-                          <label className="form-label fw-semibold text-dark mb-2">
+                        <div className="mb-3">
+                          <label
+                            className="form-label fw-semibold text-dark mb-2"
+                            style={{ fontSize: "0.85rem" }}
+                          >
                             <FontAwesomeIcon
                               icon={faBell}
                               className="me-2 text-muted"
@@ -1582,7 +1727,7 @@ export default function ListeMessages() {
                             Type de message
                           </label>
                           <select
-                            className="form-select form-select-lg border-2 py-3"
+                            className="form-select form-select-sm border-2 py-2"
                             value={newMessage.type}
                             onChange={(e) =>
                               setNewMessage((prev) => ({
@@ -1590,6 +1735,7 @@ export default function ListeMessages() {
                                 type: e.target.value,
                               }))
                             }
+                            style={{ fontSize: "0.85rem" }}
                           >
                             <option value="NOTIFICATION">Notification</option>
                             <option value="ALERT">Alerte</option>
@@ -1598,8 +1744,11 @@ export default function ListeMessages() {
                           </select>
                         </div>
 
-                        <div className="mb-4">
-                          <label className="form-label fw-semibold text-dark mb-2">
+                        <div className="mb-3">
+                          <label
+                            className="form-label fw-semibold text-dark mb-2"
+                            style={{ fontSize: "0.85rem" }}
+                          >
                             <FontAwesomeIcon
                               icon={faMessage}
                               className="me-2 text-muted"
@@ -1607,8 +1756,8 @@ export default function ListeMessages() {
                             Message <span className="text-danger">*</span>
                           </label>
                           <textarea
-                            className="form-control border-2 py-3"
-                            rows={8}
+                            className="form-control border-2 py-2"
+                            rows={6}
                             placeholder="Écrivez votre message ici..."
                             value={newMessage.contenu}
                             onChange={(e) =>
@@ -1618,14 +1767,16 @@ export default function ListeMessages() {
                               }))
                             }
                             required
+                            style={{ fontSize: "0.85rem" }}
                           />
                         </div>
 
                         <div className="d-grid">
                           <button
                             type="submit"
-                            className="btn btn-primary btn-lg d-flex align-items-center justify-content-center gap-3 py-3 fw-bold"
+                            className="btn btn-primary btn-sm d-flex align-items-center justify-content-center gap-3 py-2 fw-bold"
                             disabled={loading.envoi}
+                            style={{ fontSize: "0.85rem" }}
                           >
                             {loading.envoi ? (
                               <>
@@ -1652,32 +1803,42 @@ export default function ListeMessages() {
 
             {/* Onglet: Messages reçus */}
             {activeTab === "received" && (
-              <div className="row g-4">
+              <div className="row g-3">
                 <div className="col-lg-8">
                   <div className="card border-0 shadow-sm h-100">
-                    <div className="card-header bg-white border-0 py-4 px-4">
+                    <div className="card-header bg-white border-0 py-3 px-3">
                       <div className="d-flex justify-content-between align-items-center">
                         <div>
-                          <h5 className="mb-0 fw-bold text-dark">
+                          <h5
+                            className="mb-0 fw-bold text-dark"
+                            style={{ fontSize: "1rem" }}
+                          >
                             <FontAwesomeIcon
                               icon={faInbox}
                               className="me-2 text-primary"
                             />
                             Messages reçus
                           </h5>
-                          <p className="text-muted mb-0 mt-1">
+                          <p
+                            className="text-muted mb-0 mt-1"
+                            style={{ fontSize: "0.8rem" }}
+                          >
                             {stats.unreadMessages > 0
                               ? `${stats.unreadMessages} message(s) non lu(s)`
                               : "Tous vos messages sont lus"}
                           </p>
                         </div>
                         <div className="d-flex align-items-center gap-3">
-                          <span className="badge bg-primary bg-opacity-10 text-primary px-3 py-2">
+                          <span
+                            className="badge bg-primary bg-opacity-10 text-primary px-3 py-2"
+                            style={{ fontSize: "0.8rem" }}
+                          >
                             {messages.length} message(s)
                           </span>
                           <button
                             className="btn btn-outline-primary d-flex align-items-center gap-2"
                             onClick={fetchMessagesRecus}
+                            style={{ fontSize: "0.85rem" }}
                           >
                             <FontAwesomeIcon icon={faHistory} />
                             Actualiser
@@ -1686,18 +1847,27 @@ export default function ListeMessages() {
                       </div>
                     </div>
                     <div className="card-body p-0">
-                      <div className="list-group list-group-flush px-4 py-3">
+                      <div
+                        className="list-group list-group-flush px-3 py-2"
+                        style={{ maxHeight: "500px", overflowY: "auto" }}
+                      >
                         {messages.length === 0 ? (
-                          <div className="text-center py-5">
-                            <div className="text-muted py-5">
+                          <div className="text-center py-4">
+                            <div className="text-muted py-3">
                               <FontAwesomeIcon
                                 icon={faInbox}
                                 className="fs-1 mb-3 opacity-25"
                               />
-                              <h5 className="fw-semibold mb-2">
+                              <h5
+                                className="fw-semibold mb-2"
+                                style={{ fontSize: "0.9rem" }}
+                              >
                                 Aucun message reçu
                               </h5>
-                              <p className="mb-0">
+                              <p
+                                className="mb-0"
+                                style={{ fontSize: "0.8rem" }}
+                              >
                                 Vos messages apparaîtront ici
                               </p>
                             </div>
@@ -1729,54 +1899,70 @@ export default function ListeMessages() {
 
                 <div className="col-lg-4">
                   <div
-                    className="card border-0 shadow-sm h-100 sticky-top"
+                    className="card border-0 shadow-sm h-100"
                     style={{ top: "20px" }}
                   >
-                    <div className="card-header bg-white border-0 py-4 px-4">
-                      <h5 className="mb-0 fw-bold text-dark">
+                    <div className="card-header bg-white border-0 py-3 px-3">
+                      <h5
+                        className="mb-0 fw-bold text-dark"
+                        style={{ fontSize: "0.95rem" }}
+                      >
                         <FontAwesomeIcon
                           icon={faEye}
                           className="me-2 text-primary"
                         />
                         Détails du message
                       </h5>
-                      <p className="text-muted mb-0 mt-1">
+                      <p
+                        className="text-muted mb-0 mt-1"
+                        style={{ fontSize: "0.8rem" }}
+                      >
                         Informations détaillées du message sélectionné
                       </p>
                     </div>
                     <div className="card-body">
                       {selectedMessage ? (
                         <>
-                          <div className="mb-4">
-                            <div className="d-flex justify-content-between align-items-start mb-3">
-                              <h6 className="fw-bold text-primary mb-2 flex-grow-1">
+                          <div className="mb-3">
+                            <div className="d-flex justify-content-between align-items-start mb-2">
+                              <h6
+                                className="fw-bold text-primary mb-2 flex-grow-1"
+                                style={{ fontSize: "0.9rem" }}
+                              >
                                 {selectedMessage.sujet}
                               </h6>
                               <span
-                                className={`badge bg-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : "primary"} bg-opacity-10 text-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : "primary"} border border-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : "primary"} border-opacity-25 px-3 py-2`}
+                                className={`badge bg-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : "primary"} bg-opacity-10 text-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : "primary"} border border-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : "primary"} border-opacity-25 px-2 py-1`}
+                                style={{ fontSize: "0.7rem" }}
                               >
                                 {selectedMessage.type.toUpperCase()}
                               </span>
                             </div>
-                            <div className="bg-light rounded-3 p-4 mb-3">
-                              <div className="d-flex align-items-center gap-3 mb-3">
-                                <div className="bg-primary bg-opacity-10 rounded-circle p-3">
+                            <div className="bg-light rounded-3 p-3 mb-2">
+                              <div className="d-flex align-items-center gap-3 mb-2">
+                                <div className="bg-primary bg-opacity-10 rounded-circle p-2">
                                   <FontAwesomeIcon
                                     icon={faUser}
                                     className="text-primary fs-4"
                                   />
                                 </div>
                                 <div>
-                                  <h6 className="fw-bold mb-1">
+                                  <h6
+                                    className="fw-bold mb-1"
+                                    style={{ fontSize: "0.85rem" }}
+                                  >
                                     {selectedMessage.expediteurNom}
                                   </h6>
-                                  <p className="text-muted mb-0">
+                                  <p
+                                    className="text-muted mb-0"
+                                    style={{ fontSize: "0.8rem" }}
+                                  >
                                     {selectedMessage.expediteurEmail}
                                   </p>
                                 </div>
                               </div>
-                              <div className="text-muted mb-3">
-                                <small>
+                              <div className="text-muted mb-2">
+                                <small style={{ fontSize: "0.75rem" }}>
                                   <FontAwesomeIcon
                                     icon={faClock}
                                     className="me-1"
@@ -1797,18 +1983,27 @@ export default function ListeMessages() {
                             </div>
                           </div>
 
-                          <div className="mb-4">
-                            <h6 className="fw-semibold mb-3 text-dark">
+                          <div className="mb-3">
+                            <h6
+                              className="fw-semibold mb-2 text-dark"
+                              style={{ fontSize: "0.85rem" }}
+                            >
                               Contenu :
                             </h6>
-                            <div className="p-4 bg-light rounded-3">
+                            <div
+                              className="p-3 bg-light rounded-3"
+                              style={{ fontSize: "0.8rem" }}
+                            >
                               {selectedMessage.contenu
                                 .split("\n")
                                 .map((line, index) => (
                                   <p
                                     key={index}
-                                    className={index > 0 ? "mt-3" : ""}
-                                    style={{ lineHeight: "1.6" }}
+                                    className={index > 0 ? "mt-2" : ""}
+                                    style={{
+                                      lineHeight: "1.5",
+                                      fontSize: "0.8rem",
+                                    }}
                                   >
                                     {line}
                                   </p>
@@ -1816,10 +2011,11 @@ export default function ListeMessages() {
                             </div>
                           </div>
 
-                          <div className="d-grid gap-3">
+                          <div className="d-grid gap-2">
                             <button
-                              className="btn btn-primary d-flex align-items-center justify-content-center gap-3 py-3 fw-bold"
+                              className="btn btn-primary d-flex align-items-center justify-content-center gap-3 py-2 fw-bold"
                               onClick={() => handleReply(selectedMessage)}
+                              style={{ fontSize: "0.85rem" }}
                             >
                               <FontAwesomeIcon
                                 icon={faReply}
@@ -1828,8 +2024,9 @@ export default function ListeMessages() {
                               Répondre au message
                             </button>
                             <button
-                              className="btn btn-outline-secondary d-flex align-items-center justify-content-center gap-3 py-3"
+                              className="btn btn-outline-secondary d-flex align-items-center justify-content-center gap-3 py-2"
                               onClick={() => setSelectedMessage(null)}
+                              style={{ fontSize: "0.85rem" }}
                             >
                               <FontAwesomeIcon icon={faTimes} />
                               Fermer les détails
@@ -1837,16 +2034,19 @@ export default function ListeMessages() {
                           </div>
                         </>
                       ) : (
-                        <div className="text-center py-5">
-                          <div className="text-muted py-5">
+                        <div className="text-center py-4">
+                          <div className="text-muted py-3">
                             <FontAwesomeIcon
                               icon={faMessage}
                               className="fs-1 mb-3 opacity-25"
                             />
-                            <h5 className="fw-semibold mb-2">
+                            <h5
+                              className="fw-semibold mb-2"
+                              style={{ fontSize: "0.9rem" }}
+                            >
                               Aucun message sélectionné
                             </h5>
-                            <p className="mb-0">
+                            <p className="mb-0" style={{ fontSize: "0.8rem" }}>
                               Sélectionnez un message pour voir les détails
                             </p>
                           </div>
@@ -1863,27 +2063,37 @@ export default function ListeMessages() {
               <div className="row">
                 <div className="col-12">
                   <div className="card border-0 shadow-sm">
-                    <div className="card-header bg-white border-0 py-4 px-4">
+                    <div className="card-header bg-white border-0 py-3 px-3">
                       <div className="d-flex justify-content-between align-items-center">
                         <div>
-                          <h5 className="mb-0 fw-bold text-dark">
+                          <h5
+                            className="mb-0 fw-bold text-dark"
+                            style={{ fontSize: "1rem" }}
+                          >
                             <FontAwesomeIcon
                               icon={faShareSquare}
                               className="me-2 text-primary"
                             />
                             Messages envoyés
                           </h5>
-                          <p className="text-muted mb-0 mt-1">
+                          <p
+                            className="text-muted mb-0 mt-1"
+                            style={{ fontSize: "0.8rem" }}
+                          >
                             Historique de tous vos messages envoyés
                           </p>
                         </div>
                         <div className="d-flex align-items-center gap-3">
-                          <span className="badge bg-success bg-opacity-10 text-success px-3 py-2">
+                          <span
+                            className="badge bg-success bg-opacity-10 text-success px-3 py-2"
+                            style={{ fontSize: "0.8rem" }}
+                          >
                             {messagesEnvoyes.length} message(s)
                           </span>
                           <button
                             className="btn btn-outline-primary d-flex align-items-center gap-2"
                             onClick={fetchMessagesEnvoyes}
+                            style={{ fontSize: "0.85rem" }}
                           >
                             <FontAwesomeIcon icon={faHistory} />
                             Actualiser
@@ -1892,33 +2102,75 @@ export default function ListeMessages() {
                       </div>
                     </div>
                     <div className="card-body p-0">
-                      <div className="table-responsive">
+                      <div
+                        className="table-responsive"
+                        style={{ maxHeight: "500px", overflowY: "auto" }}
+                      >
                         <table className="table table-hover align-middle mb-0">
-                          <thead className="table-light">
+                          <thead
+                            className="table-light sticky-top"
+                            style={{ top: 0 }}
+                          >
                             <tr>
-                              <th className="py-3 px-4">Destinataire</th>
-                              <th className="py-3 px-4">Sujet</th>
-                              <th className="py-3 px-4">Type</th>
-                              <th className="py-3 px-4">Date d'envoi</th>
-                              <th className="py-3 px-4">Statut</th>
-                              <th className="py-3 px-4 text-center">Actions</th>
+                              <th
+                                className="py-2 px-3"
+                                style={{ fontSize: "0.8rem" }}
+                              >
+                                Destinataire
+                              </th>
+                              <th
+                                className="py-2 px-3"
+                                style={{ fontSize: "0.8rem" }}
+                              >
+                                Sujet
+                              </th>
+                              <th
+                                className="py-2 px-3"
+                                style={{ fontSize: "0.8rem" }}
+                              >
+                                Type
+                              </th>
+                              <th
+                                className="py-2 px-3"
+                                style={{ fontSize: "0.8rem" }}
+                              >
+                                Date d'envoi
+                              </th>
+                              <th
+                                className="py-2 px-3"
+                                style={{ fontSize: "0.8rem" }}
+                              >
+                                Statut
+                              </th>
+                              <th
+                                className="py-2 px-3 text-center"
+                                style={{ fontSize: "0.8rem" }}
+                              >
+                                Actions
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
                             {messagesEnvoyes.length === 0 ? (
                               <tr>
-                                <td colSpan={6} className="text-center py-5">
-                                  <div className="text-muted py-5">
+                                <td colSpan={6} className="text-center py-4">
+                                  <div className="text-muted py-3">
                                     <FontAwesomeIcon
                                       icon={faShareSquare}
                                       className="fs-1 mb-3 opacity-25"
                                     />
-                                    <h5 className="fw-semibold mb-2">
+                                    <h5
+                                      className="fw-semibold mb-2"
+                                      style={{ fontSize: "0.9rem" }}
+                                    >
                                       Aucun message envoyé
                                     </h5>
-                                    <p className="mb-0">
+                                    <p
+                                      className="mb-0"
+                                      style={{ fontSize: "0.8rem" }}
+                                    >
                                       Envoyez votre premier message depuis
-                                      l'onglet "Destinataires"
+                                      l'onglet "Contacts"
                                     </p>
                                   </div>
                                 </td>
@@ -1926,51 +2178,56 @@ export default function ListeMessages() {
                             ) : (
                               messagesEnvoyes.map((message) => (
                                 <tr key={message.uuid}>
-                                  <td className="py-3 px-4">
-                                    <div className="fw-bold text-dark">
+                                  <td className="py-2 px-3">
+                                    <div
+                                      className="fw-bold text-dark"
+                                      style={{ fontSize: "0.85rem" }}
+                                    >
                                       {message.destinataireEmail}
                                     </div>
+                                    <small
+                                      className="text-muted"
+                                      style={{ fontSize: "0.75rem" }}
+                                    >
+                                      {message.expediteurEmail}
+                                    </small>
                                   </td>
-                                  <td className="py-3 px-4">
+                                  <td className="py-2 px-3">
                                     <div
                                       className="text-truncate"
-                                      style={{ maxWidth: "250px" }}
+                                      style={{
+                                        maxWidth: "200px",
+                                        fontSize: "0.85rem",
+                                      }}
                                       title={message.sujet}
                                     >
                                       {message.sujet}
                                     </div>
                                   </td>
-                                  <td className="py-3 px-4">
+                                  <td className="py-2 px-3">
                                     <span
-                                      className={`badge bg-${message.type === "ALERT" ? "danger" : message.type === "WARNING" ? "warning" : "primary"} bg-opacity-10 text-${message.type === "ALERT" ? "danger" : message.type === "WARNING" ? "warning" : "primary"} border border-${message.type === "ALERT" ? "danger" : message.type === "WARNING" ? "warning" : "primary"} border-opacity-25 px-3 py-2 fw-medium`}
+                                      className={`badge bg-${message.type === "ALERT" ? "danger" : message.type === "WARNING" ? "warning" : "primary"} bg-opacity-10 text-${message.type === "ALERT" ? "danger" : message.type === "WARNING" ? "warning" : "primary"} border border-${message.type === "ALERT" ? "danger" : message.type === "WARNING" ? "warning" : "primary"} border-opacity-25 px-2 py-1 fw-medium`}
+                                      style={{ fontSize: "0.7rem" }}
                                     >
                                       {message.type}
                                     </span>
                                   </td>
-                                  <td className="py-3 px-4">
+                                  <td className="py-2 px-3">
                                     <div className="d-flex flex-column">
-                                      <span className="fw-medium">
-                                        {new Date(
-                                          message.envoyeLe,
-                                        ).toLocaleDateString("fr-FR", {
-                                          day: "2-digit",
-                                          month: "2-digit",
-                                          year: "numeric",
-                                        })}
+                                      <span
+                                        className="fw-medium"
+                                        style={{ fontSize: "0.85rem" }}
+                                      >
+                                        {formatDate(message.envoyeLe)}
                                       </span>
-                                      <small className="text-muted">
-                                        {new Date(
-                                          message.envoyeLe,
-                                        ).toLocaleTimeString("fr-FR", {
-                                          hour: "2-digit",
-                                          minute: "2-digit",
-                                        })}
-                                      </small>
                                     </div>
                                   </td>
-                                  <td className="py-3 px-4">
+                                  <td className="py-2 px-3">
                                     {message.estLu ? (
-                                      <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 d-flex align-items-center gap-2 px-3 py-2">
+                                      <span
+                                        className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 d-flex align-items-center gap-2 px-2 py-1"
+                                        style={{ fontSize: "0.75rem" }}
+                                      >
                                         <FontAwesomeIcon
                                           icon={faCheckCircle}
                                           className="fs-12"
@@ -1978,7 +2235,10 @@ export default function ListeMessages() {
                                         <span className="fw-medium">Lu</span>
                                       </span>
                                     ) : (
-                                      <span className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 d-flex align-items-center gap-2 px-3 py-2">
+                                      <span
+                                        className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 d-flex align-items-center gap-2 px-2 py-1"
+                                        style={{ fontSize: "0.75rem" }}
+                                      >
                                         <FontAwesomeIcon
                                           icon={faClock}
                                           className="fs-12"
@@ -1989,9 +2249,9 @@ export default function ListeMessages() {
                                       </span>
                                     )}
                                   </td>
-                                  <td className="py-3 px-4 text-center">
+                                  <td className="py-2 px-3 text-center">
                                     <button
-                                      className="btn btn-sm btn-outline-primary d-flex align-items-center gap-2 px-3 py-2"
+                                      className="btn btn-sm btn-outline-primary d-flex align-items-center gap-2 px-2 py-1"
                                       onClick={() => {
                                         setNewMessage({
                                           destinataireEmail:
@@ -2004,8 +2264,12 @@ export default function ListeMessages() {
                                         });
                                         setActiveTab("users");
                                       }}
+                                      style={{ fontSize: "0.75rem" }}
                                     >
-                                      <FontAwesomeIcon icon={faReply} />
+                                      <FontAwesomeIcon
+                                        icon={faReply}
+                                        style={{ fontSize: "0.7rem" }}
+                                      />
                                       <span>Répondre</span>
                                     </button>
                                   </td>
@@ -2037,14 +2301,18 @@ export default function ListeMessages() {
           >
             <div className="toast-header bg-info bg-opacity-10 text-info border-bottom">
               <FontAwesomeIcon icon={faInfoCircle} className="me-2" />
-              <strong className="me-auto">Information</strong>
+              <strong className="me-auto" style={{ fontSize: "0.9rem" }}>
+                Information
+              </strong>
               <button
                 type="button"
                 className="btn-close"
                 onClick={() => setInfoMessage(null)}
               ></button>
             </div>
-            <div className="toast-body">{infoMessage}</div>
+            <div className="toast-body" style={{ fontSize: "0.85rem" }}>
+              {infoMessage}
+            </div>
           </div>
         </div>
       )}
@@ -2063,12 +2331,13 @@ export default function ListeMessages() {
           position: relative;
           background: transparent;
           transition: all 0.3s ease;
+          font-size: 0.85rem;
         }
 
         .nav-tabs-custom .nav-link.active {
           color: var(--bs-primary);
           background: rgba(var(--bs-primary-rgb), 0.1);
-          border-radius: 12px;
+          border-radius: 8px;
         }
 
         .nav-tabs-custom .nav-link.active::after {
@@ -2077,8 +2346,8 @@ export default function ListeMessages() {
           bottom: -1px;
           left: 50%;
           transform: translateX(-50%);
-          width: 40px;
-          height: 3px;
+          width: 30px;
+          height: 2px;
           background-color: var(--bs-primary);
           border-radius: 3px 3px 0 0;
         }
@@ -2086,7 +2355,7 @@ export default function ListeMessages() {
         .nav-tabs-custom .nav-link:hover:not(.active) {
           color: var(--bs-primary);
           background: rgba(0, 0, 0, 0.02);
-          border-radius: 12px;
+          border-radius: 8px;
         }
 
         .hover-bg-light:hover {
@@ -2105,13 +2374,13 @@ export default function ListeMessages() {
 
         .stats-card {
           transition: all 0.3s ease;
-          border-radius: 16px;
+          border-radius: 12px;
           overflow: hidden;
         }
 
         .stats-card:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1) !important;
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08) !important;
         }
 
         .fs-10 {
@@ -2148,7 +2417,7 @@ export default function ListeMessages() {
         }
 
         .table > :not(caption) > * > * {
-          padding: 1rem 1.25rem;
+          padding: 0.75rem 1rem;
           vertical-align: middle;
           border-bottom: 1px solid #f1f3f5;
         }
@@ -2176,12 +2445,20 @@ export default function ListeMessages() {
         @media (max-width: 768px) {
           .nav-tabs-custom .nav-link {
             padding: 0.5rem;
-            font-size: 0.875rem;
+            font-size: 0.8rem;
           }
 
           .container-fluid {
             padding-left: 1rem;
             padding-right: 1rem;
+          }
+
+          h1 {
+            font-size: 1.25rem !important;
+          }
+
+          .card-header h5 {
+            font-size: 0.9rem !important;
           }
         }
 
@@ -2199,6 +2476,44 @@ export default function ListeMessages() {
 
         .message-item {
           animation: fadeIn 0.3s ease;
+        }
+
+        /* Scrollbar personnalisée */
+        .table-responsive::-webkit-scrollbar {
+          width: 6px;
+          height: 6px;
+        }
+
+        .table-responsive::-webkit-scrollbar-track {
+          background: #f1f1f1;
+          border-radius: 10px;
+        }
+
+        .table-responsive::-webkit-scrollbar-thumb {
+          background: #c1c1c1;
+          border-radius: 10px;
+        }
+
+        .table-responsive::-webkit-scrollbar-thumb:hover {
+          background: #a8a8a8;
+        }
+
+        .list-group-flush::-webkit-scrollbar {
+          width: 6px;
+        }
+
+        .list-group-flush::-webkit-scrollbar-track {
+          background: #f1f1f1;
+          border-radius: 10px;
+        }
+
+        .list-group-flush::-webkit-scrollbar-thumb {
+          background: #c1c1c1;
+          border-radius: 10px;
+        }
+
+        .list-group-flush::-webkit-scrollbar-thumb:hover {
+          background: #a8a8a8;
         }
       `}</style>
     </>

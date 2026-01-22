@@ -433,9 +433,7 @@ export default function VillesPage() {
         queryParams.append("limit", String(params?.limit || pagination.limit));
         if (params?.search) queryParams.append("search", params.search);
 
-        const response = await api.get(
-          `${API_ENDPOINTS.VILLES.LIST}?${queryParams.toString()}`,
-        );
+        const response = await api.get(`${API_ENDPOINTS.VILLES.LIST}`);
 
         // ✅ Gestion du format { data: [...], total: number }
         let villesData: Ville[] = [];

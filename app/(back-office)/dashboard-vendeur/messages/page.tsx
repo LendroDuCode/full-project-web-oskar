@@ -51,6 +51,8 @@ import {
   faBuilding,
   faBox,
   faShoppingCart,
+  faUserTie,
+  faUserShield,
 } from "@fortawesome/free-solid-svg-icons";
 
 // Import des services et hooks
@@ -70,6 +72,7 @@ interface UtilisateurBase {
   };
   role?: {
     name: string;
+    permissions?: any[];
   };
   est_verifie: boolean;
   est_bloque: boolean;
@@ -79,6 +82,7 @@ interface UtilisateurBase {
   deleted_at?: string;
   avatar?: string;
   statut?: string;
+  is_admin?: boolean;
 }
 
 interface VendeurProfile extends UtilisateurBase {
@@ -88,7 +92,21 @@ interface VendeurProfile extends UtilisateurBase {
   };
 }
 
-interface Utilisateur extends UtilisateurBase {}
+interface Agent extends UtilisateurBase {
+  userType?: "agent";
+}
+
+interface Vendeur extends UtilisateurBase {
+  userType?: "vendeur";
+  boutique?: {
+    nom: string;
+    uuid: string;
+  };
+}
+
+interface Utilisateur extends UtilisateurBase {
+  userType?: "utilisateur";
+}
 
 interface Message {
   uuid: string;
@@ -110,6 +128,7 @@ interface ApiResponse<T> {
   data?: T;
   message?: string;
   status?: string;
+  count?: number;
 }
 
 // Interface pour les messages de l'API
@@ -126,6 +145,16 @@ interface ApiMessage {
   estLu?: boolean;
   dateLecture?: string | null;
   dateCreation?: string;
+}
+
+// Interface pour les messages reçus de l'API
+interface MessageReceived {
+  uuid: string;
+  message: ApiMessage;
+  statut: string;
+  estLu: boolean;
+  dateLecture?: string;
+  dateReception: string;
 }
 
 // Composant de badge de statut
@@ -264,7 +293,7 @@ const MessageItem = ({
       )}
 
       <div
-        className={`list-group-item list-group-item-action border-0 py-4 px-4 ${isSelected ? "bg-primary bg-opacity-10 selected-message" : "hover-bg-light"} ${!message.estLu ? "unread-message" : ""}`}
+        className={`list-group-item list-group-item-action border-0 py-3 px-3 ${isSelected ? "bg-primary bg-opacity-10 selected-message" : "hover-bg-light"} ${!message.estLu ? "unread-message" : ""}`}
         onClick={() => onSelect(message)}
         style={{
           cursor: "pointer",
@@ -278,11 +307,11 @@ const MessageItem = ({
           marginBottom: "4px",
         }}
       >
-        <div className="d-flex justify-content-between align-items-start mb-3">
+        <div className="d-flex justify-content-between align-items-start mb-2">
           <div className="d-flex align-items-center gap-3">
             <div
               className={`bg-${getTypeColor()} bg-opacity-10 text-${getTypeColor()} rounded-circle d-flex align-items-center justify-content-center`}
-              style={{ width: "48px", height: "48px" }}
+              style={{ width: "40px", height: "40px" }}
             >
               <FontAwesomeIcon
                 icon={getTypeIcon()}
@@ -291,7 +320,10 @@ const MessageItem = ({
             </div>
             <div className="d-flex flex-column">
               <div className="d-flex align-items-center gap-2 mb-1">
-                <h6 className="mb-0 fw-bold text-dark">
+                <h6
+                  className="mb-0 fw-bold text-dark"
+                  style={{ fontSize: "0.9rem" }}
+                >
                   {message.expediteurNom}
                 </h6>
                 {!message.estLu && (
@@ -301,13 +333,15 @@ const MessageItem = ({
                   </span>
                 )}
               </div>
-              <div className="d-flex align-items-center gap-2">
-                <small className="text-muted">
+              <div className="d-flex align-items-center gap-2 flex-wrap">
+                <small className="text-muted" style={{ fontSize: "0.75rem" }}>
                   <FontAwesomeIcon icon={faUser} className="me-1 fs-11" />
                   {message.expediteurEmail}
                 </small>
-                <span className="text-muted">•</span>
-                <small className="text-muted">
+                <span className="text-muted" style={{ fontSize: "0.75rem" }}>
+                  •
+                </span>
+                <small className="text-muted" style={{ fontSize: "0.75rem" }}>
                   À: {message.destinataireEmail}
                 </small>
               </div>
@@ -315,19 +349,22 @@ const MessageItem = ({
           </div>
           <div className="d-flex flex-column align-items-end gap-2">
             <div className="d-flex align-items-center gap-2">
-              <small className="text-muted">
+              <small className="text-muted" style={{ fontSize: "0.75rem" }}>
                 <FontAwesomeIcon icon={faClock} className="me-1" />
                 {formatDate(message.envoyeLe)}
               </small>
               <span
-                className={`badge bg-${getTypeColor()} bg-opacity-10 text-${getTypeColor()} border border-${getTypeColor()} border-opacity-25 px-3 py-1 fw-medium`}
-                style={{ fontSize: "0.7rem" }}
+                className={`badge bg-${getTypeColor()} bg-opacity-10 text-${getTypeColor()} border border-${getTypeColor()} border-opacity-25 px-2 py-1 fw-medium`}
+                style={{ fontSize: "0.65rem" }}
               >
                 {message.type.toUpperCase()}
               </span>
             </div>
             {message.estEnvoye && (
-              <small className="text-success fw-medium">
+              <small
+                className="text-success fw-medium"
+                style={{ fontSize: "0.75rem" }}
+              >
                 <FontAwesomeIcon icon={faCheckCircle} className="me-1" />
                 Envoyé
               </small>
@@ -335,13 +372,16 @@ const MessageItem = ({
           </div>
         </div>
 
-        <h6 className="fw-bold mb-2 text-dark">{message.sujet}</h6>
+        <h6 className="fw-bold mb-2 text-dark" style={{ fontSize: "0.9rem" }}>
+          {message.sujet}
+        </h6>
 
         <p
           className="mb-0 text-muted fs-14 line-clamp-2"
           style={{
+            fontSize: "0.8rem",
             maxWidth: "600px",
-            lineHeight: "1.5",
+            lineHeight: "1.4",
             WebkitLineClamp: 2,
             WebkitBoxOrient: "vertical",
             overflow: "hidden",
@@ -360,8 +400,8 @@ const MessageItem = ({
                 onSelect(message);
               }}
             >
-              <FontAwesomeIcon icon={faEye} />
-              <span>Voir</span>
+              <FontAwesomeIcon icon={faEye} style={{ fontSize: "0.8rem" }} />
+              <span style={{ fontSize: "0.8rem" }}>Voir</span>
             </button>
             <button
               className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
@@ -370,13 +410,20 @@ const MessageItem = ({
                 // Gérer la réponse plus tard
               }}
             >
-              <FontAwesomeIcon icon={faReply} />
-              <span>Répondre</span>
+              <FontAwesomeIcon icon={faReply} style={{ fontSize: "0.8rem" }} />
+              <span style={{ fontSize: "0.8rem" }}>Répondre</span>
             </button>
           </div>
           {message.estEnvoye && !message.estLu && (
-            <span className="badge bg-light text-dark border border-secondary-subtle px-3 py-1">
-              <FontAwesomeIcon icon={faClock} className="me-1" />
+            <span
+              className="badge bg-light text-dark border border-secondary-subtle px-2 py-1"
+              style={{ fontSize: "0.75rem" }}
+            >
+              <FontAwesomeIcon
+                icon={faClock}
+                className="me-1"
+                style={{ fontSize: "0.7rem" }}
+              />
               En attente de lecture
             </span>
           )}
@@ -421,17 +468,17 @@ const StatsCard = ({
 
   return (
     <div className="card border-0 shadow-sm h-100 stats-card">
-      <div className="card-body">
+      <div className="card-body p-3">
         <div className="d-flex align-items-center">
           <div
-            className={`bg-${color} bg-opacity-10 text-${color} rounded-3 p-3 me-3`}
+            className={`bg-${color} bg-opacity-10 text-${color} rounded-3 p-2 me-3`}
             style={{ borderRadius: "12px" }}
           >
-            <FontAwesomeIcon icon={icon} className="fs-3" />
+            <FontAwesomeIcon icon={icon} className="fs-2" />
           </div>
           <div className="flex-grow-1">
             <div className="d-flex align-items-center gap-2 mb-1">
-              <h3 className="mb-0 fw-bold">
+              <h3 className="mb-0 fw-bold" style={{ fontSize: "1.25rem" }}>
                 {isLoading ? (
                   <span
                     className="spinner-border spinner-border-sm me-2"
@@ -445,9 +492,17 @@ const StatsCard = ({
               </h3>
               {trend && getTrendIcon()}
             </div>
-            <p className="text-muted mb-1 fw-medium">{title}</p>
+            <p
+              className="text-muted mb-1 fw-medium"
+              style={{ fontSize: "0.8rem" }}
+            >
+              {title}
+            </p>
             {subtitle && (
-              <small className="text-muted d-flex align-items-center gap-1">
+              <small
+                className="text-muted d-flex align-items-center gap-1"
+                style={{ fontSize: "0.7rem" }}
+              >
                 <FontAwesomeIcon icon={faInfoCircle} className="fs-11" />
                 {subtitle}
               </small>
@@ -459,9 +514,48 @@ const StatsCard = ({
   );
 };
 
+// Fonction pour déterminer si un utilisateur est un admin
+const isAdminUser = (user: UtilisateurBase): boolean => {
+  // Dans votre API, presque tous les utilisateurs ont is_admin: true
+  // On va donc déterminer par le rôle et l'email
+  const email = user.email?.toLowerCase() || "";
+  const roleName = user.role?.name?.toLowerCase() || "";
+
+  // Si l'email contient "admin" ou "superadmin"
+  if (email.includes("admin") || email.includes("superadmin")) {
+    return true;
+  }
+
+  // Si le rôle est "Admin" ou "Super Admin"
+  if (roleName.includes("admin") && !roleName.includes("utilisateur")) {
+    return true;
+  }
+
+  // Vérifier aussi si c'est un super admin par d'autres critères
+  return false;
+};
+
+// Fonction pour déterminer le type d'utilisateur par rôle
+const getUserTypeFromRole = (roleName?: string): string => {
+  if (!roleName) return "utilisateur";
+
+  const roleLower = roleName.toLowerCase();
+
+  if (roleLower.includes("agent")) return "agent";
+  if (roleLower.includes("vendeur")) return "vendeur";
+  if (roleLower.includes("utilisateur") || roleLower.includes("user"))
+    return "utilisateur";
+  if (roleLower.includes("admin") || roleLower.includes("superadmin"))
+    return "admin";
+
+  return "utilisateur";
+};
+
 export default function MessagerieVendeur() {
   // États pour les données
   const [utilisateurs, setUtilisateurs] = useState<Utilisateur[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [vendeurs, setVendeurs] = useState<Vendeur[]>([]);
   const [vendeurProfile, setVendeurProfile] = useState<VendeurProfile | null>(
     null,
   );
@@ -471,6 +565,8 @@ export default function MessagerieVendeur() {
   // États pour le chargement
   const [loading, setLoading] = useState({
     utilisateurs: false,
+    agents: false,
+    vendeurs: false,
     messages: false,
     envoi: false,
     profile: false,
@@ -481,6 +577,7 @@ export default function MessagerieVendeur() {
 
   // États pour les filtres
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedType, setSelectedType] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
 
   // États pour la sélection
@@ -496,7 +593,7 @@ export default function MessagerieVendeur() {
     destinataireEmail: "",
     sujet: "",
     contenu: "",
-    type: "notification",
+    type: "NOTIFICATION",
     expediteurNom: "",
     expediteurEmail: "",
   });
@@ -554,73 +651,174 @@ export default function MessagerieVendeur() {
     }
   }, []);
 
-  // Charger les utilisateurs (clients seulement pour vendeur)
-  const fetchUtilisateurs = useCallback(async () => {
-    setLoading((prev) => ({ ...prev, utilisateurs: true }));
+  // Charger tous les utilisateurs (corrigé pour votre API)
+  const fetchAllUsers = useCallback(async () => {
     try {
-      const response = await api.get<ApiResponse<Utilisateur[]>>(
+      setLoading((prev) => ({
+        ...prev,
+        utilisateurs: true,
+        agents: true,
+        vendeurs: true,
+      }));
+
+      console.log("🔄 Chargement des utilisateurs...");
+
+      // Charger les utilisateurs (rôle "Utilisateur")
+      const usersResponse = await api.get<ApiResponse<Utilisateur[]>>(
         API_ENDPOINTS.ADMIN.USERS.LIST,
       );
-      setUtilisateurs(response?.data || []);
+      console.log("✅ Utilisateurs chargés:", usersResponse?.data?.length || 0);
+
+      // Charger les agents (rôle "Agent")
+      const agentsResponse = await api.get<ApiResponse<Agent[]>>(
+        API_ENDPOINTS.ADMIN.AGENTS.LIST,
+      );
+      console.log("✅ Agents chargés:", agentsResponse?.data?.length || 0);
+
+      // Charger les vendeurs (rôle "Vendeur")
+      const vendeursResponse = await api.get<ApiResponse<Vendeur[]>>(
+        API_ENDPOINTS.ADMIN.VENDEURS.LIST,
+      );
+      console.log("✅ Vendeurs chargés:", vendeursResponse?.data?.length || 0);
+
+      // Traiter les utilisateurs (rôle "Utilisateur")
+      const filteredUsers = (usersResponse?.data || [])
+        .filter((user) => {
+          // Exclure les vrais admins (pas ceux qui ont juste is_admin: true)
+          const isRealAdmin = isAdminUser(user);
+          console.log(
+            `Utilisateur ${user.email}: isRealAdmin=${isRealAdmin}, role=${user.role?.name}`,
+          );
+          return !isRealAdmin;
+        })
+        .map((user) => ({
+          ...user,
+          userType: "utilisateur" as const,
+        }));
+
+      // Traiter les agents (rôle "Agent")
+      const filteredAgents = (agentsResponse?.data || [])
+        .filter((agent) => {
+          // Exclure les vrais admins
+          const isRealAdmin = isAdminUser(agent);
+          console.log(
+            `Agent ${agent.email}: isRealAdmin=${isRealAdmin}, role=${agent.role?.name}`,
+          );
+          return !isRealAdmin;
+        })
+        .map((agent) => ({
+          ...agent,
+          userType: "agent" as const,
+        }));
+
+      // Traiter les vendeurs (rôle "Vendeur") - exclure le vendeur connecté
+      const currentVendeurEmail = vendeurProfile?.email?.toLowerCase();
+      const filteredVendeurs = (vendeursResponse?.data || [])
+        .filter((vendeur) => {
+          // Exclure les vrais admins
+          const isRealAdmin = isAdminUser(vendeur);
+          // Exclure le vendeur connecté
+          const isCurrentVendeur =
+            currentVendeurEmail &&
+            vendeur.email?.toLowerCase() === currentVendeurEmail;
+
+          console.log(
+            `Vendeur ${vendeur.email}: isRealAdmin=${isRealAdmin}, isCurrentVendeur=${isCurrentVendeur}, role=${vendeur.role?.name}`,
+          );
+
+          return !isRealAdmin && !isCurrentVendeur;
+        })
+        .map((vendeur) => ({
+          ...vendeur,
+          userType: "vendeur" as const,
+        }));
+
+      console.log("📊 Résultats finaux:", {
+        utilisateurs: filteredUsers.length,
+        agents: filteredAgents.length,
+        vendeurs: filteredVendeurs.length,
+      });
+
+      setUtilisateurs(filteredUsers);
+      setAgents(filteredAgents);
+      setVendeurs(filteredVendeurs);
     } catch (err: any) {
-      console.error("❌ Error fetching utilisateurs:", err);
+      console.error("❌ Erreur lors du chargement des utilisateurs:", err);
       setError("Erreur lors du chargement des utilisateurs");
     } finally {
-      setLoading((prev) => ({ ...prev, utilisateurs: false }));
+      setLoading((prev) => ({
+        ...prev,
+        utilisateurs: false,
+        agents: false,
+        vendeurs: false,
+      }));
     }
-  }, []);
+  }, [vendeurProfile]);
 
   // Charger les messages reçus
   const fetchMessagesRecus = useCallback(async () => {
     setLoading((prev) => ({ ...prev, messages: true }));
     try {
       console.log("🔄 Chargement des messages reçus pour vendeur...");
-      const response = await api.get<ApiResponse<any[]>>(
+      const response = await api.get<MessageReceived[]>(
         API_ENDPOINTS.MESSAGERIE.RECEIVED,
       );
 
-      if (
-        !response ||
-        !response.data ||
-        (Array.isArray(response.data) && response.data.length === 0)
-      ) {
-        console.warn("⚠️ Réponse API vide (messages reçus)");
+      console.log("📨 Réponse brute des messages reçus:", response);
+
+      if (!response || (Array.isArray(response) && response.length === 0)) {
+        console.warn("⚠️ Aucun message reçu trouvé");
         setMessages([]);
         return;
       }
 
-      let responseData = Array.isArray(response.data) ? response.data : [];
-
-      const transformedMessages = responseData
+      // Transformer les données
+      const transformedMessages = (Array.isArray(response) ? response : [])
         .map((item: any) => {
-          if (!item || !item.message) return null;
+          if (!item) return null;
+
+          // Vérifier la structure de l'item
+          const hasMessageWrapper = item.message !== undefined;
+          const messageData = hasMessageWrapper ? item.message : item;
 
           return {
-            uuid: item.message.uuid || item.uuid || "",
-            sujet: item.message.sujet || "",
-            contenu: item.message.contenu || "",
-            expediteurNom: item.message.expediteurNom || "",
-            expediteurEmail: item.message.expediteurEmail || "",
-            destinataireEmail: item.message.destinataireEmail || "",
-            type: (item.message.type || "notification").toUpperCase(),
-            estEnvoye: item.message.estEnvoye || false,
+            uuid: messageData.uuid || item.uuid || `msg-${Date.now()}`,
+            sujet: messageData.sujet || "Sans sujet",
+            contenu: messageData.contenu || "",
+            expediteurNom: messageData.expediteurNom || "Expéditeur inconnu",
+            expediteurEmail:
+              messageData.expediteurEmail || "inconnu@exemple.com",
+            destinataireEmail:
+              messageData.destinataireEmail ||
+              vendeurProfile?.email ||
+              "vendeur@sonec.com",
+            type: (messageData.type || "notification").toUpperCase(),
+            estEnvoye:
+              messageData.estEnvoye !== undefined
+                ? messageData.estEnvoye
+                : true,
             envoyeLe:
+              messageData.envoyeLe ||
               item.dateReception ||
-              item.message.envoyeLe ||
               new Date().toISOString(),
-            estLu: item.estLu || false,
-            dateLecture: item.dateLecture || null,
-            dateCreation: item.message.dateCreation,
+            estLu: hasMessageWrapper
+              ? item.estLu || false
+              : messageData.estLu || false,
+            dateLecture: hasMessageWrapper
+              ? item.dateLecture
+              : messageData.dateLecture,
+            dateCreation: messageData.dateCreation || item.dateReception,
           } as Message;
         })
-        .filter((item: any): item is Message => item !== null);
+        .filter((item): item is Message => item !== null);
 
+      console.log("📨 Messages transformés:", transformedMessages);
       setMessages(transformedMessages);
     } catch (err: any) {
-      console.error("❌ Error fetching messages:", err);
+      console.error("❌ Erreur lors du chargement des messages:", err);
       setError("Erreur lors du chargement des messages");
 
-      // Données de démonstration adaptées pour vendeur
+      // Données de démonstration
       const demoMessages: Message[] = [
         {
           uuid: "c5d30cbd-b606-4721-8ec7-5a00f7df9e87",
@@ -659,34 +857,35 @@ export default function MessagerieVendeur() {
 
   // Charger les messages envoyés
   const fetchMessagesEnvoyes = useCallback(async () => {
+    setLoading((prev) => ({ ...prev, messages: true }));
     try {
       console.log("🔄 Chargement des messages envoyés...");
-      const response = await api.get<ApiResponse<ApiMessage[]>>(
+      const response = await api.get<ApiMessage[]>(
         API_ENDPOINTS.MESSAGERIE.SENT,
       );
 
-      if (
-        !response ||
-        !response.data ||
-        (Array.isArray(response.data) && response.data.length === 0)
-      ) {
-        console.warn("⚠️ Réponse API vide (messages envoyés)");
+      console.log("📤 Réponse brute des messages envoyés:", response);
+
+      if (!response || (Array.isArray(response) && response.length === 0)) {
+        console.warn("⚠️ Aucun message envoyé trouvé");
         setMessagesEnvoyes([]);
         return;
       }
 
-      let responseData = Array.isArray(response.data) ? response.data : [];
-
-      const formattedMessages = responseData
+      const formattedMessages = (Array.isArray(response) ? response : [])
         .map((msg: any) => {
           if (!msg) return null;
 
           return {
-            uuid: msg.uuid || "",
-            sujet: msg.sujet || "",
+            uuid: msg.uuid || `sent-${Date.now()}`,
+            sujet: msg.sujet || "Sans sujet",
             contenu: msg.contenu || "",
-            expediteurNom: msg.expediteurNom || "Vendeur SONEC",
-            expediteurEmail: msg.expediteurEmail || vendeurProfile?.email || "",
+            expediteurNom:
+              msg.expediteurNom || vendeurProfile?.nom || "Vendeur SONEC",
+            expediteurEmail:
+              msg.expediteurEmail ||
+              vendeurProfile?.email ||
+              "vendeur@sonec.com",
             destinataireEmail: msg.destinataireEmail || "",
             type: (msg.type || "notification").toUpperCase(),
             estEnvoye: msg.estEnvoye !== undefined ? msg.estEnvoye : true,
@@ -696,13 +895,15 @@ export default function MessagerieVendeur() {
             dateCreation: msg.dateCreation,
           } as Message;
         })
-        .filter((msg: any): msg is Message => msg !== null);
+        .filter((msg): msg is Message => msg !== null);
 
+      console.log("📤 Messages envoyés transformés:", formattedMessages);
       setMessagesEnvoyes(formattedMessages);
     } catch (err: any) {
-      console.error("❌ Error fetching sent messages:", err);
+      console.error("❌ Erreur lors du chargement des messages envoyés:", err);
       setError("Erreur lors du chargement des messages envoyés");
 
+      // Données de démonstration
       const demoSentMessages: Message[] = [
         {
           uuid: "sent-1",
@@ -737,6 +938,8 @@ export default function MessagerieVendeur() {
         },
       ];
       setMessagesEnvoyes(demoSentMessages);
+    } finally {
+      setLoading((prev) => ({ ...prev, messages: false }));
     }
   }, [vendeurProfile]);
 
@@ -756,15 +959,16 @@ export default function MessagerieVendeur() {
   // Charger toutes les données au montage
   useEffect(() => {
     console.log("🚀 Chargement des données pour vendeur...");
-    fetchVendeurProfile();
-    fetchUtilisateurs();
-    fetchMessagesRecus();
-    fetchMessagesEnvoyes();
+    fetchVendeurProfile().then(() => {
+      fetchAllUsers();
+      fetchMessagesRecus();
+      fetchMessagesEnvoyes();
+    });
   }, []);
 
   // Mettre à jour les statistiques
   useEffect(() => {
-    const totalUsers = utilisateurs.length;
+    const totalUsers = utilisateurs.length + agents.length + vendeurs.length;
     const totalMessages = messages.length + messagesEnvoyes.length;
     const unreadMessages = messages.filter((m) => !m.estLu).length;
 
@@ -774,11 +978,43 @@ export default function MessagerieVendeur() {
       unreadMessages,
       sentMessages: messagesEnvoyes.length,
     });
-  }, [utilisateurs, messages, messagesEnvoyes]);
+  }, [utilisateurs, agents, vendeurs, messages, messagesEnvoyes]);
+
+  // Combiner tous les utilisateurs (sauf admin)
+  const allUsers = useMemo(() => {
+    const users = [];
+
+    if (selectedType === "all" || selectedType === "utilisateur") {
+      users.push(
+        ...utilisateurs.map((user) => ({
+          ...user,
+          userType: "utilisateur" as const,
+        })),
+      );
+    }
+
+    if (selectedType === "all" || selectedType === "agent") {
+      users.push(
+        ...agents.map((agent) => ({ ...agent, userType: "agent" as const })),
+      );
+    }
+
+    if (selectedType === "all" || selectedType === "vendeur") {
+      users.push(
+        ...vendeurs.map((vendeur) => ({
+          ...vendeur,
+          userType: "vendeur" as const,
+        })),
+      );
+    }
+
+    console.log("👥 Tous les utilisateurs combinés:", users.length);
+    return users;
+  }, [utilisateurs, agents, vendeurs, selectedType]);
 
   // Filtrer les utilisateurs
   const filteredUsers = useMemo(() => {
-    let result = utilisateurs.filter((v) => !v.is_deleted);
+    let result = allUsers.filter((v) => !v.is_deleted);
 
     // Filtrer par recherche
     if (searchTerm.trim()) {
@@ -803,8 +1039,9 @@ export default function MessagerieVendeur() {
       }
     }
 
+    console.log("🔍 Utilisateurs filtrés:", result.length);
     return result;
-  }, [utilisateurs, searchTerm, selectedStatus]);
+  }, [allUsers, searchTerm, selectedStatus]);
 
   // Gestion de la sélection multiple
   const handleSelectUser = (userId: string) => {
@@ -831,12 +1068,15 @@ export default function MessagerieVendeur() {
     email: string,
     nom?: string,
     prenoms?: string,
+    userType?: string,
   ) => {
+    const typeLabel = getUserTypeLabel(userType || "utilisateur");
+
     setNewMessage((prev) => ({
       ...prev,
       destinataireEmail: email,
       sujet:
-        `Message pour ${nom || ""} ${prenoms || ""}`.trim() ||
+        `Message pour ${typeLabel} ${nom || ""} ${prenoms || ""}`.trim() ||
         "Message important",
     }));
   };
@@ -905,7 +1145,7 @@ export default function MessagerieVendeur() {
           destinataireEmail: "",
           sujet: "",
           contenu: "",
-          type: "notification",
+          type: "NOTIFICATION",
           expediteurNom: newMessage.expediteurNom,
           expediteurEmail: newMessage.expediteurEmail,
         });
@@ -913,7 +1153,7 @@ export default function MessagerieVendeur() {
         setActiveTab("sent");
       }
     } catch (err: any) {
-      console.error("❌ Error sending message:", err);
+      console.error("❌ Erreur lors de l'envoi du message:", err);
 
       let errorMessage = "Erreur lors de l'envoi du message";
 
@@ -941,8 +1181,6 @@ export default function MessagerieVendeur() {
         }
       } else if (err.message) {
         errorMessage = err.message;
-      } else if (err.errorMessage) {
-        errorMessage = err.errorMessage;
       }
 
       setError(errorMessage);
@@ -980,11 +1218,53 @@ export default function MessagerieVendeur() {
       destinataireEmail: message.expediteurEmail,
       sujet: `RE: ${message.sujet}`,
       contenu: `\n\n--- Message original ---\n${message.contenu}`,
-      type: message.type.toLowerCase(),
+      type: message.type,
       expediteurNom: newMessage.expediteurNom,
       expediteurEmail: newMessage.expediteurEmail,
     });
     setActiveTab("users");
+  };
+
+  // Obtenir l'icône pour le type d'utilisateur
+  const getUserTypeIcon = (userType: string) => {
+    switch (userType) {
+      case "agent":
+        return faUserTie;
+      case "vendeur":
+        return faStore;
+      case "utilisateur":
+        return faUser;
+      default:
+        return faUser;
+    }
+  };
+
+  // Obtenir la couleur pour le type d'utilisateur
+  const getUserTypeColor = (userType: string) => {
+    switch (userType) {
+      case "agent":
+        return "primary";
+      case "vendeur":
+        return "warning";
+      case "utilisateur":
+        return "info";
+      default:
+        return "secondary";
+    }
+  };
+
+  // Obtenir le label pour le type d'utilisateur
+  const getUserTypeLabel = (userType: string) => {
+    switch (userType) {
+      case "agent":
+        return "Agent";
+      case "vendeur":
+        return "Vendeur";
+      case "utilisateur":
+        return "Utilisateur";
+      default:
+        return "Utilisateur";
+    }
   };
 
   // Grouper les messages par date pour les séparateurs
@@ -1015,27 +1295,39 @@ export default function MessagerieVendeur() {
     }
   };
 
+  // Charger les données quand l'onglet change
+  useEffect(() => {
+    if (activeTab === "users") {
+      fetchAllUsers();
+    }
+  }, [activeTab, fetchAllUsers]);
+
   return (
     <>
-      <div className="container-fluid px-4 py-4">
+      <div className="container-fluid px-3 py-3">
         {/* Header avec titre et actions */}
         <div className="d-flex justify-content-between align-items-center mb-4">
           <div>
-            <h1 className="h2 fw-bold text-dark mb-1">
+            <h1
+              className="h2 fw-bold text-dark mb-1"
+              style={{ fontSize: "1.5rem" }}
+            >
               <FontAwesomeIcon
                 icon={faEnvelope}
                 className="me-3 text-primary"
               />
               Messagerie Vendeur
             </h1>
-            <p className="text-muted mb-0">
-              Gérez vos messages et communiquez avec vos clients
+            <p className="text-muted mb-0" style={{ fontSize: "0.9rem" }}>
+              Gérez vos messages et communiquez avec les utilisateurs, agents et
+              autres vendeurs
             </p>
           </div>
           <div className="d-flex gap-3">
             <button
               className="btn btn-outline-primary d-flex align-items-center gap-2"
               onClick={() => setActiveTab("users")}
+              style={{ fontSize: "0.85rem" }}
             >
               <FontAwesomeIcon icon={faUserPen} />
               Nouveau message
@@ -1043,9 +1335,11 @@ export default function MessagerieVendeur() {
             <button
               className="btn btn-primary d-flex align-items-center gap-2"
               onClick={() => {
+                fetchAllUsers();
                 fetchMessagesRecus();
                 fetchMessagesEnvoyes();
               }}
+              style={{ fontSize: "0.85rem" }}
             >
               <FontAwesomeIcon icon={faHistory} />
               Actualiser
@@ -1054,16 +1348,18 @@ export default function MessagerieVendeur() {
         </div>
 
         {/* Cartes de statistiques améliorées */}
-        <div className="row g-4 mb-5">
+        <div className="row g-3 mb-4">
           <div className="col-xl-3 col-lg-6">
             <StatsCard
-              title="Clients Totaux"
+              title="Utilisateurs Totaux"
               value={stats.totalUsers}
               icon={faUsers}
               color="primary"
-              subtitle="Clients disponibles"
+              subtitle="Utilisateurs, Agents, Vendeurs"
               trend="up"
-              isLoading={loading.utilisateurs}
+              isLoading={
+                loading.utilisateurs || loading.agents || loading.vendeurs
+              }
             />
           </div>
           <div className="col-xl-3 col-lg-6">
@@ -1101,7 +1397,7 @@ export default function MessagerieVendeur() {
 
         {/* Onglets principaux améliorés */}
         <div className="card border-0 shadow-lg mb-4 overflow-hidden">
-          <div className="card-header bg-white border-0 py-4 px-4">
+          <div className="card-header bg-white border-0 py-3 px-3">
             <ul
               className="nav nav-tabs nav-tabs-custom border-0 d-flex justify-content-between"
               role="tablist"
@@ -1109,25 +1405,30 @@ export default function MessagerieVendeur() {
             >
               <li className="nav-item flex-grow-1" role="presentation">
                 <button
-                  className={`nav-link w-100 ${activeTab === "users" ? "active" : ""} d-flex align-items-center justify-content-center gap-2 py-3`}
+                  className={`nav-link w-100 ${activeTab === "users" ? "active" : ""} d-flex align-items-center justify-content-center gap-2 py-2`}
                   onClick={() => setActiveTab("users")}
+                  style={{ fontSize: "0.85rem" }}
                 >
                   <div className="d-flex flex-column align-items-center">
                     <FontAwesomeIcon icon={faUsers} className="fs-5 mb-1" />
-                    <span className="fw-semibold">Clients</span>
+                    <span className="fw-semibold">Contacts</span>
                   </div>
                 </button>
               </li>
               <li className="nav-item flex-grow-1" role="presentation">
                 <button
-                  className={`nav-link w-100 ${activeTab === "received" ? "active" : ""} d-flex align-items-center justify-content-center gap-2 py-3`}
+                  className={`nav-link w-100 ${activeTab === "received" ? "active" : ""} d-flex align-items-center justify-content-center gap-2 py-2`}
                   onClick={() => setActiveTab("received")}
+                  style={{ fontSize: "0.85rem" }}
                 >
                   <div className="d-flex flex-column align-items-center position-relative">
                     <FontAwesomeIcon icon={faInbox} className="fs-5 mb-1" />
                     <span className="fw-semibold">Messages reçus</span>
                     {stats.unreadMessages > 0 && (
-                      <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                      <span
+                        className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                        style={{ fontSize: "0.65rem" }}
+                      >
                         {stats.unreadMessages}
                       </span>
                     )}
@@ -1136,8 +1437,9 @@ export default function MessagerieVendeur() {
               </li>
               <li className="nav-item flex-grow-1" role="presentation">
                 <button
-                  className={`nav-link w-100 ${activeTab === "sent" ? "active" : ""} d-flex align-items-center justify-content-center gap-2 py-3`}
+                  className={`nav-link w-100 ${activeTab === "sent" ? "active" : ""} d-flex align-items-center justify-content-center gap-2 py-2`}
                   onClick={() => setActiveTab("sent")}
+                  style={{ fontSize: "0.85rem" }}
                 >
                   <div className="d-flex flex-column align-items-center">
                     <FontAwesomeIcon
@@ -1151,43 +1453,52 @@ export default function MessagerieVendeur() {
             </ul>
           </div>
 
-          <div className="card-body p-4">
-            {/* Onglet: Clients */}
+          <div className="card-body p-3">
+            {/* Onglet: Contacts */}
             {activeTab === "users" && (
-              <div className="row g-4">
+              <div className="row g-3">
                 <div className="col-lg-8">
                   <div className="card border-0 shadow-sm h-100">
-                    <div className="card-header bg-white border-0 py-4 px-4">
+                    <div className="card-header bg-white border-0 py-3 px-3">
                       <div className="d-flex justify-content-between align-items-center">
                         <div>
-                          <h5 className="mb-0 fw-bold text-dark">
+                          <h5
+                            className="mb-0 fw-bold text-dark"
+                            style={{ fontSize: "1rem" }}
+                          >
                             <FontAwesomeIcon
                               icon={faUsers}
                               className="me-2 text-primary"
                             />
-                            Liste des clients
+                            Liste des contacts
                           </h5>
-                          <p className="text-muted mb-0 mt-1">
-                            Sélectionnez des clients pour leur envoyer des
+                          <p
+                            className="text-muted mb-0 mt-1"
+                            style={{ fontSize: "0.8rem" }}
+                          >
+                            Sélectionnez des contacts pour leur envoyer des
                             messages
                           </p>
                         </div>
                         <div className="d-flex align-items-center gap-3">
-                          <span className="badge bg-primary bg-opacity-10 text-primary px-3 py-2">
+                          <span
+                            className="badge bg-primary bg-opacity-10 text-primary px-3 py-2"
+                            style={{ fontSize: "0.8rem" }}
+                          >
                             <FontAwesomeIcon
                               icon={faUserCheck}
                               className="me-2"
                             />
-                            {filteredUsers.length} client(s)
+                            {filteredUsers.length} contact(s)
                           </span>
                         </div>
                       </div>
 
                       {/* Filtres améliorés */}
-                      <div className="row g-3 mt-4">
+                      <div className="row g-2 mt-3">
                         <div className="col-lg-6">
-                          <div className="input-group input-group-lg shadow-sm">
-                            <span className="input-group-text bg-white border-end-0 ps-4">
+                          <div className="input-group input-group-sm shadow-sm">
+                            <span className="input-group-text bg-white border-end-0 ps-3">
                               <FontAwesomeIcon
                                 icon={faSearch}
                                 className="text-muted"
@@ -1195,27 +1506,56 @@ export default function MessagerieVendeur() {
                             </span>
                             <input
                               type="text"
-                              className="form-control border-start-0 ps-2 py-3"
-                              placeholder="Rechercher un client..."
+                              className="form-control border-start-0 ps-2 py-2"
+                              placeholder="Rechercher un contact..."
                               value={searchTerm}
                               onChange={(e) => setSearchTerm(e.target.value)}
+                              style={{ fontSize: "0.85rem" }}
                             />
                           </div>
                         </div>
-                        <div className="col-lg-6">
-                          <div className="input-group input-group-lg shadow-sm">
-                            <label className="input-group-text bg-white border-end-0">
+                        <div className="col-lg-3">
+                          <div className="input-group input-group-sm shadow-sm">
+                            <label
+                              className="input-group-text bg-white border-end-0"
+                              style={{ fontSize: "0.85rem" }}
+                            >
+                              <FontAwesomeIcon
+                                icon={faUserTag}
+                                className="text-muted"
+                              />
+                            </label>
+                            <select
+                              className="form-select border-start-0 py-2"
+                              value={selectedType}
+                              onChange={(e) => setSelectedType(e.target.value)}
+                              style={{ fontSize: "0.85rem" }}
+                            >
+                              <option value="all">Tous les types</option>
+                              <option value="utilisateur">Utilisateurs</option>
+                              <option value="agent">Agents</option>
+                              <option value="vendeur">Vendeurs</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="col-lg-3">
+                          <div className="input-group input-group-sm shadow-sm">
+                            <label
+                              className="input-group-text bg-white border-end-0"
+                              style={{ fontSize: "0.85rem" }}
+                            >
                               <FontAwesomeIcon
                                 icon={faFilter}
                                 className="text-muted"
                               />
                             </label>
                             <select
-                              className="form-select border-start-0 py-3"
+                              className="form-select border-start-0 py-2"
                               value={selectedStatus}
                               onChange={(e) =>
                                 setSelectedStatus(e.target.value)
                               }
+                              style={{ fontSize: "0.85rem" }}
                             >
                               <option value="all">Tous les statuts</option>
                               <option value="active">Actifs</option>
@@ -1228,13 +1568,19 @@ export default function MessagerieVendeur() {
                     </div>
 
                     <div className="card-body p-0">
-                      <div className="table-responsive">
+                      <div
+                        className="table-responsive"
+                        style={{ maxHeight: "500px", overflowY: "auto" }}
+                      >
                         <table className="table table-hover align-middle mb-0">
-                          <thead className="table-light">
+                          <thead
+                            className="table-light sticky-top"
+                            style={{ top: 0 }}
+                          >
                             <tr>
                               <th
-                                className="py-3 px-4"
-                                style={{ width: "60px" }}
+                                className="py-2 px-3"
+                                style={{ width: "50px", fontSize: "0.8rem" }}
                               >
                                 <div className="form-check">
                                   <input
@@ -1251,27 +1597,38 @@ export default function MessagerieVendeur() {
                                 </div>
                               </th>
                               <th
-                                className="py-3 px-4"
-                                style={{ width: "80px" }}
+                                className="py-2 px-3"
+                                style={{ width: "60px", fontSize: "0.8rem" }}
                               >
                                 <span className="text-muted fw-medium">#</span>
                               </th>
-                              <th className="py-3 px-4">
+                              <th
+                                className="py-2 px-3"
+                                style={{ fontSize: "0.8rem" }}
+                              >
                                 <span className="text-muted fw-medium">
-                                  Client
+                                  Contact
                                 </span>
                               </th>
                               <th
-                                className="py-3 px-4"
-                                style={{ width: "140px" }}
+                                className="py-2 px-3"
+                                style={{ width: "120px", fontSize: "0.8rem" }}
+                              >
+                                <span className="text-muted fw-medium">
+                                  Type
+                                </span>
+                              </th>
+                              <th
+                                className="py-2 px-3"
+                                style={{ width: "120px", fontSize: "0.8rem" }}
                               >
                                 <span className="text-muted fw-medium">
                                   Statut
                                 </span>
                               </th>
                               <th
-                                className="py-3 px-4 text-center"
-                                style={{ width: "120px" }}
+                                className="py-2 px-3 text-center"
+                                style={{ width: "100px", fontSize: "0.8rem" }}
                               >
                                 <span className="text-muted fw-medium">
                                   Actions
@@ -1282,26 +1639,35 @@ export default function MessagerieVendeur() {
                           <tbody>
                             {filteredUsers.length === 0 ? (
                               <tr>
-                                <td colSpan={5} className="text-center py-5">
-                                  <div className="text-muted py-5">
+                                <td colSpan={6} className="text-center py-4">
+                                  <div className="text-muted py-3">
                                     <FontAwesomeIcon
                                       icon={faUsers}
                                       className="fs-1 mb-3 opacity-25"
                                     />
-                                    <h5 className="fw-semibold mb-2">
-                                      Aucun client trouvé
+                                    <h5
+                                      className="fw-semibold mb-2"
+                                      style={{ fontSize: "0.9rem" }}
+                                    >
+                                      Aucun contact trouvé
                                     </h5>
-                                    <p className="mb-0">Ajustez vos filtres</p>
+                                    <p
+                                      className="mb-0"
+                                      style={{ fontSize: "0.8rem" }}
+                                    >
+                                      Ajustez vos filtres ou vérifiez vos
+                                      permissions
+                                    </p>
                                   </div>
                                 </td>
                               </tr>
                             ) : (
                               filteredUsers.map((user, index) => (
                                 <tr
-                                  key={`utilisateur-${user.uuid}`}
+                                  key={`${user.userType}-${user.uuid}`}
                                   className="align-middle"
                                 >
-                                  <td className="py-3 px-4">
+                                  <td className="py-2 px-3">
                                     <div className="form-check">
                                       <input
                                         type="checkbox"
@@ -1315,39 +1681,66 @@ export default function MessagerieVendeur() {
                                       />
                                     </div>
                                   </td>
-                                  <td className="py-3 px-4">
-                                    <span className="text-muted fw-semibold">
+                                  <td className="py-2 px-3">
+                                    <span
+                                      className="text-muted fw-semibold"
+                                      style={{ fontSize: "0.8rem" }}
+                                    >
                                       {index + 1}
                                     </span>
                                   </td>
-                                  <td className="py-3 px-4">
+                                  <td className="py-2 px-3">
                                     <div className="d-flex align-items-center">
                                       <div
-                                        className={`bg-info bg-opacity-10 text-info rounded-circle d-flex align-items-center justify-content-center me-3`}
+                                        className={`bg-${getUserTypeColor(user.userType || "utilisateur")} bg-opacity-10 text-${getUserTypeColor(user.userType || "utilisateur")} rounded-circle d-flex align-items-center justify-content-center me-2`}
                                         style={{
-                                          width: "44px",
-                                          height: "44px",
+                                          width: "36px",
+                                          height: "36px",
+                                          minWidth: "36px",
                                         }}
                                       >
                                         <FontAwesomeIcon
-                                          icon={faUser}
+                                          icon={getUserTypeIcon(
+                                            user.userType || "utilisateur",
+                                          )}
                                           className="fs-5"
                                         />
                                       </div>
-                                      <div>
-                                        <div className="fw-bold text-dark">
+                                      <div
+                                        className="flex-grow-1"
+                                        style={{ minWidth: 0 }}
+                                      >
+                                        <div
+                                          className="fw-bold text-dark text-truncate"
+                                          style={{ fontSize: "0.85rem" }}
+                                        >
                                           {user.email}
                                         </div>
-                                        <div className="d-flex align-items-center gap-2">
-                                          <small className="text-muted">
+                                        <div className="d-flex align-items-center gap-2 flex-wrap">
+                                          <small
+                                            className="text-muted text-truncate"
+                                            style={{
+                                              fontSize: "0.75rem",
+                                              maxWidth: "200px",
+                                            }}
+                                          >
                                             {user.nom} {user.prenoms}
                                           </small>
                                           {user.telephone && (
                                             <>
-                                              <span className="text-muted">
+                                              <span
+                                                className="text-muted"
+                                                style={{ fontSize: "0.75rem" }}
+                                              >
                                                 •
                                               </span>
-                                              <small className="text-muted">
+                                              <small
+                                                className="text-muted text-truncate"
+                                                style={{
+                                                  fontSize: "0.75rem",
+                                                  maxWidth: "120px",
+                                                }}
+                                              >
                                                 <FontAwesomeIcon
                                                   icon={faPhone}
                                                   className="me-1"
@@ -1360,26 +1753,41 @@ export default function MessagerieVendeur() {
                                       </div>
                                     </div>
                                   </td>
-                                  <td className="py-3 px-4">
+                                  <td className="py-2 px-3">
+                                    <span
+                                      className={`badge bg-${getUserTypeColor(user.userType || "utilisateur")} bg-opacity-10 text-${getUserTypeColor(user.userType || "utilisateur")} border border-${getUserTypeColor(user.userType || "utilisateur")} border-opacity-25 px-2 py-1 fw-medium`}
+                                      style={{ fontSize: "0.7rem" }}
+                                    >
+                                      {getUserTypeLabel(
+                                        user.userType || "utilisateur",
+                                      )}
+                                    </span>
+                                  </td>
+                                  <td className="py-2 px-3">
                                     <StatusBadge
                                       est_bloque={user.est_bloque}
                                       est_verifie={user.est_verifie}
                                       is_deleted={user.is_deleted}
                                     />
                                   </td>
-                                  <td className="py-3 px-4 text-center">
+                                  <td className="py-2 px-3 text-center">
                                     <button
-                                      className="btn btn-sm btn-primary d-flex align-items-center justify-content-center gap-1 px-3 py-2"
+                                      className="btn btn-sm btn-primary d-flex align-items-center justify-content-center gap-1 px-2 py-1"
                                       title="Envoyer un message"
                                       onClick={() =>
                                         selectUserForMessage(
                                           user.email,
                                           user.nom,
                                           user.prenoms,
+                                          user.userType,
                                         )
                                       }
+                                      style={{ fontSize: "0.75rem" }}
                                     >
-                                      <FontAwesomeIcon icon={faPaperPlane} />
+                                      <FontAwesomeIcon
+                                        icon={faPaperPlane}
+                                        style={{ fontSize: "0.7rem" }}
+                                      />
                                       <span className="d-none d-md-inline">
                                         Message
                                       </span>
@@ -1397,10 +1805,10 @@ export default function MessagerieVendeur() {
 
                 <div className="col-lg-4">
                   <div
-                    className="card border-0 shadow-sm h-100 sticky-top"
+                    className="card border-0 shadow-sm h-100"
                     style={{ top: "20px" }}
                   >
-                    <div className="card-header bg-white border-0 py-4 px-4">
+                    <div className="card-header bg-white border-0 py-3 px-3">
                       <div className="d-flex align-items-center gap-3 mb-2">
                         <div className="bg-primary bg-opacity-10 rounded-circle p-2">
                           <FontAwesomeIcon
@@ -1409,11 +1817,17 @@ export default function MessagerieVendeur() {
                           />
                         </div>
                         <div>
-                          <h5 className="mb-0 fw-bold text-dark">
+                          <h5
+                            className="mb-0 fw-bold text-dark"
+                            style={{ fontSize: "0.95rem" }}
+                          >
                             Nouveau message
                           </h5>
-                          <p className="text-muted mb-0">
-                            Rédigez et envoyez un message à un client
+                          <p
+                            className="text-muted mb-0"
+                            style={{ fontSize: "0.8rem" }}
+                          >
+                            Rédigez et envoyez un message
                           </p>
                         </div>
                       </div>
@@ -1421,7 +1835,7 @@ export default function MessagerieVendeur() {
                     <div className="card-body">
                       {successMessage && (
                         <div
-                          className="alert alert-success alert-dismissible fade show mb-4"
+                          className="alert alert-success alert-dismissible fade show mb-3"
                           role="alert"
                         >
                           <div className="d-flex align-items-center">
@@ -1430,10 +1844,18 @@ export default function MessagerieVendeur() {
                               className="me-2 fs-4"
                             />
                             <div>
-                              <h6 className="alert-heading mb-1">
+                              <h6
+                                className="alert-heading mb-1"
+                                style={{ fontSize: "0.85rem" }}
+                              >
                                 Message envoyé !
                               </h6>
-                              <p className="mb-0">{successMessage}</p>
+                              <p
+                                className="mb-0"
+                                style={{ fontSize: "0.8rem" }}
+                              >
+                                {successMessage}
+                              </p>
                             </div>
                           </div>
                           <button
@@ -1446,7 +1868,7 @@ export default function MessagerieVendeur() {
 
                       {error && (
                         <div
-                          className="alert alert-danger alert-dismissible fade show mb-4"
+                          className="alert alert-danger alert-dismissible fade show mb-3"
                           role="alert"
                         >
                           <div className="d-flex align-items-center">
@@ -1455,8 +1877,18 @@ export default function MessagerieVendeur() {
                               className="me-2 fs-4"
                             />
                             <div>
-                              <h6 className="alert-heading mb-1">Erreur</h6>
-                              <p className="mb-0">{error}</p>
+                              <h6
+                                className="alert-heading mb-1"
+                                style={{ fontSize: "0.85rem" }}
+                              >
+                                Erreur
+                              </h6>
+                              <p
+                                className="mb-0"
+                                style={{ fontSize: "0.8rem" }}
+                              >
+                                {error}
+                              </p>
                             </div>
                           </div>
                           <button
@@ -1473,19 +1905,21 @@ export default function MessagerieVendeur() {
                           handleSendMessage();
                         }}
                       >
-                        <div className="mb-4">
-                          <label className="form-label fw-semibold text-dark mb-2">
+                        <div className="mb-3">
+                          <label
+                            className="form-label fw-semibold text-dark mb-2"
+                            style={{ fontSize: "0.85rem" }}
+                          >
                             <FontAwesomeIcon
                               icon={faUser}
                               className="me-2 text-muted"
                             />
-                            Destinataire (Client){" "}
-                            <span className="text-danger">*</span>
+                            Destinataire <span className="text-danger">*</span>
                           </label>
                           <input
                             type="email"
-                            className="form-control form-control-lg border-2 py-3"
-                            placeholder="client@exemple.com"
+                            className="form-control form-control-sm border-2 py-2"
+                            placeholder="contact@exemple.com"
                             value={newMessage.destinataireEmail}
                             onChange={(e) =>
                               setNewMessage((prev) => ({
@@ -1494,18 +1928,25 @@ export default function MessagerieVendeur() {
                               }))
                             }
                             required
+                            style={{ fontSize: "0.85rem" }}
                           />
-                          <small className="text-muted d-block mt-2">
+                          <small
+                            className="text-muted d-block mt-1"
+                            style={{ fontSize: "0.75rem" }}
+                          >
                             <FontAwesomeIcon
                               icon={faInfoCircle}
                               className="me-1"
                             />
-                            Sélectionnez un client dans le tableau
+                            Sélectionnez un contact dans le tableau
                           </small>
                         </div>
 
-                        <div className="mb-4">
-                          <label className="form-label fw-semibold text-dark mb-2">
+                        <div className="mb-3">
+                          <label
+                            className="form-label fw-semibold text-dark mb-2"
+                            style={{ fontSize: "0.85rem" }}
+                          >
                             <FontAwesomeIcon
                               icon={faEdit}
                               className="me-2 text-muted"
@@ -1514,7 +1955,7 @@ export default function MessagerieVendeur() {
                           </label>
                           <input
                             type="text"
-                            className="form-control form-control-lg border-2 py-3"
+                            className="form-control form-control-sm border-2 py-2"
                             placeholder="Sujet du message"
                             value={newMessage.sujet}
                             onChange={(e) =>
@@ -1524,11 +1965,15 @@ export default function MessagerieVendeur() {
                               }))
                             }
                             required
+                            style={{ fontSize: "0.85rem" }}
                           />
                         </div>
 
-                        <div className="mb-4">
-                          <label className="form-label fw-semibold text-dark mb-2">
+                        <div className="mb-3">
+                          <label
+                            className="form-label fw-semibold text-dark mb-2"
+                            style={{ fontSize: "0.85rem" }}
+                          >
                             <FontAwesomeIcon
                               icon={faBell}
                               className="me-2 text-muted"
@@ -1536,7 +1981,7 @@ export default function MessagerieVendeur() {
                             Type de message
                           </label>
                           <select
-                            className="form-select form-select-lg border-2 py-3"
+                            className="form-select form-select-sm border-2 py-2"
                             value={newMessage.type}
                             onChange={(e) =>
                               setNewMessage((prev) => ({
@@ -1544,16 +1989,20 @@ export default function MessagerieVendeur() {
                                 type: e.target.value,
                               }))
                             }
+                            style={{ fontSize: "0.85rem" }}
                           >
-                            <option value="notification">Notification</option>
-                            <option value="alert">Alerte</option>
-                            <option value="info">Information</option>
-                            <option value="warning">Avertissement</option>
+                            <option value="NOTIFICATION">Notification</option>
+                            <option value="ALERT">Alerte</option>
+                            <option value="INFO">Information</option>
+                            <option value="WARNING">Avertissement</option>
                           </select>
                         </div>
 
-                        <div className="mb-4">
-                          <label className="form-label fw-semibold text-dark mb-2">
+                        <div className="mb-3">
+                          <label
+                            className="form-label fw-semibold text-dark mb-2"
+                            style={{ fontSize: "0.85rem" }}
+                          >
                             <FontAwesomeIcon
                               icon={faMessage}
                               className="me-2 text-muted"
@@ -1561,8 +2010,8 @@ export default function MessagerieVendeur() {
                             Message <span className="text-danger">*</span>
                           </label>
                           <textarea
-                            className="form-control border-2 py-3"
-                            rows={8}
+                            className="form-control border-2 py-2"
+                            rows={6}
                             placeholder="Écrivez votre message ici..."
                             value={newMessage.contenu}
                             onChange={(e) =>
@@ -1572,14 +2021,16 @@ export default function MessagerieVendeur() {
                               }))
                             }
                             required
+                            style={{ fontSize: "0.85rem" }}
                           />
                         </div>
 
                         <div className="d-grid">
                           <button
                             type="submit"
-                            className="btn btn-primary btn-lg d-flex align-items-center justify-content-center gap-3 py-3 fw-bold"
+                            className="btn btn-primary btn-sm d-flex align-items-center justify-content-center gap-3 py-2 fw-bold"
                             disabled={loading.envoi}
+                            style={{ fontSize: "0.85rem" }}
                           >
                             {loading.envoi ? (
                               <>
@@ -1606,32 +2057,42 @@ export default function MessagerieVendeur() {
 
             {/* Onglet: Messages reçus */}
             {activeTab === "received" && (
-              <div className="row g-4">
+              <div className="row g-3">
                 <div className="col-lg-8">
                   <div className="card border-0 shadow-sm h-100">
-                    <div className="card-header bg-white border-0 py-4 px-4">
+                    <div className="card-header bg-white border-0 py-3 px-3">
                       <div className="d-flex justify-content-between align-items-center">
                         <div>
-                          <h5 className="mb-0 fw-bold text-dark">
+                          <h5
+                            className="mb-0 fw-bold text-dark"
+                            style={{ fontSize: "1rem" }}
+                          >
                             <FontAwesomeIcon
                               icon={faInbox}
                               className="me-2 text-primary"
                             />
                             Messages reçus
                           </h5>
-                          <p className="text-muted mb-0 mt-1">
+                          <p
+                            className="text-muted mb-0 mt-1"
+                            style={{ fontSize: "0.8rem" }}
+                          >
                             {stats.unreadMessages > 0
                               ? `${stats.unreadMessages} message(s) non lu(s)`
                               : "Tous vos messages sont lus"}
                           </p>
                         </div>
                         <div className="d-flex align-items-center gap-3">
-                          <span className="badge bg-primary bg-opacity-10 text-primary px-3 py-2">
+                          <span
+                            className="badge bg-primary bg-opacity-10 text-primary px-3 py-2"
+                            style={{ fontSize: "0.8rem" }}
+                          >
                             {messages.length} message(s)
                           </span>
                           <button
                             className="btn btn-outline-primary d-flex align-items-center gap-2"
                             onClick={fetchMessagesRecus}
+                            style={{ fontSize: "0.85rem" }}
                           >
                             <FontAwesomeIcon icon={faHistory} />
                             Actualiser
@@ -1640,18 +2101,27 @@ export default function MessagerieVendeur() {
                       </div>
                     </div>
                     <div className="card-body p-0">
-                      <div className="list-group list-group-flush px-4 py-3">
+                      <div
+                        className="list-group list-group-flush px-3 py-2"
+                        style={{ maxHeight: "500px", overflowY: "auto" }}
+                      >
                         {messages.length === 0 ? (
-                          <div className="text-center py-5">
-                            <div className="text-muted py-5">
+                          <div className="text-center py-4">
+                            <div className="text-muted py-3">
                               <FontAwesomeIcon
                                 icon={faInbox}
                                 className="fs-1 mb-3 opacity-25"
                               />
-                              <h5 className="fw-semibold mb-2">
+                              <h5
+                                className="fw-semibold mb-2"
+                                style={{ fontSize: "0.9rem" }}
+                              >
                                 Aucun message reçu
                               </h5>
-                              <p className="mb-0">
+                              <p
+                                className="mb-0"
+                                style={{ fontSize: "0.8rem" }}
+                              >
                                 Vos messages apparaîtront ici
                               </p>
                             </div>
@@ -1683,54 +2153,70 @@ export default function MessagerieVendeur() {
 
                 <div className="col-lg-4">
                   <div
-                    className="card border-0 shadow-sm h-100 sticky-top"
+                    className="card border-0 shadow-sm h-100"
                     style={{ top: "20px" }}
                   >
-                    <div className="card-header bg-white border-0 py-4 px-4">
-                      <h5 className="mb-0 fw-bold text-dark">
+                    <div className="card-header bg-white border-0 py-3 px-3">
+                      <h5
+                        className="mb-0 fw-bold text-dark"
+                        style={{ fontSize: "0.95rem" }}
+                      >
                         <FontAwesomeIcon
                           icon={faEye}
                           className="me-2 text-primary"
                         />
                         Détails du message
                       </h5>
-                      <p className="text-muted mb-0 mt-1">
+                      <p
+                        className="text-muted mb-0 mt-1"
+                        style={{ fontSize: "0.8rem" }}
+                      >
                         Informations détaillées du message sélectionné
                       </p>
                     </div>
                     <div className="card-body">
                       {selectedMessage ? (
                         <>
-                          <div className="mb-4">
-                            <div className="d-flex justify-content-between align-items-start mb-3">
-                              <h6 className="fw-bold text-primary mb-2 flex-grow-1">
+                          <div className="mb-3">
+                            <div className="d-flex justify-content-between align-items-start mb-2">
+                              <h6
+                                className="fw-bold text-primary mb-2 flex-grow-1"
+                                style={{ fontSize: "0.9rem" }}
+                              >
                                 {selectedMessage.sujet}
                               </h6>
                               <span
-                                className={`badge bg-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : "primary"} bg-opacity-10 text-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : "primary"} border border-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : "primary"} border-opacity-25 px-3 py-2`}
+                                className={`badge bg-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : "primary"} bg-opacity-10 text-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : "primary"} border border-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : "primary"} border-opacity-25 px-2 py-1`}
+                                style={{ fontSize: "0.7rem" }}
                               >
                                 {selectedMessage.type.toUpperCase()}
                               </span>
                             </div>
-                            <div className="bg-light rounded-3 p-4 mb-3">
-                              <div className="d-flex align-items-center gap-3 mb-3">
-                                <div className="bg-primary bg-opacity-10 rounded-circle p-3">
+                            <div className="bg-light rounded-3 p-3 mb-2">
+                              <div className="d-flex align-items-center gap-3 mb-2">
+                                <div className="bg-primary bg-opacity-10 rounded-circle p-2">
                                   <FontAwesomeIcon
                                     icon={faUser}
                                     className="text-primary fs-4"
                                   />
                                 </div>
                                 <div>
-                                  <h6 className="fw-bold mb-1">
+                                  <h6
+                                    className="fw-bold mb-1"
+                                    style={{ fontSize: "0.85rem" }}
+                                  >
                                     {selectedMessage.expediteurNom}
                                   </h6>
-                                  <p className="text-muted mb-0">
+                                  <p
+                                    className="text-muted mb-0"
+                                    style={{ fontSize: "0.8rem" }}
+                                  >
                                     {selectedMessage.expediteurEmail}
                                   </p>
                                 </div>
                               </div>
-                              <div className="text-muted mb-3">
-                                <small>
+                              <div className="text-muted mb-2">
+                                <small style={{ fontSize: "0.75rem" }}>
                                   <FontAwesomeIcon
                                     icon={faClock}
                                     className="me-1"
@@ -1751,18 +2237,27 @@ export default function MessagerieVendeur() {
                             </div>
                           </div>
 
-                          <div className="mb-4">
-                            <h6 className="fw-semibold mb-3 text-dark">
+                          <div className="mb-3">
+                            <h6
+                              className="fw-semibold mb-2 text-dark"
+                              style={{ fontSize: "0.85rem" }}
+                            >
                               Contenu :
                             </h6>
-                            <div className="p-4 bg-light rounded-3">
+                            <div
+                              className="p-3 bg-light rounded-3"
+                              style={{ fontSize: "0.8rem" }}
+                            >
                               {selectedMessage.contenu
                                 .split("\n")
                                 .map((line, index) => (
                                   <p
                                     key={index}
-                                    className={index > 0 ? "mt-3" : ""}
-                                    style={{ lineHeight: "1.6" }}
+                                    className={index > 0 ? "mt-2" : ""}
+                                    style={{
+                                      lineHeight: "1.5",
+                                      fontSize: "0.8rem",
+                                    }}
                                   >
                                     {line}
                                   </p>
@@ -1770,10 +2265,11 @@ export default function MessagerieVendeur() {
                             </div>
                           </div>
 
-                          <div className="d-grid gap-3">
+                          <div className="d-grid gap-2">
                             <button
-                              className="btn btn-primary d-flex align-items-center justify-content-center gap-3 py-3 fw-bold"
+                              className="btn btn-primary d-flex align-items-center justify-content-center gap-3 py-2 fw-bold"
                               onClick={() => handleReply(selectedMessage)}
+                              style={{ fontSize: "0.85rem" }}
                             >
                               <FontAwesomeIcon
                                 icon={faReply}
@@ -1782,8 +2278,9 @@ export default function MessagerieVendeur() {
                               Répondre au message
                             </button>
                             <button
-                              className="btn btn-outline-secondary d-flex align-items-center justify-content-center gap-3 py-3"
+                              className="btn btn-outline-secondary d-flex align-items-center justify-content-center gap-3 py-2"
                               onClick={() => setSelectedMessage(null)}
+                              style={{ fontSize: "0.85rem" }}
                             >
                               <FontAwesomeIcon icon={faTimes} />
                               Fermer les détails
@@ -1791,16 +2288,19 @@ export default function MessagerieVendeur() {
                           </div>
                         </>
                       ) : (
-                        <div className="text-center py-5">
-                          <div className="text-muted py-5">
+                        <div className="text-center py-4">
+                          <div className="text-muted py-3">
                             <FontAwesomeIcon
                               icon={faMessage}
                               className="fs-1 mb-3 opacity-25"
                             />
-                            <h5 className="fw-semibold mb-2">
+                            <h5
+                              className="fw-semibold mb-2"
+                              style={{ fontSize: "0.9rem" }}
+                            >
                               Aucun message sélectionné
                             </h5>
-                            <p className="mb-0">
+                            <p className="mb-0" style={{ fontSize: "0.8rem" }}>
                               Sélectionnez un message pour voir les détails
                             </p>
                           </div>
@@ -1817,27 +2317,37 @@ export default function MessagerieVendeur() {
               <div className="row">
                 <div className="col-12">
                   <div className="card border-0 shadow-sm">
-                    <div className="card-header bg-white border-0 py-4 px-4">
+                    <div className="card-header bg-white border-0 py-3 px-3">
                       <div className="d-flex justify-content-between align-items-center">
                         <div>
-                          <h5 className="mb-0 fw-bold text-dark">
+                          <h5
+                            className="mb-0 fw-bold text-dark"
+                            style={{ fontSize: "1rem" }}
+                          >
                             <FontAwesomeIcon
                               icon={faShareSquare}
                               className="me-2 text-primary"
                             />
                             Messages envoyés
                           </h5>
-                          <p className="text-muted mb-0 mt-1">
+                          <p
+                            className="text-muted mb-0 mt-1"
+                            style={{ fontSize: "0.8rem" }}
+                          >
                             Historique de tous vos messages envoyés
                           </p>
                         </div>
                         <div className="d-flex align-items-center gap-3">
-                          <span className="badge bg-success bg-opacity-10 text-success px-3 py-2">
+                          <span
+                            className="badge bg-success bg-opacity-10 text-success px-3 py-2"
+                            style={{ fontSize: "0.8rem" }}
+                          >
                             {messagesEnvoyes.length} message(s)
                           </span>
                           <button
                             className="btn btn-outline-primary d-flex align-items-center gap-2"
                             onClick={fetchMessagesEnvoyes}
+                            style={{ fontSize: "0.85rem" }}
                           >
                             <FontAwesomeIcon icon={faHistory} />
                             Actualiser
@@ -1846,33 +2356,75 @@ export default function MessagerieVendeur() {
                       </div>
                     </div>
                     <div className="card-body p-0">
-                      <div className="table-responsive">
+                      <div
+                        className="table-responsive"
+                        style={{ maxHeight: "500px", overflowY: "auto" }}
+                      >
                         <table className="table table-hover align-middle mb-0">
-                          <thead className="table-light">
+                          <thead
+                            className="table-light sticky-top"
+                            style={{ top: 0 }}
+                          >
                             <tr>
-                              <th className="py-3 px-4">Destinataire</th>
-                              <th className="py-3 px-4">Sujet</th>
-                              <th className="py-3 px-4">Type</th>
-                              <th className="py-3 px-4">Date d'envoi</th>
-                              <th className="py-3 px-4">Statut</th>
-                              <th className="py-3 px-4 text-center">Actions</th>
+                              <th
+                                className="py-2 px-3"
+                                style={{ fontSize: "0.8rem" }}
+                              >
+                                Destinataire
+                              </th>
+                              <th
+                                className="py-2 px-3"
+                                style={{ fontSize: "0.8rem" }}
+                              >
+                                Sujet
+                              </th>
+                              <th
+                                className="py-2 px-3"
+                                style={{ fontSize: "0.8rem" }}
+                              >
+                                Type
+                              </th>
+                              <th
+                                className="py-2 px-3"
+                                style={{ fontSize: "0.8rem" }}
+                              >
+                                Date d'envoi
+                              </th>
+                              <th
+                                className="py-2 px-3"
+                                style={{ fontSize: "0.8rem" }}
+                              >
+                                Statut
+                              </th>
+                              <th
+                                className="py-2 px-3 text-center"
+                                style={{ fontSize: "0.8rem" }}
+                              >
+                                Actions
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
                             {messagesEnvoyes.length === 0 ? (
                               <tr>
-                                <td colSpan={6} className="text-center py-5">
-                                  <div className="text-muted py-5">
+                                <td colSpan={6} className="text-center py-4">
+                                  <div className="text-muted py-3">
                                     <FontAwesomeIcon
                                       icon={faShareSquare}
                                       className="fs-1 mb-3 opacity-25"
                                     />
-                                    <h5 className="fw-semibold mb-2">
+                                    <h5
+                                      className="fw-semibold mb-2"
+                                      style={{ fontSize: "0.9rem" }}
+                                    >
                                       Aucun message envoyé
                                     </h5>
-                                    <p className="mb-0">
+                                    <p
+                                      className="mb-0"
+                                      style={{ fontSize: "0.8rem" }}
+                                    >
                                       Envoyez votre premier message depuis
-                                      l'onglet "Clients"
+                                      l'onglet "Contacts"
                                     </p>
                                   </div>
                                 </td>
@@ -1880,40 +2432,56 @@ export default function MessagerieVendeur() {
                             ) : (
                               messagesEnvoyes.map((message) => (
                                 <tr key={message.uuid}>
-                                  <td className="py-3 px-4">
-                                    <div className="fw-bold text-dark">
+                                  <td className="py-2 px-3">
+                                    <div
+                                      className="fw-bold text-dark"
+                                      style={{ fontSize: "0.85rem" }}
+                                    >
                                       {message.destinataireEmail}
                                     </div>
-                                    <small className="text-muted">
+                                    <small
+                                      className="text-muted"
+                                      style={{ fontSize: "0.75rem" }}
+                                    >
                                       {message.expediteurEmail}
                                     </small>
                                   </td>
-                                  <td className="py-3 px-4">
+                                  <td className="py-2 px-3">
                                     <div
                                       className="text-truncate"
-                                      style={{ maxWidth: "250px" }}
+                                      style={{
+                                        maxWidth: "200px",
+                                        fontSize: "0.85rem",
+                                      }}
                                       title={message.sujet}
                                     >
                                       {message.sujet}
                                     </div>
                                   </td>
-                                  <td className="py-3 px-4">
+                                  <td className="py-2 px-3">
                                     <span
-                                      className={`badge bg-${message.type === "ALERT" ? "danger" : message.type === "WARNING" ? "warning" : "primary"} bg-opacity-10 text-${message.type === "ALERT" ? "danger" : message.type === "WARNING" ? "warning" : "primary"} border border-${message.type === "ALERT" ? "danger" : message.type === "WARNING" ? "warning" : "primary"} border-opacity-25 px-3 py-2 fw-medium`}
+                                      className={`badge bg-${message.type === "ALERT" ? "danger" : message.type === "WARNING" ? "warning" : "primary"} bg-opacity-10 text-${message.type === "ALERT" ? "danger" : message.type === "WARNING" ? "warning" : "primary"} border border-${message.type === "ALERT" ? "danger" : message.type === "WARNING" ? "warning" : "primary"} border-opacity-25 px-2 py-1 fw-medium`}
+                                      style={{ fontSize: "0.7rem" }}
                                     >
                                       {message.type}
                                     </span>
                                   </td>
-                                  <td className="py-3 px-4">
+                                  <td className="py-2 px-3">
                                     <div className="d-flex flex-column">
-                                      <span className="fw-medium">
+                                      <span
+                                        className="fw-medium"
+                                        style={{ fontSize: "0.85rem" }}
+                                      >
                                         {formatDate(message.envoyeLe)}
                                       </span>
                                     </div>
                                   </td>
-                                  <td className="py-3 px-4">
+                                  <td className="py-2 px-3">
                                     {message.estLu ? (
-                                      <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 d-flex align-items-center gap-2 px-3 py-2">
+                                      <span
+                                        className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 d-flex align-items-center gap-2 px-2 py-1"
+                                        style={{ fontSize: "0.75rem" }}
+                                      >
                                         <FontAwesomeIcon
                                           icon={faCheckCircle}
                                           className="fs-12"
@@ -1921,7 +2489,10 @@ export default function MessagerieVendeur() {
                                         <span className="fw-medium">Lu</span>
                                       </span>
                                     ) : (
-                                      <span className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 d-flex align-items-center gap-2 px-3 py-2">
+                                      <span
+                                        className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 d-flex align-items-center gap-2 px-2 py-1"
+                                        style={{ fontSize: "0.75rem" }}
+                                      >
                                         <FontAwesomeIcon
                                           icon={faClock}
                                           className="fs-12"
@@ -1932,16 +2503,16 @@ export default function MessagerieVendeur() {
                                       </span>
                                     )}
                                   </td>
-                                  <td className="py-3 px-4 text-center">
+                                  <td className="py-2 px-3 text-center">
                                     <button
-                                      className="btn btn-sm btn-outline-primary d-flex align-items-center gap-2 px-3 py-2"
+                                      className="btn btn-sm btn-outline-primary d-flex align-items-center gap-2 px-2 py-1"
                                       onClick={() => {
                                         setNewMessage({
                                           destinataireEmail:
                                             message.destinataireEmail,
                                           sujet: `RE: ${message.sujet}`,
                                           contenu: "",
-                                          type: message.type.toLowerCase(),
+                                          type: message.type,
                                           expediteurNom:
                                             newMessage.expediteurNom,
                                           expediteurEmail:
@@ -1949,8 +2520,12 @@ export default function MessagerieVendeur() {
                                         });
                                         setActiveTab("users");
                                       }}
+                                      style={{ fontSize: "0.75rem" }}
                                     >
-                                      <FontAwesomeIcon icon={faReply} />
+                                      <FontAwesomeIcon
+                                        icon={faReply}
+                                        style={{ fontSize: "0.7rem" }}
+                                      />
                                       <span>Répondre</span>
                                     </button>
                                   </td>
@@ -1982,14 +2557,18 @@ export default function MessagerieVendeur() {
           >
             <div className="toast-header bg-info bg-opacity-10 text-info border-bottom">
               <FontAwesomeIcon icon={faInfoCircle} className="me-2" />
-              <strong className="me-auto">Information</strong>
+              <strong className="me-auto" style={{ fontSize: "0.9rem" }}>
+                Information
+              </strong>
               <button
                 type="button"
                 className="btn-close"
                 onClick={() => setInfoMessage(null)}
               ></button>
             </div>
-            <div className="toast-body">{infoMessage}</div>
+            <div className="toast-body" style={{ fontSize: "0.85rem" }}>
+              {infoMessage}
+            </div>
           </div>
         </div>
       )}
@@ -2008,12 +2587,13 @@ export default function MessagerieVendeur() {
           position: relative;
           background: transparent;
           transition: all 0.3s ease;
+          font-size: 0.85rem;
         }
 
         .nav-tabs-custom .nav-link.active {
           color: var(--bs-primary);
           background: rgba(var(--bs-primary-rgb), 0.1);
-          border-radius: 12px;
+          border-radius: 8px;
         }
 
         .nav-tabs-custom .nav-link.active::after {
@@ -2022,8 +2602,8 @@ export default function MessagerieVendeur() {
           bottom: -1px;
           left: 50%;
           transform: translateX(-50%);
-          width: 40px;
-          height: 3px;
+          width: 30px;
+          height: 2px;
           background-color: var(--bs-primary);
           border-radius: 3px 3px 0 0;
         }
@@ -2031,7 +2611,7 @@ export default function MessagerieVendeur() {
         .nav-tabs-custom .nav-link:hover:not(.active) {
           color: var(--bs-primary);
           background: rgba(0, 0, 0, 0.02);
-          border-radius: 12px;
+          border-radius: 8px;
         }
 
         .hover-bg-light:hover {
@@ -2050,13 +2630,13 @@ export default function MessagerieVendeur() {
 
         .stats-card {
           transition: all 0.3s ease;
-          border-radius: 16px;
+          border-radius: 12px;
           overflow: hidden;
         }
 
         .stats-card:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1) !important;
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08) !important;
         }
 
         .fs-10 {
@@ -2093,7 +2673,7 @@ export default function MessagerieVendeur() {
         }
 
         .table > :not(caption) > * > * {
-          padding: 1rem 1.25rem;
+          padding: 0.75rem 1rem;
           vertical-align: middle;
           border-bottom: 1px solid #f1f3f5;
         }
@@ -2121,12 +2701,20 @@ export default function MessagerieVendeur() {
         @media (max-width: 768px) {
           .nav-tabs-custom .nav-link {
             padding: 0.5rem;
-            font-size: 0.875rem;
+            font-size: 0.8rem;
           }
 
           .container-fluid {
             padding-left: 1rem;
             padding-right: 1rem;
+          }
+
+          h1 {
+            font-size: 1.25rem !important;
+          }
+
+          .card-header h5 {
+            font-size: 0.9rem !important;
           }
         }
 
@@ -2144,6 +2732,44 @@ export default function MessagerieVendeur() {
 
         .message-item {
           animation: fadeIn 0.3s ease;
+        }
+
+        /* Scrollbar personnalisée */
+        .table-responsive::-webkit-scrollbar {
+          width: 6px;
+          height: 6px;
+        }
+
+        .table-responsive::-webkit-scrollbar-track {
+          background: #f1f1f1;
+          border-radius: 10px;
+        }
+
+        .table-responsive::-webkit-scrollbar-thumb {
+          background: #c1c1c1;
+          border-radius: 10px;
+        }
+
+        .table-responsive::-webkit-scrollbar-thumb:hover {
+          background: #a8a8a8;
+        }
+
+        .list-group-flush::-webkit-scrollbar {
+          width: 6px;
+        }
+
+        .list-group-flush::-webkit-scrollbar-track {
+          background: #f1f1f1;
+          border-radius: 10px;
+        }
+
+        .list-group-flush::-webkit-scrollbar-thumb {
+          background: #c1c1c1;
+          border-radius: 10px;
+        }
+
+        .list-group-flush::-webkit-scrollbar-thumb:hover {
+          background: #a8a8a8;
         }
       `}</style>
     </>

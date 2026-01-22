@@ -1,4 +1,3 @@
-// app/(back-office)/dashboard-vendeur/stocks/page.tsx
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -75,6 +74,7 @@ interface Don {
   vendeur: string;
   utilisateur: string;
   agent: string;
+  quantite?: number; // Ajouté pour la quantité des dons
   createdAt: string | null;
   updatedAt: string | null;
 }
@@ -84,6 +84,7 @@ interface Echange {
   nomElementEchange: string;
   nom_initiateur: string;
   prix: string;
+  quantite: number; // Quantité des échanges
   image: string;
   typeDestinataire: string;
   typeEchange: string;
@@ -128,7 +129,7 @@ interface Produit {
   adminUuid: string | null;
   createdAt: string | null;
   updatedAt: string | null;
-  quantite: number;
+  quantite: number; // Quantité des produits
   note_moyenne: number;
   nombre_avis: number;
   statut: string;
@@ -228,7 +229,12 @@ export default function GestionStocksPage() {
       );
 
       if (response.data.status === "success") {
-        setDons(response.data.data || []);
+        // Ajouter une quantité par défaut de 1 pour les dons si non présente
+        const donsAvecQuantite = (response.data.data || []).map((don: Don) => ({
+          ...don,
+          quantite: don.quantite || 1,
+        }));
+        setDons(donsAvecQuantite);
       } else {
         setErrors((prev) => ({
           ...prev,
@@ -269,6 +275,7 @@ export default function GestionStocksPage() {
       );
 
       if (response.data.status === "success") {
+        // Les échanges ont déjà la propriété quantite dans l'API
         setEchanges(response.data.data || []);
       } else {
         setErrors((prev) => ({
@@ -312,6 +319,7 @@ export default function GestionStocksPage() {
       );
 
       if (response.data.data) {
+        // Les produits ont déjà la propriété quantite dans l'API
         setProduits(response.data.data || []);
       } else {
         setErrors((prev) => ({
@@ -355,7 +363,7 @@ export default function GestionStocksPage() {
         nom: don.nom,
         image: don.image,
         categorie: don.categorie,
-        quantite: 1, // Par défaut pour les dons
+        quantite: don.quantite || 1, // Utiliser la quantité du don ou 1 par défaut
         statut: don.statut,
         date_maj: don.updatedAt || don.date_debut,
         disponible: don.estPublie && !don.est_bloque,
@@ -374,7 +382,7 @@ export default function GestionStocksPage() {
         nom: echange.nomElementEchange,
         image: echange.image,
         categorie: echange.categorie,
-        quantite: 1, // Par défaut pour les échanges
+        quantite: echange.quantite || 1, // Utiliser la quantité de l'échange
         statut: echange.statut,
         date_maj: echange.updatedAt || echange.dateProposition,
         disponible: echange.estPublie,
@@ -393,7 +401,7 @@ export default function GestionStocksPage() {
         nom: produit.libelle,
         image: produit.image,
         categorie: produit.categorie_uuid,
-        quantite: produit.quantite || 0,
+        quantite: produit.quantite || 0, // Utiliser la quantité du produit
         statut: produit.statut,
         date_maj: produit.updatedAt || "",
         disponible: produit.estPublie && !produit.estBloque,
@@ -411,7 +419,15 @@ export default function GestionStocksPage() {
   const filteredItems = useMemo(() => {
     let filtered = [...stockItems];
 
- 
+    // Filtrer par type d'élément
+    if (activeView !== "tous") {
+      filtered = filtered.filter((item) => {
+        if (activeView === "dons") return item.type === "don";
+        if (activeView === "produits") return item.type === "produit";
+        if (activeView === "echanges") return item.type === "echange";
+        return true;
+      });
+    }
 
     // Filtrer par statut de stock
     if (statutFilter !== "tous") {
@@ -661,32 +677,35 @@ export default function GestionStocksPage() {
 
       switch (selectedItem.type) {
         case "don":
+          // Pour les dons, utiliser l'endpoint de mise à jour du stock
           endpoint = buildApiUrl(
             API_ENDPOINTS.DONS.UPDATE_STOCK_DON(selectedItem.id),
           );
           requestData = {
+            quantite: quantiteNum,
             disponible: stockDisponible,
-            ...(selectedItem.originalItem as Don),
           };
           break;
 
         case "produit":
+          // Pour les produits, utiliser l'endpoint de mise à jour du stock
           endpoint = buildApiUrl(
             API_ENDPOINTS.PRODUCTS.UPDATE_STOCK_PRODUIT(selectedItem.id),
           );
           requestData = {
+            quantite: quantiteNum,
             disponible: stockDisponible,
-            ...(selectedItem.originalItem as Produit),
           };
           break;
 
         case "echange":
+          // Pour les échanges, utiliser l'endpoint de mise à jour du stock
           endpoint = buildApiUrl(
-            API_ENDPOINTS.ECHANGES.UPDATE_STOCK_ECHANGE(selectedItem.id),
+            API_ENDPOINTS.ECHANGES.UPDATE_STOCK_VENDEUR(selectedItem.id),
           );
           requestData = {
+            quantite: quantiteNum,
             disponible: stockDisponible,
-            ...(selectedItem.originalItem as Echange),
           };
           break;
 
@@ -719,6 +738,8 @@ export default function GestionStocksPage() {
                 don.uuid === selectedItem.id
                   ? {
                       ...don,
+                      quantite: quantiteNum,
+                      disponible: stockDisponible,
                       updatedAt: new Date().toISOString(),
                     }
                   : don,
@@ -745,6 +766,8 @@ export default function GestionStocksPage() {
                 ech.uuid === selectedItem.id
                   ? {
                       ...ech,
+                      quantite: quantiteNum,
+                      disponible: stockDisponible,
                       updatedAt: new Date().toISOString(),
                     }
                   : ech,
@@ -929,7 +952,7 @@ export default function GestionStocksPage() {
               <div className="modal-header bg-primary text-white">
                 <h5 className="modal-title">
                   <FontAwesomeIcon icon={faWarehouse} className="me-2" />
-                  Gestion du Stock
+                  Gestion du Stock - {selectedItem.nom}
                 </h5>
                 <button
                   type="button"
@@ -1488,7 +1511,11 @@ export default function GestionStocksPage() {
                     </h3>
                     <p className="text-muted mb-0">
                       {filteredItems.length} article(s) correspondant à vos
-                      critères
+                      critères - Total des unités:{" "}
+                      {filteredItems.reduce(
+                        (sum, item) => sum + item.quantite,
+                        0,
+                      )}
                     </p>
                   </div>
                   <div className="d-flex align-items-center">
@@ -1580,7 +1607,7 @@ export default function GestionStocksPage() {
                               icon={getSortIcon("quantite")}
                               className="me-2"
                             />
-                            Stock
+                            Stock (Quantité)
                           </div>
                         </th>
                         <th
@@ -1592,7 +1619,7 @@ export default function GestionStocksPage() {
                               icon={getSortIcon("statut")}
                               className="me-2"
                             />
-                            Statut
+                            Statut Stock
                           </div>
                         </th>
                         <th
@@ -1736,6 +1763,15 @@ export default function GestionStocksPage() {
                                       {formatPrice(item.prix)}
                                     </div>
                                   )}
+                                  {item.typeSpecifique && (
+                                    <div className="text-muted small">
+                                      <FontAwesomeIcon
+                                        icon={faTags}
+                                        className="me-1"
+                                      />
+                                      {item.typeSpecifique}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </td>
@@ -1755,7 +1791,7 @@ export default function GestionStocksPage() {
                                         : "bg-success"
                                   }`}
                                 >
-                                  {item.quantite}
+                                  {item.quantite} unité(s)
                                 </span>
                                 {item.quantite <= 10 && item.quantite > 0 && (
                                   <small className="text-warning fw-bold mt-1">
@@ -1794,12 +1830,19 @@ export default function GestionStocksPage() {
                                 >
                                   <FontAwesomeIcon icon={faEdit} />
                                 </button>
-                                <button
+                                <Link
+                                  href={
+                                    item.type === "don"
+                                      ? `/dashboard-vendeur/dons/${item.id}`
+                                      : item.type === "produit"
+                                        ? `/dashboard-vendeur/produits/${item.id}`
+                                        : `/dashboard-vendeur/echanges/${item.id}`
+                                  }
                                   className="btn btn-outline-info"
                                   title="Voir les détails"
                                 >
                                   <FontAwesomeIcon icon={faEye} />
-                                </button>
+                                </Link>
                               </div>
                             </td>
                           </tr>
@@ -1826,6 +1869,16 @@ export default function GestionStocksPage() {
                           )}
                         </strong>{" "}
                         sur <strong>{filteredItems.length}</strong> articles
+                      </p>
+                      <p className="text-muted mb-0">
+                        Quantité totale affichée:{" "}
+                        <strong>
+                          {paginatedItems.reduce(
+                            (sum, item) => sum + item.quantite,
+                            0,
+                          )}
+                        </strong>{" "}
+                        unités
                       </p>
                     </div>
                     <nav aria-label="Pagination">

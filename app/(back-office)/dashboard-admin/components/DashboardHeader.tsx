@@ -170,7 +170,7 @@ export default function DashboardHeader({
 
       // Rediriger vers la page de connexion
       setTimeout(() => {
-        router.push("/connexion/admin");
+        router.push("/");
       }, 500);
     } catch (error) {
       console.error("Erreur lors de la déconnexion:", error);
@@ -180,7 +180,7 @@ export default function DashboardHeader({
       localStorage.removeItem("oskar_role");
 
       setTimeout(() => {
-        router.push("/connexion/admin");
+        router.push("/");
       }, 500);
     }
   };
@@ -192,7 +192,7 @@ export default function DashboardHeader({
 
   const handleSettingsClick = () => {
     setShowUserMenu(false);
-    router.push("/dashboard-admin/settings");
+    router.push("/dashboard-admin/parametres-systeme");
   };
 
   // Utilitaires

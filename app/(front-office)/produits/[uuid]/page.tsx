@@ -6,7 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
-import { API_CONFIG, buildApiUrl } from "@/config/env";
+import { API_CONFIG } from "@/config/env";
 
 // Types basés sur votre réponse API
 interface ProduitAPI {
@@ -134,7 +134,7 @@ interface Produit {
   nom: string;
   libelle: string;
   slug: string;
-  image: string | null;
+  image: string;
   image_key?: string | null;
   disponible: boolean;
   statut: string;
@@ -161,7 +161,7 @@ interface ProduitSimilaire {
   nom: string;
   libelle: string;
   prix: number;
-  image: string | null;
+  image: string;
   statut: string;
   note_moyenne: number;
   disponible: boolean;
@@ -185,35 +185,49 @@ interface Boutique {
 }
 
 interface CommentaireAPI {
+  is_deleted: boolean;
+  deleted_at: string | null;
+  id: number;
   uuid: string;
   contenu: string;
-  note: number | null;
+  note: number;
+  est_actif: boolean;
+  est_signeale: boolean;
+  raison_signalement: string | null;
+  produitUuid: string | null;
+  donUuid: string | null;
+  echangeUuid: string | null;
   utilisateurUuid: string;
   utilisateur?: {
+    uuid: string;
     nom: string;
     prenoms: string;
     avatar: string | null;
   };
-  produitUuid: string;
-  date_creation: string;
-  date_modification: string | null;
-  likes: number;
-  reponses?: CommentaireAPI[];
-  is_helpful?: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
-interface NoteAPI {
-  uuid: string;
-  note: number;
-  commentaire: string | null;
-  utilisateurUuid: string;
-  utilisateur?: {
-    nom: string;
-    prenoms: string;
-    avatar: string | null;
+interface CommentairesResponse {
+  commentaires: CommentaireAPI[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
   };
-  produitUuid: string;
-  date_creation: string;
+  stats: {
+    nombreCommentaires: number;
+    nombreNotes: number;
+    noteMoyenne: number;
+    distributionNotes: {
+      1: number;
+      2: number;
+      3: number;
+      4: number;
+      5: number;
+    };
+  };
 }
 
 interface Commentaire {
@@ -228,6 +242,16 @@ interface Commentaire {
   reponses?: Commentaire[];
 }
 
+interface NoteStats {
+  1: number;
+  2: number;
+  3: number;
+  4: number;
+  5: number;
+  total: number;
+  moyenne: number;
+}
+
 export default function ProduitDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -239,6 +263,12 @@ export default function ProduitDetailPage() {
     ProduitSimilaire[]
   >([]);
   const [commentaires, setCommentaires] = useState<Commentaire[]>([]);
+  const [commentairesStats, setCommentairesStats] = useState({
+    nombreCommentaires: 0,
+    nombreNotes: 0,
+    noteMoyenne: 0,
+    distributionNotes: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+  });
   const [images, setImages] = useState<string[]>([]);
   const [imagePrincipale, setImagePrincipale] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -274,9 +304,19 @@ export default function ProduitDetailPage() {
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
-  // Normaliser les URLs d'images - CORRIGÉE
+  // URL d'avatar par défaut
+  const getDefaultAvatarUrl = (): string => {
+    return `${API_CONFIG.BASE_URL || "http://localhost:3005"}/images/default-avatar.png`;
+  };
+
+  // URL d'image par défaut pour les produits
+  const getDefaultProductImage = (): string => {
+    return `${API_CONFIG.BASE_URL || "http://localhost:3005"}/images/default-product.png`;
+  };
+
+  // Normaliser les URLs d'images
   const normalizeImageUrl = (url: string | null): string => {
-    if (!url) return "";
+    if (!url) return getDefaultProductImage();
 
     // Si c'est déjà une URL complète
     if (url.startsWith("http://") || url.startsWith("https://")) {
@@ -299,16 +339,40 @@ export default function ProduitDetailPage() {
       return `${API_CONFIG.BASE_URL || "http://localhost:3005"}${url.startsWith("/") ? url : "/" + url}`;
     }
 
-    return "";
+    return getDefaultProductImage();
   };
 
-  // URL d'avatar par défaut
-  const getDefaultAvatarUrl = () => {
-    return "https://ui-avatars.com/api/?name=Utilisateur&background=random&color=fff&size=50";
+  // Fonction sécurisée pour formater les nombres
+  const safeToFixed = (
+    value: number | null | undefined,
+    decimals: number = 1,
+  ): string => {
+    if (value === null || value === undefined || isNaN(value)) {
+      return "0.0";
+    }
+    return value.toFixed(decimals);
+  };
+
+  // Fonction sécurisée pour obtenir la note moyenne
+  const getSafeNoteMoyenne = (produit: Produit | null): number => {
+    if (!produit) return 0;
+    if (
+      produit.note_moyenne === null ||
+      produit.note_moyenne === undefined ||
+      isNaN(produit.note_moyenne)
+    ) {
+      return 0;
+    }
+    return produit.note_moyenne;
   };
 
   // Transformer les données API vers notre format
   const transformProduitData = (apiProduit: ProduitAPI): Produit => {
+    const safeNoteMoyenne =
+      apiProduit.note_moyenne !== null && !isNaN(apiProduit.note_moyenne)
+        ? apiProduit.note_moyenne
+        : 0;
+
     return {
       uuid: apiProduit.uuid,
       nom: apiProduit.libelle,
@@ -320,14 +384,14 @@ export default function ProduitDetailPage() {
       statut: apiProduit.statut,
       prix:
         typeof apiProduit.prix === "string"
-          ? parseFloat(apiProduit.prix)
-          : apiProduit.prix,
+          ? parseFloat(apiProduit.prix) || 0
+          : apiProduit.prix || 0,
       description: apiProduit.description,
-      etoile: apiProduit.etoile,
-      note_moyenne: apiProduit.note_moyenne,
-      nombre_avis: apiProduit.nombre_avis,
-      nombre_favoris: apiProduit.nombre_favoris,
-      quantite: apiProduit.quantite,
+      etoile: apiProduit.etoile || 0,
+      note_moyenne: safeNoteMoyenne,
+      nombre_avis: apiProduit.nombre_avis || 0,
+      nombre_favoris: apiProduit.nombre_favoris || 0,
+      quantite: apiProduit.quantite || 0,
       vendeurUuid: apiProduit.vendeurUuid,
       boutiqueUuid: apiProduit.boutiqueUuid,
       createdAt: apiProduit.createdAt || new Date().toISOString(),
@@ -351,13 +415,13 @@ export default function ProduitDetailPage() {
       libelle: apiSimilaire.libelle,
       prix:
         typeof apiSimilaire.prix === "string"
-          ? parseFloat(apiSimilaire.prix)
-          : apiSimilaire.prix,
+          ? parseFloat(apiSimilaire.prix) || 0
+          : apiSimilaire.prix || 0,
       image: normalizeImageUrl(apiSimilaire.image),
       statut: apiSimilaire.statut,
-      note_moyenne: apiSimilaire.note_moyenne,
+      note_moyenne: apiSimilaire.note_moyenne || 0,
       disponible: apiSimilaire.disponible,
-      quantite: apiSimilaire.quantite,
+      quantite: apiSimilaire.quantite || 0,
     };
   };
 
@@ -395,14 +459,13 @@ export default function ProduitDetailPage() {
         : getDefaultAvatarUrl(),
       note: apiCommentaire.note || 0,
       commentaire: apiCommentaire.contenu,
-      date: apiCommentaire.date_creation,
-      likes: apiCommentaire.likes || 0,
-      is_helpful: apiCommentaire.is_helpful || false,
-      reponses: apiCommentaire.reponses?.map(transformCommentaireData),
+      date: apiCommentaire.createdAt,
+      likes: 0,
+      is_helpful: false,
     };
   };
 
-  // Charger les commentaires et notes
+  // Charger les commentaires
   const fetchCommentaires = useCallback(
     async (produitUuid: string) => {
       if (!produitUuid || commentairesFetched) return;
@@ -411,116 +474,58 @@ export default function ProduitDetailPage() {
         setLoadingComments(true);
 
         // Charger les commentaires depuis l'API
-        try {
-          // Endpoint pour les commentaires d'un produit
-          const commentairesResponse = await api.get<CommentaireAPI[]>(
-            API_ENDPOINTS.COMMENTAIRES.BY_PRODUIT(produitUuid),
+        const response = await api.get<CommentairesResponse>(
+          API_ENDPOINTS.COMMENTAIRES.BY_PRODUIT(produitUuid),
+        );
+
+        if (response && response.commentaires) {
+          const commentairesData = response.commentaires.map(
+            transformCommentaireData,
           );
-
-          let commentairesData: CommentaireAPI[] = [];
-
-          if (Array.isArray(commentairesResponse)) {
-            commentairesData = commentairesResponse;
-          } else if (commentairesResponse) {
-            commentairesData = Array.isArray(commentairesResponse)
-              ? commentairesResponse
-              : [];
-          }
-
-          // Charger les notes depuis l'API
-          const notesResponse = await api.get<NoteAPI[]>(
-            `${API_ENDPOINTS.PRODUCTS.DETAIL(produitUuid)}/notes`,
-          );
-
-          let notesData: NoteAPI[] = [];
-          
-
-          if (Array.isArray(notesResponse)) {
-            notesData = notesResponse;
-          } else if (notesResponse) {
-            notesData = Array.isArray(notesResponse)
-              ? notesResponse
-              : [];
-          }
-
-          // Fusionner les commentaires et notes
-          // Note: Dans votre API, les notes et commentaires pourraient être séparés
-          // On va considérer que les commentaires incluent déjà les notes si disponibles
-          // Sinon, on combine les deux listes
-          const allComments: Commentaire[] = [];
-
-          // Ajouter d'abord les commentaires avec notes
-          commentairesData.forEach((comment) => {
-            if (comment.note) {
-              allComments.push(transformCommentaireData(comment));
-            }
-          });
-
-          // Ajouter les notes sans commentaires
-          notesData.forEach((note) => {
-            // Vérifier si cette note a déjà été ajoutée via un commentaire
-            const existingComment = allComments.find(
-              (c) =>
-                c.utilisateur_nom.includes(note.utilisateur?.nom || "") &&
-                c.note === note.note,
-            );
-
-            if (!existingComment && note.commentaire) {
-              allComments.push({
-                uuid: note.uuid,
-                utilisateur_nom: note.utilisateur
-                  ? `${note.utilisateur.prenoms || ""} ${note.utilisateur.nom || ""}`.trim() ||
-                    "Utilisateur"
-                  : "Utilisateur",
-                utilisateur_photo: note.utilisateur?.avatar
-                  ? normalizeImageUrl(note.utilisateur.avatar)
-                  : getDefaultAvatarUrl(),
-                note: note.note,
-                commentaire: note.commentaire,
-                date: note.date_creation,
-                likes: 0,
-                is_helpful: false,
-              });
-            }
-          });
 
           // Trier par date (plus récent en premier)
-          allComments.sort(
+          commentairesData.sort(
             (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
           );
 
-          setCommentaires(allComments);
-          setCommentairesFetched(true);
-        } catch (apiError: any) {
-          console.warn("Erreur chargement commentaires API:", apiError);
+          setCommentaires(commentairesData);
 
-          // Fallback: données minimales si l'API échoue
-          const fallbackComments: Commentaire[] = [
-            {
-              uuid: "fallback-1",
-              utilisateur_nom: "Utilisateur OSKAR",
-              utilisateur_photo: getDefaultAvatarUrl(),
-              note: produit?.note_moyenne || 4,
-              commentaire:
-                "Aucun commentaire disponible pour le moment. Soyez le premier à donner votre avis !",
-              date: new Date().toISOString(),
-              likes: 0,
-              is_helpful: false,
-            },
-          ];
+          // S'assurer que les stats ne sont pas null
+          const safeNoteMoyenne = response.stats?.noteMoyenne || 0;
+          const safeDistributionNotes = response.stats?.distributionNotes || {
+            1: 0,
+            2: 0,
+            3: 0,
+            4: 0,
+            5: 0,
+          };
 
-          setCommentaires(fallbackComments);
+          setCommentairesStats({
+            nombreCommentaires: response.stats?.nombreCommentaires || 0,
+            nombreNotes: response.stats?.nombreNotes || 0,
+            noteMoyenne: safeNoteMoyenne,
+            distributionNotes: safeDistributionNotes,
+          });
           setCommentairesFetched(true);
         }
-      } catch (err) {
-        console.error("Erreur générale chargement commentaires:", err);
+      } catch (err: any) {
+        console.warn("Erreur chargement commentaires API:", err);
+        // Mettre à jour avec des stats par défaut
+        const produitNoteMoyenne = getSafeNoteMoyenne(produit);
+
+        setCommentairesStats({
+          nombreCommentaires: 0,
+          nombreNotes: 0,
+          noteMoyenne: produitNoteMoyenne,
+          distributionNotes: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+        });
         setCommentaires([]);
         setCommentairesFetched(true);
       } finally {
         setLoadingComments(false);
       }
     },
-    [produit?.note_moyenne, commentairesFetched],
+    [produit, commentairesFetched],
   );
 
   // Charger les données du produit
@@ -531,140 +536,58 @@ export default function ProduitDetailPage() {
       setLoading(true);
       setError(null);
 
-      // 1. Charger le produit avec l'endpoint aléatoire
-      try {
-        const response = await api.get<APIResponse>(
-          API_ENDPOINTS.PRODUCTS.DETAIL_ALEATOIRE(uuid),
-        );
+      // 1. Charger le produit
+      const response = await api.get<APIResponse>(
+        API_ENDPOINTS.PRODUCTS.DETAIL_ALEATOIRE(uuid),
+      );
 
-        if (!response || !response.produit) {
-          throw new Error("Produit non trouvé");
+      if (!response || !response.produit) {
+        throw new Error("Produit non trouvé");
+      }
+
+      // Transformer les données
+      const produitData = transformProduitData(response.produit);
+      const similairesData = response.similaires.map(
+        transformProduitSimilaireData,
+      );
+
+      setProduit(produitData);
+      setProduitsSimilaires(similairesData);
+      setFavori(response.produit.is_favoris || false);
+
+      // 2. Préparer les images
+      const imageUrls: string[] = [];
+      const mainImage = produitData.image;
+      imageUrls.push(mainImage);
+      setImagePrincipale(mainImage);
+
+      // Ajouter des images supplémentaires depuis les produits similaires
+      similairesData.slice(0, 4).forEach((similaire) => {
+        if (similaire.image && !imageUrls.includes(similaire.image)) {
+          imageUrls.push(similaire.image);
         }
+      });
 
-        // Transformer les données
-        const produitData = transformProduitData(response.produit);
-        const similairesData = response.similaires.map(
-          transformProduitSimilaireData,
-        );
+      // Si moins de 4 images, ajouter des images par défaut
+      while (imageUrls.length < 4) {
+        imageUrls.push(getDefaultProductImage());
+      }
 
-        setProduit(produitData);
-        setProduitsSimilaires(similairesData);
-        setFavori(response.produit.is_favoris || false);
+      setImages(imageUrls);
 
-        // 2. Préparer les images
-        const imageUrls: string[] = [];
-        const mainImage =
-          produitData.image ||
-          "https://via.placeholder.com/400x400?text=Produit+OSKAR";
-        imageUrls.push(mainImage);
-        setImagePrincipale(mainImage);
-
-        // Ajouter des images supplémentaires depuis les produits similaires
-        similairesData.slice(0, 4).forEach((similaire) => {
-          if (similaire.image && !imageUrls.includes(similaire.image)) {
-            imageUrls.push(similaire.image);
-          }
-        });
-
-        // Si moins de 4 images, ajouter des placeholders
-        while (imageUrls.length < 4) {
-          imageUrls.push(
-            "https://via.placeholder.com/400x400?text=Produit+OSKAR",
+      // 3. Traiter les données de la boutique
+      if (response.produit.boutique) {
+        const boutiqueData = transformBoutiqueData(response.produit.boutique);
+        setBoutique(boutiqueData);
+      } else if (produitData.boutiqueUuid) {
+        try {
+          const boutiqueResponse = await api.get(
+            API_ENDPOINTS.BOUTIQUES.DETAIL(produitData.boutiqueUuid),
           );
-        }
-
-        setImages(imageUrls);
-
-        // 3. Traiter les données de la boutique
-        if (response.produit.boutique) {
-          // Si la boutique est incluse dans la réponse du produit
-          const boutiqueData = transformBoutiqueData(response.produit.boutique);
+          const boutiqueData = transformBoutiqueData(boutiqueResponse);
           setBoutique(boutiqueData);
-        } else if (produitData.boutiqueUuid) {
-          // Sinon, charger la boutique séparément
-          try {
-            const boutiqueResponse = await api.get(
-              API_ENDPOINTS.BOUTIQUES.DETAIL(produitData.boutiqueUuid),
-            );
-            const boutiqueData = transformBoutiqueData(boutiqueResponse);
-            setBoutique(boutiqueData);
-          } catch (err) {
-            console.warn("Impossible de charger les détails de la boutique");
-            setBoutique({
-              uuid: produitData.boutiqueUuid,
-              nom: "Boutique OSKAR",
-              description: "Boutique officielle OSKAR",
-              statut: "en_review",
-              slug: "boutique-oskar",
-              logo: null,
-              banniere: null,
-              est_bloque: false,
-              est_ferme: false,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            });
-          }
-        }
-
-        // 4. Charger les commentaires
-        fetchCommentaires(produitData.uuid);
-      } catch (err: any) {
-        // Si erreur 404 ou 401, utiliser des données factices pour la démo
-        if (err.response?.status === 404 || err.response?.status === 401) {
-          console.warn("Erreur API, utilisation données factices");
-
-          // Données factices pour le produit
-          const produitData: Produit = {
-            uuid: uuid,
-            nom: "Produit OSKAR",
-            libelle: "Produit OSKAR",
-            slug: "produit-oskar",
-            image: "https://via.placeholder.com/400x400?text=Produit+OSKAR",
-            disponible: true,
-            statut: "publie",
-            prix: 10000,
-            description: "Description du produit",
-            etoile: 4.5,
-            note_moyenne: 4.5,
-            nombre_avis: 0,
-            nombre_favoris: 0,
-            quantite: 5,
-            vendeurUuid: "vendeur-123",
-            boutiqueUuid: "boutique-456",
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
-
-          // Données factices pour les produits similaires
-          const similairesData: ProduitSimilaire[] = [
-            {
-              uuid: "sim1",
-              nom: "Produit Similaire 1",
-              libelle: "Produit Similaire 1",
-              prix: 12000,
-              image:
-                "https://via.placeholder.com/400x400?text=Produit+Similaire",
-              statut: "bon_etat",
-              note_moyenne: 4.5,
-              disponible: true,
-              quantite: 3,
-            },
-          ];
-
-          setProduit(produitData);
-          setProduitsSimilaires(similairesData);
-
-          // Préparer les images factices
-          const imageUrls: string[] = [
-            "https://via.placeholder.com/400x400?text=Produit+OSKAR",
-            "https://via.placeholder.com/400x400?text=Produit+Similaire",
-          ];
-          setImages(imageUrls);
-          setImagePrincipale(
-            "https://via.placeholder.com/400x400?text=Produit+OSKAR",
-          );
-
-          // Boutique factice
+        } catch (err) {
+          console.warn("Impossible de charger les détails de la boutique");
           setBoutique({
             uuid: produitData.boutiqueUuid,
             nom: "Boutique OSKAR",
@@ -678,23 +601,23 @@ export default function ProduitDetailPage() {
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           });
-
-          // Charger les commentaires
-          fetchCommentaires(produitData.uuid);
-        } else {
-          throw err;
         }
       }
+
+      // 4. Charger les commentaires
+      fetchCommentaires(produitData.uuid);
     } catch (err: any) {
       console.error("Erreur détail produit:", err);
 
       if (
-        err.message.includes("404") ||
+        err.response?.status === 404 ||
         err.message.includes("Produit non trouvé")
       ) {
         setError("Ce produit n'existe pas ou a été supprimé.");
-      } else if (err.message.includes("401")) {
+      } else if (err.response?.status === 401) {
         setError("Vous devez être connecté pour voir ce produit.");
+      } else if (err.response?.status === 403) {
+        setError("Vous n'avez pas l'autorisation de voir ce produit.");
       } else {
         setError(
           "Impossible de charger les détails du produit. Veuillez réessayer.",
@@ -714,10 +637,15 @@ export default function ProduitDetailPage() {
 
   // Fonctions utilitaires
   const formatPrice = (price: number) => {
+    if (price === null || price === undefined || isNaN(price)) {
+      return "0 FCFA";
+    }
     return price.toLocaleString("fr-FR") + " FCFA";
   };
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return "Date inconnue";
+
     try {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) {
@@ -746,7 +674,11 @@ export default function ProduitDetailPage() {
     }
   };
 
-  const renderStars = (rating: number) => {
+  const renderStars = (rating: number | null | undefined) => {
+    if (rating === null || rating === undefined || isNaN(rating)) {
+      rating = 0;
+    }
+
     const stars = [];
     const roundedRating = Math.round(rating);
     for (let i = 1; i <= 5; i++) {
@@ -760,7 +692,11 @@ export default function ProduitDetailPage() {
     return stars;
   };
 
-  const renderRatingStars = (rating: number) => {
+  const renderRatingStars = (rating: number | null | undefined) => {
+    if (rating === null || rating === undefined || isNaN(rating)) {
+      rating = 0;
+    }
+
     const stars = [];
     for (let i = 1; i <= 5; i++) {
       stars.push(
@@ -815,43 +751,41 @@ export default function ProduitDetailPage() {
   };
 
   // Calculer les statistiques des notes depuis les commentaires réels
-  const calculateNoteStats = () => {
-    if (commentaires.length === 0) {
-      return {
-        5: 0,
-        4: 0,
-        3: 0,
-        2: 0,
-        1: 0,
-        total: 0,
-        moyenne: produit?.note_moyenne || 0,
-      };
-    }
-
-    const stats = {
-      5: 0,
-      4: 0,
-      3: 0,
-      2: 0,
-      1: 0,
-      total: commentaires.length,
-      moyenne: 0,
+  const calculateNoteStats = (): NoteStats => {
+    // Utiliser les stats de l'API si disponibles
+    const stats: NoteStats = {
+      1: commentairesStats.distributionNotes[1] || 0,
+      2: commentairesStats.distributionNotes[2] || 0,
+      3: commentairesStats.distributionNotes[3] || 0,
+      4: commentairesStats.distributionNotes[4] || 0,
+      5: commentairesStats.distributionNotes[5] || 0,
+      total: commentairesStats.nombreCommentaires || 0,
+      moyenne: commentairesStats.noteMoyenne || 0,
     };
 
-    let totalNotes = 0;
+    // Si pas de stats d'API, calculer à partir des commentaires
+    if (stats.total === 0 && commentaires.length > 0) {
+      stats.total = commentaires.length;
+      let totalNotes = 0;
 
-    commentaires.forEach((comment) => {
-      const note = comment.note;
-      if (note >= 4.5) stats[5]++;
-      else if (note >= 3.5) stats[4]++;
-      else if (note >= 2.5) stats[3]++;
-      else if (note >= 1.5) stats[2]++;
-      else stats[1]++;
+      commentaires.forEach((comment) => {
+        const note = comment.note || 0;
+        if (note >= 4.5) stats[5]++;
+        else if (note >= 3.5) stats[4]++;
+        else if (note >= 2.5) stats[3]++;
+        else if (note >= 1.5) stats[2]++;
+        else stats[1]++;
 
-      totalNotes += note;
-    });
+        totalNotes += note;
+      });
 
-    stats.moyenne = totalNotes / commentaires.length;
+      stats.moyenne = totalNotes / commentaires.length;
+    }
+
+    // S'assurer que la moyenne n'est pas NaN
+    if (isNaN(stats.moyenne)) {
+      stats.moyenne = 0;
+    }
 
     return stats;
   };
@@ -946,7 +880,7 @@ export default function ProduitDetailPage() {
 
   const handleLikeComment = async (commentUuid: string) => {
     try {
-      // API pour liker un commentaire
+      // API pour liker un commentaire (à implémenter côté backend si nécessaire)
       await api.post(`/commentaires/${commentUuid}/like`, {});
 
       // Mettre à jour localement
@@ -973,7 +907,7 @@ export default function ProduitDetailPage() {
   const handleReportComment = async (commentUuid: string) => {
     if (window.confirm("Signaler ce commentaire comme inapproprié ?")) {
       try {
-        await api.post(`/commentaires/${commentUuid}/signaler`, {});
+        await api.post(API_ENDPOINTS.COMMENTAIRES.REPORT(commentUuid), {});
         alert("Commentaire signalé. Notre équipe le vérifiera sous 24h.");
       } catch (err) {
         console.error("Erreur signalement:", err);
@@ -999,19 +933,15 @@ export default function ProduitDetailPage() {
     setSubmittingReview(true);
 
     try {
-      // Créer d'abord une note
-      const noteResponse = await api.post("/notes", {
-        note: newReview.note,
-        commentaire: newReview.commentaire,
-        produitUuid: produit.uuid,
-      });
-
-      // Créer ensuite un commentaire lié à cette note
-      const commentaireResponse = await api.post("/commentaires/creer", {
-        contenu: newReview.commentaire,
-        note: newReview.note,
-        produitUuid: produit.uuid,
-      });
+      // Créer un commentaire avec note
+      const response = await api.post<{ commentaire: CommentaireAPI }>(
+        API_ENDPOINTS.COMMENTAIRES.CREATE,
+        {
+          contenu: newReview.commentaire,
+          produitUuid: produit.uuid,
+          note: newReview.note,
+        },
+      );
 
       // Recharger les commentaires
       await fetchCommentaires(produit.uuid);
@@ -1046,7 +976,7 @@ export default function ProduitDetailPage() {
 
   const handleVisitBoutique = () => {
     if (boutique) {
-      router.push(`/boutiques/${boutique.slug || boutique.uuid}`);
+      router.push(`/boutiques/${boutique.uuid}`);
     }
   };
 
@@ -1186,8 +1116,7 @@ export default function ProduitDetailPage() {
                         alt={produit.libelle}
                         className="img-fluid h-100 w-100 object-fit-cover"
                         onError={(e) => {
-                          e.currentTarget.src =
-                            "https://via.placeholder.com/400x400?text=Produit+OSKAR";
+                          e.currentTarget.src = getDefaultProductImage();
                         }}
                       />
                       <div className="position-absolute top-0 start-0 p-3">
@@ -1221,7 +1150,7 @@ export default function ProduitDetailPage() {
                             {renderStars(produit.note_moyenne)}
                           </div>
                           <span className="text-muted">
-                            {produit.note_moyenne.toFixed(1)}
+                            {safeToFixed(produit.note_moyenne)}
                             /5 ({produit.nombre_avis} avis)
                           </span>
                         </div>
@@ -1342,8 +1271,7 @@ export default function ProduitDetailPage() {
                             alt={`${produit.libelle} - vue ${index + 1}`}
                             className="img-fluid h-100 w-100 object-fit-cover"
                             onError={(e) => {
-                              e.currentTarget.src =
-                                "https://via.placeholder.com/400x400?text=Produit+OSKAR";
+                              e.currentTarget.src = getDefaultProductImage();
                             }}
                           />
                         </div>
@@ -1400,7 +1328,7 @@ export default function ProduitDetailPage() {
                       <li className="mb-3">
                         <strong className="text-muted">Note moyenne:</strong>
                         <span className="ms-2">
-                          {produit.note_moyenne.toFixed(1)}
+                          {safeToFixed(produit.note_moyenne)}
                           /5
                         </span>
                       </li>
@@ -1466,7 +1394,7 @@ export default function ProduitDetailPage() {
                       <div className="row align-items-center">
                         <div className="col-md-4 text-center">
                           <div className="display-4 fw-bold text-primary mb-2">
-                            {noteStats.moyenne.toFixed(1)}
+                            {safeToFixed(noteStats.moyenne)}
                           </div>
                           <div className="mb-2">
                             {renderStars(noteStats.moyenne)}
@@ -1657,31 +1585,6 @@ export default function ProduitDetailPage() {
                                   </div>
                                   <p className="mb-3">{comment.commentaire}</p>
 
-                                  {/* Réponses */}
-                                  {comment.reponses &&
-                                    comment.reponses.length > 0 && (
-                                      <div className="ms-4 ps-3 border-start border-secondary">
-                                        {comment.reponses.map((reponse) => (
-                                          <div
-                                            key={reponse.uuid}
-                                            className="mt-3"
-                                          >
-                                            <div className="d-flex align-items-center mb-2">
-                                              <strong className="me-2">
-                                                {reponse.utilisateur_nom}
-                                              </strong>
-                                              <small className="text-muted">
-                                                {formatDate(reponse.date)}
-                                              </small>
-                                            </div>
-                                            <p className="mb-2">
-                                              {reponse.commentaire}
-                                            </p>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-
                                   <div className="d-flex gap-3 mt-3">
                                     <button
                                       className="btn btn-sm btn-outline-secondary"
@@ -1771,15 +1674,11 @@ export default function ProduitDetailPage() {
                             style={{ height: "200px" }}
                           >
                             <img
-                              src={
-                                produitSim.image ||
-                                "https://via.placeholder.com/400x400?text=Produit+OSKAR"
-                              }
+                              src={produitSim.image}
                               alt={produitSim.nom}
                               className="img-fluid h-100 w-100 object-fit-cover"
                               onError={(e) => {
-                                e.currentTarget.src =
-                                  "https://via.placeholder.com/400x400?text=Produit+OSKAR";
+                                e.currentTarget.src = getDefaultProductImage();
                               }}
                             />
                             <span className="position-absolute top-0 start-0 m-2 badge bg-success">
@@ -1793,7 +1692,7 @@ export default function ProduitDetailPage() {
                             <div className="d-flex justify-content-between align-items-center mb-2">
                               <div>{renderStars(produitSim.note_moyenne)}</div>
                               <small className="text-muted">
-                                ({produitSim.note_moyenne.toFixed(1)})
+                                ({safeToFixed(produitSim.note_moyenne)})
                               </small>
                             </div>
                             <h5 className="text-primary fw-bold mb-3">
@@ -1856,8 +1755,7 @@ export default function ProduitDetailPage() {
                               "Erreur chargement logo boutique:",
                               boutique.logo,
                             );
-                            e.currentTarget.src =
-                              "https://via.placeholder.com/80x80?text=Boutique";
+                            e.currentTarget.src = getDefaultProductImage();
                             e.currentTarget.className = "img-fluid h-100 w-100";
                           }}
                         />
@@ -1959,7 +1857,7 @@ export default function ProduitDetailPage() {
                     <div className="d-flex justify-content-between">
                       <span className="text-muted">Note moyenne</span>
                       <span className="fw-bold">
-                        {produit.note_moyenne.toFixed(1)}
+                        {safeToFixed(produit.note_moyenne)}
                         /5
                       </span>
                     </div>
@@ -2068,15 +1966,11 @@ export default function ProduitDetailPage() {
                       style={{ height: "150px" }}
                     >
                       <img
-                        src={
-                          produitSim.image ||
-                          "https://via.placeholder.com/400x400?text=Produit+OSKAR"
-                        }
+                        src={produitSim.image}
                         alt={produitSim.nom}
                         className="img-fluid h-100 w-100 object-fit-cover"
                         onError={(e) => {
-                          e.currentTarget.src =
-                            "https://via.placeholder.com/400x400?text=Produit+OSKAR";
+                          e.currentTarget.src = getDefaultProductImage();
                         }}
                       />
                     </div>

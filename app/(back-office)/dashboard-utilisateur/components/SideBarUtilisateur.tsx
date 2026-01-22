@@ -51,7 +51,7 @@ export default function SidebarUtilisateur({
       label: "Tableau de Bord",
       icon: "fa-chart-line",
       badge: null,
-      href: "/dashboard-utilisateur/dashboard",
+      href: "/dashboard-utilisateur/",
     },
     {
       id: "messages",
@@ -147,6 +147,38 @@ export default function SidebarUtilisateur({
           label: "Mes produits",
           href: "/dashboard-utilisateur/produits/liste-produits-cree-utilisateur",
           icon: "fa-list text-info",
+        },
+      ],
+    },
+    // Ajout d'un menu dédié aux favoris (optionnel)
+    {
+      id: "favoris",
+      label: "Mes Favoris",
+      icon: "fa-heart",
+      submenu: [
+        {
+          label: "Tous mes favoris",
+          href: "/dashboard-utilisateur/favoris",
+          icon: "fa-heart text-danger",
+          badge: { count: 8, color: "bg-danger" },
+        },
+        {
+          label: "Produits favoris",
+          href: "/dashboard-utilisateur/favoris/produits",
+          icon: "fa-box text-info",
+          badge: { count: 5, color: "bg-info" },
+        },
+        {
+          label: "Dons favoris",
+          href: "/dashboard-utilisateur/favoris/dons",
+          icon: "fa-gift text-success",
+          badge: { count: 2, color: "bg-success" },
+        },
+        {
+          label: "Échanges favoris",
+          href: "/dashboard-utilisateur/favoris/echanges",
+          icon: "fa-arrows-rotate text-warning",
+          badge: { count: 1, color: "bg-warning" },
         },
       ],
     },

@@ -431,7 +431,7 @@ export const API_ENDPOINTS = {
     LIST: "/produits",
     ALL: "/produits/tous-produits",
     PUBLISHED: "/produits/published",
-    
+
     UNPUBLISH: (uuid: string) => `/produits/${uuid}/restore`,
     PUBLISH: (uuid: string) => `/produits/${uuid}/restore`,
     PUBLLIER: "/produits/publier",
@@ -565,9 +565,16 @@ export const API_ENDPOINTS = {
   // Commentaires
   COMMENTAIRES: {
     CREATE: "/commentaires/creer",
+    FIND_COMMENTS_DON_BY_UUID: (donUuid: string) =>
+      `/commentaires/don/${donUuid}`,
     BY_PRODUIT: (produitUuid: string) => `/commentaires/produit/${produitUuid}`,
+    FIND_COMMENTS_ECHANGE_BY_UUID: (echangeUuid: string) =>
+      `/commentaires/echange/${echangeUuid}`,
+    FIND_COMMENTS_PRODUIT_BY_UUID: (produitUuid: string) =>
+      `/commentaires/produit/${produitUuid}`,
     USER_COMMENTS: "/commentaires/utilisateur",
     UPDATE: (uuid: string) => `/commentaires/${uuid}`,
+    FIND_COMMENTS_BY_UUID: (uuid: string) => `/commentaires/${uuid}`,
     DELETE: (uuid: string) => `/commentaires/${uuid}`,
     REPORT: (uuid: string) => `/commentaires/${uuid}/signaler`,
     REPORTED_LIST: "/commentaires/signales",

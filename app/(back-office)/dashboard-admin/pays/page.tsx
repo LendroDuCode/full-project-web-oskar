@@ -419,9 +419,7 @@ export default function PaysPage() {
         queryParams.append("limit", String(params?.limit || pagination.limit));
         if (params?.search) queryParams.append("search", params.search);
 
-        const response = await api.get(
-          `${API_ENDPOINTS.PAYS.LIST}?${queryParams.toString()}`,
-        );
+        const response = await api.get(`${API_ENDPOINTS.PAYS.LIST}`);
 
         // ✅ Gestion du format { data: [...], total: number }
         let paysData: Pays[] = [];
