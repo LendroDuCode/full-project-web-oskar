@@ -1,11 +1,9 @@
-// lib/api-client.ts - VERSION SIMPLIFIÉE ET CORRIGÉE
+// lib/api-client.ts - VERSION COMPLÈTE AVEC TOUTES LES MÉTHODES
 class ApiClient {
   private baseUrl: string;
 
   constructor() {
     // Toujours utiliser les chemins relatifs pour éviter les problèmes Mixed Content
-    // En production via HTTPS, on utilise les chemins relatifs (/api/*)
-    // En développement, on peut utiliser l'URL directe
     if (typeof window !== "undefined") {
       // Côté client
       if (window.location.protocol === "https:") {
@@ -31,7 +29,6 @@ class ApiClient {
   private getAuthToken(): string | null {
     if (typeof window === "undefined") return null;
 
-    // Chercher dans les cookies
     const getCookie = (name: string) => {
       const value = `; ${document.cookie}`;
       const parts = value.split(`; ${name}=`);
@@ -39,17 +36,13 @@ class ApiClient {
       return null;
     };
 
-    // Chercher dans tous les endroits possibles
     const tokenSources = [
-      // Cookies
       getCookie("oskar_token"),
       getCookie("access_token"),
       getCookie("token"),
-      // LocalStorage
       localStorage.getItem("oskar_token"),
       localStorage.getItem("access_token"),
       localStorage.getItem("token"),
-      // SessionStorage
       sessionStorage.getItem("oskar_token"),
       sessionStorage.getItem("access_token"),
       sessionStorage.getItem("token"),
@@ -63,12 +56,10 @@ class ApiClient {
   }
 
   private buildUrl(endpoint: string): string {
-    // Si on est en HTTPS, on utilise les chemins relatifs avec préfixe /api
     if (
       typeof window !== "undefined" &&
       window.location.protocol === "https:"
     ) {
-      // Ajouter /api/ au début si ce n'est pas déjà présent et si ce n'est pas une URL complète
       if (!endpoint.startsWith("http")) {
         if (!endpoint.startsWith("/api/")) {
           return `/api${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
@@ -77,7 +68,6 @@ class ApiClient {
       }
     }
 
-    // Sinon, on utilise l'URL complète
     return `${this.baseUrl}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
   }
 
@@ -89,7 +79,6 @@ class ApiClient {
       statusText: response.statusText,
     });
 
-    // Gestion des erreurs d'authentification
     if (response.status === 401) {
       console.error("❌ Erreur 401: Non authentifié");
       this.clearAuthTokens();
@@ -137,19 +126,16 @@ class ApiClient {
   private clearAuthTokens(): void {
     if (typeof window === "undefined") return;
 
-    // Cookies
     document.cookie =
       "oskar_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
     document.cookie =
       "access_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
     document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
 
-    // LocalStorage
     localStorage.removeItem("oskar_token");
     localStorage.removeItem("access_token");
     localStorage.removeItem("token");
 
-    // SessionStorage
     sessionStorage.removeItem("oskar_token");
     sessionStorage.removeItem("access_token");
     sessionStorage.removeItem("token");
@@ -172,10 +158,8 @@ class ApiClient {
         typeof window !== "undefined" ? window.location.protocol : "server",
     });
 
-    // Construire les headers
     const headers: HeadersInit = {};
 
-    // Gestion du Content-Type
     const isFormData = options.isFormData || options.body instanceof FormData;
     if (!isFormData) {
       headers["Content-Type"] = "application/json";
@@ -183,7 +167,6 @@ class ApiClient {
 
     headers["Accept"] = "application/json";
 
-    // Ajouter le token d'authentification
     if (options.requiresAuth !== false) {
       const token = this.getAuthToken();
       if (token) {
@@ -211,7 +194,6 @@ class ApiClient {
         url,
       });
 
-      // Si c'est une erreur CORS ou Mixed Content, donner un message clair
       if (error?.message?.includes("Mixed Content")) {
         throw new Error(
           "Erreur Mixed Content: Le site est en HTTPS mais l'API est appelée en HTTP. " +
@@ -223,7 +205,47 @@ class ApiClient {
     }
   }
 
-  // Méthodes HTTP simplifiées
+  // Méthodes HTTP spécialisées pour FormData
+  postFormData<T = any>(
+    endpoint: string,
+    formData: FormData,
+    options?: Omit<RequestInit, "method" | "body">,
+  ) {
+    return this.request<T>(endpoint, {
+      ...options,
+      method: "POST",
+      body: formData,
+      isFormData: true,
+    });
+  }
+
+  putFormData<T = any>(
+    endpoint: string,
+    formData: FormData,
+    options?: Omit<RequestInit, "method" | "body">,
+  ) {
+    return this.request<T>(endpoint, {
+      ...options,
+      method: "PUT",
+      body: formData,
+      isFormData: true,
+    });
+  }
+
+  patchFormData<T = any>(
+    endpoint: string,
+    formData: FormData,
+    options?: Omit<RequestInit, "method" | "body">,
+  ) {
+    return this.request<T>(endpoint, {
+      ...options,
+      method: "PATCH",
+      body: formData,
+      isFormData: true,
+    });
+  }
+
+  // Méthodes HTTP standard avec détection automatique de FormData
   get<T = any>(endpoint: string, options?: Omit<RequestInit, "method">) {
     return this.request<T>(endpoint, { ...options, method: "GET" });
   }
@@ -233,12 +255,14 @@ class ApiClient {
     data?: any,
     options?: Omit<RequestInit, "method" | "body">,
   ) {
-    const isFormData = data instanceof FormData;
+    if (data instanceof FormData) {
+      return this.postFormData<T>(endpoint, data, options);
+    }
+
     return this.request<T>(endpoint, {
       ...options,
       method: "POST",
-      body: isFormData ? data : data ? JSON.stringify(data) : undefined,
-      isFormData,
+      body: data ? JSON.stringify(data) : undefined,
     });
   }
 
@@ -247,12 +271,14 @@ class ApiClient {
     data?: any,
     options?: Omit<RequestInit, "method" | "body">,
   ) {
-    const isFormData = data instanceof FormData;
+    if (data instanceof FormData) {
+      return this.putFormData<T>(endpoint, data, options);
+    }
+
     return this.request<T>(endpoint, {
       ...options,
       method: "PUT",
-      body: isFormData ? data : data ? JSON.stringify(data) : undefined,
-      isFormData,
+      body: data ? JSON.stringify(data) : undefined,
     });
   }
 
@@ -261,12 +287,14 @@ class ApiClient {
     data?: any,
     options?: Omit<RequestInit, "method" | "body">,
   ) {
-    const isFormData = data instanceof FormData;
+    if (data instanceof FormData) {
+      return this.patchFormData<T>(endpoint, data, options);
+    }
+
     return this.request<T>(endpoint, {
       ...options,
       method: "PATCH",
-      body: isFormData ? data : data ? JSON.stringify(data) : undefined,
-      isFormData,
+      body: data ? JSON.stringify(data) : undefined,
     });
   }
 

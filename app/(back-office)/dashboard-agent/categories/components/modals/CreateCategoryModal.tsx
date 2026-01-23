@@ -235,7 +235,7 @@ export default function CreateCategoryModal({
     }
   };
 
-  // Soumission principale
+  // Soumission principale avec fetch direct
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -288,25 +288,32 @@ export default function CreateCategoryModal({
         }
       }
 
-      // Envoyer avec l'API client
+      // Utiliser fetch directement
       console.log("🚀 Envoi vers:", API_ENDPOINTS.CATEGORIES.CREATE);
 
-      const response = await api.postFormData(
-        API_ENDPOINTS.CATEGORIES.CREATE,
-        formDataToSend,
-        {
-         // requiresAuth: true,
+      const response = await fetch(API_ENDPOINTS.CATEGORIES.CREATE, {
+        method: "POST",
+        body: formDataToSend,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          // NE PAS définir Content-Type pour FormData (le navigateur le fera automatiquement)
         },
-      );
+      });
 
-      console.log("✅ Réponse API:", response);
+      const data = await response.json();
+
+      console.log("✅ Réponse API:", { status: response.status, data });
+
+      if (!response.ok) {
+        throw new Error(data.message || `Erreur ${response.status}`);
+      }
 
       // Vérifier la réponse
-      if (response && response.success !== false) {
-        setSuccessMessage(response.message || "Catégorie créée avec succès !");
+      if (data && data.success !== false) {
+        setSuccessMessage(data.message || "Catégorie créée avec succès !");
       } else {
         throw new Error(
-          response?.message || "La création a échoué sans message d'erreur",
+          data?.message || "La création a échoué sans message d'erreur",
         );
       }
 
@@ -360,8 +367,8 @@ export default function CreateCategoryModal({
     }
   };
 
-  // Alternative avec fetch direct pour débogage
-  const handleSubmitWithFetch = async (e: React.FormEvent) => {
+  // Alternative utilisant la méthode post de l'API client (si elle supporte FormData)
+  const handleSubmitWithApiClient = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!validateForm()) {
@@ -389,23 +396,21 @@ export default function CreateCategoryModal({
         formDataToSend.append("image", formData.imageFile);
       }
 
-      // Utiliser fetch directement
-      const response = await fetch(API_ENDPOINTS.CATEGORIES.CREATE, {
-        method: "POST",
-        body: formDataToSend,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          // NE PAS définir Content-Type pour FormData
-        },
-      });
+      // Utiliser la méthode post de l'API client (si elle existe et supporte FormData)
+      // Note: Cette méthode nécessite que votre api.post supporte FormData
+      const response = await api.post(
+        API_ENDPOINTS.CATEGORIES.CREATE,
+        formDataToSend,
+        {},
+      );
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || `Erreur ${response.status}`);
+      if (response && response.success !== false) {
+        setSuccessMessage(response.message || "Catégorie créée avec succès !");
+      } else {
+        throw new Error(
+          response?.message || "La création a échoué sans message d'erreur",
+        );
       }
-
-      setSuccessMessage("Catégorie créée avec succès !");
 
       // Réinitialiser et fermer
       setFormData({
@@ -425,7 +430,7 @@ export default function CreateCategoryModal({
         onClose();
       }, 1500);
     } catch (err: any) {
-      console.error("Erreur fetch:", err);
+      console.error("Erreur api client:", err);
       setError(err.message || "Erreur lors de la création");
     } finally {
       setLoading(false);

@@ -1,4 +1,3 @@
-// components/dons/CreateDonModal.tsx
 "use client";
 
 import { useState, useEffect, useRef } from "react";
@@ -16,113 +15,69 @@ import {
   faExclamationTriangle,
   faTrash,
   faLock,
-  faGift,
-  faPhone,
-  faBox,
-  faMapMarkerAlt,
-  faUser,
-  faList,
-  faGlobe,
-  faCalendar,
-  faInfoCircle,
 } from "@fortawesome/free-solid-svg-icons";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import colors from "@/app/shared/constants/colors";
 
-interface DonFormData {
-  titre: string;
-  type_don: string;
-  description: string;
-  localisation: string;
-  lieu_retrait: string;
-  quantite: string;
-  nom_donataire: string;
-  numero: string;
-  condition: string;
-  disponibilite: string;
-  categorie_uuid: string;
-  image: File | null;
-}
-
-interface Category {
-  label: string;
-  value: string;
-  uuid: string;
-  icon: any;
-}
-
-interface CreateDonModalProps {
+interface CreateCategoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
 }
 
-const CONDITIONS = [
-  { value: "neuf", label: "Neuf" },
-  { value: "tres_bon", label: "Très bon état" },
-  { value: "bon", label: "Bon état" },
-  { value: "usage", label: "État d'usage" },
-  { value: "reparation", label: "À réparer" },
+interface FormData {
+  type: string;
+  libelle: string;
+  description: string;
+  imageFile?: File | null;
+}
+
+interface ValidationErrors {
+  type?: string;
+  libelle?: string;
+  description?: string;
+  image?: string;
+}
+
+const CATEGORY_TYPES = [
+  "Alimentation & Boissons",
+  "Don & Échange",
+  "Électronique",
+  "Mode & Accessoires",
+  "Maison & Jardin",
+  "Automobile",
+  "Services",
+  "Immobilier",
+  "Loisirs & Sport",
+  "Santé & Beauté",
+  "Éducation",
+  "Autre",
 ];
 
-export default function CreateDonModal({
+export default function CreateCategoryModal({
   isOpen,
   onClose,
   onSuccess,
-}: CreateDonModalProps) {
+}: CreateCategoryModalProps) {
   // États
-  const [formData, setFormData] = useState<DonFormData>({
-    titre: "",
-    type_don: "",
+  const [formData, setFormData] = useState<FormData>({
+    type: "",
+    libelle: "",
     description: "",
-    localisation: "",
-    lieu_retrait: "",
-    quantite: "1",
-    nom_donataire: "",
-    numero: "",
-    condition: "bon",
-    disponibilite: "immediate",
-    categorie_uuid: "",
-    image: null,
+    imageFile: null,
   });
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [validationErrors, setValidationErrors] = useState<
-    Partial<Record<keyof DonFormData, string>>
-  >({});
+  const [validationErrors, setValidationErrors] = useState<ValidationErrors>(
+    {},
+  );
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [categories, setCategories] = useState<Category[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Charger les catégories
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const response = await api.get(API_ENDPOINTS.CATEGORIES.LIST);
-        if (Array.isArray(response)) {
-          const formatted: Category[] = response.map((item) => ({
-            label: item.libelle || item.type || "Sans nom",
-            value: item.uuid,
-            uuid: item.uuid,
-            icon: faList,
-          }));
-          setCategories(formatted);
-        }
-      } catch (err) {
-        console.error("Erreur chargement catégories:", err);
-      }
-    };
-
-    if (isOpen) {
-      fetchCategories();
-    }
-  }, [isOpen]);
-
-  // Vérifier l'authentification
+  // Vérifier l'authentification au chargement
   useEffect(() => {
     if (isOpen) {
       const checkAuth = () => {
@@ -130,8 +85,20 @@ export default function CreateDonModal({
         const authenticated = !!token;
         setIsAuthenticated(authenticated);
 
+        console.log("🔐 Vérification auth:", {
+          authenticated,
+          tokenPresent: !!token,
+          tokenPreview: token ? token.substring(0, 10) + "..." : "aucun",
+        });
+
         if (!authenticated) {
-          setError("Vous devez être connecté pour créer un don.");
+          setError(
+            "Vous devez être connecté pour créer une catégorie. Redirection...",
+          );
+          setTimeout(() => {
+            window.location.href =
+              "/login?redirect=" + encodeURIComponent(window.location.pathname);
+          }, 2000);
         }
       };
 
@@ -139,18 +106,10 @@ export default function CreateDonModal({
 
       // Réinitialiser le formulaire
       setFormData({
-        titre: "",
-        type_don: "",
+        type: "",
+        libelle: "",
         description: "",
-        localisation: "",
-        lieu_retrait: "",
-        quantite: "1",
-        nom_donataire: "",
-        numero: "",
-        condition: "bon",
-        disponibilite: "immediate",
-        categorie_uuid: "",
-        image: null,
+        imageFile: null,
       });
       setError(null);
       setSuccessMessage(null);
@@ -170,42 +129,23 @@ export default function CreateDonModal({
 
   // Validation
   const validateForm = (): boolean => {
-    const errors: Partial<Record<keyof DonFormData, string>> = {};
+    const errors: ValidationErrors = {};
 
-    if (!formData.titre.trim()) {
-      errors.titre = "Le titre est obligatoire";
+    if (!formData.type.trim()) {
+      errors.type = "Le type est obligatoire";
     }
 
-    if (!formData.type_don.trim()) {
-      errors.type_don = "Le type de don est obligatoire";
+    if (!formData.libelle.trim()) {
+      errors.libelle = "Le libellé est obligatoire";
+    } else if (formData.libelle.length < 2) {
+      errors.libelle = "Le libellé doit contenir au moins 2 caractères";
     }
 
     if (!formData.description.trim()) {
       errors.description = "La description est obligatoire";
-    }
-
-    if (!formData.localisation.trim()) {
-      errors.localisation = "La localisation est obligatoire";
-    }
-
-    if (!formData.lieu_retrait.trim()) {
-      errors.lieu_retrait = "Le lieu de retrait est obligatoire";
-    }
-
-    if (!formData.nom_donataire.trim()) {
-      errors.nom_donataire = "Le nom du donataire est obligatoire";
-    }
-
-    if (!formData.numero.trim()) {
-      errors.numero = "Le numéro de contact est obligatoire";
-    }
-
-    if (!formData.categorie_uuid) {
-      errors.categorie_uuid = "La catégorie est obligatoire";
-    }
-
-    if (parseInt(formData.quantite) < 1) {
-      errors.quantite = "La quantité doit être au moins 1";
+    } else if (formData.description.length < 10) {
+      errors.description =
+        "La description doit contenir au moins 10 caractères";
     }
 
     setValidationErrors(errors);
@@ -222,10 +162,10 @@ export default function CreateDonModal({
     setFormData((prev) => ({ ...prev, [name]: value }));
 
     // Effacer l'erreur de validation pour ce champ
-    if (validationErrors[name as keyof DonFormData]) {
+    if (validationErrors[name as keyof ValidationErrors]) {
       setValidationErrors((prev) => {
         const newErrors = { ...prev };
-        delete newErrors[name as keyof DonFormData];
+        delete newErrors[name as keyof ValidationErrors];
         return newErrors;
       });
     }
@@ -236,25 +176,31 @@ export default function CreateDonModal({
     const file = e.target.files?.[0];
     if (file) {
       // Vérifier le type de fichier
-      const validTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+      const validTypes = [
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/gif",
+        "image/svg+xml",
+      ];
       if (!validTypes.includes(file.type)) {
         setError(
-          "Type de fichier non supporté. Utilisez JPG, PNG, WEBP ou GIF.",
+          "Type de fichier non supporté. Utilisez JPG, PNG, WEBP, GIF ou SVG.",
         );
         return;
       }
 
-      // Vérifier la taille (max 5MB)
-      const maxSize = 5 * 1024 * 1024;
+      // Vérifier la taille (max 10MB)
+      const maxSize = 10 * 1024 * 1024; // 10MB
       if (file.size > maxSize) {
-        setError("L'image est trop volumineuse. Taille maximale : 5MB.");
+        setError("L'image est trop volumineuse. Taille maximale : 10MB.");
         return;
       }
 
       // Mettre à jour l'état
       setFormData((prev) => ({
         ...prev,
-        image: file,
+        imageFile: file,
       }));
 
       // Créer l'aperçu
@@ -263,6 +209,11 @@ export default function CreateDonModal({
 
       // Effacer les erreurs
       setError(null);
+      setValidationErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors.image;
+        return newErrors;
+      });
     }
   };
 
@@ -270,7 +221,7 @@ export default function CreateDonModal({
   const handleRemoveImage = () => {
     setFormData((prev) => ({
       ...prev,
-      image: null,
+      imageFile: null,
     }));
 
     if (previewImage && previewImage.startsWith("blob:")) {
@@ -284,12 +235,12 @@ export default function CreateDonModal({
     }
   };
 
-  // Soumission
+  // Soumission principale avec fetch direct
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!isAuthenticated) {
-      setError("Vous devez être connecté pour créer un don.");
+      setError("Vous devez être connecté pour créer une catégorie.");
       return;
     }
 
@@ -302,55 +253,76 @@ export default function CreateDonModal({
       setLoading(true);
       setError(null);
 
-      // Créer FormData
-      const formDataToSend = new FormData();
-      formDataToSend.append("titre", formData.titre.trim());
-      formDataToSend.append("type_don", formData.type_don.trim());
-      formDataToSend.append("description", formData.description.trim());
-      formDataToSend.append("localisation", formData.localisation.trim());
-      formDataToSend.append("lieu_retrait", formData.lieu_retrait.trim());
-      formDataToSend.append("quantite", formData.quantite);
-      formDataToSend.append("nom_donataire", formData.nom_donataire.trim());
-      formDataToSend.append("numero", formData.numero.trim());
-      formDataToSend.append("condition", formData.condition);
-      formDataToSend.append("disponibilite", formData.disponibilite);
-      formDataToSend.append("categorie_uuid", formData.categorie_uuid);
+      console.log("📤 Début création catégorie...");
 
-      if (formData.image) {
-        formDataToSend.append("image", formData.image);
+      // Vérifier à nouveau l'authentification
+      const token = api.getToken();
+      if (!token) {
+        throw new Error("Authentification perdue. Veuillez vous reconnecter.");
       }
 
-      // Envoyer avec l'API
-      const response = await api.postFormData(
-        API_ENDPOINTS.DONS.CREATE,
-        formDataToSend,
-        {
+      console.log("🔑 Token valide détecté");
+
+      // Créer FormData
+      const formDataToSend = new FormData();
+      formDataToSend.append("type", formData.type.trim());
+      formDataToSend.append("libelle", formData.libelle.trim());
+      formDataToSend.append("description", formData.description.trim());
+
+      if (formData.imageFile) {
+        formDataToSend.append("image", formData.imageFile);
+        console.log("📷 Image ajoutée:", {
+          name: formData.imageFile.name,
+          type: formData.imageFile.type,
+          size: formData.imageFile.size,
+        });
+      }
+
+      // Afficher les données pour débogage
+      console.log("📝 Données FormData prêtes:");
+      for (let [key, value] of formDataToSend.entries()) {
+        if (value instanceof File) {
+          console.log(`  ${key}: [File] ${value.name} (${value.size} bytes)`);
+        } else {
+          console.log(`  ${key}: "${value}"`);
+        }
+      }
+
+      // Utiliser fetch directement
+      console.log("🚀 Envoi vers:", API_ENDPOINTS.CATEGORIES.CREATE);
+
+      const response = await fetch(API_ENDPOINTS.CATEGORIES.CREATE, {
+        method: "POST",
+        body: formDataToSend,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          // NE PAS définir Content-Type pour FormData (le navigateur le fera automatiquement)
         },
-      );
+      });
+
+      const data = await response.json();
+
+      console.log("✅ Réponse API:", { status: response.status, data });
+
+      if (!response.ok) {
+        throw new Error(data.message || `Erreur ${response.status}`);
+      }
 
       // Vérifier la réponse
-      if (response && response.success !== false) {
-        setSuccessMessage(response.message || "Don créé avec succès !");
+      if (data && data.success !== false) {
+        setSuccessMessage(data.message || "Catégorie créée avec succès !");
       } else {
         throw new Error(
-          response?.message || "La création a échoué sans message d'erreur",
+          data?.message || "La création a échoué sans message d'erreur",
         );
       }
 
       // Réinitialiser le formulaire
       setFormData({
-        titre: "",
-        type_don: "",
+        type: "",
+        libelle: "",
         description: "",
-        localisation: "",
-        lieu_retrait: "",
-        quantite: "1",
-        nom_donataire: "",
-        numero: "",
-        condition: "bon",
-        disponibilite: "immediate",
-        categorie_uuid: "",
-        image: null,
+        imageFile: null,
       });
 
       // Nettoyer l'aperçu
@@ -369,17 +341,97 @@ export default function CreateDonModal({
     } catch (err: any) {
       console.error("❌ Erreur lors de la création:", err);
 
-      let errorMessage = err.message || "Erreur lors de la création du don";
+      let errorMessage =
+        err.message || "Erreur lors de la création de la catégorie";
 
+      // Messages d'erreur spécifiques
       if (
         errorMessage.includes("Authentification") ||
         errorMessage.includes("401") ||
         errorMessage.includes("Unauthorized")
       ) {
         errorMessage = "Authentification requise. Veuillez vous reconnecter.";
+
+        // Rediriger vers login
+        setTimeout(() => {
+          if (typeof window !== "undefined") {
+            window.location.href =
+              "/login?redirect=" + encodeURIComponent(window.location.pathname);
+          }
+        }, 2000);
       }
 
       setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Alternative utilisant la méthode post de l'API client (si elle supporte FormData)
+  const handleSubmitWithApiClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!validateForm()) {
+      setError("Veuillez corriger les erreurs dans le formulaire");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Vérifier l'authentification
+      const token = api.getToken();
+      if (!token) {
+        throw new Error("Authentification requise");
+      }
+
+      // Créer FormData
+      const formDataToSend = new FormData();
+      formDataToSend.append("type", formData.type.trim());
+      formDataToSend.append("libelle", formData.libelle.trim());
+      formDataToSend.append("description", formData.description.trim());
+
+      if (formData.imageFile) {
+        formDataToSend.append("image", formData.imageFile);
+      }
+
+      // Utiliser la méthode post de l'API client (si elle existe et supporte FormData)
+      // Note: Cette méthode nécessite que votre api.post supporte FormData
+      const response = await api.post(
+        API_ENDPOINTS.CATEGORIES.CREATE,
+        formDataToSend,
+        {},
+      );
+
+      if (response && response.success !== false) {
+        setSuccessMessage(response.message || "Catégorie créée avec succès !");
+      } else {
+        throw new Error(
+          response?.message || "La création a échoué sans message d'erreur",
+        );
+      }
+
+      // Réinitialiser et fermer
+      setFormData({
+        type: "",
+        libelle: "",
+        description: "",
+        imageFile: null,
+      });
+
+      if (previewImage && previewImage.startsWith("blob:")) {
+        URL.revokeObjectURL(previewImage);
+      }
+      setPreviewImage(null);
+
+      setTimeout(() => {
+        if (onSuccess) onSuccess();
+        onClose();
+      }, 1500);
+    } catch (err: any) {
+      console.error("Erreur api client:", err);
+      setError(err.message || "Erreur lors de la création");
     } finally {
       setLoading(false);
     }
@@ -393,15 +445,11 @@ export default function CreateDonModal({
       URL.revokeObjectURL(previewImage);
     }
 
-    const hasChanges = Object.values(formData).some(
-      (value) =>
-        value !== "" &&
-        value !== null &&
-        value !== undefined &&
-        value !== "1" &&
-        value !== "bon" &&
-        value !== "immediate",
-    );
+    const hasChanges =
+      formData.type ||
+      formData.libelle ||
+      formData.description ||
+      formData.imageFile;
 
     if (hasChanges) {
       if (
@@ -427,7 +475,7 @@ export default function CreateDonModal({
         backdropFilter: "blur(2px)",
       }}
       role="dialog"
-      aria-labelledby="createDonModalLabel"
+      aria-labelledby="createCategoryModalLabel"
       aria-modal="true"
     >
       <div className="modal-dialog modal-dialog-centered modal-lg">
@@ -439,23 +487,23 @@ export default function CreateDonModal({
           <div
             className="modal-header text-white border-0 rounded-top-3"
             style={{
-              background: `linear-gradient(135deg, ${colors.oskar.green} 0%, ${colors.oskar.greenHover} 100%)`,
+              background: `linear-gradient(135deg, ${colors.oskar.green} 0%, ${colors.oskar.green} 100%)`,
               borderBottom: `3px solid ${colors.oskar.orange}`,
             }}
           >
             <div className="d-flex align-items-center">
               <div className="bg-white bg-opacity-20 rounded-circle p-2 me-3">
-                <FontAwesomeIcon icon={faGift} className="fs-5" />
+                <FontAwesomeIcon icon={faPlus} className="fs-5" />
               </div>
               <div>
                 <h5
                   className="modal-title mb-0 fw-bold"
-                  id="createDonModalLabel"
+                  id="createCategoryModalLabel"
                 >
-                  Créer un Nouveau Don
+                  Créer une Nouvelle Catégorie
                 </h5>
                 <p className="mb-0 opacity-75 fs-14">
-                  Offrez un objet ou service gratuitement
+                  Remplissez les informations pour créer une nouvelle catégorie
                 </p>
               </div>
             </div>
@@ -492,7 +540,8 @@ export default function CreateDonModal({
                       Authentification requise
                     </h6>
                     <p className="mb-0">
-                      Vous devez être connecté pour créer un don.
+                      Vous devez être connecté pour créer une catégorie.
+                      Redirection vers la page de connexion...
                     </p>
                   </div>
                 </div>
@@ -568,263 +617,63 @@ export default function CreateDonModal({
             {/* Formulaire */}
             <form onSubmit={handleSubmit} encType="multipart/form-data">
               <div className="row g-4">
-                {/* Titre */}
-                <div className="col-md-12">
-                  <label htmlFor="titre" className="form-label fw-semibold">
+                {/* Type */}
+                <div className="col-md-6">
+                  <label htmlFor="type" className="form-label fw-semibold">
                     <FontAwesomeIcon icon={faTag} className="me-2" />
-                    Titre du don <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    id="titre"
-                    name="titre"
-                    className={`form-control ${validationErrors.titre ? "is-invalid" : ""}`}
-                    placeholder="Ex: Feu"
-                    value={formData.titre}
-                    onChange={handleChange}
-                    disabled={loading || !isAuthenticated}
-                    style={{ borderRadius: "8px" }}
-                  />
-                  {validationErrors.titre && (
-                    <div className="invalid-feedback d-block">
-                      {validationErrors.titre}
-                    </div>
-                  )}
-                </div>
-
-                {/* Type de don */}
-                <div className="col-md-6">
-                  <label htmlFor="type_don" className="form-label fw-semibold">
-                    <FontAwesomeIcon icon={faGift} className="me-2" />
-                    Type de don <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    id="type_don"
-                    name="type_don"
-                    className={`form-control ${validationErrors.type_don ? "is-invalid" : ""}`}
-                    placeholder="Ex: Allumette"
-                    value={formData.type_don}
-                    onChange={handleChange}
-                    disabled={loading || !isAuthenticated}
-                    style={{ borderRadius: "8px" }}
-                  />
-                  {validationErrors.type_don && (
-                    <div className="invalid-feedback d-block">
-                      {validationErrors.type_don}
-                    </div>
-                  )}
-                </div>
-
-                {/* Catégorie */}
-                <div className="col-md-6">
-                  <label
-                    htmlFor="categorie_uuid"
-                    className="form-label fw-semibold"
-                  >
-                    <FontAwesomeIcon icon={faList} className="me-2" />
-                    Catégorie <span className="text-danger">*</span>
+                    Type <span className="text-danger">*</span>
                   </label>
                   <select
-                    id="categorie_uuid"
-                    name="categorie_uuid"
-                    className={`form-select ${validationErrors.categorie_uuid ? "is-invalid" : ""}`}
-                    value={formData.categorie_uuid}
+                    id="type"
+                    name="type"
+                    className={`form-select ${validationErrors.type ? "is-invalid" : ""}`}
+                    value={formData.type}
                     onChange={handleChange}
-                    disabled={
-                      loading || !isAuthenticated || categories.length === 0
-                    }
+                    disabled={loading || !isAuthenticated}
                     style={{ borderRadius: "8px" }}
                   >
-                    <option value="">Sélectionner une catégorie...</option>
-                    {categories.map((category) => (
-                      <option key={category.uuid} value={category.uuid}>
-                        {category.label}
+                    <option value="">Sélectionner un type...</option>
+                    {CATEGORY_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
                       </option>
                     ))}
                   </select>
-                  {validationErrors.categorie_uuid && (
+                  {validationErrors.type && (
                     <div className="invalid-feedback d-block">
-                      {validationErrors.categorie_uuid}
+                      {validationErrors.type}
                     </div>
                   )}
+                  <small className="text-muted mt-1 d-block">
+                    Sélectionnez le type de catégorie
+                  </small>
                 </div>
 
-                {/* Localisation */}
+                {/* Libellé */}
                 <div className="col-md-6">
-                  <label
-                    htmlFor="localisation"
-                    className="form-label fw-semibold"
-                  >
-                    <FontAwesomeIcon icon={faMapMarkerAlt} className="me-2" />
-                    Localisation <span className="text-danger">*</span>
+                  <label htmlFor="libelle" className="form-label fw-semibold">
+                    <FontAwesomeIcon icon={faTag} className="me-2" />
+                    Libellé <span className="text-danger">*</span>
                   </label>
                   <input
                     type="text"
-                    id="localisation"
-                    name="localisation"
-                    className={`form-control ${validationErrors.localisation ? "is-invalid" : ""}`}
-                    placeholder="Ex: Abidjan, Cocody"
-                    value={formData.localisation}
+                    id="libelle"
+                    name="libelle"
+                    className={`form-control ${validationErrors.libelle ? "is-invalid" : ""}`}
+                    placeholder="Ex: Alimentation & Boissons"
+                    value={formData.libelle}
                     onChange={handleChange}
                     disabled={loading || !isAuthenticated}
                     style={{ borderRadius: "8px" }}
                   />
-                  {validationErrors.localisation && (
+                  {validationErrors.libelle && (
                     <div className="invalid-feedback d-block">
-                      {validationErrors.localisation}
+                      {validationErrors.libelle}
                     </div>
                   )}
-                </div>
-
-                {/* Lieu de retrait */}
-                <div className="col-md-6">
-                  <label
-                    htmlFor="lieu_retrait"
-                    className="form-label fw-semibold"
-                  >
-                    <FontAwesomeIcon icon={faGlobe} className="me-2" />
-                    Lieu de retrait <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    id="lieu_retrait"
-                    name="lieu_retrait"
-                    className={`form-control ${validationErrors.lieu_retrait ? "is-invalid" : ""}`}
-                    placeholder="Ex: Centre jeunesse Abobo Baoulé"
-                    value={formData.lieu_retrait}
-                    onChange={handleChange}
-                    disabled={loading || !isAuthenticated}
-                    style={{ borderRadius: "8px" }}
-                  />
-                  {validationErrors.lieu_retrait && (
-                    <div className="invalid-feedback d-block">
-                      {validationErrors.lieu_retrait}
-                    </div>
-                  )}
-                </div>
-
-                {/* Quantité */}
-                <div className="col-md-4">
-                  <label htmlFor="quantite" className="form-label fw-semibold">
-                    <FontAwesomeIcon icon={faBox} className="me-2" />
-                    Quantité <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    id="quantite"
-                    name="quantite"
-                    className={`form-control ${validationErrors.quantite ? "is-invalid" : ""}`}
-                    value={formData.quantite}
-                    onChange={handleChange}
-                    disabled={loading || !isAuthenticated}
-                    min="1"
-                    style={{ borderRadius: "8px" }}
-                  />
-                  {validationErrors.quantite && (
-                    <div className="invalid-feedback d-block">
-                      {validationErrors.quantite}
-                    </div>
-                  )}
-                </div>
-
-                {/* État */}
-                <div className="col-md-4">
-                  <label htmlFor="condition" className="form-label fw-semibold">
-                    <FontAwesomeIcon icon={faInfoCircle} className="me-2" />
-                    État
-                  </label>
-                  <select
-                    id="condition"
-                    name="condition"
-                    className="form-select"
-                    value={formData.condition}
-                    onChange={handleChange}
-                    disabled={loading || !isAuthenticated}
-                    style={{ borderRadius: "8px" }}
-                  >
-                    {CONDITIONS.map((cond) => (
-                      <option key={cond.value} value={cond.value}>
-                        {cond.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Disponibilité */}
-                <div className="col-md-4">
-                  <label
-                    htmlFor="disponibilite"
-                    className="form-label fw-semibold"
-                  >
-                    <FontAwesomeIcon icon={faCalendar} className="me-2" />
-                    Disponibilité
-                  </label>
-                  <select
-                    id="disponibilite"
-                    name="disponibilite"
-                    className="form-select"
-                    value={formData.disponibilite}
-                    onChange={handleChange}
-                    disabled={loading || !isAuthenticated}
-                    style={{ borderRadius: "8px" }}
-                  >
-                    <option value="immediate">Immédiate</option>
-                    <option value="semaine">Cette semaine</option>
-                    <option value="mois">Ce mois-ci</option>
-                  </select>
-                </div>
-
-                {/* Nom du donataire */}
-                <div className="col-md-6">
-                  <label
-                    htmlFor="nom_donataire"
-                    className="form-label fw-semibold"
-                  >
-                    <FontAwesomeIcon icon={faUser} className="me-2" />
-                    Votre nom/organisation{" "}
-                    <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    id="nom_donataire"
-                    name="nom_donataire"
-                    className={`form-control ${validationErrors.nom_donataire ? "is-invalid" : ""}`}
-                    placeholder="Ex: Association Solidarité"
-                    value={formData.nom_donataire}
-                    onChange={handleChange}
-                    disabled={loading || !isAuthenticated}
-                    style={{ borderRadius: "8px" }}
-                  />
-                  {validationErrors.nom_donataire && (
-                    <div className="invalid-feedback d-block">
-                      {validationErrors.nom_donataire}
-                    </div>
-                  )}
-                </div>
-
-                {/* Numéro de contact */}
-                <div className="col-md-6">
-                  <label htmlFor="numero" className="form-label fw-semibold">
-                    <FontAwesomeIcon icon={faPhone} className="me-2" />
-                    Numéro de contact <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    type="tel"
-                    id="numero"
-                    name="numero"
-                    className={`form-control ${validationErrors.numero ? "is-invalid" : ""}`}
-                    placeholder="Ex: 000002222222"
-                    value={formData.numero}
-                    onChange={handleChange}
-                    disabled={loading || !isAuthenticated}
-                    style={{ borderRadius: "8px" }}
-                  />
-                  {validationErrors.numero && (
-                    <div className="invalid-feedback d-block">
-                      {validationErrors.numero}
-                    </div>
-                  )}
+                  <small className="text-muted mt-1 d-block">
+                    Nom affiché de la catégorie
+                  </small>
                 </div>
 
                 {/* Description */}
@@ -834,14 +683,14 @@ export default function CreateDonModal({
                     className="form-label fw-semibold"
                   >
                     <FontAwesomeIcon icon={faFileAlt} className="me-2" />
-                    Description détaillée <span className="text-danger">*</span>
+                    Description <span className="text-danger">*</span>
                   </label>
                   <textarea
                     id="description"
                     name="description"
                     className={`form-control ${validationErrors.description ? "is-invalid" : ""}`}
+                    placeholder="Décrivez cette catégorie..."
                     rows={4}
-                    placeholder="Décrivez ce que vous donnez..."
                     value={formData.description}
                     onChange={handleChange}
                     disabled={loading || !isAuthenticated}
@@ -852,15 +701,19 @@ export default function CreateDonModal({
                       {validationErrors.description}
                     </div>
                   )}
+                  <small className="text-muted mt-1 d-block">
+                    Décrivez cette catégorie en quelques mots (minimum 10
+                    caractères)
+                  </small>
                 </div>
 
                 {/* Image */}
                 <div className="col-12">
                   <label className="form-label fw-semibold">
                     <FontAwesomeIcon icon={faImage} className="me-2" />
-                    Photo du don
+                    Image de la catégorie
                     <span className="text-muted ms-1 fw-normal">
-                      (Optionnel mais recommandé)
+                      (Optionnel)
                     </span>
                   </label>
 
@@ -905,8 +758,8 @@ export default function CreateDonModal({
                     <input
                       ref={fileInputRef}
                       type="file"
-                      id="image"
-                      name="image"
+                      id="imageFile"
+                      name="imageFile"
                       className="form-control"
                       accept="image/*"
                       onChange={handleFileChange}
@@ -927,11 +780,26 @@ export default function CreateDonModal({
 
                   <div className="text-muted mt-2">
                     <small>
-                      Formats acceptés: JPG, PNG, WEBP, GIF (max 5MB).
+                      Formats acceptés: JPG, PNG, WEBP, GIF, SVG (max 10MB).
                       {!previewImage &&
                         " Si aucune image n'est fournie, une image par défaut sera utilisée."}
                     </small>
                   </div>
+
+                  {/* Nom du fichier */}
+                  {formData.imageFile && (
+                    <div className="mt-2">
+                      <small className="text-success">
+                        <FontAwesomeIcon
+                          icon={faCheckCircle}
+                          className="me-1"
+                        />
+                        Fichier sélectionné:{" "}
+                        <strong>{formData.imageFile.name}</strong> (
+                        {Math.round(formData.imageFile.size / 1024)} Ko)
+                      </small>
+                    </div>
+                  )}
                 </div>
               </div>
             </form>
@@ -966,7 +834,7 @@ export default function CreateDonModal({
                   background: isAuthenticated
                     ? colors.oskar.green
                     : colors.oskar.grey,
-                  border: `1px solid ${isAuthenticated ? colors.oskar.greenHover : colors.oskar.grey}`,
+                  border: `1px solid ${isAuthenticated ? colors.oskar.green : colors.oskar.grey}`,
                   borderRadius: "8px",
                   fontWeight: "500",
                   opacity: !isAuthenticated ? 0.6 : 1,
@@ -986,7 +854,7 @@ export default function CreateDonModal({
                 ) : (
                   <>
                     <FontAwesomeIcon icon={faPlus} />
-                    Créer le Don
+                    Créer la Catégorie
                   </>
                 )}
               </button>
@@ -1010,7 +878,7 @@ export default function CreateDonModal({
         .form-control:focus,
         .form-select:focus {
           border-color: ${colors.oskar.green};
-          box-shadow: 0 0 0 0.25rem ${colors.oskar.greenHover}25;
+          box-shadow: 0 0 0 0.25rem ${colors.oskar.green}25;
         }
 
         .btn {
