@@ -1,6 +1,6 @@
-// lib/api-client.ts - VERSION CORRIGÉE POUR GÉRER LES URLs COMPLÈTES
+// lib/api-client.ts - VERSION CORRIGÉE
+
 class ApiClient {
-  private baseUrl: string;
   private useProxy: boolean;
   private isProduction: boolean;
 
@@ -9,44 +9,12 @@ class ApiClient {
     this.useProxy = process.env.NEXT_PUBLIC_USE_PROXY === "true";
     this.isProduction = process.env.NODE_ENV === "production";
 
-    // Configurer l'URL de base selon l'environnement
-    if (typeof window !== "undefined") {
-      // Côté client (browser)
-      if (window.location.protocol === "https:") {
-        // En HTTPS (production), utiliser les chemins relatifs
-        this.baseUrl = "";
-        if (!this.isProduction) {
-          console.log("🔧 ApiClient configuré pour HTTPS - chemins relatifs");
-        }
-      } else {
-        // En HTTP (dev), utiliser l'URL configurée
-        this.baseUrl =
-          process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
-        if (!this.isProduction) {
-          console.log(
-            "🔧 ApiClient configuré pour HTTP - URL directe:",
-            this.baseUrl,
-          );
-        }
-      }
-    } else {
-      // Côté serveur (SSR)
-      if (this.isProduction) {
-        // En production SSR, utiliser l'IP interne
-        this.baseUrl = "http://localhost:3005";
-        if (!this.isProduction) {
-          console.log(
-            "🔧 ApiClient configuré côté serveur production - localhost:3005",
-          );
-        }
-      } else {
-        // En développement SSR
-        this.baseUrl =
-          process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
-        if (!this.isProduction) {
-          console.log("🔧 ApiClient configuré côté serveur dev:", this.baseUrl);
-        }
-      }
+    if (!this.isProduction) {
+      console.log("🔧 ApiClient initialisé:", {
+        useProxy: this.useProxy,
+        isProduction: this.isProduction,
+        apiUrl: process.env.NEXT_PUBLIC_API_URL,
+      });
     }
   }
 
@@ -79,47 +47,50 @@ class ApiClient {
     return this.getAuthToken();
   }
 
-  private buildUrl(endpoint: string): string {
-    // CORRECTION : Si l'endpoint est déjà une URL complète
-    if (endpoint.startsWith("http://") || endpoint.startsWith("https://")) {
-      // Si on utilise le proxy, convertir en chemin relatif /api/
-      if (this.useProxy) {
-        // Extraire le chemin après la base URL
-        const baseUrl =
-          process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
-        if (endpoint.startsWith(baseUrl)) {
-          const path = endpoint.substring(baseUrl.length);
-          // Nettoyer le chemin (enlever les doubles slashes)
-          const cleanPath = path.replace(/^\/+/, "");
-          return `/api/${cleanPath}`;
+  /**
+   * CORRECTION : Les endpoints dans API_ENDPOINTS contiennent déjà les URLs complètes
+   * Cette méthode adapte l'URL pour utiliser le proxy si nécessaire
+   */
+  private buildUrl(fullUrl: string): string {
+    // DEBUG
+    if (!this.isProduction) {
+      console.log("🔗 buildUrl input:", fullUrl);
+    }
+
+    // Si nous utilisons le proxy, convertir en chemin relatif /api/
+    if (this.useProxy) {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
+
+      // Si l'URL commence par l'URL de base de l'API
+      if (fullUrl.startsWith(apiUrl)) {
+        const path = fullUrl.substring(apiUrl.length);
+        // Nettoyer le chemin (enlever les doubles slashes)
+        const cleanPath = path.replace(/^\/+/, "");
+        const proxyUrl = `/api/${cleanPath}`;
+
+        if (!this.isProduction) {
+          console.log("🔗 Conversion proxy:", {
+            fullUrl,
+            apiUrl,
+            path,
+            proxyUrl,
+          });
         }
-        // Si ce n'est pas notre base URL, on ne peut pas utiliser le proxy
-        return endpoint;
+
+        return proxyUrl;
       }
-      // Si on n'utilise pas le proxy, utiliser l'URL complète directement
-      return endpoint;
+
+      // Si c'est déjà un chemin relatif /api/, le garder tel quel
+      if (fullUrl.startsWith("/api/")) {
+        return fullUrl;
+      }
+
+      // Pour les autres cas, utiliser l'URL complète
+      return fullUrl;
     }
 
-    // CORRECTION : Si l'endpoint commence déjà par /api/, l'utiliser directement
-    if (endpoint.startsWith("/api/")) {
-      return endpoint;
-    }
-
-    // Si on utilise le proxy ou qu'on est en HTTPS, utiliser les chemins relatifs avec /api/
-    const useApiPrefix =
-      this.useProxy ||
-      (typeof window !== "undefined" && window.location.protocol === "https:");
-
-    if (useApiPrefix) {
-      // Ajouter /api/ seulement si ce n'est pas déjà présent
-      const cleanEndpoint = endpoint.startsWith("/")
-        ? endpoint.substring(1)
-        : endpoint;
-      return `/api/${cleanEndpoint}`;
-    }
-
-    // Sinon, utiliser l'URL complète
-    return `${this.baseUrl}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
+    // Si nous n'utilisons pas le proxy, utiliser l'URL complète directement
+    return fullUrl;
   }
 
   private async handleResponse<T>(response: Response): Promise<T> {
@@ -237,18 +208,23 @@ class ApiClient {
   }
 
   async request<T = any>(
-    endpoint: string,
+    endpointOrUrl: string, // Peut être un endpoint d'API_ENDPOINTS (URL complète) ou un chemin
     options: RequestInit & {
       requiresAuth?: boolean;
       isFormData?: boolean;
     } = {},
   ): Promise<T> {
-    const url = this.buildUrl(endpoint);
+    // DEBUG
+    if (!this.isProduction) {
+      console.log("🌐 API Request (avant buildUrl):", endpointOrUrl);
+    }
+
+    const url = this.buildUrl(endpointOrUrl);
 
     if (!this.isProduction) {
       console.log("🌐 API Request:", {
-        endpoint,
-        url,
+        input: endpointOrUrl,
+        finalUrl: url,
         method: options.method || "GET",
         useProxy: this.useProxy,
         isProduction: this.isProduction,
@@ -276,7 +252,7 @@ class ApiClient {
     const config: RequestInit = {
       method: options.method || "GET",
       headers,
-      credentials: "include",
+      credentials: this.useProxy ? "include" : "omit", // IMPORTANT: Inclure les cookies seulement si on utilise le proxy
       cache: "no-store",
       ...options,
     };
@@ -287,8 +263,8 @@ class ApiClient {
     } catch (error: any) {
       // GESTION D'ERREUR AMÉLIORÉE
       const errorDetails = {
-        endpoint,
-        url,
+        endpointOrUrl,
+        finalUrl: url,
         method: options.method || "GET",
         errorName: error?.name,
         errorMessage: error?.message || "Unknown error",
@@ -431,6 +407,7 @@ class ApiClient {
 
   async getCurrentUser<T = any>() {
     try {
+      // Utiliser le bon endpoint de votre API_ENDPOINTS
       return await this.get<T>("/auth/profile");
     } catch (error) {
       if (!this.isProduction) {

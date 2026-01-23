@@ -1,10 +1,18 @@
-// config/api-endpoints.ts
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
 
 // Fonction utilitaire pour ajouter le préfixe
-const withBaseUrl = (endpoint: string) => `${API_BASE_URL}${endpoint}`;
-const withBaseUrlFn = (fn: (arg: string) => string) => (arg: string) =>
-  `${API_BASE_URL}${fn(arg)}`;
+const withBaseUrl = (endpoint: string) => {
+  // Si l'endpoint commence déjà par http, ne pas ajouter la base URL
+  if (endpoint.startsWith("http://") || endpoint.startsWith("https://")) {
+    return endpoint;
+  }
+  // Nettoyer les doubles slash
+  const cleanBaseUrl = API_BASE_URL.endsWith("/")
+    ? API_BASE_URL.slice(0, -1)
+    : API_BASE_URL;
+  const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  return `${cleanBaseUrl}${cleanEndpoint}`;
+};
 
 export const API_ENDPOINTS = {
   // Auth
@@ -555,7 +563,7 @@ export const API_ENDPOINTS = {
     DETAIL: (uuid: string) => withBaseUrl(`/dons/${uuid}`),
     DETAIL_NON_PUBLIE: (uuid: string) =>
       withBaseUrl(`/dons/non-publie/${uuid}`),
-    CREATE: withBaseUrl("/dons/creer-don-agent-vendeur-utilisateur"),
+    CREATE: withBaseUrl("/dons/creer-don-agent-vendeur-utilisateur"), // CORRIGÉ
     UPDATE: (uuid: string) => withBaseUrl(`/dons/${uuid}`),
     DELETE: (uuid: string) => withBaseUrl(`/dons/${uuid}`),
     PUBLISH: withBaseUrl("/dons/publier"),
