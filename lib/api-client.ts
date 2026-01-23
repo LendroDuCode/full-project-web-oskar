@@ -13,7 +13,7 @@ class ApiClient {
       } else {
         // En HTTP (dev), utiliser l'URL configurée ou localhost
         this.baseUrl =
-          process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
+          process.env.NEXT_PUBLIC_API_URL || "http://15.236.142.141:3005";
         console.log(
           "🔧 ApiClient configuré pour HTTP - URL directe:",
           this.baseUrl,
@@ -21,8 +21,8 @@ class ApiClient {
       }
     } else {
       // Côté serveur (SSR), utiliser localhost
-      this.baseUrl = "http://localhost:3005";
-      console.log("🔧 ApiClient configuré côté serveur - localhost:3005");
+      this.baseUrl = "http://15.236.142.141:3005";
+      console.log("🔧 ApiClient configuré côté serveur - 15.236.142.141:3005");
     }
   }
 

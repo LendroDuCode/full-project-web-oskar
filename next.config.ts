@@ -19,7 +19,7 @@ const nextConfig = {
       },
       {
         protocol: "http",
-        hostname: "localhost",
+        hostname: "15.236.142.141",
         port: "3005",
         pathname: "/api/files/**", // ← AJOUTÉ: pour le développement
       },
@@ -46,19 +46,19 @@ const nextConfig = {
       // 1. Règle principale pour l'API
       {
         source: "/api/:path*",
-        destination: "http://localhost:3005/:path*",
+        destination: "http://15.236.142.141:3005/:path*",
       },
 
       // 2. Règle pour les fichiers uploadés
       {
         source: "/files/:path*",
-        destination: "http://localhost:3005/api/files/:path*",
+        destination: "http://15.236.142.141:3005/api/files/:path*",
       },
 
       // 3. Routes API spécifiques (pour compatibilité)
       {
         source: "/annonces/:path*",
-        destination: "http://localhost:3005/annonces/:path*",
+        destination: "http://15.236.142.141:3005/annonces/:path*",
         has: [
           {
             type: "header",
@@ -69,7 +69,7 @@ const nextConfig = {
       },
       {
         source: "/categories/:path*",
-        destination: "http://localhost:3005/categories/:path*",
+        destination: "http://15.236.142.141:3005/categories/:path*",
         has: [
           {
             type: "header",
@@ -80,7 +80,7 @@ const nextConfig = {
       },
       {
         source: "/categories",
-        destination: "http://localhost:3005/categories",
+        destination: "http://15.236.142.141:3005/categories",
         has: [
           {
             type: "header",
@@ -91,7 +91,7 @@ const nextConfig = {
       },
       {
         source: "/auth/:path*",
-        destination: "http://localhost:3005/auth/:path*",
+        destination: "http://15.236.142.141:3005/auth/:path*",
         has: [
           {
             type: "header",
@@ -102,7 +102,7 @@ const nextConfig = {
       },
       {
         source: "/dons/:path*",
-        destination: "http://localhost:3005/dons/:path*",
+        destination: "http://15.236.142.141:3005/dons/:path*",
         has: [
           {
             type: "header",
@@ -113,7 +113,7 @@ const nextConfig = {
       },
       {
         source: "/echanges/:path*",
-        destination: "http://localhost:3005/echanges/:path*",
+        destination: "http://15.236.142.141:3005/echanges/:path*",
         has: [
           {
             type: "header",
@@ -124,7 +124,7 @@ const nextConfig = {
       },
       {
         source: "/produits/:path*",
-        destination: "http://localhost:3005/produits/:path*",
+        destination: "http://15.236.142.141:3005/produits/:path*",
         has: [
           {
             type: "header",
@@ -137,7 +137,7 @@ const nextConfig = {
       // 4. Règle générale pour toutes les autres routes API (fallback)
       {
         source: "/:path*",
-        destination: "http://localhost:3005/:path*",
+        destination: "http://15.236.142.141:3005/:path*",
         has: [
           {
             type: "header",
