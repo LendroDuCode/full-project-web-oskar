@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import colors from "../../../shared/constants/colors";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
-
+import { API_CONFIG, buildApiUrl } from "@/config/env";
 interface ListingItem {
   uuid: string;
   type: "produit" | "echange" | "don";
@@ -51,7 +51,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
       url.startsWith("/images/") ||
       url.startsWith("/api/files/")
     ) {
-      return `http://localhost:3005${url}`;
+      return `${process.env.NEXT_PUBLIC_API_URL}${url}`;
     }
     return PLACEHOLDER_IMAGE;
   }, []);

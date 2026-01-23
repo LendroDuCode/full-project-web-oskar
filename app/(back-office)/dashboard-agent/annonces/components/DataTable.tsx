@@ -146,7 +146,7 @@ export default function DataTable({
           isBlocked = item.estBloque || false;
 
           if (item.image && item.image.startsWith("/")) {
-            imageUrl = `http://localhost:3005${item.image}`;
+            imageUrl = `${process.env.NEXT_PUBLIC_API_URL}${item.image}`;
           } else if (item.image) {
             imageUrl = item.image;
           } else {
@@ -162,7 +162,7 @@ export default function DataTable({
           isBlocked = item.est_bloque || false;
 
           if (item.image && item.image.startsWith("/")) {
-            imageUrl = `http://localhost:3005${item.image}`;
+            imageUrl = `${process.env.NEXT_PUBLIC_API_URL}${item.image}`;
           } else if (item.image) {
             imageUrl = item.image;
           } else {
@@ -180,7 +180,7 @@ export default function DataTable({
           isBlocked = item.estBloque || false;
 
           if (item.image && item.image.startsWith("/")) {
-            imageUrl = `http://localhost:3005${item.image}`;
+            imageUrl = `${process.env.NEXT_PUBLIC_API_URL}${item.image}`;
           } else if (item.image) {
             imageUrl = item.image;
           } else {

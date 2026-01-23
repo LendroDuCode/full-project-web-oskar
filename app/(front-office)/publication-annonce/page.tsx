@@ -292,7 +292,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         typeof window !== "undefined"
           ? localStorage.getItem("oskar_token")
           : null;
-      const res = await fetch(`http://localhost:3005${endpoint}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
         method: "POST",
         body: formData,
         headers: token ? { Authorization: `Bearer ${token}` } : {},

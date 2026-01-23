@@ -227,7 +227,9 @@ export default function DashboardHeader({
 
       try {
         const decodedAvatar = decodeURIComponent(profile.avatar);
-        return `http://localhost:3005/api/files/${decodedAvatar}`;
+        const apiUrl =
+          process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
+        return `${apiUrl}/api/files/${decodedAvatar}`;
       } catch (error) {
         console.error("Erreur de décodage de l'avatar:", error);
         return getDefaultAvatar(profile.nom || "A");

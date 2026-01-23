@@ -155,7 +155,7 @@ export default function Annonces() {
 
         // Construction correcte de l'URL de l'image
         if (item.image && item.image.startsWith("/")) {
-          image = `http://localhost:3005${item.image}`;
+          image = `${process.env.NEXT_PUBLIC_API_URL}${item.image}`;
         } else if (item.image) {
           image = item.image;
         } else {
@@ -169,7 +169,7 @@ export default function Annonces() {
         date = item.date_debut || new Date().toISOString();
 
         if (item.image && item.image.startsWith("/")) {
-          image = `http://localhost:3005${item.image}`;
+          image = `${process.env.NEXT_PUBLIC_API_URL}${item.image}`;
         } else if (item.image) {
           image = item.image;
         } else {
@@ -186,7 +186,7 @@ export default function Annonces() {
         date = item.dateProposition || new Date().toISOString();
 
         if (item.image && item.image.startsWith("/")) {
-          image = `http://localhost:3005${item.image}`;
+          image = `${process.env.NEXT_PUBLIC_API_URL}${item.image}`;
         } else if (item.image) {
           image = item.image;
         } else {

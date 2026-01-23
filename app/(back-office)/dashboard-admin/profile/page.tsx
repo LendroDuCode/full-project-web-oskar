@@ -195,7 +195,7 @@ export default function ModifierProfile() {
     }
 
     // Si c'est un chemin local
-    return `http://localhost:3005${avatarPath}`;
+    return `${process.env.NEXT_PUBLIC_API_URL}${avatarPath}`;
   };
 
   const getDefaultAvatar = (nom: string, prenoms: string) => {

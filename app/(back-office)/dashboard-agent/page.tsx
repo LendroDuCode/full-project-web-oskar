@@ -95,11 +95,12 @@ type Boutique = {
   logo?: string;
 };
 
+// CORRECTION : Changer le type de 'image' à string | undefined
 type Produit = {
   uuid: string;
   libelle: string;
   prix: string;
-  image: string;
+  image: string | undefined; // Changé de 'string' à 'string | undefined'
   disponible: boolean;
   statut: string;
   created_at: string;
@@ -114,7 +115,7 @@ type Don = {
   nom: string;
   type_don: string;
   prix: number | null;
-  image: string;
+  image: string | undefined; // Changé de 'string' à 'string | undefined'
   statut: string;
   estPublie: boolean;
   disponible: boolean;
@@ -126,7 +127,7 @@ type Echange = {
   uuid: string;
   nomElementEchange: string;
   prix: string;
-  image: string;
+  image: string | undefined; // Changé de 'string' à 'string | undefined'
   statut: string;
   estPublie: boolean;
   disponible: boolean;
@@ -166,6 +167,35 @@ const getAuthToken = () => {
     );
   }
   return null;
+};
+
+// Fonction pour construire une URL complète
+const buildUrl = (url: string): string => {
+  if (url.startsWith("http")) {
+    return url;
+  }
+
+  // Utiliser la variable d'environnement pour l'URL de base
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
+  return `${baseUrl}${url}`;
+};
+
+// Fonction pour remplacer les URLs locales par l'URL de base
+const replaceLocalUrl = (url?: string): string | undefined => {
+  if (!url) return undefined;
+
+  // Si l'URL contient déjà le domaine localhost:3005, on la remplace
+  if (url.includes("http://localhost:3005")) {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
+    return url.replace("http://localhost:3005", baseUrl);
+  }
+
+  // Si c'est une URL relative qui commence par /api/files, on construit l'URL complète
+  if (url.startsWith("/api/files")) {
+    return buildUrl(url);
+  }
+
+  return url;
 };
 
 // Données pour les graphiques
@@ -272,9 +302,9 @@ const AgentDashboard = () => {
         headers["Authorization"] = `Bearer ${token}`;
       }
 
-      const fullUrl = url.startsWith("http")
-        ? url
-        : `http://localhost:3005${url}`;
+      const fullUrl = buildUrl(url);
+
+      console.log(`🌐 Fetching from: ${fullUrl}`);
 
       const response = await fetch(fullUrl, {
         headers,
@@ -292,11 +322,15 @@ const AgentDashboard = () => {
 
       const contentType = response.headers.get("content-type");
       if (contentType && contentType.includes("application/json")) {
-        return await response.json();
+        const data = await response.json();
+        console.log(`✅ Response from ${url}:`, data);
+        return data;
       } else {
+        console.log(`⚠️ Non-JSON response from ${url}`);
         return null;
       }
     } catch (error) {
+      console.error(`❌ Error fetching ${url}:`, error);
       setShowDemoData(true);
       return null;
     }
@@ -304,6 +338,9 @@ const AgentDashboard = () => {
 
   // Fonction pour charger les données de démo
   const loadDemoData = () => {
+    // Construire les URLs d'image avec la variable d'environnement
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
+
     // Données de démo pour les utilisateurs
     const demoUsers: Utilisateur[] = [
       {
@@ -433,8 +470,9 @@ const AgentDashboard = () => {
         uuid: "1",
         libelle: "Casque Audio Sony WH-1000XM5",
         prix: "250000.00",
-        image:
-          "http://localhost:3005/api/files/produits%2F1767458848791-529269243.jpg",
+        image: replaceLocalUrl(
+          "/api/files/produits%2F1767458848791-529269243.jpg",
+        ),
         disponible: true,
         statut: "publie",
         created_at: "2026-01-03T07:09:34.000Z",
@@ -444,8 +482,9 @@ const AgentDashboard = () => {
         uuid: "2",
         libelle: "Smartphone Samsung Galaxy S23",
         prix: "450000.00",
-        image:
-          "http://localhost:3005/api/files/produits%2F1766486629814-459629390.png",
+        image: replaceLocalUrl(
+          "/api/files/produits%2F1766486629814-459629390.png",
+        ),
         disponible: true,
         statut: "publie",
         created_at: "2026-01-02T14:30:00.000Z",
@@ -455,8 +494,9 @@ const AgentDashboard = () => {
         uuid: "3",
         libelle: "Ordinateur Portable Dell XPS 13",
         prix: "850000.00",
-        image:
-          "http://localhost:3005/api/files/produits%2F1766489386966-526764004.png",
+        image: replaceLocalUrl(
+          "/api/files/produits%2F1766489386966-526764004.png",
+        ),
         disponible: false,
         statut: "publie",
         created_at: "2026-01-01T10:15:00.000Z",
@@ -471,8 +511,7 @@ const AgentDashboard = () => {
         nom: "Feu",
         type_don: "Allumette",
         prix: null,
-        image:
-          "http://localhost:3005/api/files/dons%2F1766486667118-485210721.png",
+        image: replaceLocalUrl("/api/files/dons%2F1766486667118-485210721.png"),
         statut: "publie",
         estPublie: true,
         disponible: true,
@@ -484,8 +523,7 @@ const AgentDashboard = () => {
         nom: "Jeux de société",
         type_don: "Loisirs",
         prix: null,
-        image:
-          "http://localhost:3005/api/files/dons%2F1767043164025-25999572.png",
+        image: replaceLocalUrl("/api/files/dons%2F1767043164025-25999572.png"),
         statut: "disponible",
         estPublie: false,
         disponible: true,
@@ -500,8 +538,9 @@ const AgentDashboard = () => {
         uuid: "1",
         nomElementEchange: "Cahier vs Galaxy S21",
         prix: "100000.00",
-        image:
-          "http://localhost:3005/api/files/echanges%2F1766486726483-332824154.png",
+        image: replaceLocalUrl(
+          "/api/files/echanges%2F1766486726483-332824154.png",
+        ),
         statut: "en_attente",
         estPublie: true,
         disponible: true,
@@ -512,8 +551,9 @@ const AgentDashboard = () => {
         uuid: "2",
         nomElementEchange: "iPhone 12 Pro vs Samsung",
         prix: "150000.00",
-        image:
-          "http://localhost:3005/api/files/echanges%2F1766486726483-332824154.png",
+        image: replaceLocalUrl(
+          "/api/files/echanges%2F1766486726483-332824154.png",
+        ),
         statut: "accepte",
         estPublie: true,
         disponible: false,
@@ -534,7 +574,9 @@ const AgentDashboard = () => {
         type_boutique: { libelle: "Boutique Biens" },
         est_bloque: false,
         est_ferme: false,
-        logo: "http://localhost:3005/api/files/boutiques%2Flogos%2F1767419547643-652761049.jpg",
+        logo: replaceLocalUrl(
+          "/api/files/boutiques%2Flogos%2F1767419547643-652761049.jpg",
+        ),
       },
       {
         uuid: "2",
@@ -546,7 +588,9 @@ const AgentDashboard = () => {
         type_boutique: { libelle: "Vente accessoire" },
         est_bloque: false,
         est_ferme: false,
-        logo: "http://localhost:3005/api/files/boutiques%2Flogos%2F1767454730509-869346568.jpg",
+        logo: replaceLocalUrl(
+          "/api/files/boutiques%2Flogos%2F1767454730509-869346568.jpg",
+        ),
       },
     ];
 
@@ -629,22 +673,53 @@ const AgentDashboard = () => {
           const boutiquesData =
             results.boutiques?.data || results.boutiques || [];
 
-          setRecentUtilisateurs(
-            Array.isArray(usersData) ? usersData.slice(0, 5) : [],
-          );
-          setRecentVendeurs(
-            Array.isArray(vendeursData) ? vendeursData.slice(0, 5) : [],
-          );
-          setRecentProduits(
-            Array.isArray(produitsData) ? produitsData.slice(0, 5) : [],
-          );
-          setRecentDons(Array.isArray(donsData) ? donsData.slice(0, 5) : []);
-          setRecentEchanges(
-            Array.isArray(echangesData) ? echangesData.slice(0, 5) : [],
-          );
-          setRecentBoutiques(
-            Array.isArray(boutiquesData) ? boutiquesData.slice(0, 5) : [],
-          );
+          // Remplacer les URLs d'images dans les données
+          const processedUsers = Array.isArray(usersData)
+            ? usersData.slice(0, 5).map((user: Utilisateur) => ({
+                ...user,
+              }))
+            : [];
+
+          const processedVendeurs = Array.isArray(vendeursData)
+            ? vendeursData.slice(0, 5).map((vendeur: Vendeur) => ({
+                ...vendeur,
+              }))
+            : [];
+
+          const processedProduits = Array.isArray(produitsData)
+            ? produitsData.slice(0, 5).map((produit: any) => ({
+                ...produit,
+                image: replaceLocalUrl(produit.image),
+              }))
+            : [];
+
+          const processedDons = Array.isArray(donsData)
+            ? donsData.slice(0, 5).map((don: any) => ({
+                ...don,
+                image: replaceLocalUrl(don.image),
+              }))
+            : [];
+
+          const processedEchanges = Array.isArray(echangesData)
+            ? echangesData.slice(0, 5).map((echange: any) => ({
+                ...echange,
+                image: replaceLocalUrl(echange.image),
+              }))
+            : [];
+
+          const processedBoutiques = Array.isArray(boutiquesData)
+            ? boutiquesData.slice(0, 5).map((boutique: Boutique) => ({
+                ...boutique,
+                logo: replaceLocalUrl(boutique.logo),
+              }))
+            : [];
+
+          setRecentUtilisateurs(processedUsers);
+          setRecentVendeurs(processedVendeurs);
+          setRecentProduits(processedProduits);
+          setRecentDons(processedDons);
+          setRecentEchanges(processedEchanges);
+          setRecentBoutiques(processedBoutiques);
 
           // Calcul des statistiques
           const newStats = {
@@ -677,21 +752,20 @@ const AgentDashboard = () => {
               ? produitsData.length
               : 0,
             produitsPublies: Array.isArray(produitsData)
-              ? produitsData.filter((p: Produit) => p.statut === "publie")
-                  .length
+              ? produitsData.filter((p: any) => p.statut === "publie").length
               : 0,
             totalDons: Array.isArray(donsData) ? donsData.length : 0,
             donsPublies: Array.isArray(donsData)
-              ? donsData.filter((d: Don) => d.estPublie).length
+              ? donsData.filter((d: any) => d.estPublie).length
               : 0,
             totalEchanges: Array.isArray(echangesData)
               ? echangesData.length
               : 0,
             echangesPublies: Array.isArray(echangesData)
-              ? echangesData.filter((e: Echange) => e.estPublie).length
+              ? echangesData.filter((e: any) => e.estPublie).length
               : 0,
             echangesEnAttente: Array.isArray(echangesData)
-              ? echangesData.filter((e: Echange) => e.statut === "en_attente")
+              ? echangesData.filter((e: any) => e.statut === "en_attente")
                   .length
               : 0,
             commandesTotal: 125,
@@ -706,6 +780,7 @@ const AgentDashboard = () => {
           loadDemoData();
         }
       } catch (error) {
+        console.error("❌ Error in fetchData:", error);
         setError(
           "Impossible de charger les données. Affichage des données de démo.",
         );
@@ -1796,7 +1871,6 @@ const AgentDashboard = () => {
           </div>
         </div>
       </footer>
-
       {/* Styles additionnels */}
       <style jsx>{`
         .border-left-primary {
