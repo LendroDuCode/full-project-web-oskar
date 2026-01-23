@@ -21,7 +21,7 @@ const nextConfig = {
       // IMPORTANT: Pour les images du backend
       {
         protocol: "http",
-        hostname: "localhost",
+        hostname: "12.0.2.15", // ← CHANGÉ ICI
         port: "3005",
         pathname: "/uploads/**",
       },
@@ -40,7 +40,7 @@ const nextConfig = {
       // Cette règle capture TOUTES les requêtes commençant par /api/
       {
         source: "/api/:path*",
-        destination: "http://localhost:3005/api/:path*",
+        destination: "http://12.0.2.15:3005/api/:path*", // ← CHANGÉ ICI
         has: [
           {
             type: "header",
@@ -54,7 +54,7 @@ const nextConfig = {
       // Capturer les routes commençant par /admin/, /auth/, etc.
       {
         source: "/:path*",
-        destination: "http://localhost:3005/:path*",
+        destination: "http://12.0.2.15:3005/:path*", // ← CHANGÉ ICI
         has: [
           {
             type: "header",
@@ -78,7 +78,7 @@ const nextConfig = {
 
   // Variables d'environnement
   env: {
-    NEXT_PUBLIC_API_URL: "http://localhost:3005",
+    NEXT_PUBLIC_API_URL: "http://12.0.2.15:3005", // ← CHANGÉ ICI
     NEXT_PUBLIC_USE_PROXY: "false", // On utilise les rewrites
   },
 
