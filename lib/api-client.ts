@@ -1,4 +1,4 @@
-// lib/api-client.ts - VERSION CORRIGÉE AVEC GESTION D'ERREUR AMÉLIORÉE
+// lib/api-client.ts - VERSION CORRIGÉE POUR GÉRER LES URLs COMPLÈTES
 class ApiClient {
   private baseUrl: string;
   private useProxy: boolean;
@@ -80,19 +80,42 @@ class ApiClient {
   }
 
   private buildUrl(endpoint: string): string {
+    // CORRECTION : Si l'endpoint est déjà une URL complète
+    if (endpoint.startsWith("http://") || endpoint.startsWith("https://")) {
+      // Si on utilise le proxy, convertir en chemin relatif /api/
+      if (this.useProxy) {
+        // Extraire le chemin après la base URL
+        const baseUrl =
+          process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
+        if (endpoint.startsWith(baseUrl)) {
+          const path = endpoint.substring(baseUrl.length);
+          // Nettoyer le chemin (enlever les doubles slashes)
+          const cleanPath = path.replace(/^\/+/, "");
+          return `/api/${cleanPath}`;
+        }
+        // Si ce n'est pas notre base URL, on ne peut pas utiliser le proxy
+        return endpoint;
+      }
+      // Si on n'utilise pas le proxy, utiliser l'URL complète directement
+      return endpoint;
+    }
+
+    // CORRECTION : Si l'endpoint commence déjà par /api/, l'utiliser directement
+    if (endpoint.startsWith("/api/")) {
+      return endpoint;
+    }
+
     // Si on utilise le proxy ou qu'on est en HTTPS, utiliser les chemins relatifs avec /api/
     const useApiPrefix =
       this.useProxy ||
       (typeof window !== "undefined" && window.location.protocol === "https:");
 
     if (useApiPrefix) {
-      if (!endpoint.startsWith("http")) {
-        // Ajouter /api/ seulement si ce n'est pas déjà présent
-        if (!endpoint.startsWith("/api/")) {
-          return `/api${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
-        }
-        return endpoint;
-      }
+      // Ajouter /api/ seulement si ce n'est pas déjà présent
+      const cleanEndpoint = endpoint.startsWith("/")
+        ? endpoint.substring(1)
+        : endpoint;
+      return `/api/${cleanEndpoint}`;
     }
 
     // Sinon, utiliser l'URL complète
@@ -109,6 +132,42 @@ class ApiClient {
       });
     }
 
+    // Récupérer d'abord le texte de la réponse pour analyse
+    const responseText = await response.text();
+    const contentType = response.headers.get("content-type") || "";
+
+    // Vérifier si c'est du HTML (erreur du backend)
+    const isHtmlResponse =
+      responseText.trim().startsWith("<!DOCTYPE") ||
+      responseText.includes("<html") ||
+      contentType.includes("text/html");
+
+    if (isHtmlResponse) {
+      console.error("❌ Backend retourne du HTML au lieu de JSON:", {
+        status: response.status,
+        url: response.url,
+        preview: responseText.substring(0, 300),
+      });
+
+      // Analyser le type d'erreur HTML
+      let errorMessage = `Le serveur a retourné du HTML (${response.status}). `;
+
+      if (response.status === 404 || responseText.includes("404")) {
+        errorMessage += "La route n'existe pas sur le backend.";
+      } else if (response.status === 500 || responseText.includes("500")) {
+        errorMessage += "Erreur interne du serveur.";
+      } else if (
+        responseText.includes("Cannot GET") ||
+        responseText.includes("Cannot POST")
+      ) {
+        errorMessage += "Route non implémentée sur le backend.";
+      } else {
+        errorMessage += "Vérifiez la configuration du backend.";
+      }
+
+      throw new Error(errorMessage);
+    }
+
     if (response.status === 401) {
       console.error("❌ Erreur 401: Non authentifié");
       this.clearAuthTokens();
@@ -117,23 +176,16 @@ class ApiClient {
 
     if (!response.ok) {
       let errorData;
-      const contentType = response.headers.get("content-type");
 
       try {
-        if (contentType && contentType.includes("application/json")) {
-          errorData = await response.json();
-        } else {
-          const text = await response.text();
-          errorData = {
-            message: `HTTP ${response.status} ${response.statusText}`,
-            status: response.status,
-            rawResponse: text.substring(0, 500),
-          };
-        }
+        // Essayer de parser comme JSON
+        errorData = JSON.parse(responseText);
       } catch {
+        // Si ce n'est pas du JSON valide
         errorData = {
-          message: `HTTP ${response.status} ${response.statusText}`,
+          message: `HTTP ${response.status}: ${response.statusText}`,
           status: response.status,
+          rawResponse: responseText.substring(0, 500),
         };
       }
 
@@ -150,7 +202,20 @@ class ApiClient {
       return {} as T;
     }
 
-    return response.json();
+    // Essayer de parser la réponse JSON
+    try {
+      return JSON.parse(responseText);
+    } catch (error) {
+      console.error("❌ Erreur parsing JSON:", {
+        url: response.url,
+        status: response.status,
+        contentType: contentType,
+        preview: responseText.substring(0, 500),
+      });
+      throw new Error(
+        `Réponse invalide du serveur. Attendu: JSON, Reçu: ${contentType}`,
+      );
+    }
   }
 
   private clearAuthTokens(): void {
@@ -261,9 +326,6 @@ class ApiClient {
       );
     }
   }
-
-  // ... gardez toutes les autres méthodes (postFormData, putFormData, etc.)
-  // Copiez-collez ici toutes vos méthodes existantes
 
   // Méthodes HTTP spécialisées pour FormData
   postFormData<T = any>(
