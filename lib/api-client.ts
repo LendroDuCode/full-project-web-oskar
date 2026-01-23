@@ -1,21 +1,31 @@
-// lib/api-client.ts - VERSION CORRIGÉE
+// lib/api-client.ts - VERSION SIMPLIFIÉE ET CORRIGÉE
 class ApiClient {
   private baseUrl: string;
-  private useProxy: boolean;
 
   constructor() {
-    // Toujours utiliser les rewrites en production, direct en dev
-    this.useProxy = process.env.NODE_ENV === "production" || false;
-    this.baseUrl = this.useProxy
-      ? ""
-      : process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
-
-    console.log("🔧 ApiClient configuré:", {
-      useProxy: this.useProxy,
-      baseUrl: this.baseUrl,
-      nodeEnv: process.env.NODE_ENV,
-      apiUrl: process.env.NEXT_PUBLIC_API_URL,
-    });
+    // Toujours utiliser les chemins relatifs pour éviter les problèmes Mixed Content
+    // En production via HTTPS, on utilise les chemins relatifs (/api/*)
+    // En développement, on peut utiliser l'URL directe
+    if (typeof window !== "undefined") {
+      // Côté client
+      if (window.location.protocol === "https:") {
+        // En HTTPS, utiliser les chemins relatifs
+        this.baseUrl = "";
+        console.log("🔧 ApiClient configuré pour HTTPS - chemins relatifs");
+      } else {
+        // En HTTP (dev), utiliser l'URL configurée ou localhost
+        this.baseUrl =
+          process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
+        console.log(
+          "🔧 ApiClient configuré pour HTTP - URL directe:",
+          this.baseUrl,
+        );
+      }
+    } else {
+      // Côté serveur (SSR), utiliser localhost
+      this.baseUrl = "http://localhost:3005";
+      console.log("🔧 ApiClient configuré côté serveur - localhost:3005");
+    }
   }
 
   private getAuthToken(): string | null {
@@ -48,23 +58,27 @@ class ApiClient {
     return tokenSources.find((token) => token !== null) || null;
   }
 
-  // Méthode publique pour récupérer le token
   public getToken(): string | null {
     return this.getAuthToken();
   }
 
   private buildUrl(endpoint: string): string {
-    // Si on utilise le proxy (rewrites), on enlève /api du début car il est déjà dans la destination
-    if (this.useProxy) {
-      // Enlève le préfixe /api si présent
-      if (endpoint.startsWith("/api/")) {
+    // Si on est en HTTPS, on utilise les chemins relatifs avec préfixe /api
+    if (
+      typeof window !== "undefined" &&
+      window.location.protocol === "https:"
+    ) {
+      // Ajouter /api/ au début si ce n'est pas déjà présent et si ce n'est pas une URL complète
+      if (!endpoint.startsWith("http")) {
+        if (!endpoint.startsWith("/api/")) {
+          return `/api${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
+        }
         return endpoint;
       }
-      // Si ce n'est pas une route API, on laisse tel quel
-      return endpoint;
     }
-    // Sinon, on construit l'URL complète
-    return `${this.baseUrl}${endpoint}`;
+
+    // Sinon, on utilise l'URL complète
+    return `${this.baseUrl}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
   }
 
   private async handleResponse<T>(response: Response): Promise<T> {
@@ -73,7 +87,6 @@ class ApiClient {
       ok: response.ok,
       url: response.url,
       statusText: response.statusText,
-      contentType: response.headers.get("content-type"),
     });
 
     // Gestion des erreurs d'authentification
@@ -87,23 +100,21 @@ class ApiClient {
       let errorData;
       const contentType = response.headers.get("content-type");
 
-      if (contentType && contentType.includes("application/json")) {
-        try {
+      try {
+        if (contentType && contentType.includes("application/json")) {
           errorData = await response.json();
-        } catch {
+        } else {
+          const text = await response.text();
           errorData = {
             message: `HTTP ${response.status} ${response.statusText}`,
             status: response.status,
-            statusText: response.statusText,
+            rawResponse: text.substring(0, 500),
           };
         }
-      } else {
-        const text = await response.text();
+      } catch {
         errorData = {
           message: `HTTP ${response.status} ${response.statusText}`,
           status: response.status,
-          statusText: response.statusText,
-          rawResponse: text.substring(0, 500),
         };
       }
 
@@ -149,7 +160,6 @@ class ApiClient {
     options: RequestInit & {
       requiresAuth?: boolean;
       isFormData?: boolean;
-      skipContentType?: boolean;
     } = {},
   ): Promise<T> {
     const url = this.buildUrl(endpoint);
@@ -157,10 +167,9 @@ class ApiClient {
     console.log("🌐 API Request:", {
       endpoint,
       url,
-      method: options.method,
-      hasBody: !!options.body,
-      isFormData: options.isFormData || options.body instanceof FormData,
-      useProxy: this.useProxy,
+      method: options.method || "GET",
+      protocol:
+        typeof window !== "undefined" ? window.location.protocol : "server",
     });
 
     // Construire les headers
@@ -168,7 +177,7 @@ class ApiClient {
 
     // Gestion du Content-Type
     const isFormData = options.isFormData || options.body instanceof FormData;
-    if (!isFormData && !options.skipContentType) {
+    if (!isFormData) {
       headers["Content-Type"] = "application/json";
     }
 
@@ -179,7 +188,6 @@ class ApiClient {
       const token = this.getAuthToken();
       if (token) {
         headers["Authorization"] = `Bearer ${token}`;
-        console.log("🔑 Token envoyé (début):", token.substring(0, 10) + "...");
       } else {
         console.warn("⚠️  Aucun token d'authentification trouvé");
       }
@@ -200,51 +208,22 @@ class ApiClient {
       console.error("❌ API Request failed:", {
         endpoint,
         errorMessage: error?.message,
-        errorStatus: error?.status,
         url,
       });
 
-      // Si c'est une erreur de connexion, essayer sans proxy
-      if (
-        error?.message?.includes("ECONNREFUSED") ||
-        error?.message?.includes("Failed to fetch")
-      ) {
-        console.log("🔄 Tentative sans proxy...");
-        // On pourrait implémenter une retry logique ici
+      // Si c'est une erreur CORS ou Mixed Content, donner un message clair
+      if (error?.message?.includes("Mixed Content")) {
+        throw new Error(
+          "Erreur Mixed Content: Le site est en HTTPS mais l'API est appelée en HTTP. " +
+            "Vérifiez la configuration des rewrites et du reverse proxy.",
+        );
       }
 
       throw error;
     }
   }
 
-  // Méthodes HTTP spécialisées pour FormData
-  postFormData<T = any>(
-    endpoint: string,
-    formData: FormData,
-    options?: Omit<RequestInit, "method" | "body">,
-  ) {
-    return this.request<T>(endpoint, {
-      ...options,
-      method: "POST",
-      body: formData,
-      isFormData: true,
-    });
-  }
-
-  putFormData<T = any>(
-    endpoint: string,
-    formData: FormData,
-    options?: Omit<RequestInit, "method" | "body">,
-  ) {
-    return this.request<T>(endpoint, {
-      ...options,
-      method: "PATCH",
-      body: formData,
-      isFormData: true,
-    });
-  }
-
-  // Méthodes HTTP standard avec détection automatique de FormData
+  // Méthodes HTTP simplifiées
   get<T = any>(endpoint: string, options?: Omit<RequestInit, "method">) {
     return this.request<T>(endpoint, { ...options, method: "GET" });
   }
@@ -254,15 +233,12 @@ class ApiClient {
     data?: any,
     options?: Omit<RequestInit, "method" | "body">,
   ) {
-    // Détection automatique de FormData
-    if (data instanceof FormData) {
-      return this.postFormData<T>(endpoint, data, options);
-    }
-
+    const isFormData = data instanceof FormData;
     return this.request<T>(endpoint, {
       ...options,
       method: "POST",
-      body: data ? JSON.stringify(data) : undefined,
+      body: isFormData ? data : data ? JSON.stringify(data) : undefined,
+      isFormData,
     });
   }
 
@@ -271,14 +247,12 @@ class ApiClient {
     data?: any,
     options?: Omit<RequestInit, "method" | "body">,
   ) {
-    if (data instanceof FormData) {
-      return this.putFormData<T>(endpoint, data, options);
-    }
-
+    const isFormData = data instanceof FormData;
     return this.request<T>(endpoint, {
       ...options,
       method: "PUT",
-      body: data ? JSON.stringify(data) : undefined,
+      body: isFormData ? data : data ? JSON.stringify(data) : undefined,
+      isFormData,
     });
   }
 
@@ -287,10 +261,12 @@ class ApiClient {
     data?: any,
     options?: Omit<RequestInit, "method" | "body">,
   ) {
+    const isFormData = data instanceof FormData;
     return this.request<T>(endpoint, {
       ...options,
       method: "PATCH",
-      body: data ? JSON.stringify(data) : undefined,
+      body: isFormData ? data : data ? JSON.stringify(data) : undefined,
+      isFormData,
     });
   }
 
@@ -298,12 +274,11 @@ class ApiClient {
     return this.request<T>(endpoint, { ...options, method: "DELETE" });
   }
 
-  // Méthode pour vérifier l'authentification
+  // Méthodes utilitaires
   checkAuth(): boolean {
     return !!this.getAuthToken();
   }
 
-  // Méthode pour récupérer les informations de l'utilisateur
   async getCurrentUser<T = any>() {
     try {
       return await this.get<T>("/auth/profile");
@@ -314,4 +289,5 @@ class ApiClient {
   }
 }
 
+// Instance unique de l'ApiClient
 export const api = new ApiClient();

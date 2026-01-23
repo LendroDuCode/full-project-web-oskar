@@ -1,5 +1,3 @@
-// next.config.ts - CORRIGÉ
-/** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
     remotePatterns: [
@@ -9,8 +7,8 @@ const nextConfig = {
         pathname: "/uxpilot-auth.appspot.com/**",
       },
       {
-        protocol: "https", // ← CHANGÉ EN HTTPS
-        hostname: "oskar-api.mysonec.pro", // ← VOTRE DOMAINE EN HTTPS
+        protocol: "https",
+        hostname: "oskar.mysonec.pro",
         pathname: "/api/uploads/**",
       },
     ],
@@ -19,19 +17,16 @@ const nextConfig = {
 
   async rewrites() {
     console.log("🔄 Configuration des rewrites chargée");
-
     return [
-      // Règle principale - utiliser localhost pour communication interne
       {
         source: "/api/:path*",
-        destination: "http://localhost:3005/:path*", // ← localhost
+        destination: "http://localhost:3005/:path*",
       },
     ];
   },
 
   env: {
-    NEXT_PUBLIC_API_URL: "", // ← LAISSER VIDE pour utiliser les rewrites
-    NEXT_PUBLIC_USE_PROXY: "true",
+    NEXT_PUBLIC_API_URL: "",
   },
 
   reactStrictMode: false,
@@ -40,5 +35,3 @@ const nextConfig = {
   },
   trailingSlash: false,
 };
-
-export default nextConfig;
