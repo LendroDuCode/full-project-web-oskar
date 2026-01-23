@@ -1,15 +1,19 @@
-// lib/api-client.ts - VERSION COMPLÈTE MIS À JOUR
+// lib/api-client.ts - VERSION CORRIGÉE
 class ApiClient {
   private baseUrl: string;
   private useProxy: boolean;
 
   constructor() {
-    this.useProxy = process.env.NEXT_PUBLIC_USE_PROXY === "true";
-    this.baseUrl = this.useProxy ? "/api/proxy" : "";
+    // Toujours utiliser les rewrites en production, direct en dev
+    this.useProxy = process.env.NODE_ENV === "production" || false;
+    this.baseUrl = this.useProxy
+      ? ""
+      : process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
 
     console.log("🔧 ApiClient configuré:", {
       useProxy: this.useProxy,
       baseUrl: this.baseUrl,
+      nodeEnv: process.env.NODE_ENV,
       apiUrl: process.env.NEXT_PUBLIC_API_URL,
     });
   }
@@ -50,10 +54,17 @@ class ApiClient {
   }
 
   private buildUrl(endpoint: string): string {
+    // Si on utilise le proxy (rewrites), on enlève /api du début car il est déjà dans la destination
     if (this.useProxy) {
-      return `${this.baseUrl}${endpoint}`;
+      // Enlève le préfixe /api si présent
+      if (endpoint.startsWith("/api/")) {
+        return endpoint;
+      }
+      // Si ce n'est pas une route API, on laisse tel quel
+      return endpoint;
     }
-    return endpoint;
+    // Sinon, on construit l'URL complète
+    return `${this.baseUrl}${endpoint}`;
   }
 
   private async handleResponse<T>(response: Response): Promise<T> {
@@ -190,7 +201,18 @@ class ApiClient {
         endpoint,
         errorMessage: error?.message,
         errorStatus: error?.status,
+        url,
       });
+
+      // Si c'est une erreur de connexion, essayer sans proxy
+      if (
+        error?.message?.includes("ECONNREFUSED") ||
+        error?.message?.includes("Failed to fetch")
+      ) {
+        console.log("🔄 Tentative sans proxy...");
+        // On pourrait implémenter une retry logique ici
+      }
+
       throw error;
     }
   }

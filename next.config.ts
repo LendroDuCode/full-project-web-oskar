@@ -21,7 +21,13 @@ const nextConfig = {
       // IMPORTANT: Pour les images du backend
       {
         protocol: "http",
-        hostname: "12.0.2.15", // ← CHANGÉ ICI
+        hostname: "12.0.2.15", // Utilisez l'IP de votre serveur
+        port: "3005",
+        pathname: "/uploads/**",
+      },
+      {
+        protocol: "http",
+        hostname: "localhost", // Pour le développement local
         port: "3005",
         pathname: "/uploads/**",
       },
@@ -36,30 +42,20 @@ const nextConfig = {
     console.log("🔄 Configuration des rewrites chargée");
 
     return [
-      // Règle GÉNÉRIQUE pour TOUT rediriger vers le backend
-      // Cette règle capture TOUTES les requêtes commençant par /api/
+      // Règle principale pour l'API
       {
         source: "/api/:path*",
-        destination: "http://12.0.2.15:3005/api/:path*", // ← CHANGÉ ICI
-        has: [
-          {
-            type: "header",
-            key: "accept",
-            value: ".*application/json.*",
-          },
-        ],
+        destination: "http://12.0.2.15:3005/:path*",
       },
-
-      // Règle ALTERNATIVE pour les routes directes
-      // Capturer les routes commençant par /admin/, /auth/, etc.
+      // Règle alternative pour compatibilité
       {
         source: "/:path*",
-        destination: "http://12.0.2.15:3005/:path*", // ← CHANGÉ ICI
+        destination: "http://12.0.2.15:3005/:path*",
         has: [
           {
             type: "header",
             key: "accept",
-            value: ".*application/json.*",
+            value: "application/json",
           },
         ],
       },
@@ -78,8 +74,8 @@ const nextConfig = {
 
   // Variables d'environnement
   env: {
-    NEXT_PUBLIC_API_URL: "http://12.0.2.15:3005", // ← CHANGÉ ICI
-    NEXT_PUBLIC_USE_PROXY: "false", // On utilise les rewrites
+    NEXT_PUBLIC_API_URL: "http://12.0.2.15:3005", // URL directe vers l'API
+    NEXT_PUBLIC_USE_PROXY: "true", // Activer les rewrites
   },
 
   // Compiler
