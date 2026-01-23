@@ -10,7 +10,7 @@ const nextConfig = {
       },
       {
         protocol: "https", // ← CHANGÉ EN HTTPS
-        hostname: "oskar.mysonec.pro", // ← VOTRE DOMAINE EN HTTPS
+        hostname: "oskar-api.mysonec.pro", // ← VOTRE DOMAINE EN HTTPS
         pathname: "/api/uploads/**",
       },
     ],
