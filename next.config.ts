@@ -21,7 +21,7 @@ const nextConfig = {
       // IMPORTANT: Pour les images du backend
       {
         protocol: "http",
-        hostname: "12.0.2.15", // Utilisez l'IP de votre serveur
+        hostname: "15.236.142.141", // Utilisez l'IP de votre serveur
         port: "3005",
         pathname: "/uploads/**",
       },
@@ -45,12 +45,12 @@ const nextConfig = {
       // Règle principale pour l'API
       {
         source: "/api/:path*",
-        destination: "http://12.0.2.15:3005/:path*",
+        destination: "http://15.236.142.141:3005/:path*",
       },
       // Règle alternative pour compatibilité
       {
         source: "/:path*",
-        destination: "http://12.0.2.15:3005/:path*",
+        destination: "http://15.236.142.141:3005/:path*",
         has: [
           {
             type: "header",
@@ -74,7 +74,7 @@ const nextConfig = {
 
   // Variables d'environnement
   env: {
-    NEXT_PUBLIC_API_URL: "http://12.0.2.15:3005", // URL directe vers l'API
+    NEXT_PUBLIC_API_URL: "http://15.236.142.141", // URL directe vers l'API
     NEXT_PUBLIC_USE_PROXY: "true", // Activer les rewrites
   },
 
