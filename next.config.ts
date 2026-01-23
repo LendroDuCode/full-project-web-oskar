@@ -1,3 +1,5 @@
+// next.config.ts - CORRIGÉ AVEC PLUS DE REWRITES
+/** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
     remotePatterns: [
@@ -18,9 +20,44 @@ const nextConfig = {
   async rewrites() {
     console.log("🔄 Configuration des rewrites chargée");
     return [
+      // Règle principale pour l'API
       {
         source: "/api/:path*",
         destination: "http://localhost:3005/:path*",
+      },
+      // Règles spécifiques pour les routes principales
+      {
+        source: "/annonces/:path*",
+        destination: "http://localhost:3005/annonces/:path*",
+        has: [
+          {
+            type: "header",
+            key: "accept",
+            value: "application/json",
+          },
+        ],
+      },
+      {
+        source: "/categories/:path*",
+        destination: "http://localhost:3005/categories/:path*",
+        has: [
+          {
+            type: "header",
+            key: "accept",
+            value: "application/json",
+          },
+        ],
+      },
+      {
+        source: "/categories",
+        destination: "http://localhost:3005/categories",
+        has: [
+          {
+            type: "header",
+            key: "accept",
+            value: "application/json",
+          },
+        ],
       },
     ];
   },
@@ -35,3 +72,5 @@ const nextConfig = {
   },
   trailingSlash: false,
 };
+
+export default nextConfig;
