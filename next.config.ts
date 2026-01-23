@@ -1,3 +1,4 @@
+// next.config.ts
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
@@ -18,20 +19,61 @@ const nextConfig = {
         port: "3005",
         pathname: "/api/files/**",
       },
-      {
-        protocol: "https",
-        hostname: "15.236.142.141",
-        port: "9000",
-        pathname: "/oskar-bucket/**",
-      },
-      {
-        protocol: "http",
-        hostname: "15.236.142.141",
-        port: "9000",
-        pathname: "/oskar-bucket/**",
-      },
     ],
     unoptimized: true,
+  },
+
+  async rewrites() {
+    return [
+      {
+        source: "/api/:path*",
+        destination: "http://localhost:3005/:path*",
+      },
+      {
+        source: "/categories",
+        destination: "http://localhost:3005/categories",
+        has: [
+          {
+            type: "header",
+            key: "accept",
+            value: "application/json",
+          },
+        ],
+      },
+      {
+        source: "/categories/:path*",
+        destination: "http://localhost:3005/categories/:path*",
+        has: [
+          {
+            type: "header",
+            key: "accept",
+            value: "application/json",
+          },
+        ],
+      },
+      {
+        source: "/annonces/:path*",
+        destination: "http://localhost:3005/annonces/:path*",
+        has: [
+          {
+            type: "header",
+            key: "accept",
+            value: "application/json",
+          },
+        ],
+      },
+      {
+        source: "/annonces",
+        destination: "http://localhost:3005/annonces",
+        has: [
+          {
+            type: "header",
+            key: "accept",
+            value: "application/json",
+          },
+        ],
+      },
+    ];
   },
 
   reactStrictMode: false,

@@ -1,7 +1,7 @@
-// app/(front-office)/autre/page.tsx
+// app/(front-office)/autres/page.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import colors from "@/app/shared/constants/colors";
@@ -70,11 +70,34 @@ interface ListingItem {
 
 // Fonction utilitaire pour convertir les filtres UI en types d'items
 const filterToItemType = (filter: string): "don" | "echange" | "produit" => {
-  switch(filter) {
-    case "dons": return "don";
-    case "echanges": return "echange";
-    case "produits": return "produit";
-    default: return "don"; // Fallback
+  switch (filter) {
+    case "dons":
+      return "don";
+    case "echanges":
+      return "echange";
+    case "produits":
+      return "produit";
+    default:
+      return "don"; // Fallback
+  }
+};
+
+// Fonction pour générer un texte alt sécurisé
+const generateAltText = (titre: string, type: string): string => {
+  const safeTitre = titre?.trim() || "Objet sans nom";
+  const typeText =
+    type === "don" ? "don" : type === "echange" ? "échange" : "produit";
+  return `${safeTitre} - ${typeText}`;
+};
+
+// Fonction pour valider l'URL de l'image
+const isValidImageUrl = (url?: string): boolean => {
+  if (!url) return false;
+  try {
+    const parsedUrl = new URL(url);
+    return parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:";
+  } catch {
+    return false;
   }
 };
 
@@ -88,7 +111,6 @@ export default function AutrePage() {
     "all" | "dons" | "echanges" | "produits"
   >("all");
   const [allItems, setAllItems] = useState<ListingItem[]>([]);
-  const [filteredItems, setFilteredItems] = useState<ListingItem[]>([]);
 
   // Fonction pour récupérer les données
   const fetchCategoryData = useCallback(async () => {
@@ -96,9 +118,18 @@ export default function AutrePage() {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(
-        `http://localhost:3005${API_ENDPOINTS.CATEGORIES.BY_LIBELLE_WITH_ITEMS("Autre")}`,
-      );
+      const apiUrl =
+        process.env.NEXT_PUBLIC_USE_PROXY === "true"
+          ? `/api/categories/libelle/Autre/with-items`
+          : `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005"}/categories/libelle/Autre/with-items`;
+
+      const response = await fetch(apiUrl, {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+        },
+        cache: "no-store",
+      });
 
       if (!response.ok) {
         throw new Error(`Erreur ${response.status}: ${response.statusText}`);
@@ -115,40 +146,43 @@ export default function AutrePage() {
 
       setData(categoryData);
 
-      // Combiner tous les items
+      // Combiner tous les items avec validation des données
       const items: ListingItem[] = [
-        ...categoryData.dons.map((don: Don) => ({
-          uuid: don.uuid,
-          titre: don.titre,
-          description: don.description,
+        ...(categoryData.dons || []).map((don: Don) => ({
+          uuid: don.uuid || "",
+          titre: don.titre?.trim() || "Don sans titre",
+          description: don.description?.trim() || "",
           image: don.image,
           type: "don" as const,
-          date: don.createdAt,
-          statut: don.statut,
+          date: don.createdAt || new Date().toISOString(),
+          statut: don.statut || "inconnu",
         })),
-        ...categoryData.echanges.map((echange: Echange) => ({
-          uuid: echange.uuid,
-          titre: echange.titre,
-          description: echange.description,
+        ...(categoryData.echanges || []).map((echange: Echange) => ({
+          uuid: echange.uuid || "",
+          titre: echange.titre?.trim() || "Échange sans titre",
+          description: echange.description?.trim() || "",
           image: echange.image,
           type: "echange" as const,
-          date: echange.createdAt,
-          statut: echange.statut,
+          date: echange.createdAt || new Date().toISOString(),
+          statut: echange.statut || "inconnu",
         })),
-        ...categoryData.produits.map((produit: Produit) => ({
-          uuid: produit.uuid,
-          titre: produit.nom,
-          description: produit.description,
+        ...(categoryData.produits || []).map((produit: Produit) => ({
+          uuid: produit.uuid || "",
+          titre: produit.nom?.trim() || "Produit sans nom",
+          description: produit.description?.trim() || "",
           image: produit.image,
           type: "produit" as const,
-          date: produit.createdAt,
-          prix: produit.prix,
-          statut: produit.statut,
+          date: produit.createdAt || new Date().toISOString(),
+          prix: produit.prix || 0,
+          statut: produit.statut || "inconnu",
         })),
       ];
 
-      setAllItems(items);
-      setFilteredItems(items);
+      // Filtrer les items qui ont un UUID valide
+      const validItems = items.filter(
+        (item) => item.uuid && item.uuid.trim() !== "",
+      );
+      setAllItems(validItems);
     } catch (err) {
       console.error("Erreur lors du chargement des données:", err);
       setError(err instanceof Error ? err.message : "Une erreur est survenue");
@@ -161,19 +195,18 @@ export default function AutrePage() {
     fetchCategoryData();
   }, [fetchCategoryData]);
 
-  // Filtrer les items
-  useEffect(() => {
-    if (activeFilter === "all") {
-      setFilteredItems(allItems);
-    } else {
-      const itemType = filterToItemType(activeFilter);
-      setFilteredItems(allItems.filter((item) => item.type === itemType));
-    }
-  }, [activeFilter, allItems]);
+  // Calculer les items filtrés et triés avec useMemo
+  const filteredAndSortedItems = useMemo(() => {
+    let filtered = allItems;
 
-  // Trier les items
-  useEffect(() => {
-    const sorted = [...filteredItems].sort((a, b) => {
+    // Appliquer le filtre
+    if (activeFilter !== "all") {
+      const itemType = filterToItemType(activeFilter);
+      filtered = allItems.filter((item) => item.type === itemType);
+    }
+
+    // Appliquer le tri
+    return [...filtered].sort((a, b) => {
       switch (sortOption) {
         case "recent":
           return new Date(b.date).getTime() - new Date(a.date).getTime();
@@ -187,17 +220,23 @@ export default function AutrePage() {
           return 0;
       }
     });
-    setFilteredItems(sorted);
-  }, [sortOption, filteredItems]);
+  }, [allItems, activeFilter, sortOption]);
 
   // Fonction pour formater la date
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("fr-FR", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return "Date inconnue";
+      }
+      return date.toLocaleDateString("fr-FR", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+      });
+    } catch {
+      return "Date inconnue";
+    }
   };
 
   // Composant de chargement
@@ -335,14 +374,15 @@ export default function AutrePage() {
             </div>
 
             <div className="col-lg-4 text-center d-none d-lg-block">
-              {data.categorie.image ? (
+              {data.categorie.image && isValidImageUrl(data.categorie.image) ? (
                 <div className="position-relative" style={{ height: "180px" }}>
                   <Image
                     src={data.categorie.image}
-                    alt={data.categorie.libelle}
+                    alt={data.categorie.libelle || "Catégorie Autre"}
                     fill
                     className="rounded-3 object-fit-cover"
                     style={{ border: "4px solid rgba(255,255,255,0.2)" }}
+                    sizes="100vw"
                   />
                 </div>
               ) : (
@@ -438,9 +478,9 @@ export default function AutrePage() {
                     {activeFilter === "produits" && "Produits en vente"}
                   </h2>
                   <p className="text-muted small mb-0">
-                    {filteredItems.length} objet
-                    {filteredItems.length > 1 ? "s" : ""} trouvé
-                    {filteredItems.length > 1 ? "s" : ""}
+                    {filteredAndSortedItems.length} objet
+                    {filteredAndSortedItems.length > 1 ? "s" : ""} trouvé
+                    {filteredAndSortedItems.length > 1 ? "s" : ""}
                   </p>
                 </div>
 
@@ -549,7 +589,7 @@ export default function AutrePage() {
           </div>
 
           {/* Liste des objets */}
-          {filteredItems.length === 0 ? (
+          {filteredAndSortedItems.length === 0 ? (
             <div className="text-center py-5 my-5">
               <div className="mb-4">
                 <i className="fas fa-search fa-4x text-muted"></i>
@@ -569,7 +609,7 @@ export default function AutrePage() {
             <div
               className={`row g-3 ${viewMode === "list" ? "row-cols-1" : "row-cols-2 row-cols-md-3 row-cols-lg-4"}`}
             >
-              {filteredItems.map((item) => (
+              {filteredAndSortedItems.map((item) => (
                 <div key={item.uuid} className="col">
                   <div className="card h-100 border-0 shadow-sm hover-shadow transition-all">
                     {/* Badge type */}
@@ -594,13 +634,32 @@ export default function AutrePage() {
                         height: viewMode === "list" ? "200px" : "180px",
                       }}
                     >
-                      {item.image ? (
+                      {item.image && isValidImageUrl(item.image) ? (
                         <Image
                           src={item.image}
-                          alt={item.titre}
+                          alt={generateAltText(item.titre, item.type)}
                           fill
                           className="card-img-top object-fit-cover"
                           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+                          onError={(e) => {
+                            // Fallback en cas d'erreur de chargement d'image
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = "none";
+                            const parent = target.parentElement;
+                            if (parent) {
+                              const fallback = document.createElement("div");
+                              fallback.className =
+                                "h-100 d-flex align-items-center justify-content-center bg-light";
+                              fallback.innerHTML = `<i class="fas ${
+                                item.type === "don"
+                                  ? "fa-gift"
+                                  : item.type === "echange"
+                                    ? "fa-exchange-alt"
+                                    : "fa-shopping-bag"
+                              } fa-3x text-muted"></i>`;
+                              parent.appendChild(fallback);
+                            }
+                          }}
                         />
                       ) : (
                         <div className="h-100 d-flex align-items-center justify-content-center bg-light">
@@ -624,16 +683,18 @@ export default function AutrePage() {
                       </h5>
 
                       <p className="card-text small text-muted mb-2 line-clamp-2">
-                        {item.description}
+                        {item.description || "Pas de description disponible."}
                       </p>
 
-                      {item.type === "produit" && item.prix && (
-                        <div className="mb-2">
-                          <span className="fw-bold text-success">
-                            {item.prix.toFixed(2)} €
-                          </span>
-                        </div>
-                      )}
+                      {item.type === "produit" &&
+                        item.prix &&
+                        item.prix > 0 && (
+                          <div className="mb-2">
+                            <span className="fw-bold text-success">
+                              {item.prix.toFixed(2)} €
+                            </span>
+                          </div>
+                        )}
 
                       <div className="d-flex justify-content-between align-items-center">
                         <small className="text-muted">
@@ -657,7 +718,9 @@ export default function AutrePage() {
                       >
                         {item.statut === "actif"
                           ? "Disponible"
-                          : "Indisponible"}
+                          : item.statut === "inactif"
+                            ? "Indisponible"
+                            : "Statut inconnu"}
                       </small>
                     </div>
                   </div>

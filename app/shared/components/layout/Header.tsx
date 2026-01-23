@@ -6,9 +6,12 @@ import { FC, useState, useRef, useEffect } from "react";
 import colors from "../../constants/colors";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/app/(front-office)/auth/AuthContext";
-import axios from "axios";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import PublishAdModal from "@/app/(front-office)/publication-annonce/page";
+
+// Importez votre ApiClient depuis le bon chemin
+// Assurez-vous que ce chemin est correct
+import { api } from "@/lib/api-client"; // OU depuis "@/app/lib/api-client" selon votre structure
 
 interface NavLink {
   name: string;
@@ -33,26 +36,28 @@ const Header: FC = () => {
   const [cartItemsCount] = useState(3);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
-  const [showPublishModal, setShowPublishModal] = useState(false); // État pour le modal
+  const [showPublishModal, setShowPublishModal] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
   const { isLoggedIn, user, logout, openLoginModal } = useAuth();
 
-  // Récupérer les catégories depuis l'API
+  // Récupérer les catégories depuis l'API - CORRIGÉ
   useEffect(() => {
     const fetchCategories = async () => {
       try {
         setLoadingCategories(true);
-        const response = await axios.get(API_ENDPOINTS.CATEGORIES.LIST);
+
+        // Utilisez votre ApiClient au lieu de axios directement
+        const response = await api.get(API_ENDPOINTS.CATEGORIES.LIST);
 
         // Filtrer les catégories actives
-        const activeCategories = response.data.filter(
+        const activeCategories = response.filter(
           (category: any) =>
             !category.is_deleted && category.deleted_at === null,
         );
 
-        // Dédupliquer par libellé (au cas où il y aurait des doublons)
+        // Dédupliquer par libellé
         const uniqueCategories = activeCategories.reduce(
           (acc: Category[], category: any) => {
             const exists = acc.find(
@@ -74,10 +79,46 @@ const Header: FC = () => {
         );
 
         setCategories(uniqueCategories);
-      } catch (error) {
+      } catch (error: any) {
         console.error("Erreur lors du chargement des catégories:", error);
-        // En cas d'erreur, définir un tableau vide
-        setCategories([]);
+
+        // Log détaillé pour le débogage
+        console.log("🌐 Détails de la requête API:");
+        console.log("- Endpoint:", API_ENDPOINTS.CATEGORIES.LIST);
+        console.log("- Mode:", process.env.NODE_ENV);
+        console.log("- USE_PROXY:", process.env.NEXT_PUBLIC_USE_PROXY);
+        console.log("- API_URL:", process.env.NEXT_PUBLIC_API_URL);
+        console.log("- Erreur complète:", error.message || error);
+
+        // En cas d'erreur, définir des catégories par défaut
+        const defaultCategories: Category[] = [
+          {
+            uuid: "1",
+            libelle: "Vêtements & Chaussures",
+            slug: "vetements-chaussures",
+            type: "produit",
+          },
+          {
+            uuid: "2",
+            libelle: "Éducation & Culture",
+            slug: "education-culture",
+            type: "produit",
+          },
+          {
+            uuid: "3",
+            libelle: "Électronique",
+            slug: "electronique",
+            type: "produit",
+          },
+          {
+            uuid: "4",
+            libelle: "Services de proximité",
+            slug: "services-proximite",
+            type: "service",
+          },
+          { uuid: "5", libelle: "Autre", slug: "autre", type: "autre" },
+        ];
+        setCategories(defaultCategories);
       } finally {
         setLoadingCategories(false);
       }

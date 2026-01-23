@@ -1,4 +1,4 @@
-// lib/api-client.ts - VERSION AMÉLIORÉE AVEC SUPPORT .env
+// lib/api-client.ts - VERSION CORRIGÉE AVEC GESTION D'ERREUR AMÉLIORÉE
 class ApiClient {
   private baseUrl: string;
   private useProxy: boolean;
@@ -15,29 +15,37 @@ class ApiClient {
       if (window.location.protocol === "https:") {
         // En HTTPS (production), utiliser les chemins relatifs
         this.baseUrl = "";
-        console.log("🔧 ApiClient configuré pour HTTPS - chemins relatifs");
+        if (!this.isProduction) {
+          console.log("🔧 ApiClient configuré pour HTTPS - chemins relatifs");
+        }
       } else {
         // En HTTP (dev), utiliser l'URL configurée
         this.baseUrl =
           process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
-        console.log(
-          "🔧 ApiClient configuré pour HTTP - URL directe:",
-          this.baseUrl,
-        );
+        if (!this.isProduction) {
+          console.log(
+            "🔧 ApiClient configuré pour HTTP - URL directe:",
+            this.baseUrl,
+          );
+        }
       }
     } else {
       // Côté serveur (SSR)
       if (this.isProduction) {
         // En production SSR, utiliser l'IP interne
         this.baseUrl = "http://localhost:3005";
-        console.log(
-          "🔧 ApiClient configuré côté serveur production - localhost:3005",
-        );
+        if (!this.isProduction) {
+          console.log(
+            "🔧 ApiClient configuré côté serveur production - localhost:3005",
+          );
+        }
       } else {
         // En développement SSR
         this.baseUrl =
           process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
-        console.log("🔧 ApiClient configuré côté serveur dev:", this.baseUrl);
+        if (!this.isProduction) {
+          console.log("🔧 ApiClient configuré côté serveur dev:", this.baseUrl);
+        }
       }
     }
   }
@@ -212,12 +220,29 @@ class ApiClient {
       const response = await fetch(url, config);
       return await this.handleResponse<T>(response);
     } catch (error: any) {
-      console.error("❌ API Request failed:", {
+      // GESTION D'ERREUR AMÉLIORÉE
+      const errorDetails = {
         endpoint,
-        errorMessage: error?.message,
         url,
-      });
+        method: options.method || "GET",
+        errorName: error?.name,
+        errorMessage: error?.message || "Unknown error",
+        errorStack: error?.stack,
+        errorCode: error?.code,
+        errorStatus: error?.status,
+      };
 
+      console.error("❌ API Request failed:", errorDetails);
+
+      // Si c'est une erreur de réseau
+      if (error?.name === "TypeError" && error?.message?.includes("fetch")) {
+        throw new Error(
+          `Impossible de se connecter à l'API à l'URL: ${url}. ` +
+            `Vérifiez que le serveur backend est démarré et accessible.`,
+        );
+      }
+
+      // Si c'est une erreur Mixed Content
       if (error?.message?.includes("Mixed Content")) {
         throw new Error(
           "Erreur Mixed Content: Le site est en HTTPS mais l'API est appelée en HTTP. " +
@@ -225,9 +250,20 @@ class ApiClient {
         );
       }
 
-      throw error;
+      // Si l'erreur a un message, le propager
+      if (error?.message) {
+        throw error;
+      }
+
+      // Sinon, créer une nouvelle erreur avec les détails
+      throw new Error(
+        `API Request failed: ${JSON.stringify(errorDetails, null, 2)}`,
+      );
     }
   }
+
+  // ... gardez toutes les autres méthodes (postFormData, putFormData, etc.)
+  // Copiez-collez ici toutes vos méthodes existantes
 
   // Méthodes HTTP spécialisées pour FormData
   postFormData<T = any>(
