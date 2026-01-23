@@ -7,6 +7,7 @@ import { faGoogle, faFacebook } from "@fortawesome/free-brands-svg-icons";
 import colors from "../../../shared/constants/colors";
 import { useRouter } from "next/navigation";
 import "./LoginModal.css";
+import { API_ENDPOINTS } from "@/config/api-endpoints";
 
 interface LoginModalProps {
   visible: boolean;
@@ -46,8 +47,6 @@ interface LoginResponse {
   };
   [key: string]: any;
 }
-
-const API_BASE_URL = "http://localhost:3005";
 
 const LoginModal: React.FC<LoginModalProps> = ({
   visible,
@@ -235,28 +234,28 @@ const LoginModal: React.FC<LoginModalProps> = ({
 
       switch (userType) {
         case "admin":
-          endpoint = `${API_BASE_URL}/auth/admin/login`;
+          endpoint = API_ENDPOINTS.AUTH.ADMIN.LOGIN;
           requestBody = {
             email: loginData.email,
             password: loginData.password,
           };
           break;
         case "agent":
-          endpoint = `${API_BASE_URL}/auth/agent/login`;
+          endpoint = API_ENDPOINTS.AUTH.AGENT.LOGIN;
           requestBody = {
             email: loginData.email,
             mot_de_passe: loginData.password,
           };
           break;
         case "utilisateur":
-          endpoint = `${API_BASE_URL}/auth/utilisateur/login`;
+          endpoint = API_ENDPOINTS.AUTH.UTILISATEUR.LOGIN;
           requestBody = {
             email: loginData.email,
             password: loginData.password,
           };
           break;
         case "vendeur":
-          endpoint = `${API_BASE_URL}/auth/vendeur/login`;
+          endpoint = API_ENDPOINTS.AUTH.VENDEUR.LOGIN;
           requestBody = {
             email: loginData.email,
             mot_de_passe: loginData.password,
@@ -264,7 +263,7 @@ const LoginModal: React.FC<LoginModalProps> = ({
           break;
         default:
           // Par défaut, essayer d'abord vendeur, puis utilisateur
-          endpoint = `${API_BASE_URL}/auth/vendeur/login`;
+          endpoint = API_ENDPOINTS.AUTH.VENDEUR.LOGIN;
           requestBody = {
             email: loginData.email,
             mot_de_passe: loginData.password,
@@ -281,6 +280,7 @@ const LoginModal: React.FC<LoginModalProps> = ({
           Accept: "application/json",
         },
         body: JSON.stringify(requestBody),
+        credentials: "include",
       });
 
       const data = await response.json();
@@ -292,7 +292,7 @@ const LoginModal: React.FC<LoginModalProps> = ({
             "Tentative avec vendeur échouée, essai avec utilisateur...",
           );
           const utilisateurResponse = await fetch(
-            `${API_BASE_URL}/auth/utilisateur/login`,
+            API_ENDPOINTS.AUTH.UTILISATEUR.LOGIN,
             {
               method: "POST",
               headers: {
@@ -303,6 +303,7 @@ const LoginModal: React.FC<LoginModalProps> = ({
                 email: loginData.email,
                 password: loginData.password,
               }),
+              credentials: "include",
             },
           );
 
@@ -389,6 +390,46 @@ const LoginModal: React.FC<LoginModalProps> = ({
 
   const handleSocialLogin = (provider: "google" | "facebook") => {
     console.log(`Connexion avec ${provider}`);
+
+    let endpoint = "";
+    switch (provider) {
+      case "google":
+        endpoint = API_ENDPOINTS.AUTH.UTILISATEUR.GOOGLE_CONNEXION;
+        break;
+      case "facebook":
+        endpoint = API_ENDPOINTS.AUTH.UTILISATEUR.FACEBOOK;
+        break;
+    }
+
+    // Pour la connexion sociale, on redirige vers l'endpoint OAuth
+    window.location.href = endpoint;
+  };
+
+  const handleForgotPassword = () => {
+    const userType = getUserTypeFromEmail(loginData.email || "");
+    let endpoint = "";
+
+    switch (userType) {
+      case "admin":
+        endpoint = API_ENDPOINTS.AUTH.ADMIN.FORGOT_PASSWORD;
+        break;
+      case "vendeur":
+        endpoint = API_ENDPOINTS.AUTH.VENDEUR.FORGOT_PASSWORD;
+        break;
+      case "utilisateur":
+        endpoint = API_ENDPOINTS.AUTH.UTILISATEUR.FORGOT_PASSWORD;
+        break;
+      default:
+        endpoint = API_ENDPOINTS.AUTH.UTILISATEUR.FORGOT_PASSWORD;
+    }
+
+    // Ici, vous pouvez ouvrir un modal de mot de passe oublié
+    // ou rediriger vers une page dédiée
+    console.log(`Redirection vers: ${endpoint} pour réinitialisation`);
+    // Pour l'instant, juste un alert
+    alert(
+      `Fonctionnalité de réinitialisation pour ${userType} sera implémentée`,
+    );
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -523,6 +564,7 @@ const LoginModal: React.FC<LoginModalProps> = ({
                     <button
                       type="button"
                       className="btn btn-link p-0 text-decoration-none"
+                      onClick={handleForgotPassword}
                       disabled={loading}
                       style={{
                         fontSize: "0.875rem",
