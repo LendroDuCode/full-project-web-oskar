@@ -1,28 +1,44 @@
-// lib/api-client.ts - VERSION COMPLÈTE AVEC TOUTES LES MÉTHODES
+// lib/api-client.ts - VERSION AMÉLIORÉE AVEC SUPPORT .env
 class ApiClient {
   private baseUrl: string;
+  private useProxy: boolean;
+  private isProduction: boolean;
 
   constructor() {
-    // Toujours utiliser les chemins relatifs pour éviter les problèmes Mixed Content
+    // Lire les variables d'environnement
+    this.useProxy = process.env.NEXT_PUBLIC_USE_PROXY === "true";
+    this.isProduction = process.env.NODE_ENV === "production";
+
+    // Configurer l'URL de base selon l'environnement
     if (typeof window !== "undefined") {
-      // Côté client
+      // Côté client (browser)
       if (window.location.protocol === "https:") {
-        // En HTTPS, utiliser les chemins relatifs
+        // En HTTPS (production), utiliser les chemins relatifs
         this.baseUrl = "";
         console.log("🔧 ApiClient configuré pour HTTPS - chemins relatifs");
       } else {
-        // En HTTP (dev), utiliser l'URL configurée ou localhost
+        // En HTTP (dev), utiliser l'URL configurée
         this.baseUrl =
-          process.env.NEXT_PUBLIC_API_URL || "http://15.236.142.141:3005";
+          process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
         console.log(
           "🔧 ApiClient configuré pour HTTP - URL directe:",
           this.baseUrl,
         );
       }
     } else {
-      // Côté serveur (SSR), utiliser localhost
-      this.baseUrl = "http://15.236.142.141:3005";
-      console.log("🔧 ApiClient configuré côté serveur - 15.236.142.141:3005");
+      // Côté serveur (SSR)
+      if (this.isProduction) {
+        // En production SSR, utiliser l'IP interne
+        this.baseUrl = "http://localhost:3005";
+        console.log(
+          "🔧 ApiClient configuré côté serveur production - localhost:3005",
+        );
+      } else {
+        // En développement SSR
+        this.baseUrl =
+          process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
+        console.log("🔧 ApiClient configuré côté serveur dev:", this.baseUrl);
+      }
     }
   }
 
@@ -56,11 +72,14 @@ class ApiClient {
   }
 
   private buildUrl(endpoint: string): string {
-    if (
-      typeof window !== "undefined" &&
-      window.location.protocol === "https:"
-    ) {
+    // Si on utilise le proxy ou qu'on est en HTTPS, utiliser les chemins relatifs avec /api/
+    const useApiPrefix =
+      this.useProxy ||
+      (typeof window !== "undefined" && window.location.protocol === "https:");
+
+    if (useApiPrefix) {
       if (!endpoint.startsWith("http")) {
+        // Ajouter /api/ seulement si ce n'est pas déjà présent
         if (!endpoint.startsWith("/api/")) {
           return `/api${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
         }
@@ -68,16 +87,19 @@ class ApiClient {
       }
     }
 
+    // Sinon, utiliser l'URL complète
     return `${this.baseUrl}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
   }
 
   private async handleResponse<T>(response: Response): Promise<T> {
-    console.log("📥 API Response:", {
-      status: response.status,
-      ok: response.ok,
-      url: response.url,
-      statusText: response.statusText,
-    });
+    if (!this.isProduction) {
+      console.log("📥 API Response:", {
+        status: response.status,
+        ok: response.ok,
+        url: response.url,
+        statusText: response.statusText,
+      });
+    }
 
     if (response.status === 401) {
       console.error("❌ Erreur 401: Non authentifié");
@@ -150,13 +172,15 @@ class ApiClient {
   ): Promise<T> {
     const url = this.buildUrl(endpoint);
 
-    console.log("🌐 API Request:", {
-      endpoint,
-      url,
-      method: options.method || "GET",
-      protocol:
-        typeof window !== "undefined" ? window.location.protocol : "server",
-    });
+    if (!this.isProduction) {
+      console.log("🌐 API Request:", {
+        endpoint,
+        url,
+        method: options.method || "GET",
+        useProxy: this.useProxy,
+        isProduction: this.isProduction,
+      });
+    }
 
     const headers: HeadersInit = {};
 
@@ -171,7 +195,7 @@ class ApiClient {
       const token = this.getAuthToken();
       if (token) {
         headers["Authorization"] = `Bearer ${token}`;
-      } else {
+      } else if (!this.isProduction) {
         console.warn("⚠️  Aucun token d'authentification trouvé");
       }
     }
@@ -197,7 +221,7 @@ class ApiClient {
       if (error?.message?.includes("Mixed Content")) {
         throw new Error(
           "Erreur Mixed Content: Le site est en HTTPS mais l'API est appelée en HTTP. " +
-            "Vérifiez la configuration des rewrites et du reverse proxy.",
+            "Vérifiez la configuration.",
         );
       }
 
@@ -311,7 +335,9 @@ class ApiClient {
     try {
       return await this.get<T>("/auth/profile");
     } catch (error) {
-      console.error("❌ Erreur lors de la récupération du profil:", error);
+      if (!this.isProduction) {
+        console.error("❌ Erreur lors de la récupération du profil:", error);
+      }
       return null;
     }
   }
