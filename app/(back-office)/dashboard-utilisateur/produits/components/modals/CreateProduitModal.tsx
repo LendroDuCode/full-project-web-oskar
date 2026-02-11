@@ -357,8 +357,7 @@ export default function CreateDonModal({
       const response = await api.postFormData(
         API_ENDPOINTS.DONS.CREATE,
         formDataToSend,
-        {
-        },
+        {},
       );
 
       // Vérifier la réponse

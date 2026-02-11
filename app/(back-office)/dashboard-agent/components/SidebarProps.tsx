@@ -49,7 +49,7 @@ export default function SidebarModPanel({
       label: "Tableau de Bord",
       icon: "fa-chart-line",
       badge: null,
-      href: "/dashboard-agent/dashboard",
+      href: "/dashboard-agent",
     },
     {
       id: "ads",
@@ -65,6 +65,7 @@ export default function SidebarModPanel({
       badge: { count: 23, color: "bg-danger" },
       href: "/dashboard-agent/certifications",
     },
+
     {
       id: "shops",
       label: "Boutiques",
@@ -72,6 +73,7 @@ export default function SidebarModPanel({
       badge: null,
       href: "/dashboard-agent/boutiques",
     },
+    /*
     {
       id: "messages",
       label: "Messages",
@@ -79,6 +81,9 @@ export default function SidebarModPanel({
       badge: { count: 12, color: "bg-primary" },
       href: "/dashboard-agent/messages",
     },
+    */
+
+    /*
     {
       id: "reports",
       label: "Signalements",
@@ -86,6 +91,8 @@ export default function SidebarModPanel({
       badge: null,
       href: "/dashboard-agent/signalements",
     },
+    */
+
     {
       id: "support",
       label: "Support",
@@ -150,6 +157,12 @@ export default function SidebarModPanel({
           href: "/dashboard-agent/categories/liste",
           icon: "fa-list text-info",
         },
+        // AJOUT DE LA SOUS-CATÉGORIE FAVORIS
+        {
+          label: "Favoris par catégorie",
+          href: "/dashboard-agent/categories/sous-categories",
+          icon: "fa-layer-group text-info",
+        },
       ],
     },
     {
@@ -164,6 +177,7 @@ export default function SidebarModPanel({
         },
       ],
     },
+    /*
     {
       id: "history",
       label: "Historique",
@@ -186,6 +200,8 @@ export default function SidebarModPanel({
         },
       ],
     },
+    */
+
     {
       id: "roles",
       label: "Gestion des Rôles",

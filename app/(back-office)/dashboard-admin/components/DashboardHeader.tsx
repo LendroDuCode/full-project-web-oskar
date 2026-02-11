@@ -48,6 +48,7 @@ export default function DashboardHeader({
 }: HeaderProps) {
   const [selectedPeriod, setSelectedPeriod] = useState("Aujourd'hui");
   const [notificationCount, setNotificationCount] = useState(1);
+  const [messageCount, setMessageCount] = useState(3);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [profile, setProfile] = useState<AdminProfile | null>(null);
@@ -154,6 +155,15 @@ export default function DashboardHeader({
   const handleNotificationClick = () => {
     console.log("Opening notifications...");
     setNotificationCount(0);
+    // Redirection vers la page des notifications
+    router.push("/dashboard-admin/notifications");
+  };
+
+  const handleMessagesClick = () => {
+    console.log("Opening messages...");
+    setMessageCount(0);
+    // Redirection vers la page des messages
+    router.push("/dashboard-admin/messages");
   };
 
   const handleLogout = async () => {
@@ -183,6 +193,16 @@ export default function DashboardHeader({
         router.push("/");
       }, 500);
     }
+  };
+
+  const handleHomeClick = () => {
+    setShowUserMenu(false);
+    router.push("/");
+  };
+
+  const handleMessagesMenuClick = () => {
+    setShowUserMenu(false);
+    router.push("/dashboard-admin/messages");
   };
 
   const handleProfileClick = () => {
@@ -423,6 +443,34 @@ export default function DashboardHeader({
 
             {/* Groupe d'icônes d'action */}
             <div className="d-flex align-items-center gap-1 border-start ps-2 ms-1">
+              {/* Messages */}
+              <button
+                onClick={handleMessagesClick}
+                onKeyDown={(e) => handleKeyDown(e, handleMessagesClick)}
+                className="btn btn-light btn-sm position-relative p-2"
+                aria-label="Messages"
+                title="Messages"
+                style={{ borderRadius: "8px" }}
+                disabled={loading}
+              >
+                <i
+                  className="fa-regular fa-envelope text-muted"
+                  aria-hidden="true"
+                ></i>
+                {messageCount > 0 && (
+                  <span
+                    className="position-absolute top-0 end-0 translate-middle bg-primary rounded-circle"
+                    style={{
+                      width: "8px",
+                      height: "8px",
+                      border: "2px solid white",
+                    }}
+                  >
+                    <span className="visually-hidden">Nouveaux messages</span>
+                  </span>
+                )}
+              </button>
+
               {/* Notification */}
               {showNotification && (
                 <button
@@ -619,6 +667,44 @@ export default function DashboardHeader({
 
                     <div className="py-2">
                       <button
+                        onClick={handleHomeClick}
+                        onKeyDown={(e) => handleKeyDown(e, handleHomeClick)}
+                        className="btn btn-link text-dark text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
+                        role="menuitem"
+                      >
+                        <i
+                          className="fa-solid fa-home text-muted"
+                          style={{ width: "20px" }}
+                          aria-hidden="true"
+                        ></i>
+                        <span>Accueil</span>
+                      </button>
+
+                      <button
+                        onClick={handleMessagesMenuClick}
+                        onKeyDown={(e) =>
+                          handleKeyDown(e, handleMessagesMenuClick)
+                        }
+                        className="btn btn-link text-dark text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light position-relative"
+                        role="menuitem"
+                      >
+                        <i
+                          className="fa-regular fa-envelope text-muted"
+                          style={{ width: "20px" }}
+                          aria-hidden="true"
+                        ></i>
+                        <span>Messages</span>
+                        {messageCount > 0 && (
+                          <span
+                            className="position-absolute end-0 me-3 badge bg-primary rounded-pill"
+                            style={{ fontSize: "0.7rem" }}
+                          >
+                            {messageCount}
+                          </span>
+                        )}
+                      </button>
+
+                      <button
                         onClick={handleProfileClick}
                         onKeyDown={(e) => handleKeyDown(e, handleProfileClick)}
                         className="btn btn-link text-dark text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
@@ -699,6 +785,9 @@ export default function DashboardHeader({
           }
           .hover-bg-light:hover {
             background-color: #f8f9fa;
+          }
+          .bg-purple {
+            background-color: #6f42c1 !important;
           }
         `}</style>
       </header>

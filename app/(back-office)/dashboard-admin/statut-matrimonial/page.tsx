@@ -1,4 +1,5 @@
 "use client";
+
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -23,6 +24,7 @@ import {
   faCircleCheck,
   faCircleXmark,
   faStar,
+  faCode,
   faCrown,
   faCheckSquare,
   faSquare,
@@ -38,240 +40,98 @@ import {
   faExclamationTriangle,
 } from "@fortawesome/free-solid-svg-icons";
 
+// Importez vos modals
+import CreateStatutMatrimonialModal from "./components/modals/CreateStatutMatrimonialModal";
+import EditStatutMatrimonialModal from "./components/modals/EditStatutMatrimonialModal";
+import DeleteStatutMatrimonialModal from "./components/modals/DeleteStatutMatrimonialModal";
+
 // Importez votre client API et endpoints
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
+import ViewStatutMatrimonialModal from "./components/modals/ViewStatutMatrimonialModal";
+import BulkDeleteModal from "./components/modals/BulkDeleteModal";
+import BulkActionsBar from "./components/modals/BulkActionsBar";
+import DefaultBadge from "./components/modals/DefaultBadge";
+import StatusBadge from "./components/modals/StatusBadge";
 
-// Types
+// Types pour le statut matrimonial
 interface StatutMatrimonialType {
+  // Identifiant unique
   uuid: string;
+
+  // Informations principales
   libelle: string;
-  code: string;
   slug: string;
+  code: string;
+  description?: string;
+  is_default: boolean;
+
+  // Statut et configuration
   statut: "actif" | "inactif";
+  defaut: boolean;
+  ordre?: number;
+
+  // Métadonnées
   createdAt?: string;
   updatedAt?: string;
+  createdBy?: string;
+  updatedBy?: string;
+
+  // Données statistiques (optionnelles)
+  nombreUtilisations?: number;
+  derniereUtilisation?: string;
+
+  // Historique des modifications
+  historique?: Array<{
+    date: string;
+    action: string;
+    utilisateur: string;
+    details?: string;
+  }>;
+
+  // Relations (optionnelles selon les besoins)
+  utilisateurs?: Array<{
+    uuid: string;
+    nom: string;
+    prenom: string;
+    email: string;
+  }>;
+
+  // Validation et contraintes
+  estValide?: boolean;
+  contraintes?: {
+    minAge?: number;
+    maxAge?: number;
+    conditions?: string[];
+  };
 }
 
-// Composant de badge de statut
-const StatusBadge = ({ statut }: { statut: string }) => {
-  if (statut === "actif") {
-    return (
-      <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 d-inline-flex align-items-center gap-1">
-        <FontAwesomeIcon icon={faCircleCheck} className="fs-12" />
-        <span>Actif</span>
-      </span>
-    );
-  }
-  return (
-    <span className="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 d-inline-flex align-items-center gap-1">
-      <FontAwesomeIcon icon={faCircleXmark} className="fs-12" />
-      <span>Inactif</span>
-    </span>
-  );
-};
-
-// Badge de statut par défaut
-const DefaultBadge = ({ isDefault }: { isDefault: boolean }) => {
-  if (!isDefault) return null;
-  return (
-    <span className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 d-inline-flex align-items-center gap-1 ms-2">
-      <FontAwesomeIcon icon={faCrown} className="fs-12" />
-      <span>Par défaut</span>
-    </span>
-  );
-};
-
-// Barre d'actions groupées
-const BulkActionsBar = ({
-  selectedCount,
-  onSelectAll,
-  onClearSelection,
-  onBulkAction,
-  isAllSelected,
-  totalItems,
-  loading,
-}: {
-  selectedCount: number;
-  onSelectAll: () => void;
-  onClearSelection: () => void;
-  onBulkAction: (action: string) => void;
-  isAllSelected: boolean;
-  totalItems: number;
-  loading: boolean;
-}) => {
-  if (selectedCount === 0) return null;
-  return (
-    <div className="bg-primary bg-opacity-10 border-primary border-start border-5 p-3 mb-3 rounded">
-      <div className="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
-        <div className="d-flex align-items-center gap-3">
-          <div
-            className="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center"
-            style={{ width: "40px", height: "40px" }}
-          >
-            <FontAwesomeIcon icon={faCheck} />
-          </div>
-          <div>
-            <h6 className="mb-0 fw-bold">
-              {selectedCount} statut(s) sélectionné(s)
-            </h6>
-            <small className="text-muted">
-              {isAllSelected
-                ? "Tous les statuts sont sélectionnés"
-                : `${selectedCount} sur ${totalItems} statuts sélectionnés`}
-            </small>
-          </div>
-        </div>
-        <div className="d-flex flex-wrap gap-2">
-          <button
-            className="btn btn-outline-primary btn-sm"
-            onClick={onSelectAll}
-            disabled={loading}
-          >
-            {isAllSelected ? "Tout désélectionner" : "Tout sélectionner"}
-          </button>
-          <button
-            className="btn btn-success btn-sm d-flex align-items-center gap-2"
-            onClick={() => onBulkAction("activate")}
-            disabled={loading}
-          >
-            <FontAwesomeIcon icon={faPlay} />
-            Activer
-          </button>
-          <button
-            className="btn btn-warning btn-sm d-flex align-items-center gap-2"
-            onClick={() => onBulkAction("deactivate")}
-            disabled={loading}
-          >
-            <FontAwesomeIcon icon={faPause} />
-            Désactiver
-          </button>
-          <button
-            className="btn btn-danger btn-sm d-flex align-items-center gap-2"
-            onClick={() => onBulkAction("delete")}
-            disabled={loading}
-          >
-            <FontAwesomeIcon icon={faTrashIcon} />
-            Supprimer
-          </button>
-          <button
-            className="btn btn-outline-secondary btn-sm"
-            onClick={onClearSelection}
-            disabled={loading}
-          >
-            <FontAwesomeIcon icon={faBanIcon} />
-            Annuler
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Modal de suppression multiple
-const BulkDeleteModal = ({
-  show,
-  loading,
-  count,
-  onClose,
-  onConfirm,
-}: {
-  show: boolean;
-  loading: boolean;
-  count: number;
-  onClose: () => void;
-  onConfirm: () => void;
-}) => {
-  if (!show) return null;
-  return (
-    <div
-      className="modal fade show d-block"
-      style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
-      tabIndex={-1}
-    >
-      <div className="modal-dialog modal-dialog-centered">
-        <div className="modal-content border-0 shadow-lg">
-          <div className="modal-header border-0 bg-danger text-white rounded-top-3">
-            <h5 className="modal-title fw-bold">
-              <FontAwesomeIcon icon={faTrash} className="me-2" />
-              Suppression multiple
-            </h5>
-            <button
-              type="button"
-              className="btn-close btn-close-white"
-              onClick={onClose}
-              disabled={loading}
-            ></button>
-          </div>
-          <div className="modal-body p-4">
-            <div className="alert alert-warning mb-3 border-0">
-              <FontAwesomeIcon icon={faExclamationTriangle} className="me-2" />
-              <strong>Attention :</strong> Cette action est définitive
-            </div>
-            <p className="mb-3">
-              Êtes-vous sûr de vouloir supprimer{" "}
-              <strong>{count} statut(s) matrimonial(aux)</strong> ?
-            </p>
-            <div className="text-danger">
-              <small>
-                Cette action est irréversible. Toutes les données associées
-                seront perdues.
-              </small>
-            </div>
-          </div>
-          <div className="modal-footer border-0">
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={onClose}
-              disabled={loading}
-            >
-              Annuler
-            </button>
-            <button
-              type="button"
-              className="btn btn-danger"
-              onClick={onConfirm}
-              disabled={loading}
-            >
-              {loading ? (
-                <>
-                  <span className="spinner-border spinner-border-sm me-2"></span>
-                  Suppression en cours...
-                </>
-              ) : (
-                <>
-                  <FontAwesomeIcon icon={faTrash} className="me-2" />
-                  Supprimer les statuts
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 export default function StatutsMatrimoniauxPage() {
+  // États principaux
   const [statuts, setStatuts] = useState<StatutMatrimonialType[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [localError, setLocalError] = useState<string | null>(null);
 
   // États pour la sélection multiple
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [isAllSelected, setIsAllSelected] = useState(false);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
 
-  // États pour les filtres et recherche
+  // États pour les modals
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedStatut, setSelectedStatut] =
+    useState<StatutMatrimonialType | null>(null);
+
+  // États pour les filtres
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
-
-  // Options pour les éléments par page
-  const itemsPerPageOptions = [5, 10, 20, 50];
   const [limit, setLimit] = useState(10);
+
+  const itemsPerPageOptions = [5, 10, 20, 50];
 
   // Charger les statuts
   const fetchStatuts = useCallback(async () => {
@@ -326,7 +186,8 @@ export default function StatutsMatrimoniauxPage() {
       result = result.filter(
         (s) =>
           s.libelle.toLowerCase().includes(term) ||
-          s.slug.toLowerCase().includes(term),
+          s.slug.toLowerCase().includes(term) ||
+          s.code.toLowerCase().includes(term),
       );
     }
     if (selectedStatus !== "all") {
@@ -371,11 +232,56 @@ export default function StatutsMatrimoniauxPage() {
     setIsAllSelected(false);
   };
 
+  // Actions sur un statut unique
+  const openViewModal = (statut: StatutMatrimonialType) => {
+    setSelectedStatut(statut);
+    setShowViewModal(true);
+  };
+
+  const openEditModal = (statut: StatutMatrimonialType) => {
+    setSelectedStatut(statut);
+    setShowEditModal(true);
+  };
+
+  const openDeleteModal = (statut: StatutMatrimonialType) => {
+    setSelectedStatut(statut);
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteStatut = async () => {
+    if (!selectedStatut) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      await api.delete(
+        API_ENDPOINTS.STATUTS_MATRIMONIAUX.DELETE(selectedStatut.uuid),
+      );
+
+      setShowDeleteModal(false);
+      setSelectedStatut(null);
+      clearSelection();
+      await fetchStatuts();
+
+      setSuccessMessage("Statut matrimonial supprimé avec succès");
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err: any) {
+      setError(
+        err.response?.data?.message ||
+          "Erreur lors de la suppression du statut",
+      );
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Actions en masse
   const handleBulkAction = async (actionId: string) => {
     if (selectedRows.size === 0) {
-      setLocalError("Veuillez sélectionner au moins un statut");
-      setTimeout(() => setLocalError(null), 3000);
+      setError("Veuillez sélectionner au moins un statut");
+      setTimeout(() => setError(null), 3000);
       return;
     }
 
@@ -385,30 +291,58 @@ export default function StatutsMatrimoniauxPage() {
     }
 
     try {
-      // Simuler l'action (vous pouvez appeler votre API ici)
-      setLocalError(null);
+      const promises = Array.from(selectedRows).map((uuid) => {
+        const newStatus = actionId === "activate" ? "actif" : "inactif";
+        return api.put(API_ENDPOINTS.STATUTS_MATRIMONIAUX.UPDATE(uuid), {
+          statut: newStatus,
+        });
+      });
+
+      await Promise.all(promises);
+
       setSuccessMessage(
         `${selectedRows.size} statut(s) ${actionId === "activate" ? "activé(s)" : "désactivé(s)"} avec succès`,
       );
       setTimeout(() => setSuccessMessage(null), 3000);
       clearSelection();
+      await fetchStatuts();
     } catch (err: any) {
-      setLocalError("Erreur lors de l'action en masse");
+      setError("Erreur lors de l'action en masse");
     }
   };
 
   const handleBulkDelete = async () => {
     try {
-      setLocalError(null);
+      setLoading(true);
+      setError(null);
+
+      const promises = Array.from(selectedRows).map((uuid) =>
+        api.delete(API_ENDPOINTS.STATUTS_MATRIMONIAUX.DELETE(uuid)),
+      );
+
+      await Promise.all(promises);
+
+      setShowBulkDeleteModal(false);
+      clearSelection();
+      await fetchStatuts();
+
       setSuccessMessage(
         `${selectedRows.size} statut(s) supprimé(s) avec succès`,
       );
       setTimeout(() => setSuccessMessage(null), 3000);
-      setShowBulkDeleteModal(false);
-      clearSelection();
     } catch (err: any) {
-      setLocalError("Erreur lors de la suppression");
+      setError("Erreur lors de la suppression");
+    } finally {
+      setLoading(false);
     }
+  };
+
+  // Gestion du succès
+  const handleSuccess = (message: string = "Opération réussie") => {
+    setSuccessMessage(message);
+    clearSelection();
+    fetchStatuts();
+    setTimeout(() => setSuccessMessage(null), 3000);
   };
 
   // Export CSV
@@ -419,11 +353,23 @@ export default function StatutsMatrimoniauxPage() {
     }
     try {
       const csvContent = [
-        ["Libellé", "Slug", "Statut", "Créé le", "Modifié le"],
+        [
+          "Libellé",
+          "Code",
+          "Slug",
+          "Statut",
+          "Ordre",
+          "Par défaut",
+          "Créé le",
+          "Modifié le",
+        ],
         ...filteredStatuts.map((s) => [
           s.libelle || "",
+          s.code || "",
           s.slug || "",
           s.statut || "",
+          s.ordre || "0",
+          s.is_default ? "Oui" : "Non",
           formatDate(s.createdAt),
           formatDate(s.updatedAt),
         ]),
@@ -452,14 +398,60 @@ export default function StatutsMatrimoniauxPage() {
     clearSelection();
   };
 
-  // Pagination simulée (car l'API ne la fournit pas)
+  // Pagination
   const currentItems = useMemo(() => {
     return filteredStatuts.slice(0, limit);
   }, [filteredStatuts, limit]);
 
   return (
     <>
-      {/* Modal de suppression multiple */}
+      {/* Modals */}
+      <CreateStatutMatrimonialModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={handleSuccess}
+      />
+
+      <EditStatutMatrimonialModal
+        isOpen={showEditModal}
+        statut={selectedStatut}
+        onClose={() => {
+          setShowEditModal(false);
+          setSelectedStatut(null);
+        }}
+        onSuccess={handleSuccess}
+      />
+
+      <ViewStatutMatrimonialModal
+        isOpen={showViewModal}
+        statut={selectedStatut}
+        onClose={() => {
+          setShowViewModal(false);
+          setSelectedStatut(null);
+        }}
+        onEdit={() => {
+          if (selectedStatut) {
+            setShowViewModal(false);
+            setShowEditModal(true);
+          }
+        }}
+      />
+
+      {/* CORRIGÉ : Utilisation correcte des props */}
+      <DeleteStatutMatrimonialModal
+        isOpen={showDeleteModal} // Utilisez isOpen au lieu de show
+        statut={selectedStatut}
+        loading={loading}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setSelectedStatut(null);
+        }}
+        onConfirm={handleDeleteStatut}
+        onSuccess={() =>
+          handleSuccess("Statut matrimonial supprimé avec succès")
+        } // Ajoutez onSuccess
+      />
+
       <BulkDeleteModal
         show={showBulkDeleteModal}
         loading={loading}
@@ -468,9 +460,11 @@ export default function StatutsMatrimoniauxPage() {
         onConfirm={handleBulkDelete}
       />
 
+      {/* Interface principale */}
       <div className="p-3 p-md-4">
         <div className="card border-0 shadow-sm overflow-hidden">
           <div className="card-header bg-white border-0 py-3">
+            {/* En-tête */}
             <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
               <div>
                 <p className="text-muted mb-1">
@@ -505,8 +499,9 @@ export default function StatutsMatrimoniauxPage() {
                   Exporter CSV
                 </button>
                 <button
-                  onClick={() => alert("Fonctionnalité en développement")}
+                  onClick={() => setShowCreateModal(true)}
                   className="btn btn-success d-flex align-items-center gap-2"
+                  disabled={loading}
                 >
                   <FontAwesomeIcon icon={faPlus} />
                   Nouveau Statut
@@ -515,7 +510,7 @@ export default function StatutsMatrimoniauxPage() {
             </div>
 
             {/* Messages */}
-            {(error || localError) && (
+            {error && (
               <div
                 className="alert alert-warning alert-dismissible fade show mt-3 mb-0"
                 role="alert"
@@ -524,14 +519,11 @@ export default function StatutsMatrimoniauxPage() {
                   icon={faExclamationTriangle}
                   className="me-2"
                 />
-                <strong>Attention:</strong> {error || localError}
+                <strong>Attention:</strong> {error}
                 <button
                   type="button"
                   className="btn-close"
-                  onClick={() => {
-                    setError(null);
-                    setLocalError(null);
-                  }}
+                  onClick={() => setError(null)}
                 ></button>
               </div>
             )}
@@ -573,7 +565,7 @@ export default function StatutsMatrimoniauxPage() {
                   <input
                     type="text"
                     className="form-control border-start-0 ps-0"
-                    placeholder="Rechercher par libellé ou slug..."
+                    placeholder="Rechercher par libellé, slug ou code..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
@@ -655,7 +647,7 @@ export default function StatutsMatrimoniauxPage() {
                       : "Aucun statut ne correspond à vos critères de recherche."}
                   </p>
                   <button
-                    onClick={() => alert("Fonctionnalité en développement")}
+                    onClick={() => setShowCreateModal(true)}
                     className="btn btn-primary mt-3"
                   >
                     <FontAwesomeIcon icon={faPlus} className="me-2" />
@@ -681,14 +673,15 @@ export default function StatutsMatrimoniauxPage() {
                     <th style={{ width: "60px" }} className="text-center">
                       #
                     </th>
-                    <th style={{ width: "250px" }}>Libellé</th>
+                    <th style={{ width: "200px" }}>Libellé</th>
+                    <th style={{ width: "100px" }}>Code</th>
                     <th style={{ width: "150px" }}>Slug</th>
-                    <th style={{ width: "120px" }}>Statut</th>
+                    <th style={{ width: "100px" }}>Statut</th>
                     <th style={{ width: "150px" }}>
                       <FontAwesomeIcon icon={faCalendar} className="me-1" />
                       Créé le
                     </th>
-                    <th style={{ width: "140px" }} className="text-center">
+                    <th style={{ width: "160px" }} className="text-center">
                       Actions
                     </th>
                   </tr>
@@ -697,9 +690,7 @@ export default function StatutsMatrimoniauxPage() {
                   {currentItems.map((statut, index) => (
                     <tr
                       key={statut.uuid}
-                      className={`align-middle ${
-                        selectedRows.has(statut.uuid) ? "table-active" : ""
-                      }`}
+                      className={`align-middle ${selectedRows.has(statut.uuid) ? "table-active" : ""}`}
                     >
                       <td className="text-center">
                         <div className="form-check d-flex justify-content-center">
@@ -717,8 +708,15 @@ export default function StatutsMatrimoniauxPage() {
                       <td>
                         <div className="fw-semibold d-flex align-items-center">
                           {statut.libelle}
-                          <DefaultBadge isDefault={false} />
+                          <DefaultBadge
+                            isDefault={statut.is_default || false}
+                          />
                         </div>
+                      </td>
+                      <td>
+                        <code className="bg-light px-2 py-1 rounded">
+                          {statut.code}
+                        </code>
                       </td>
                       <td>
                         <code className="bg-light px-2 py-1 rounded">
@@ -735,15 +733,28 @@ export default function StatutsMatrimoniauxPage() {
                       </td>
                       <td className="text-center">
                         <div className="btn-group btn-group-sm" role="group">
+                          {/* NOUVEAU : Bouton Voir détails */}
+                          <button
+                            className="btn btn-outline-info"
+                            title="Voir détails"
+                            onClick={() => openViewModal(statut)}
+                            disabled={loading}
+                          >
+                            <FontAwesomeIcon icon={faEye} />
+                          </button>
                           <button
                             className="btn btn-outline-warning"
                             title="Modifier"
+                            onClick={() => openEditModal(statut)}
+                            disabled={loading}
                           >
                             <FontAwesomeIcon icon={faEdit} />
                           </button>
                           <button
                             className="btn btn-outline-danger"
                             title="Supprimer"
+                            onClick={() => openDeleteModal(statut)}
+                            disabled={loading}
                           >
                             <FontAwesomeIcon icon={faTrash} />
                           </button>

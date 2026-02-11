@@ -1,4 +1,3 @@
-// app/(back-office)/dashboard-admin/statuts-matrimoniaux/components/modals/DeleteStatutMatrimonialModal.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -24,19 +23,23 @@ import colors from "@/app/shared/constants/colors";
 interface StatutMatrimonialType {
   uuid: string;
   libelle: string;
+  slug: string;
   code: string;
   description?: string;
   statut: "actif" | "inactif";
   defaut: boolean;
+  is_default?: boolean;
   createdAt?: string;
   updatedAt?: string;
   createdBy?: string;
   updatedBy?: string;
 }
 
-// Types pour les props
+// Types pour les props - CORRIGÉ : Suppression de la prop 'show' inutile
 interface DeleteStatutMatrimonialModalProps {
   isOpen: boolean;
+  loading: boolean;
+  onConfirm: () => Promise<void>;
   statut: StatutMatrimonialType | null;
   onClose: () => void;
   onSuccess?: () => void;
@@ -44,12 +47,14 @@ interface DeleteStatutMatrimonialModalProps {
 
 export default function DeleteStatutMatrimonialModal({
   isOpen,
+  loading, // Reçu de la page parent
   statut,
   onClose,
+  onConfirm,
   onSuccess,
 }: DeleteStatutMatrimonialModalProps) {
   // États de chargement et erreurs
-  const [loading, setLoading] = useState(false);
+  const [localLoading, setLocalLoading] = useState(false);
   const [loadingStatut, setLoadingStatut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -163,6 +168,7 @@ export default function DeleteStatutMatrimonialModal({
       setError(null);
       setSuccessMessage(null);
       setConfirmationText("");
+      setLocalLoading(false);
     }
   }, [isOpen]);
 
@@ -174,21 +180,21 @@ export default function DeleteStatutMatrimonialModal({
   // Vérifier si le bouton de suppression doit être désactivé
   const isDeleteDisabled = () => {
     return (
-      loading ||
+      localLoading ||
       loadingStatut ||
       statutDetails?.defaut ||
       !isConfirmationValid()
     );
   };
 
-  // Suppression du statut
+  // Suppression du statut - Utilise la fonction de confirmation de la page parent
   const handleDelete = async () => {
     if (!statut || !statut.uuid) {
       setError("Aucun statut sélectionné pour la suppression");
       return;
     }
 
-    if (statut.defaut) {
+    if (statut.defaut || statut.is_default) {
       setError("Impossible de supprimer le statut par défaut");
       return;
     }
@@ -199,12 +205,12 @@ export default function DeleteStatutMatrimonialModal({
     }
 
     try {
-      setLoading(true);
+      setLocalLoading(true);
       setError(null);
       setSuccessMessage(null);
 
-      // Appel à l'API pour la suppression
-      await api.delete(API_ENDPOINTS.STATUTS_MATRIMONIAUX.DELETE(statut.uuid));
+      // Appeler la fonction de confirmation de la page parent
+      await onConfirm();
 
       setSuccessMessage("Statut matrimonial supprimé avec succès !");
 
@@ -243,13 +249,13 @@ export default function DeleteStatutMatrimonialModal({
 
       setError(errorMessage);
     } finally {
-      setLoading(false);
+      setLocalLoading(false);
     }
   };
 
   // Fermer la modal
   const handleClose = () => {
-    if (loading || loadingStatut) return;
+    if (localLoading || loadingStatut) return;
     onClose();
   };
 
@@ -265,7 +271,7 @@ export default function DeleteStatutMatrimonialModal({
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [loading, loadingStatut]);
+  }, [localLoading, loadingStatut]);
 
   // Si la modal n'est pas ouverte, ne rien afficher
   if (!isOpen) return null;
@@ -309,7 +315,7 @@ export default function DeleteStatutMatrimonialModal({
               type="button"
               className="btn-close btn-close-white"
               onClick={handleClose}
-              disabled={loading || loadingStatut}
+              disabled={localLoading || loadingStatut}
               aria-label="Fermer"
               style={{ filter: "brightness(0) invert(1)" }}
             ></button>
@@ -521,7 +527,7 @@ export default function DeleteStatutMatrimonialModal({
                           <div className="mb-3">
                             <label className="form-label fw-semibold text-muted mb-1">
                               <FontAwesomeIcon icon={faCode} className="me-2" />
-                              Slug
+                              Code
                             </label>
                             <div className="d-flex align-items-center">
                               <div
@@ -571,9 +577,12 @@ export default function DeleteStatutMatrimonialModal({
                             </label>
                             <div className="d-flex align-items-center">
                               <span
-                                className={`badge ${statutDetails.defaut ? "bg-warning" : "bg-light"} bg-opacity-10 text-${statutDetails.defaut ? "warning" : "muted"} border border-${statutDetails.defaut ? "warning" : "light"} border-opacity-25 px-3 py-2`}
+                                className={`badge ${statutDetails.defaut || statutDetails.is_default ? "bg-warning" : "bg-light"} bg-opacity-10 text-${statutDetails.defaut || statutDetails.is_default ? "warning" : "muted"} border border-${statutDetails.defaut || statutDetails.is_default ? "warning" : "light"} border-opacity-25 px-3 py-2`}
                               >
-                                {statutDetails.defaut ? "Oui" : "Non"}
+                                {statutDetails.defaut ||
+                                statutDetails.is_default
+                                  ? "Oui"
+                                  : "Non"}
                               </span>
                             </div>
                           </div>
@@ -723,7 +732,11 @@ export default function DeleteStatutMatrimonialModal({
                           placeholder="Tapez 'CONFIRMER' pour supprimer"
                           value={confirmationText}
                           onChange={(e) => setConfirmationText(e.target.value)}
-                          disabled={loading || statutDetails.defaut}
+                          disabled={
+                            localLoading ||
+                            statutDetails?.defaut ||
+                            statutDetails?.is_default
+                          }
                           style={{
                             border: `2px solid ${
                               isConfirmationValid()
@@ -739,7 +752,7 @@ export default function DeleteStatutMatrimonialModal({
                         />
                         <div className="d-flex justify-content-between align-items-center mt-2">
                           <small className="text-muted">
-                            {statutDetails.defaut
+                            {statutDetails?.defaut || statutDetails?.is_default
                               ? "Impossible de supprimer un statut par défaut"
                               : "Cette mesure de sécurité empêche les suppressions accidentelles."}
                           </small>
@@ -772,7 +785,7 @@ export default function DeleteStatutMatrimonialModal({
                 type="button"
                 className="btn d-flex align-items-center gap-2"
                 onClick={handleClose}
-                disabled={loading || loadingStatut}
+                disabled={localLoading || loadingStatut}
                 style={styles.secondaryButton}
                 onMouseEnter={(e) => {
                   Object.assign(
@@ -793,7 +806,11 @@ export default function DeleteStatutMatrimonialModal({
                 className="btn text-white d-flex align-items-center gap-2"
                 onClick={handleDelete}
                 disabled={isDeleteDisabled()}
-                style={isDeleteDisabled() ? styles.disabledButton : styles.dangerButton}
+                style={
+                  isDeleteDisabled()
+                    ? styles.disabledButton
+                    : styles.dangerButton
+                }
                 onMouseEnter={(e) => {
                   if (!isDeleteDisabled()) {
                     Object.assign(
@@ -808,7 +825,7 @@ export default function DeleteStatutMatrimonialModal({
                   }
                 }}
               >
-                {loading ? (
+                {localLoading ? (
                   <>
                     <FontAwesomeIcon icon={faSpinner} spin />
                     Suppression en cours...

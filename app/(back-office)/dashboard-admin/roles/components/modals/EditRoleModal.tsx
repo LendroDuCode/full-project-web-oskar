@@ -455,7 +455,7 @@ export default function EditRoleModal({
           {/* En-tête de la modal */}
           <div
             className="modal-header text-white border-0 rounded-top-3"
-            style={styles.modalHeader}
+            style={{ backgroundColor: colors.oskar.yellow }}
           >
             <div className="d-flex align-items-center justify-content-between w-100">
               <div className="d-flex align-items-center">
@@ -1117,7 +1117,7 @@ export default function EditRoleModal({
                 className="btn d-flex align-items-center gap-2"
                 onClick={handleReset}
                 disabled={loading || loadingRole}
-                style={styles.secondaryButton}
+                style={{ backgroundColor: colors.oskar.yellow }}
                 onMouseEnter={(e) => {
                   Object.assign(
                     e.currentTarget.style,
@@ -1161,7 +1161,7 @@ export default function EditRoleModal({
                   className="btn text-white d-flex align-items-center gap-2"
                   onClick={handleSubmit}
                   disabled={loading || loadingRole || !role}
-                  style={styles.primaryButton}
+                  style={{ backgroundColor: colors.oskar.yellow }}
                   onMouseEnter={(e) => {
                     Object.assign(
                       e.currentTarget.style,

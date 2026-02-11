@@ -27,21 +27,39 @@ interface Category {
 }
 
 interface Product {
+  is_deleted: boolean;
+  deleted_at: string | null;
+  id: number;
   uuid: string;
-  nom: string;
-  prix: number;
+  libelle: string;
+  slug: string;
+  type: string | null;
   image: string;
-  date: string;
   disponible: boolean;
+  statut: "publie" | "non_publie" | "en_attente" | "bloque";
+  prix: string;
   description: string | null;
+  etoile: string;
+  vendeurUuid: string;
+  boutiqueUuid: string;
+  lieu: string;
+  condition: string;
+  garantie: string;
+  categorie_uuid: string;
+  categorie: {
+    uuid: string;
+    libelle: string;
+    type: string;
+    image: string;
+  };
+  estPublie: boolean;
+  estBloque: boolean;
   createdAt: string | null;
-  quantite?: number;
-  categorie_uuid?: string;
-  lieu?: string;
-  condition?: string;
-  type?: string;
-  garantie?: string;
-  etoile?: string;
+  updatedAt: string | null;
+  quantite: number;
+  note_moyenne: string;
+  nombre_avis: number;
+  nombre_favoris: number;
 }
 
 interface ViewProductModalProps {
@@ -158,7 +176,7 @@ const ViewProductModal: React.FC<ViewProductModalProps> = ({
                       {product.image ? (
                         <img
                           src={product.image}
-                          alt={product.nom}
+                          alt={product.libelle}
                           className="img-fluid rounded-top"
                           style={{
                             width: "100%",
@@ -167,7 +185,7 @@ const ViewProductModal: React.FC<ViewProductModalProps> = ({
                           }}
                           onError={(e) => {
                             (e.target as HTMLImageElement).src =
-                              `https://via.placeholder.com/400x300/cccccc/ffffff?text=${product.nom?.charAt(0) || "P"}`;
+                              `https://via.placeholder.com/400x300/cccccc/ffffff?text=${product.libelle?.charAt(0) || "P"}`;
                           }}
                         />
                       ) : (
@@ -184,7 +202,7 @@ const ViewProductModal: React.FC<ViewProductModalProps> = ({
                       <div className="p-3">
                         <div className="d-flex justify-content-between align-items-center">
                           <h4 className="fw-bold text-dark mb-0">
-                            {formatPrice(product.prix)}
+                            {formatPrice(parseFloat(product.prix))}{" "}
                           </h4>
                           <span
                             className={`badge ${product.disponible ? "bg-success" : "bg-danger"}`}
@@ -258,7 +276,7 @@ const ViewProductModal: React.FC<ViewProductModalProps> = ({
               {/* Détails du produit */}
               <div className="col-md-7">
                 <div className="mb-4">
-                  <h3 className="fw-bold text-dark mb-2">{product.nom}</h3>
+                  <h3 className="fw-bold text-dark mb-2">{product.libelle}</h3>
                   <div className="d-flex align-items-center gap-3 mb-3">
                     <span className="badge bg-primary bg-opacity-10 text-primary">
                       <FontAwesomeIcon icon={faTag} className="me-1" />
@@ -316,9 +334,7 @@ const ViewProductModal: React.FC<ViewProductModalProps> = ({
                           <small className="text-muted">
                             Date de publication
                           </small>
-                          <p className="mb-0 fw-bold">
-                            {formatDate(product.date)}
-                          </p>
+                          <p className="mb-0 fw-bold"></p>
                         </div>
                         {product.createdAt && (
                           <div>

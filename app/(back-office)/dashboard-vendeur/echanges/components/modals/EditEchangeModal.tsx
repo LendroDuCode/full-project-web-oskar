@@ -35,7 +35,7 @@ interface Category {
 
 interface EchangeFormData {
   nomElementEchange: string;
-  typeEchange: "produit" | "service";
+  typeEchange: string;
   objetPropose: string;
   objetDemande: string;
   categorie_uuid: string;
@@ -48,18 +48,26 @@ interface EchangeFormData {
 
 interface Echange {
   uuid: string;
-  nomElementEchange?: string;
-  titre?: string;
-  typeEchange?: "produit" | "service";
-  objetPropose?: string;
-  objetDemande?: string;
-  categorie_uuid?: string;
-  quantite?: string;
-  prix?: string;
-  numero?: string;
-  message?: string;
-  image?: string;
-  // Autres propriétés possibles
+  nomElementEchange: string;
+  nom_initiateur: string;
+  prix: string;
+  image: string;
+  typeDestinataire: string;
+  typeEchange: string;
+  agent: string;
+  utilisateur: string;
+  vendeur: string;
+  objetPropose: string;
+  objetDemande: string;
+  estPublie: boolean | null;
+  statut: string;
+  message: string;
+  dateProposition: string;
+  dateAcceptation: string | null;
+  dateRefus: string | null;
+  categorie: string;
+  createdAt: string | null;
+  updatedAt: string | null;
   [key: string]: any;
 }
 
@@ -79,7 +87,7 @@ export default function EditEchangeModal({
   // États
   const [formData, setFormData] = useState<EchangeFormData>({
     nomElementEchange: "",
-    typeEchange: "produit",
+    typeEchange: echange.typeEchange,
     objetPropose: "",
     objetDemande: "",
     categorie_uuid: "",
@@ -133,7 +141,7 @@ export default function EditEchangeModal({
       // Pré-remplir le formulaire
       setFormData({
         nomElementEchange: echange.nomElementEchange || echange.titre || "",
-        typeEchange: echange.typeEchange || "produit",
+        typeEchange: echange.typeEchange,
         objetPropose: echange.objetPropose || "",
         objetDemande: echange.objetDemande || "",
         categorie_uuid: echange.categorie_uuid || "",
@@ -177,13 +185,15 @@ export default function EditEchangeModal({
     if (!formData.objetPropose.trim()) {
       errors.objetPropose = "L'objet proposé est obligatoire";
     } else if (formData.objetPropose.trim().length < 3) {
-      errors.objetPropose = "L'objet proposé doit contenir au moins 3 caractères";
+      errors.objetPropose =
+        "L'objet proposé doit contenir au moins 3 caractères";
     }
 
     if (!formData.objetDemande.trim()) {
       errors.objetDemande = "L'objet recherché est obligatoire";
     } else if (formData.objetDemande.trim().length < 3) {
-      errors.objetDemande = "L'objet recherché doit contenir au moins 3 caractères";
+      errors.objetDemande =
+        "L'objet recherché doit contenir au moins 3 caractères";
     }
 
     if (!formData.categorie_uuid) {
@@ -338,8 +348,7 @@ export default function EditEchangeModal({
       const response = await api.putFormData(
         API_ENDPOINTS.ECHANGES.UPDATE(echange.uuid),
         formDataToSend,
-        {
-        },
+        {},
       );
 
       // Vérifier la réponse

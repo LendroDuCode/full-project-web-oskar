@@ -30,6 +30,7 @@ import {
   faPlus,
   faChartLine,
   faSpinner,
+  faBoxOpen,
 } from "@fortawesome/free-solid-svg-icons";
 import { api } from "@/lib/api-client";
 import colors from "@/app/shared/constants/colors";
@@ -57,6 +58,303 @@ interface PaginationState {
   pages: number;
 }
 
+// Composant modal pour afficher les détails
+function ViewProduitPublieModal({
+  isOpen,
+  produit,
+  onClose,
+}: {
+  isOpen: boolean;
+  produit: ProduitPublie | null;
+  onClose: () => void;
+}) {
+  if (!isOpen || !produit) return null;
+
+  const formatPrice = (price: number) => {
+    return new Intl.NumberFormat("fr-FR", {
+      style: "currency",
+      currency: "XOF",
+      minimumFractionDigits: 0,
+    }).format(price || 0);
+  };
+
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return "Non spécifié";
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "Date invalide";
+
+      return date.toLocaleDateString("fr-FR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return "Date invalide";
+    }
+  };
+
+  return (
+    <div
+      className="modal fade show d-block"
+      tabIndex={-1}
+      style={{
+        backgroundColor: "rgba(0,0,0,0.6)",
+        backdropFilter: "blur(4px)",
+        zIndex: 1050,
+      }}
+      role="dialog"
+      aria-labelledby="viewProduitModalLabel"
+      aria-modal="true"
+    >
+      <div className="modal-dialog modal-dialog-centered modal-lg">
+        <div
+          className="modal-content border-0 shadow-lg overflow-hidden"
+          style={{
+            borderRadius: "20px",
+            border: `2px solid ${colors.oskar.blue}30`,
+          }}
+        >
+          {/* En-tête */}
+          <div
+            className="modal-header text-white border-0"
+            style={{
+              background: `linear-gradient(135deg, ${colors.oskar.blue} 0%, ${colors.oskar.blueHover} 100%)`,
+              padding: "1.5rem 2rem",
+            }}
+          >
+            <div className="d-flex align-items-center w-100">
+              <div
+                className="bg-white bg-opacity-25 rounded-circle p-2 me-3 d-flex align-items-center justify-content-center"
+                style={{ width: "48px", height: "48px" }}
+              >
+                <FontAwesomeIcon icon={faEye} className="fs-4" />
+              </div>
+              <div className="flex-grow-1">
+                <h5 className="modal-title mb-1 fw-bold fs-4">
+                  Détails du produit publié
+                </h5>
+                <p className="mb-0 opacity-85" style={{ fontSize: "0.95rem" }}>
+                  Informations complètes sur le produit
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn-close btn-close-white"
+              onClick={onClose}
+              aria-label="Fermer"
+              style={{
+                filter: "brightness(0) invert(1)",
+                opacity: 0.9,
+              }}
+            />
+          </div>
+
+          {/* Corps */}
+          <div className="modal-body p-4">
+            <div className="row">
+              {/* Image */}
+              <div className="col-md-5 mb-4 mb-md-0">
+                <div className="position-relative">
+                  <img
+                    src={
+                      produit.image ||
+                      `https://via.placeholder.com/400x300/007bff/ffffff?text=${produit.nom?.charAt(0) || "P"}`
+                    }
+                    alt={produit.nom}
+                    className="img-fluid rounded-3 shadow-lg w-100"
+                    style={{ height: "300px", objectFit: "cover" }}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src =
+                        `https://via.placeholder.com/400x300/007bff/ffffff?text=${produit.nom?.charAt(0) || "P"}`;
+                    }}
+                  />
+                  {produit.disponible && (
+                    <div className="position-absolute top-0 end-0 m-3">
+                      <span
+                        className="badge bg-success"
+                        style={{ fontSize: "0.9rem" }}
+                      >
+                        <FontAwesomeIcon
+                          icon={faCheckCircle}
+                          className="me-1"
+                        />
+                        Disponible
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Détails */}
+              <div className="col-md-7">
+                <h2 className="fw-bold mb-3">{produit.nom}</h2>
+
+                {/* Prix */}
+                <div className="mb-4">
+                  <div className="fw-bold fs-3 text-primary">
+                    {formatPrice(produit.prix)}
+                  </div>
+                </div>
+
+                {/* Statut */}
+                <div className="mb-4">
+                  <div className="d-flex align-items-center mb-2">
+                    <FontAwesomeIcon
+                      icon={faInfoCircle}
+                      className="me-2 text-muted"
+                    />
+                    <span className="fw-semibold me-3">Statut:</span>
+                    {produit.disponible ? (
+                      <span className="badge bg-success bg-opacity-10 text-success">
+                        <FontAwesomeIcon
+                          icon={faCheckCircle}
+                          className="me-1"
+                        />
+                        Disponible
+                      </span>
+                    ) : (
+                      <span className="badge bg-danger bg-opacity-10 text-danger">
+                        <FontAwesomeIcon
+                          icon={faTimesCircle}
+                          className="me-1"
+                        />
+                        Indisponible
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div className="mb-4">
+                  <h6 className="fw-bold mb-2">
+                    <FontAwesomeIcon
+                      icon={faTag}
+                      className="me-2 text-primary"
+                    />
+                    Description
+                  </h6>
+                  {produit.description ? (
+                    <div className="bg-light rounded p-3">
+                      <p className="mb-0" style={{ lineHeight: "1.6" }}>
+                        {produit.description}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="text-muted fst-italic">
+                      Aucune description disponible
+                    </div>
+                  )}
+                </div>
+
+                {/* Dates */}
+                <div className="row">
+                  <div className="col-md-6 mb-3">
+                    <h6 className="fw-bold mb-2">
+                      <FontAwesomeIcon
+                        icon={faCalendar}
+                        className="me-2 text-primary"
+                      />
+                      Date de publication
+                    </h6>
+                    <div className="fw-semibold">
+                      {formatDate(produit.date)}
+                    </div>
+                  </div>
+                  <div className="col-md-6 mb-3">
+                    <h6 className="fw-bold mb-2">
+                      <FontAwesomeIcon
+                        icon={faBoxOpen}
+                        className="me-2 text-primary"
+                      />
+                      Date de création
+                    </h6>
+                    <div className="fw-semibold">
+                      {formatDate(produit.createdAt)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* UUID */}
+                <div className="mt-4 pt-4 border-top">
+                  <small className="text-muted d-block">
+                    Identifiant unique
+                  </small>
+                  <code className="text-muted">{produit.uuid}</code>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Pied de page */}
+          <div className="modal-footer border-top-0">
+            <div className="d-flex justify-content-between w-100">
+              <button
+                type="button"
+                className="btn btn-outline-secondary"
+                onClick={onClose}
+                style={{ borderRadius: "10px", padding: "0.75rem 2rem" }}
+              >
+                <FontAwesomeIcon icon={faTimes} className="me-2" />
+                Fermer
+              </button>
+              <div className="d-flex gap-2">
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  style={{ borderRadius: "10px", padding: "0.75rem 2rem" }}
+                  onClick={() => {
+                    console.log("Action sur le produit:", produit);
+                    alert(
+                      `Commande pour "${produit.nom}" à ${formatPrice(produit.prix)}`,
+                    );
+                  }}
+                >
+                  <FontAwesomeIcon icon={faMoneyBillWave} className="me-2" />
+                  Acheter maintenant
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <style jsx>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .modal-content {
+          border-radius: 20px !important;
+          overflow: hidden;
+          animation: fadeIn 0.4s ease-out;
+        }
+
+        .btn {
+          border-radius: 10px !important;
+          transition: all 0.3s ease;
+          font-weight: 500;
+        }
+
+        .btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }
+      `}</style>
+    </div>
+  );
+}
+
 export default function ListeProduitsPublies() {
   const [produits, setProduits] = useState<ProduitPublie[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,6 +363,12 @@ export default function ListeProduitsPublies() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
   const [selectedProduits, setSelectedProduits] = useState<string[]>([]);
+
+  // États pour le modal
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [selectedProduit, setSelectedProduit] = useState<ProduitPublie | null>(
+    null,
+  );
 
   // Pagination
   const [pagination, setPagination] = useState<PaginationState>({
@@ -213,6 +517,17 @@ export default function ListeProduitsPublies() {
       availableCount,
       unavailableCount,
     });
+  };
+
+  // Fonctions pour le modal
+  const handleViewDetails = (produit: ProduitPublie) => {
+    setSelectedProduit(produit);
+    setIsViewModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsViewModalOpen(false);
+    setSelectedProduit(null);
   };
 
   // Filtrage et tri
@@ -1058,7 +1373,7 @@ export default function ListeProduitsPublies() {
                     </tr>
                   </thead>
                   <tbody>
-                    {currentItems.map((produit, index) => (
+                    {currentItems.map((produit) => (
                       <tr
                         key={produit.uuid}
                         className={
@@ -1168,13 +1483,7 @@ export default function ListeProduitsPublies() {
                             <button
                               className="btn btn-outline-info"
                               title="Voir détails"
-                              onClick={() => {
-                                // Implémenter la vue des détails
-                                console.log("Voir détails:", produit);
-                                alert(
-                                  `Détails du produit: ${produit.nom}\nPrix: ${formatPrice(produit.prix)}\nDisponible: ${produit.disponible ? "Oui" : "Non"}`,
-                                );
-                              }}
+                              onClick={() => handleViewDetails(produit)}
                               aria-label={`Voir détails de ${produit.nom}`}
                             >
                               <FontAwesomeIcon icon={faEye} />
@@ -1358,6 +1667,10 @@ export default function ListeProduitsPublies() {
                 <div className="col-md-6">
                   <ul className="mb-0">
                     <li>
+                      <strong>Voir détails :</strong> Affiche les informations
+                      complètes du produit
+                    </li>
+                    <li>
                       <strong>Dépublier :</strong> Rend le produit invisible aux
                       utilisateurs mais le conserve dans le système
                     </li>
@@ -1392,6 +1705,13 @@ export default function ListeProduitsPublies() {
           </div>
         </div>
       </div>
+
+      {/* Modal pour voir les détails */}
+      <ViewProduitPublieModal
+        isOpen={isViewModalOpen}
+        produit={selectedProduit}
+        onClose={handleCloseModal}
+      />
 
       <style jsx>{`
         .table > :not(caption) > * > * {

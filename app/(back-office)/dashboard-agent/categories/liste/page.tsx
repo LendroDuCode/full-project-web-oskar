@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faPlus,
@@ -35,6 +36,7 @@ import {
   faUsers,
   faEllipsisV,
   faCheckDouble,
+  faFolderOpen, // Nouvelle icône ajoutée
 } from "@fortawesome/free-solid-svg-icons";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
@@ -501,6 +503,8 @@ const Pagination = ({
 };
 
 export default function CategoriesPage() {
+  const router = useRouter();
+
   // États
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -545,6 +549,11 @@ export default function CategoriesPage() {
 
   // Options pour les éléments par page
   const itemsPerPageOptions = [5, 10, 20, 50];
+
+  // Fonction pour naviguer vers les sous-catégories
+  const handleViewSubCategories = (categoryUuid: string) => {
+    router.push(`/dashboard-agent/categories/${categoryUuid}/sous-categories`);
+  };
 
   // Charger les catégories
   const fetchCategories = useCallback(async (params?: Record<string, any>) => {
@@ -809,7 +818,7 @@ export default function CategoriesPage() {
   const handleExport = async () => {
     try {
       const response = await api.get(API_ENDPOINTS.CATEGORIES.EXPORT_PDF, {
-       // responseType: "blob",
+        // responseType: "blob",
       });
       const url = window.URL.createObjectURL(response);
       const link = document.createElement("a");
@@ -1068,6 +1077,7 @@ export default function CategoriesPage() {
             setShowViewModal(false);
             setSelectedCategory(null);
           }}
+          // CORRECTION: Retirer onEdit qui n'existe pas dans ViewCategoryModalProps
         />
       )}
       <DeleteModal
@@ -1507,7 +1517,7 @@ export default function CategoriesPage() {
                           {getSortIcon("createdAt")}
                         </button>
                       </th>
-                      <th style={{ width: "140px" }} className="text-center">
+                      <th style={{ width: "180px" }} className="text-center">
                         Actions
                       </th>
                     </tr>
@@ -1644,6 +1654,16 @@ export default function CategoriesPage() {
                               disabled={loading}
                             >
                               <FontAwesomeIcon icon={faEye} />
+                            </button>
+                            <button
+                              className="btn btn-outline-info"
+                              title="Voir sous-catégories"
+                              onClick={() =>
+                                handleViewSubCategories(category.uuid)
+                              }
+                              disabled={loading}
+                            >
+                              <FontAwesomeIcon icon={faFolderOpen} />
                             </button>
                             <button
                               className="btn btn-outline-warning"

@@ -58,15 +58,33 @@ interface Role {
   status: string;
 }
 
-interface Vendeur extends FormData {
+interface Vendeur {
   uuid: string;
-  code_vendeur?: string;
+  nom: string;
+  prenoms: string;
+  is_admin: boolean;
+  email: string;
+  telephone: string;
+  civilite_uuid?: string;
+  code_vendeur: string;
+  role_uuid?: string; // ← AJOUTEZ CE CHAMP
+  civilite?: {
+    libelle: string;
+    uuid?: string;
+  };
+  role?: {
+    name: string;
+    uuid?: string;
+  };
+  est_verifie?: boolean;
+  est_bloque?: boolean;
+  is_deleted?: boolean;
+  type?: string;
   created_at?: string;
   updated_at?: string;
   deleted_at?: string;
-  is_deleted?: boolean;
-  civilite?: { libelle: string; uuid: string };
-  role?: { name: string; uuid: string };
+  code?: string;
+  avatar?: string;
 }
 
 interface ModifierVendeurModalProps {

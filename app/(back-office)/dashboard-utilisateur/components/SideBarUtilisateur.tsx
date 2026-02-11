@@ -11,6 +11,56 @@ interface SidebarProps {
   userAvatar?: string;
 }
 
+interface NavItem {
+  id: string;
+  label: string;
+  icon: string;
+  href: string;
+  badge?: {
+    count: number;
+    color: string;
+  };
+}
+
+interface SubMenuItem {
+  label: string;
+  href: string;
+  icon: string;
+  badge?: {
+    count: number;
+    color: string;
+  };
+}
+
+type MenuKey =
+  | "dons"
+  | "echanges"
+  | "produits"
+  | "annonces"
+  | "favoris"
+  | "boutique"
+  | "commandes"
+  | "stocks"
+  | "categories"
+  | "types"
+  | "history"
+  | "profile"
+  | "settings";
+
+interface ManagementItem {
+  id: MenuKey;
+  label: string;
+  icon: string;
+  submenu: SubMenuItem[];
+}
+
+interface ProfileItem {
+  id: string;
+  label: string;
+  icon: string;
+  href: string;
+}
+
 export default function SidebarUtilisateur({
   activeNav = "dashboard",
   userName = "Utilisateur",
@@ -24,6 +74,8 @@ export default function SidebarUtilisateur({
     dons: false,
     echanges: false,
     produits: false,
+    annonces: false,
+    favoris: false,
     boutique: false,
     commandes: false,
     stocks: false,
@@ -38,119 +90,35 @@ export default function SidebarUtilisateur({
     router.push("/");
   };
 
-  const toggleMenu = (menu: keyof typeof openMenus) => {
+  const toggleMenu = (menu: MenuKey) => {
     setOpenMenus((prev) => ({
       ...prev,
       [menu]: !prev[menu],
     }));
   };
 
-  const navItems = [
+  const navItems: NavItem[] = [
     {
       id: "dashboard",
       label: "Tableau de Bord",
       icon: "fa-chart-line",
-      badge: null,
       href: "/dashboard-utilisateur/",
-    },
-    {
-      id: "messages",
-      label: "Messages",
-      icon: "fa-message",
-      badge: { count: 12, color: "bg-primary" },
-      href: "/dashboard-utilisateur/messages",
-    },
-    {
-      id: "notifications",
-      label: "Notifications",
-      icon: "fa-bell",
-      badge: { count: 5, color: "bg-warning" },
-      href: "/dashboard-utilisateur/notifications",
-    },
-    {
-      id: "analytics",
-      label: "Analytiques",
-      icon: "fa-chart-simple",
-      badge: null,
-      href: "/dashboard-utilisateur/analytiques",
-    },
-    {
-      id: "reports",
-      label: "Rapports",
-      icon: "fa-chart-pie",
-      badge: null,
-      href: "/dashboard-utilisateur/rapports",
     },
   ];
 
-  const managementItems = [
+  const managementItems: ManagementItem[] = [
     {
-      id: "dons",
-      label: "Gestion des Dons",
-      icon: "fa-gift",
+      id: "annonces",
+      label: "Gestion des Annonces",
+      icon: "fa-bullhorn",
       submenu: [
         {
-          label: "Liste des dons publiés",
-          href: "/dashboard-utilisateur/dons/liste-don-publies",
-          icon: "fa-circle-check text-success",
-        },
-        {
-          label: "Liste des dons bloqués",
-          href: "/dashboard-utilisateur/dons/liste-dons-bloques-utilisateur",
-          icon: "fa-ban text-danger",
-        },
-        {
-          label: "Mes dons",
-          href: "/dashboard-utilisateur/dons/liste-don-utilisateur",
-          icon: "fa-list text-info",
+          label: "Toutes les annonces",
+          href: "/dashboard-utilisateur/annonces/liste-annonces",
+          icon: "fa-list text-primary",
         },
       ],
     },
-    {
-      id: "echanges",
-      label: "Gestion des Échanges",
-      icon: "fa-arrows-rotate",
-      submenu: [
-        {
-          label: "Liste des échanges publiés",
-          href: "/dashboard-utilisateur/echanges/liste-toutes-echanges-publiees",
-          icon: "fa-circle-check text-success",
-        },
-        {
-          label: "Liste des échanges bloqués",
-          href: "/dashboard-utilisateur/echanges/liste-echange-bloque-utilisateur",
-          icon: "fa-ban text-danger",
-        },
-        {
-          label: "Mes échanges",
-          href: "/dashboard-utilisateur/echanges/liste-echange-utilisateur",
-          icon: "fa-list text-info",
-        },
-      ],
-    },
-    {
-      id: "produits",
-      label: "Gestion des Produits",
-      icon: "fa-box",
-      submenu: [
-        {
-          label: "Liste des produits publiés",
-          href: "/dashboard-utilisateur/produits/publies",
-          icon: "fa-circle-check text-success",
-        },
-        {
-          label: "Liste des produits bloqués",
-          href: "/dashboard-utilisateur/produits/bloques",
-          icon: "fa-ban text-danger",
-        },
-        {
-          label: "Mes produits",
-          href: "/dashboard-utilisateur/produits/liste-produits-cree-utilisateur",
-          icon: "fa-list text-info",
-        },
-      ],
-    },
-    // Ajout d'un menu dédié aux favoris (optionnel)
     {
       id: "favoris",
       label: "Mes Favoris",
@@ -162,135 +130,11 @@ export default function SidebarUtilisateur({
           icon: "fa-heart text-danger",
           badge: { count: 8, color: "bg-danger" },
         },
-        {
-          label: "Produits favoris",
-          href: "/dashboard-utilisateur/favoris/produits",
-          icon: "fa-box text-info",
-          badge: { count: 5, color: "bg-info" },
-        },
-        {
-          label: "Dons favoris",
-          href: "/dashboard-utilisateur/favoris/dons",
-          icon: "fa-gift text-success",
-          badge: { count: 2, color: "bg-success" },
-        },
-        {
-          label: "Échanges favoris",
-          href: "/dashboard-utilisateur/favoris/echanges",
-          icon: "fa-arrows-rotate text-warning",
-          badge: { count: 1, color: "bg-warning" },
-        },
-      ],
-    },
-    {
-      id: "commandes",
-      label: "Gestion des Commandes",
-      icon: "fa-shopping-cart",
-      submenu: [
-        {
-          label: "Nouvelles commandes",
-          href: "/dashboard-utilisateur/commandes/nouvelles",
-          icon: "fa-clock text-warning",
-          badge: { count: 3, color: "bg-warning" },
-        },
-        {
-          label: "Commandes en cours",
-          href: "/dashboard-utilisateur/commandes/en-cours",
-          icon: "fa-spinner text-info",
-          badge: { count: 7, color: "bg-info" },
-        },
-        {
-          label: "Commandes terminées",
-          href: "/dashboard-utilisateur/commandes/terminees",
-          icon: "fa-check-circle text-success",
-        },
-        {
-          label: "Commandes annulées",
-          href: "/dashboard-utilisateur/commandes/annulees",
-          icon: "fa-times-circle text-danger",
-        },
-        {
-          label: "Historique des commandes",
-          href: "/dashboard-utilisateur/commandes/historique",
-          icon: "fa-history text-secondary",
-        },
-      ],
-    },
-    {
-      id: "stocks",
-      label: "Gestion des Stocks",
-      icon: "fa-warehouse",
-      submenu: [
-        {
-          label: "Niveau des stocks",
-          href: "/dashboard-utilisateur/stocks/niveau",
-          icon: "fa-boxes text-info",
-        },
-        {
-          label: "Alertes de stock bas",
-          href: "/dashboard-utilisateur/stocks/alertes",
-          icon: "fa-exclamation-triangle text-danger",
-          badge: { count: 2, color: "bg-danger" },
-        },
-        {
-          label: "Mise à jour des stocks",
-          href: "/dashboard-utilisateur/stocks/mise-a-jour",
-          icon: "fa-sync text-warning",
-        },
-        {
-          label: "Inventaire",
-          href: "/dashboard-utilisateur/stocks/inventaire",
-          icon: "fa-clipboard-list text-primary",
-        },
-        {
-          label: "Rapports de stock",
-          href: "/dashboard-utilisateur/stocks/rapports",
-          icon: "fa-chart-line text-success",
-        },
-      ],
-    },
-    {
-      id: "categories",
-      label: "Gestion des Catégories",
-      icon: "fa-layer-group",
-      submenu: [
-        {
-          label: "Liste des catégories",
-          href: "/dashboard-utilisateur/categories/liste",
-          icon: "fa-list text-info",
-        },
-      ],
-    },
-    {
-      id: "history",
-      label: "Historique",
-      icon: "fa-history",
-      submenu: [
-        {
-          label: "Historique des ventes",
-          href: "/dashboard-utilisateur/historique/ventes",
-          icon: "fa-chart-line text-success",
-        },
-        {
-          label: "Historique des actions",
-          href: "/dashboard-utilisateur/historique/actions",
-          icon: "fa-clock-rotate-left text-primary",
-        },
-        {
-          label: "Journal des activités",
-          href: "/dashboard-utilisateur/historique/activites",
-          icon: "fa-clipboard-list text-info",
-        },
-        {
-          label: "Historique financier",
-          href: "/dashboard-utilisateur/historique/financier",
-          icon: "fa-money-bill-wave text-success",
-        },
       ],
     },
   ];
 
-  const profileItems = [
+  const profileItems: ProfileItem[] = [
     {
       id: "profile",
       label: "Mon Profil",
@@ -321,7 +165,7 @@ export default function SidebarUtilisateur({
     return activeNav === navId;
   };
 
-  const renderMenuItem = (item: any, index: number) => {
+  const renderMenuItem = (item: SubMenuItem, index: number) => {
     return (
       <Link
         key={index}
@@ -505,9 +349,7 @@ export default function SidebarUtilisateur({
                         cursor: "pointer",
                         fontSize: "0.9rem",
                       }}
-                      onClick={() =>
-                        toggleMenu(item.id as keyof typeof openMenus)
-                      }
+                      onClick={() => toggleMenu(item.id)}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.backgroundColor = "#374151";
                         e.currentTarget.style.color = "white";
@@ -524,13 +366,12 @@ export default function SidebarUtilisateur({
                         ></i>
                         <span>{item.label}</span>
                         {/* Badge global pour le menu */}
-                        {item.submenu.some((sub: any) => sub.badge) && (
+                        {item.submenu.some((sub) => sub.badge) && (
                           <span className="ms-auto me-2">
                             {item.submenu
-                              .filter((sub: any) => sub.badge)
+                              .filter((sub) => sub.badge)
                               .reduce(
-                                (sum: number, sub: any) =>
-                                  sum + sub.badge.count,
+                                (sum, sub) => sum + (sub.badge?.count || 0),
                                 0,
                               ) > 0 && (
                               <span
@@ -541,10 +382,9 @@ export default function SidebarUtilisateur({
                                 }}
                               >
                                 {item.submenu
-                                  .filter((sub: any) => sub.badge)
+                                  .filter((sub) => sub.badge)
                                   .reduce(
-                                    (sum: number, sub: any) =>
-                                      sum + sub.badge.count,
+                                    (sum, sub) => sum + (sub.badge?.count || 0),
                                     0,
                                   )}
                               </span>
@@ -553,12 +393,12 @@ export default function SidebarUtilisateur({
                         )}
                       </div>
                       <i
-                        className={`fa-solid fa-chevron-${openMenus[item.id as keyof typeof openMenus] ? "up" : "down"}`}
+                        className={`fa-solid fa-chevron-${openMenus[item.id] ? "up" : "down"}`}
                         style={{ fontSize: "0.8rem" }}
                       ></i>
                     </div>
 
-                    {openMenus[item.id as keyof typeof openMenus] && (
+                    {openMenus[item.id] && (
                       <div className="mt-1 ms-4">
                         {item.submenu.map((subItem, index) =>
                           renderMenuItem(subItem, index),
@@ -584,15 +424,15 @@ export default function SidebarUtilisateur({
                   >
                     <i className={`fa-solid ${item.icon}`}></i>
                     {/* Badge pour version réduite */}
-                    {item.submenu.some((sub: any) => sub.badge) && (
+                    {item.submenu.some((sub) => sub.badge) && (
                       <span
                         className="position-absolute top-0 start-100 translate-middle badge bg-danger rounded-pill"
                         style={{ fontSize: "0.5rem", padding: "0.1rem 0.2rem" }}
                       >
                         {item.submenu
-                          .filter((sub: any) => sub.badge)
+                          .filter((sub) => sub.badge)
                           .reduce(
-                            (sum: number, sub: any) => sum + sub.badge.count,
+                            (sum, sub) => sum + (sub.badge?.count || 0),
                             0,
                           )}
                       </span>

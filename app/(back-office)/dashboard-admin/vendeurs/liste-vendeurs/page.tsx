@@ -50,17 +50,22 @@ interface Vendeur {
   prenoms: string;
   email: string;
   telephone: string;
+  est_admin: boolean;
   civilite_uuid?: string;
+  code_vendeur: string;
+  is_admin: boolean;
+  role_uuid?: string; // ← AJOUTEZ CE CHAMP
   civilite?: {
     libelle: string;
+    uuid?: string;
   };
   role?: {
     name: string;
+    uuid?: string;
   };
-  est_verifie: boolean;
-  est_bloque: boolean;
-  is_deleted: boolean;
-  is_admin?: boolean;
+  est_verifie?: boolean;
+  est_bloque?: boolean | undefined;
+  is_deleted?: boolean;
   type?: string;
   created_at?: string;
   updated_at?: string;
@@ -75,8 +80,8 @@ const StatusBadge = ({
   est_verifie,
   is_deleted,
 }: {
-  est_bloque: boolean;
-  est_verifie: boolean;
+  est_bloque: boolean | undefined;
+  est_verifie: boolean | undefined;
   is_deleted?: boolean;
 }) => {
   if (is_deleted) {
@@ -1010,8 +1015,8 @@ export default function ListeVendeursActifsPage() {
         onSuccess={handleVendeurCreated}
       />
 
-      {/* Modal de modification de vendeur
-            <ModifierVendeurModal
+      {/* Modal de modification de vendeur*/}
+      <ModifierVendeurModal
         isOpen={showEditModal}
         vendeur={selectedVendeurForEdit}
         onClose={() => {
@@ -1027,8 +1032,6 @@ export default function ListeVendeursActifsPage() {
           setTimeout(() => setSuccessMessage(null), 3000);
         }}
       />
-      */}
-
 
       {/* Modal de suppression simple */}
       <DeleteModal

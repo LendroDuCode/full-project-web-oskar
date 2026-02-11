@@ -6,6 +6,7 @@ import React, {
   useState,
   useEffect,
   ReactNode,
+  useCallback,
 } from "react";
 import { useRouter } from "next/navigation";
 
@@ -18,12 +19,20 @@ interface User {
   type: string;
   role: string;
   temp_token?: string;
+  tempToken?: string;
+  est_bloque?: boolean;
+  is_deleted?: boolean;
+  avatar?: string;
+  civilite?: string;
+  telephone?: string;
+  nom?: string;
+  prenoms?: string;
 }
 
 interface AuthContextType {
   isLoggedIn: boolean;
   user: User | null;
-  login: (userData: User, shouldRedirect?: boolean) => void; // Ajout d'un paramètre optionnel
+  login: (userData: any, token: string, shouldRedirect?: boolean) => void;
   logout: () => void;
   openLoginModal: () => void;
   openRegisterModal: () => void;
@@ -32,7 +41,9 @@ interface AuthContextType {
   showRegisterModal: boolean;
   switchToRegister: () => void;
   switchToLogin: () => void;
-  redirectToDashboard: (userType?: string) => void; // Nouvelle fonction exportée
+  redirectToDashboard: (userType?: string) => void;
+  validateToken: () => Promise<boolean>;
+  refreshAuthState: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -54,49 +65,110 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const [authVersion, setAuthVersion] = useState(0);
   const router = useRouter();
 
-  useEffect(() => {
-    // Vérifier si l'utilisateur est déjà connecté au chargement
+  // Fonction pour initialiser l'authentification
+  const initializeAuth = useCallback(() => {
+    console.log("🔄 AuthContext - Initializing auth state...");
+
     const savedUser = localStorage.getItem("oskar_user");
     const savedToken = localStorage.getItem("oskar_token");
 
     if (savedUser && savedToken) {
       try {
         const parsedUser = JSON.parse(savedUser);
+        console.log("✅ AuthContext - Found saved user:", parsedUser.type);
+
         setUser(parsedUser);
         setIsLoggedIn(true);
+        console.log("✅ AuthContext - User set from localStorage");
 
-        // ⚠️ NE PAS REDIRIGER AUTOMATIQUEMENT !
-        // L'utilisateur reste sur la page où il se trouve
+        // Valider le token
+        const validateToken = async () => {
+          try {
+            const tokenParts = savedToken.split(".");
+            if (tokenParts.length === 3) {
+              const payload = JSON.parse(atob(tokenParts[1]));
+              const exp = payload.exp * 1000;
+              if (Date.now() >= exp) {
+                console.warn("⚠️ AuthContext - Token expiré");
+                logout();
+                return false;
+              }
+            }
+            return true;
+          } catch (error) {
+            console.error("❌ AuthContext - Erreur validation token:", error);
+            return false;
+          }
+        };
 
-        console.log(
-          "AuthContext - Utilisateur connecté détecté mais pas de redirection automatique",
-        );
+        validateToken();
       } catch (error) {
-        console.error("Erreur lors du parsing de l'utilisateur:", error);
+        console.error("❌ AuthContext - Erreur parsing utilisateur:", error);
         localStorage.removeItem("oskar_user");
         localStorage.removeItem("oskar_token");
+        setUser(null);
+        setIsLoggedIn(false);
       }
+    } else {
+      console.log("ℹ️ AuthContext - No saved auth found");
+      setUser(null);
+      setIsLoggedIn(false);
     }
+
+    // Forcer un re-render
+    setAuthVersion((prev) => prev + 1);
   }, []);
 
-  // Fonction pour rediriger vers le dashboard (maintenant exportée)
+  // Écouter les changements de localStorage
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "oskar_user" || e.key === "oskar_token") {
+        console.log("🔄 AuthContext - Storage changed, reinitializing auth");
+        initializeAuth();
+      }
+    };
+
+    // Écouter les événements de localStorage
+    window.addEventListener("storage", handleStorageChange);
+
+    // Écouter les événements personnalisés
+    const handleAuthChange = () => {
+      console.log("🔄 AuthContext - Custom auth change event received");
+      initializeAuth();
+    };
+
+    window.addEventListener(
+      "auth-change-event",
+      handleAuthChange as EventListener,
+    );
+
+    // Initialiser au montage
+    initializeAuth();
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener(
+        "auth-change-event",
+        handleAuthChange as EventListener,
+      );
+    };
+  }, [initializeAuth]);
+
+  // Fonction pour rediriger vers le dashboard
   const redirectToDashboard = (userType?: string) => {
-    const typeToUse = userType || user?.type;
+    const typeToUse = userType?.toLowerCase() || user?.type?.toLowerCase();
 
     if (!typeToUse) {
-      console.log(
-        "AuthContext - Type utilisateur non spécifié pour la redirection",
-      );
+      console.log("❌ AuthContext - Type utilisateur non spécifié");
       return;
     }
 
-    console.log(
-      `AuthContext - Redirection vers dashboard pour type: ${typeToUse}`,
-    );
+    console.log(`📍 AuthContext - Redirecting to dashboard for: ${typeToUse}`);
 
-    switch (typeToUse.toLowerCase()) {
+    switch (typeToUse) {
       case "admin":
         router.push("/dashboard-admin");
         break;
@@ -110,51 +182,97 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         router.push("/dashboard-utilisateur");
         break;
       default:
-        console.log(`AuthContext - Type inconnu: ${typeToUse}`);
+        router.push("/");
     }
   };
 
-  // Fonction login modifiée avec paramètre optionnel
-  const login = (userData: User, shouldRedirect: boolean = false) => {
+  // Fonction pour forcer la mise à jour
+  const refreshAuthState = () => {
+    console.log("🔄 AuthContext - Manual refresh triggered");
+    initializeAuth();
+
+    // Émettre un événement pour notifier les autres composants
+    const event = new CustomEvent("auth-state-changed", {
+      detail: { isLoggedIn, user },
+    });
+    window.dispatchEvent(event);
+  };
+
+  // Émettre un événement de changement d'authentification
+  const emitAuthChangeEvent = (isLoggedIn: boolean, user: User | null) => {
+    const event = new CustomEvent("auth-state-changed", {
+      detail: { isLoggedIn, user },
+    });
+    window.dispatchEvent(event);
+  };
+
+  // Fonction login
+  const login = (
+    userData: any,
+    token: string,
+    shouldRedirect: boolean = false,
+  ) => {
+    console.log("✅ AuthContext - Login function called");
+
+    // Sauvegarder les données
+    localStorage.setItem("oskar_user", JSON.stringify(userData));
+    localStorage.setItem("oskar_token", token);
+    localStorage.setItem("oskar_user_type", userData.type);
+
+    // Mettre à jour le state IMMÉDIATEMENT
     setUser(userData);
     setIsLoggedIn(true);
 
-    // Sauvegarder dans localStorage
-    localStorage.setItem("oskar_user", JSON.stringify(userData));
-    if (userData.temp_token) {
-      localStorage.setItem("oskar_token", userData.temp_token);
-    }
+    // Émettre l'événement
+    emitAuthChangeEvent(true, userData);
 
-    console.log("AuthContext - Connexion réussie");
+    // Forcer un re-render
+    setAuthVersion((prev) => prev + 1);
 
-    // Rediriger vers le dashboard SEULEMENT si demandé
+    console.log("✅ AuthContext - Login successful:", {
+      type: userData.type,
+      email: userData.email,
+      isLoggedIn: true,
+    });
+
+    // Fermer les modals
+    closeModals();
+
+    // Rediriger si demandé
     if (shouldRedirect) {
-      console.log("AuthContext - Redirection après login demandée");
-      redirectToDashboard(userData.type);
-    } else {
-      console.log("AuthContext - Pas de redirection après login");
+      setTimeout(() => redirectToDashboard(userData.type), 100);
     }
   };
 
   const logout = () => {
+    console.log("🔴 AuthContext - Logging out...");
+
+    // Nettoyer le localStorage
+    localStorage.removeItem("oskar_user");
+    localStorage.removeItem("oskar_token");
+    localStorage.removeItem("oskar_user_type");
+    localStorage.removeItem("oskar_remember_email");
+
+    // Nettoyer les cookies
+    document.cookie = "oskar_token=; path=/; max-age=0";
+    document.cookie = "access_token=; path=/; max-age=0";
+
+    // Mettre à jour le state
     setUser(null);
     setIsLoggedIn(false);
     setShowLoginModal(false);
     setShowRegisterModal(false);
 
-    // Supprimer de localStorage
-    localStorage.removeItem("oskar_user");
-    localStorage.removeItem("oskar_token");
-    localStorage.removeItem("oskar_remember_email");
+    // Émettre l'événement
+    emitAuthChangeEvent(false, null);
 
-    // Supprimer les cookies aussi
-    document.cookie = "oskar_user=; path=/; max-age=0";
-    document.cookie = "oskar_token=; path=/; max-age=0";
+    // Forcer un re-render
+    setAuthVersion((prev) => prev + 1);
 
-    console.log("AuthContext - Déconnexion effectuée");
+    console.log("✅ AuthContext - Logout successful");
 
-    // Rediriger vers la page d'accueil
-    router.push("/");
+    // Rediriger vers l'accueil
+    setTimeout(() => router.push("/"), 100);
   };
 
   const openLoginModal = () => {
@@ -182,6 +300,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setShowLoginModal(true);
   };
 
+  const validateToken = async (): Promise<boolean> => {
+    const token = localStorage.getItem("oskar_token");
+    if (!token) return false;
+
+    try {
+      const tokenParts = token.split(".");
+      if (tokenParts.length === 3) {
+        const payload = JSON.parse(atob(tokenParts[1]));
+        const exp = payload.exp * 1000;
+        return Date.now() < exp;
+      }
+      return true;
+    } catch (error) {
+      console.error("❌ AuthContext - Token validation error:", error);
+      return false;
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -196,8 +332,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         showRegisterModal,
         switchToRegister,
         switchToLogin,
-        redirectToDashboard, // Exporté pour pouvoir l'utiliser manuellement
+        redirectToDashboard,
+        validateToken,
+        refreshAuthState,
       }}
+      key={`auth-provider-${authVersion}`}
     >
       {children}
     </AuthContext.Provider>

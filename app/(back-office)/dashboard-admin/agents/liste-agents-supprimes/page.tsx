@@ -546,7 +546,7 @@ export default function ListeAgentsSupprimesPage() {
 
       console.log("🔄 Restoring agent:", agent.uuid);
 
-      const response = await api.post(
+      const response = await api.delete(
         API_ENDPOINTS.ADMIN.AGENTS.RESTORE(agent.uuid),
       );
 

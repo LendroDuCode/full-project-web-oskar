@@ -40,13 +40,17 @@ import CreateDonModal from "../components/modals/CreateDonModal";
 import EditDonModal from "../components/modals/EditDonModal";
 import ViewDonModal from "../components/modals/ViewDonModal";
 
-// Types
 interface Don {
   id: number;
+  nom: string;
   uuid: string;
   titre: string;
+  date_debut: string;
+  date_fin: string;
   description: string;
+  est_public: number | boolean; // Change from boolean to number | boolean
   statut: string;
+  est_bloque: boolean;
   prix: number | null;
   image: string;
   numero: string;
@@ -55,6 +59,7 @@ interface Don {
   localisation?: string;
   quantite?: number | string;
   condition?: string;
+  estPublie: boolean;
   disponibilite?: string;
   nom_donataire?: string;
   lieu_retrait?: string;
@@ -62,6 +67,21 @@ interface Don {
   categorie?: {
     libelle: string;
     type: string;
+  };
+  vendeur?: {
+    id: number;
+    uuid: string;
+    nom: string;
+  };
+  utilisateur?: {
+    id: number;
+    uuid: string;
+    nom: string;
+    prenom: string;
+    email: string;
+    telephone: string;
+    createdAt: string;
+    updatedAt: string;
   };
 }
 
@@ -508,7 +528,6 @@ export default function DonsPubliesPage() {
         ...params,
       }).toString();
 
-   
       console.log("🌐 Endpoint appelé:", endpoint);
 
       // Appel API avec gestion d'erreur améliorée
@@ -760,8 +779,7 @@ export default function DonsPubliesPage() {
   // Export PDF
   const handleExport = async () => {
     try {
-      const response = await api.get(API_ENDPOINTS.DONS.EXPORT_PDF, {
-      });
+      const response = await api.get(API_ENDPOINTS.DONS.EXPORT_PDF, {});
       const url = window.URL.createObjectURL(response);
       const link = document.createElement("a");
       link.href = url;
@@ -981,8 +999,8 @@ export default function DonsPubliesPage() {
 
   return (
     <>
-      {/* Modals 
-       {selectedDon && (
+      {/* Modals */}
+      {selectedDon && (
         <EditDonModal
           isOpen={showEditModal}
           don={selectedDon}
@@ -1003,13 +1021,12 @@ export default function DonsPubliesPage() {
           }}
         />
       )}
-      */}
       <CreateDonModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onSuccess={() => handleSuccess("Don créé avec succès !")}
       />
-     
+
       <DeleteModal
         show={showDeleteModal}
         don={selectedDon}

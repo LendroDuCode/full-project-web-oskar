@@ -25,7 +25,8 @@ import { API_ENDPOINTS } from "@/config/api-endpoints";
 import colors from "@/app/shared/constants/colors";
 
 // Types
-interface Civilite {
+// types/civilite.ts
+export interface Civilite {
   id: number;
   uuid: string;
   statut: string;
@@ -35,9 +36,9 @@ interface Civilite {
   createdAt: string | null;
   updatedAt: string | null;
   is_deleted: boolean;
-  deleted_at: string | null;
+  deleted_at: string | null | undefined;
   description?: string;
-  code?: string;
+  code?: string | null;
   libelle_court?: string;
   ordre?: number;
 }
@@ -430,7 +431,7 @@ export default function EditCiviliteModal({
           {/* En-tête de la modal */}
           <div
             className="modal-header text-white border-0 rounded-top-3"
-            style={styles.modalHeader}
+            style={{ backgroundColor: colors.oskar.yellow }}
           >
             <div className="d-flex align-items-center">
               <div className="bg-white bg-opacity-20 rounded-circle p-2 me-3">
@@ -1073,7 +1074,7 @@ export default function EditCiviliteModal({
                 className="btn d-flex align-items-center gap-2"
                 onClick={handleReset}
                 disabled={loading || loadingCivilite}
-                style={styles.secondaryButton}
+                style={{ backgroundColor: colors.oskar.yellow }}
                 onMouseEnter={(e) => {
                   Object.assign(
                     e.currentTarget.style,
@@ -1117,7 +1118,7 @@ export default function EditCiviliteModal({
                   className="btn text-white d-flex align-items-center gap-2"
                   onClick={handleSubmit}
                   disabled={loading || loadingCivilite}
-                  style={styles.primaryButton}
+                  style={{ backgroundColor: colors.oskar.yellow }}
                   onMouseEnter={(e) => {
                     Object.assign(
                       e.currentTarget.style,

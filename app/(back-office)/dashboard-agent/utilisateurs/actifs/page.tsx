@@ -40,10 +40,10 @@ import {
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { api } from "@/lib/api-client";
 import CreateUserModal from "../components/modals/CreateUserModal";
+import EditUserModal from "../components/modals/ModifierUserModal";
 
 // Types pour les utilisateurs
 
-// Type principal User
 interface User {
   // Identifiant unique
   uuid: string;
@@ -63,6 +63,7 @@ interface User {
   mot_de_passe?: string;
   est_verifie: boolean;
   est_bloque: boolean;
+  statut: string;
   is_deleted?: boolean;
   raison_blocage?: string;
   date_derniere_connexion?: string;
@@ -71,6 +72,7 @@ interface User {
   // Rôles et permissions
   role_uuid: string;
   is_admin: boolean;
+  adresse_uuid: string;
   permissions?: string[];
 
   // Civilité
@@ -102,7 +104,7 @@ interface User {
   civilite?: Civilite;
   role?: Role;
   statut_matrimonial?: StatutMatrimonial;
-  user_profile?: UserProfile;
+  user_profile?: UserProfile; // Maintenant UserProfile est défini
 }
 
 // Type pour le profil utilisateur étendu
@@ -877,6 +879,7 @@ export default function ListeUtilisateursActifsPage() {
   };
 
   // Fonction pour supprimer un utilisateur
+  // Fonction pour supprimer un utilisateur
   const deleteUser = async (userId: string) => {
     try {
       setLoading(true);
@@ -1419,28 +1422,45 @@ export default function ListeUtilisateursActifsPage() {
         onSuccess={handleUserCreated}
       />
 
-      {/* Modal de modification d'utilisateur
-        <EditUserModal
-          isOpen={showEditModal}
-          user={
-            selectedUserForEdit
-              ? {
-                  ...selectedUserForEdit,
-                  date_naissance: selectedUserForEdit.date_naissance ?? undefined,
-                }
-              : null
-          }
-          onClose={() => {
-            setShowEditModal(false);
-            setSelectedUserForEdit(null);
-          }}
-          onSuccess={() => {
-            setSuccessMessage("Utilisateur modifié avec succès");
-            refresh();
-            setTimeout(() => setSuccessMessage(null), 3000);
-          }}
-        />
-        */}
+      {/* Modal de modification d'utilisateur*/}
+      <EditUserModal
+        isOpen={showEditModal}
+        user={
+          selectedUserForEdit
+            ? {
+                ...selectedUserForEdit,
+                date_naissance: selectedUserForEdit.date_naissance ?? undefined,
+                // Corriger le type de civilite pour correspondre à l'interface Civilite attendue
+                civilite: selectedUserForEdit.civilite
+                  ? {
+                      uuid: selectedUserForEdit.civilite_uuid || "",
+                      libelle: selectedUserForEdit.civilite.libelle,
+                      slug: selectedUserForEdit.civilite.libelle.toLowerCase(),
+                      statut: "actif",
+                    }
+                  : undefined,
+                // Corriger le type de role pour correspondre à l'interface Role attendue
+                role: selectedUserForEdit.role
+                  ? {
+                      uuid: selectedUserForEdit.role_uuid || "",
+                      name: selectedUserForEdit.role.name,
+                      feature: "user_management",
+                      status: "actif",
+                    }
+                  : undefined,
+              }
+            : null
+        }
+        onClose={() => {
+          setShowEditModal(false);
+          setSelectedUserForEdit(null);
+        }}
+        onSuccess={() => {
+          setSuccessMessage("Utilisateur modifié avec succès");
+          refresh();
+          setTimeout(() => setSuccessMessage(null), 3000);
+        }}
+      />
 
       {/* Modal de suppression simple */}
       <DeleteModal

@@ -9,8 +9,12 @@
  * Interface de base pour toutes les entités avec UUID
  */
 export interface BaseEntity {
+  id: number;
   uuid: string;
-  created_at?: string;
+  adminUuid: string | null;
+  is_deleted?: boolean | undefined;
+  deleted_at?: string;
+  created_at?: string | null | undefined;
   updated_at?: string;
   created_by?: string;
   updated_by?: string;
@@ -58,7 +62,7 @@ export interface FilterOptions {
   page?: number;
   limit?: number;
   orderBy?: string;
-  orderDirection?: 'asc' | 'desc';
+  orderDirection?: "asc" | "desc";
   [key: string]: any;
 }
 
@@ -71,7 +75,7 @@ export interface FilterOptions {
  */
 export interface User extends BaseEntity {
   code_utilisateur?: string;
-  
+
   // Informations personnelles
   nom: string;
   prenoms: string;
@@ -81,7 +85,7 @@ export interface User extends BaseEntity {
   lieu_naissance?: string;
   nationalite?: string;
   photo_profil?: string;
-  
+
   // Authentification
   mot_de_passe?: string;
   est_verifie: boolean;
@@ -90,27 +94,27 @@ export interface User extends BaseEntity {
   raison_blocage?: string;
   date_derniere_connexion?: string;
   date_derniere_deconnexion?: string;
-  
+
   // Rôles et permissions
   role_uuid: string;
   is_admin: boolean;
   permissions?: string[];
-  
+
   // Relations
   civilite_uuid?: string;
   statut_matrimonial_uuid?: string;
-  
+
   // Adresse
   adresse?: string;
   ville?: string;
   code_postal?: string;
   pays?: string;
-  
+
   // Informations professionnelles
   profession?: string;
   employeur?: string;
   secteur_activite?: string;
-  
+
   // Relations étendues
   civilite?: Civilite;
   role?: Role;
@@ -153,8 +157,8 @@ export interface UserPreferences {
   format_heure?: string;
   notifications_email?: boolean;
   notifications_push?: boolean;
-  theme?: 'light' | 'dark' | 'auto';
-  email_frequency?: 'immediate' | 'daily' | 'weekly';
+  theme?: "light" | "dark" | "auto";
+  email_frequency?: "immediate" | "daily" | "weekly";
 }
 
 /**
@@ -173,11 +177,18 @@ export interface UserStatistics {
  * Type pour les civilités
  */
 export interface Civilite extends BaseEntity {
+  id: number;
+  uuid: string;
+  statut: string;
+  slug: string;
   libelle: string;
-  code: string;
-  ordre?: number;
-  statut?: 'actif' | 'inactif';
+  adminUuid: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
   description?: string;
+  code?: string | null;
+  libelle_court?: string;
+  ordre?: number;
 }
 
 /**
@@ -189,7 +200,7 @@ export interface Role extends BaseEntity {
   permissions: string[];
   is_default?: boolean;
   niveau?: number;
-  statut?: 'actif' | 'inactif';
+  statut?: "actif" | "inactif";
 }
 
 /**
@@ -199,7 +210,7 @@ export interface StatutMatrimonial extends BaseEntity {
   libelle: string;
   code: string;
   description?: string;
-  statut?: 'actif' | 'inactif';
+  statut?: "actif" | "inactif";
   defaut?: boolean;
   ordre?: number;
 }
@@ -217,14 +228,14 @@ export interface Pays extends BaseEntity {
   nom_complet?: string;
   nom_local?: string;
   description?: string;
-  
+
   // Drapeau et symboles
   code_drapeau?: string;
   emoji_drapeau?: string;
   devise?: string;
   monnaie_code?: string;
   monnaie_symbole?: string;
-  
+
   // Géographie
   continent?: string;
   sous_continent?: string;
@@ -234,28 +245,28 @@ export interface Pays extends BaseEntity {
   superficie?: number;
   population?: number;
   densite?: number;
-  
+
   // Langues
   langues_officielles?: string[];
   langues_parlees?: string[];
-  
+
   // Indicatifs
   indicatif_telephonique?: string;
   tld?: string;
-  
+
   // Fuseau horaire
   fuseau_horaire?: string;
   utc_offset?: string;
-  
+
   // Statut
-  statut: 'actif' | 'inactif' | 'archive';
+  statut: "actif" | "inactif" | "archive";
   est_soumis_tva?: boolean;
   taux_tva_standard?: number;
-  
+
   // Localisation
   latitude?: number;
   longitude?: number;
-  
+
   // Relations
   villes?: Ville[];
   regions?: Region[];
@@ -270,7 +281,7 @@ export interface Ville extends BaseEntity {
   code_postal: string;
   code_insee?: string;
   description?: string;
-  
+
   // Géographie
   latitude?: number;
   longitude?: number;
@@ -278,18 +289,18 @@ export interface Ville extends BaseEntity {
   superficie?: number;
   population?: number;
   densite?: number;
-  
+
   // Relations
   pays_uuid: string;
   departement_uuid?: string;
   region_uuid?: string;
-  
+
   // Statut
-  statut: 'actif' | 'inactif' | 'archive';
+  statut: "actif" | "inactif" | "archive";
   est_capitale?: boolean;
   est_capitale_region?: boolean;
   est_capitale_departement?: boolean;
-  
+
   // Relations étendues
   pays?: Pays;
   departement?: Departement;
@@ -308,8 +319,8 @@ export interface Region extends BaseEntity {
   superficie?: number;
   population?: number;
   capitale_region_uuid?: string;
-  statut: 'actif' | 'inactif';
-  
+  statut: "actif" | "inactif";
+
   // Relations
   pays?: Pays;
   villes?: Ville[];
@@ -328,8 +339,8 @@ export interface Departement extends BaseEntity {
   superficie?: number;
   population?: number;
   prefecture_uuid?: string;
-  statut: 'actif' | 'inactif';
-  
+  statut: "actif" | "inactif";
+
   // Relations
   region?: Region;
   pays?: Pays;
@@ -348,7 +359,7 @@ export interface Quartier extends BaseEntity {
   superficie?: number;
   latitude?: number;
   longitude?: number;
-  statut: 'actif' | 'inactif';
+  statut: "actif" | "inactif";
 }
 
 // =============================================
@@ -444,7 +455,7 @@ export interface VilleFormData {
   altitude?: number;
   superficie?: number;
   population?: number;
-  statut?: 'actif' | 'inactif';
+  statut?: "actif" | "inactif";
   est_capitale?: boolean;
   est_capitale_region?: boolean;
   est_capitale_departement?: boolean;
@@ -460,7 +471,7 @@ export interface CreateVilleData {
   description?: string;
   latitude?: number;
   longitude?: number;
-  statut?: 'actif' | 'inactif';
+  statut?: "actif" | "inactif";
   departement_uuid?: string;
   region_uuid?: string;
   code_insee?: string;
@@ -484,8 +495,8 @@ export interface UserFilterType {
   is_deleted?: boolean | string;
   date_debut?: string;
   date_fin?: string;
-  orderBy?: keyof User | 'role.name' | 'civilite.libelle';
-  orderDirection?: 'asc' | 'desc';
+  orderBy?: keyof User | "role.name" | "civilite.libelle";
+  orderDirection?: "asc" | "desc";
   page?: number;
   limit?: number;
 }
@@ -498,14 +509,14 @@ export interface VilleFilterType {
   pays_uuid?: string;
   departement_uuid?: string;
   region_uuid?: string;
-  statut?: 'actif' | 'inactif' | 'archive' | 'tous';
+  statut?: "actif" | "inactif" | "archive" | "tous";
   est_capitale?: boolean;
   avec_code_postal?: boolean;
   avec_coordonnees?: boolean;
   population_min?: number;
   population_max?: number;
-  orderBy?: keyof Ville | 'pays.nom' | 'departement.nom' | 'population';
-  orderDirection?: 'asc' | 'desc';
+  orderBy?: keyof Ville | "pays.nom" | "departement.nom" | "population";
+  orderDirection?: "asc" | "desc";
   page?: number;
   limit?: number;
 }
@@ -594,7 +605,7 @@ export interface UserLoginHistory {
     region?: string;
     pays?: string;
   };
-  status: 'success' | 'failed' | 'blocked';
+  status: "success" | "failed" | "blocked";
   reason?: string;
   created_at: string;
 }
@@ -605,7 +616,14 @@ export interface UserLoginHistory {
 export interface UserActivity {
   uuid: string;
   user_uuid: string;
-  type: 'connexion' | 'deconnexion' | 'modification' | 'creation' | 'suppression' | 'telechargement' | 'upload';
+  type:
+    | "connexion"
+    | "deconnexion"
+    | "modification"
+    | "creation"
+    | "suppression"
+    | "telechargement"
+    | "upload";
   description: string;
   metadata?: Record<string, any>;
   ip_address?: string;
@@ -623,7 +641,7 @@ export interface UserActivity {
 export interface UserNotification {
   uuid: string;
   user_uuid: string;
-  type: 'info' | 'success' | 'warning' | 'error' | 'system';
+  type: "info" | "success" | "warning" | "error" | "system";
   title: string;
   message: string;
   is_read: boolean;
@@ -645,7 +663,7 @@ export interface ExportData<T = any> {
   headers: string[];
   data: T[];
   filename: string;
-  format: 'csv' | 'excel' | 'pdf';
+  format: "csv" | "excel" | "pdf";
 }
 
 /**
@@ -692,7 +710,7 @@ export default {
   Pagination,
   ValidationError,
   FilterOptions,
-  
+
   // Types utilisateurs
   User,
   UserProfile,
@@ -702,40 +720,40 @@ export default {
   Civilite,
   Role,
   StatutMatrimonial,
-  
+
   // Types géographiques
   Pays,
   Ville,
   Region,
   Departement,
   Quartier,
-  
+
   // Types formulaires
   UserFormData,
   CreateUserData,
   UpdateUserData,
   VilleFormData,
   CreateVilleData,
-  
+
   // Types filtres
   UserFilterType,
   VilleFilterType,
-  
+
   // Types statistiques
   UserStatsType,
-  
+
   // Types options
   UserOptionType,
   PaysOptionType,
   VilleOptionType,
-  
+
   // Types historique
   UserLoginHistory,
   UserActivity,
-  
+
   // Types notifications
   UserNotification,
-  
+
   // Types utilitaires
   ExportData,
   SearchResult,
@@ -746,7 +764,13 @@ export default {
 */
 
 // Export d'un type qui combine les principales entités
-export type AppEntity = User | Pays | Ville | Civilite | Role | StatutMatrimonial;
+export type AppEntity =
+  | User
+  | Pays
+  | Ville
+  | Civilite
+  | Role
+  | StatutMatrimonial;
 
 // Export d'un type pour les formulaires
 export type AppFormData = UserFormData | VilleFormData;

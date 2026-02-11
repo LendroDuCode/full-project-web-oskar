@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { api } from "@/lib/api-client";
+import colors from "@/app/shared/constants/colors";
 
 interface AdminProfile {
   uuid: string;
@@ -201,7 +202,7 @@ export default function ModifierProfile() {
   const getDefaultAvatar = (nom: string, prenoms: string) => {
     const initials =
       `${prenoms?.charAt(0) || ""}${nom?.charAt(0) || ""}`.toUpperCase();
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=linear-gradient(135deg, #10b981 0%, #059669 100%)&color=fff&size=200&bold=true`;
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=${encodeURIComponent(colors.oskar.green)}&color=fff&size=200&bold=true`;
   };
 
   const handleInputChange = (
@@ -359,7 +360,7 @@ export default function ModifierProfile() {
             })
           : "N/A",
         icon: "calendar-check",
-        color: "teal",
+        color: colors.oskar.green,
       },
       {
         title: "Dernière mise à jour",
@@ -371,19 +372,19 @@ export default function ModifierProfile() {
             })
           : "N/A",
         icon: "clock-rotate-left",
-        color: "emerald",
+        color: colors.oskar.darkGreen,
       },
       {
         title: "Statut du compte",
         value: profile?.is_verified ? "Vérifié ✓" : "En attente",
         icon: "shield-check",
-        color: profile?.is_verified ? "green" : "lime",
+        color: profile?.is_verified ? colors.oskar.green : colors.oskar.green,
       },
       {
         title: "Niveau d'accès",
         value: "Administrateur",
         icon: "user-shield",
-        color: "forest",
+        color: colors.oskar.darkGreen,
       },
     ];
 
@@ -399,17 +400,28 @@ export default function ModifierProfile() {
               <div className="card-body p-5 text-center">
                 <div className="position-relative">
                   <div
-                    className="spinner-border text-success mb-4"
-                    style={{ width: "4rem", height: "4rem" }}
+                    className="spinner-border mb-4"
+                    style={{
+                      width: "4rem",
+                      height: "4rem",
+                      borderColor: colors.oskar.green,
+                      borderRightColor: "transparent",
+                    }}
                     role="status"
                   >
                     <span className="visually-hidden">Chargement...</span>
                   </div>
                   <div className="position-absolute top-0 start-50 translate-middle">
-                    <i className="fa-solid fa-user-shield fa-2x text-success opacity-75"></i>
+                    <i
+                      className="fa-solid fa-user-shield fa-2x opacity-75"
+                      style={{ color: colors.oskar.green }}
+                    ></i>
                   </div>
                 </div>
-                <h4 className="fw-bold text-success mb-3">
+                <h4
+                  className="fw-bold mb-3"
+                  style={{ color: colors.oskar.green }}
+                >
                   Chargement de votre profil...
                 </h4>
                 <p className="text-muted fs-5">
@@ -417,8 +429,11 @@ export default function ModifierProfile() {
                 </p>
                 <div className="progress mt-4" style={{ height: "6px" }}>
                   <div
-                    className="progress-bar progress-bar-striped progress-bar-animated bg-success"
-                    style={{ width: "75%" }}
+                    className="progress-bar progress-bar-striped progress-bar-animated"
+                    style={{
+                      width: "75%",
+                      backgroundColor: colors.oskar.green,
+                    }}
                   ></div>
                 </div>
               </div>
@@ -440,14 +455,24 @@ export default function ModifierProfile() {
                 <li className="breadcrumb-item">
                   <a
                     href="/dashboard-admin"
-                    className="text-decoration-none text-success fw-semibold d-flex align-items-center gap-2"
+                    className="text-decoration-none fw-semibold d-flex align-items-center gap-2"
+                    style={{ color: colors.oskar.green }}
                   >
-                    <i className="fa-solid fa-gauge-high fa-lg"></i>
+                    <i
+                      className="fa-solid fa-gauge-high fa-lg"
+                      style={{ color: colors.oskar.green }}
+                    ></i>
                     <span className="d-none d-md-inline">Tableau de bord</span>
                   </a>
                 </li>
-                <li className="breadcrumb-item active text-success fw-bold">
-                  <i className="fa-solid fa-user-gear me-2"></i>
+                <li
+                  className="breadcrumb-item active fw-bold"
+                  style={{ color: colors.oskar.green }}
+                >
+                  <i
+                    className="fa-solid fa-user-gear me-2"
+                    style={{ color: colors.oskar.green }}
+                  ></i>
                   Profil Administrateur
                 </li>
               </ol>
@@ -455,7 +480,10 @@ export default function ModifierProfile() {
 
             {/* En-tête principal avec gradient vert */}
             <div className="card border-0 shadow-lg overflow-hidden mb-4">
-              <div className="card-header bg-gradient-success text-white py-4 border-0">
+              <div
+                className="card-header py-4 border-0 text-white"
+                style={{ backgroundColor: colors.oskar.green }}
+              >
                 <div className="row align-items-center">
                   <div className="col-md-8">
                     <h1 className="h2 fw-bold mb-2">
@@ -471,6 +499,7 @@ export default function ModifierProfile() {
                     <button
                       onClick={() => router.push("/dashboard-admin")}
                       className="btn btn-light btn-lg rounded-pill px-4"
+                      style={{ color: colors.oskar.green }}
                     >
                       <i className="fa-solid fa-arrow-left me-2"></i>
                       Retour au dashboard
@@ -490,7 +519,10 @@ export default function ModifierProfile() {
                 aria-live="assertive"
                 aria-atomic="true"
               >
-                <div className="toast-header bg-danger text-white">
+                <div
+                  className="toast-header text-white"
+                  style={{ backgroundColor: colors.oskar.red }}
+                >
                   <i className="fa-solid fa-circle-exclamation me-2"></i>
                   <strong className="me-auto">Erreur</strong>
                   <button
@@ -512,7 +544,10 @@ export default function ModifierProfile() {
                 aria-live="assertive"
                 aria-atomic="true"
               >
-                <div className="toast-header bg-success text-white">
+                <div
+                  className="toast-header text-white"
+                  style={{ backgroundColor: colors.oskar.green }}
+                >
                   <i className="fa-solid fa-circle-check me-2"></i>
                   <strong className="me-auto">Succès</strong>
                   <button
@@ -534,6 +569,18 @@ export default function ModifierProfile() {
                   <button
                     className={`nav-link ${activeTab === "profile" ? "active" : ""}`}
                     onClick={() => setActiveTab("profile")}
+                    style={
+                      activeTab === "profile"
+                        ? {
+                            backgroundColor: colors.oskar.green,
+                            color: "white",
+                            borderColor: colors.oskar.green,
+                          }
+                        : {
+                            color: "#374151",
+                            borderColor: "#e5e7eb",
+                          }
+                    }
                   >
                     <i className="fa-solid fa-user me-2"></i>
                     Profil
@@ -543,6 +590,18 @@ export default function ModifierProfile() {
                   <button
                     className={`nav-link ${activeTab === "security" ? "active" : ""}`}
                     onClick={() => setActiveTab("security")}
+                    style={
+                      activeTab === "security"
+                        ? {
+                            backgroundColor: colors.oskar.warning,
+                            color: "white",
+                            borderColor: colors.oskar.warning,
+                          }
+                        : {
+                            color: "#374151",
+                            borderColor: "#e5e7eb",
+                          }
+                    }
                   >
                     <i className="fa-solid fa-shield-halved me-2"></i>
                     Sécurité
@@ -552,6 +611,18 @@ export default function ModifierProfile() {
                   <button
                     className={`nav-link ${activeTab === "preferences" ? "active" : ""}`}
                     onClick={() => setActiveTab("preferences")}
+                    style={
+                      activeTab === "preferences"
+                        ? {
+                            backgroundColor: colors.oskar.green,
+                            color: "white",
+                            borderColor: colors.oskar.green,
+                          }
+                        : {
+                            color: "#374151",
+                            borderColor: "#e5e7eb",
+                          }
+                    }
                   >
                     <i className="fa-solid fa-sliders me-2"></i>
                     Préférences
@@ -594,11 +665,13 @@ export default function ModifierProfile() {
                             />
                             <button
                               onClick={triggerFileInput}
-                              className="btn btn-success rounded-circle position-absolute bottom-0 end-0 shadow-lg"
+                              className="btn rounded-circle position-absolute bottom-0 end-0 shadow-lg"
                               style={{
                                 width: "48px",
                                 height: "48px",
                                 border: "4px solid white",
+                                backgroundColor: colors.oskar.green,
+                                color: "white",
                               }}
                               title="Changer la photo"
                               type="button"
@@ -617,7 +690,13 @@ export default function ModifierProfile() {
                         <div className="col-md-9">
                           <h2 className="fw-bold mb-2">
                             {getFullName()}
-                            <span className="badge bg-gradient-success ms-3">
+                            <span
+                              className="badge ms-3"
+                              style={{
+                                backgroundColor: colors.oskar.green,
+                                color: "white",
+                              }}
+                            >
                               <i className="fa-solid fa-star me-1"></i>
                               Administrateur
                             </span>
@@ -631,10 +710,14 @@ export default function ModifierProfile() {
                               <div key={index} className="col-6 col-md-3 mb-3">
                                 <div className="d-flex align-items-center">
                                   <div
-                                    className={`bg-${stat.color}-subtle rounded-circle p-3 me-3`}
+                                    className="rounded-circle p-3 me-3"
+                                    style={{
+                                      backgroundColor: `${stat.color}20`,
+                                    }}
                                   >
                                     <i
-                                      className={`fa-solid fa-${stat.icon} text-${stat.color} fa-lg`}
+                                      className={`fa-solid fa-${stat.icon} fa-lg`}
+                                      style={{ color: stat.color }}
                                     ></i>
                                   </div>
                                   <div>
@@ -662,7 +745,10 @@ export default function ModifierProfile() {
                   <div className="card border-0 shadow-sm">
                     <div className="card-header bg-white py-3 border-bottom">
                       <h5 className="fw-bold mb-0 d-flex align-items-center">
-                        <i className="fa-solid fa-user-edit text-success me-3"></i>
+                        <i
+                          className="fa-solid fa-user-edit me-3"
+                          style={{ color: colors.oskar.green }}
+                        ></i>
                         Informations personnelles
                       </h5>
                     </div>
@@ -854,7 +940,11 @@ export default function ModifierProfile() {
                                 </button>
                                 <button
                                   type="submit"
-                                  className="btn btn-success px-4 rounded-pill shadow-sm"
+                                  className="btn px-4 rounded-pill shadow-sm"
+                                  style={{
+                                    backgroundColor: colors.oskar.green,
+                                    color: "white",
+                                  }}
                                   disabled={saving}
                                 >
                                   {saving ? (
@@ -887,7 +977,10 @@ export default function ModifierProfile() {
                 <div className="card border-0 shadow-sm">
                   <div className="card-header bg-white py-3 border-bottom">
                     <h5 className="fw-bold mb-0 d-flex align-items-center">
-                      <i className="fa-solid fa-shield-halved text-warning me-3"></i>
+                      <i
+                        className="fa-solid fa-shield-halved me-3"
+                        style={{ color: colors.oskar.warning }}
+                      ></i>
                       Sécurité du compte
                     </h5>
                   </div>
@@ -895,11 +988,22 @@ export default function ModifierProfile() {
                     <div className="row g-4">
                       {/* Section mot de passe */}
                       <div className="col-md-6">
-                        <div className="card border-warning h-100">
+                        <div
+                          className="card h-100"
+                          style={{ borderColor: colors.oskar.warning }}
+                        >
                           <div className="card-body">
                             <div className="d-flex align-items-start mb-3">
-                              <div className="bg-warning-subtle rounded-circle p-3 me-3">
-                                <i className="fa-solid fa-key text-warning fa-xl"></i>
+                              <div
+                                className="rounded-circle p-3 me-3"
+                                style={{
+                                  backgroundColor: `${colors.oskar.warning}20`,
+                                }}
+                              >
+                                <i
+                                  className="fa-solid fa-key fa-xl"
+                                  style={{ color: colors.oskar.warning }}
+                                ></i>
                               </div>
                               <div>
                                 <h6 className="fw-bold mb-2">
@@ -916,7 +1020,11 @@ export default function ModifierProfile() {
                               onClick={() =>
                                 router.push("/auth/admin/forgot-password")
                               }
-                              className="btn btn-outline-warning w-100"
+                              className="btn w-100"
+                              style={{
+                                color: colors.oskar.warning,
+                                borderColor: colors.oskar.warning,
+                              }}
                             >
                               <i className="fa-solid fa-key me-2"></i>
                               Réinitialiser le mot de passe
@@ -927,11 +1035,22 @@ export default function ModifierProfile() {
 
                       {/* Section authentification à deux facteurs */}
                       <div className="col-md-6">
-                        <div className="card border-success h-100">
+                        <div
+                          className="card h-100"
+                          style={{ borderColor: colors.oskar.green }}
+                        >
                           <div className="card-body">
                             <div className="d-flex align-items-start mb-3">
-                              <div className="bg-success-subtle rounded-circle p-3 me-3">
-                                <i className="fa-solid fa-mobile-screen text-success fa-xl"></i>
+                              <div
+                                className="rounded-circle p-3 me-3"
+                                style={{
+                                  backgroundColor: `${colors.oskar.green}20`,
+                                }}
+                              >
+                                <i
+                                  className="fa-solid fa-mobile-screen fa-xl"
+                                  style={{ color: colors.oskar.green }}
+                                ></i>
                               </div>
                               <div>
                                 <h6 className="fw-bold mb-2">
@@ -963,9 +1082,20 @@ export default function ModifierProfile() {
 
                       {/* Section sessions actives */}
                       <div className="col-12">
-                        <div className="card border-success">
-                          <div className="card-header bg-success-subtle">
-                            <h6 className="fw-bold mb-0 text-success">
+                        <div
+                          className="card"
+                          style={{ borderColor: colors.oskar.green }}
+                        >
+                          <div
+                            className="card-header"
+                            style={{
+                              backgroundColor: `${colors.oskar.green}10`,
+                            }}
+                          >
+                            <h6
+                              className="fw-bold mb-0"
+                              style={{ color: colors.oskar.green }}
+                            >
                               <i className="fa-solid fa-computer-mouse me-2"></i>
                               Sessions actives
                             </h6>
@@ -980,12 +1110,24 @@ export default function ModifierProfile() {
                                   Navigateur Chrome • Abidjan, CI
                                 </small>
                               </div>
-                              <span className="badge bg-success">
+                              <span
+                                className="badge"
+                                style={{
+                                  backgroundColor: colors.oskar.green,
+                                  color: "white",
+                                }}
+                              >
                                 <i className="fa-solid fa-circle-check me-1"></i>
                                 Actif maintenant
                               </span>
                             </div>
-                            <button className="btn btn-outline-danger w-100">
+                            <button
+                              className="btn w-100"
+                              style={{
+                                color: colors.oskar.red,
+                                borderColor: colors.oskar.red,
+                              }}
+                            >
                               <i className="fa-solid fa-sign-out me-2"></i>
                               Déconnecter toutes les autres sessions
                             </button>
@@ -1005,7 +1147,10 @@ export default function ModifierProfile() {
                 <div className="card border-0 shadow-sm">
                   <div className="card-header bg-white py-3 border-bottom">
                     <h5 className="fw-bold mb-0 d-flex align-items-center">
-                      <i className="fa-solid fa-sliders text-success me-3"></i>
+                      <i
+                        className="fa-solid fa-sliders me-3"
+                        style={{ color: colors.oskar.green }}
+                      ></i>
                       Préférences du compte
                     </h5>
                   </div>
@@ -1047,9 +1192,20 @@ export default function ModifierProfile() {
 
                       {/* Notifications */}
                       <div className="col-12">
-                        <div className="card border-success">
-                          <div className="card-header bg-success-subtle">
-                            <h6 className="fw-bold mb-0 text-success">
+                        <div
+                          className="card"
+                          style={{ borderColor: colors.oskar.green }}
+                        >
+                          <div
+                            className="card-header"
+                            style={{
+                              backgroundColor: `${colors.oskar.green}10`,
+                            }}
+                          >
+                            <h6
+                              className="fw-bold mb-0"
+                              style={{ color: colors.oskar.green }}
+                            >
                               <i className="fa-solid fa-bell me-2"></i>
                               Préférences de notifications
                             </h6>
@@ -1112,7 +1268,13 @@ export default function ModifierProfile() {
                       {/* Bouton de sauvegarde */}
                       <div className="col-12">
                         <div className="d-flex justify-content-end">
-                          <button className="btn btn-success px-4 rounded-pill shadow-sm">
+                          <button
+                            className="btn px-4 rounded-pill shadow-sm"
+                            style={{
+                              backgroundColor: colors.oskar.green,
+                              color: "white",
+                            }}
+                          >
                             <i className="fa-solid fa-save me-2"></i>
                             Sauvegarder les préférences
                           </button>
@@ -1128,11 +1290,17 @@ export default function ModifierProfile() {
           {/* Footer avec informations */}
           <div className="row mt-4">
             <div className="col-12">
-              <div className="card border-0 shadow-sm bg-success-subtle">
+              <div
+                className="card border-0 shadow-sm"
+                style={{ backgroundColor: `${colors.oskar.green}10` }}
+              >
                 <div className="card-body text-center p-4">
                   <div className="row align-items-center">
                     <div className="col-md-8 text-md-start">
-                      <h6 className="fw-bold text-success mb-2">
+                      <h6
+                        className="fw-bold mb-2"
+                        style={{ color: colors.oskar.green }}
+                      >
                         <i className="fa-solid fa-circle-info me-2"></i>
                         Support Administrateur
                       </h6>
@@ -1145,7 +1313,11 @@ export default function ModifierProfile() {
                     <div className="col-md-4 text-md-end mt-3 mt-md-0">
                       <a
                         href="mailto:support@admin.com"
-                        className="btn btn-outline-success"
+                        className="btn"
+                        style={{
+                          color: colors.oskar.green,
+                          borderColor: colors.oskar.green,
+                        }}
                       >
                         <i className="fa-solid fa-envelope me-2"></i>
                         Contact Support
@@ -1160,45 +1332,13 @@ export default function ModifierProfile() {
       </div>
 
       <style jsx>{`
-        /* Définition des couleurs vertes personnalisées */
+        /* Utilisation des couleurs du fichier colors.ts */
         .bg-gradient-success {
-          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-        }
-
-        .text-teal {
-          color: #0d9488 !important;
-        }
-
-        .bg-teal-subtle {
-          background-color: #f0fdfa !important;
-        }
-
-        .text-emerald {
-          color: #059669 !important;
-        }
-
-        .bg-emerald-subtle {
-          background-color: #f0fdf4 !important;
-        }
-
-        .text-forest {
-          color: #166534 !important;
-        }
-
-        .bg-forest-subtle {
-          background-color: #f0fdf2 !important;
-        }
-
-        .text-lime {
-          color: #65a30d !important;
-        }
-
-        .bg-lime-subtle {
-          background-color: #f7fee7 !important;
-        }
-
-        .bg-success-subtle {
-          background-color: #f0fdf4 !important;
+          background: linear-gradient(
+            135deg,
+            ${colors.oskar.green} 0%,
+            ${colors.oskar.darkGreen} 100%
+          );
         }
 
         .card {
@@ -1220,43 +1360,54 @@ export default function ModifierProfile() {
         }
 
         .nav-pills .nav-link.active {
-          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
           border-color: transparent;
-          box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+          box-shadow: 0 4px 15px ${colors.oskar.green}30;
           color: white;
         }
 
         .nav-pills .nav-link:not(.active):hover {
-          background-color: rgba(16, 185, 129, 0.1);
-          border-color: #10b981;
-          color: #059669;
+          background-color: ${colors.oskar.green}10;
+          border-color: ${colors.oskar.green};
+          color: ${colors.oskar.green};
         }
 
         .form-control:focus,
         .form-select:focus {
-          border-color: #10b981;
-          box-shadow: 0 0 0 0.25rem rgba(16, 185, 129, 0.25);
+          border-color: ${colors.oskar.green};
+          box-shadow: 0 0 0 0.25rem ${colors.oskar.green}25;
         }
 
         .btn-success {
-          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+          background: linear-gradient(
+            135deg,
+            ${colors.oskar.green} 0%,
+            ${colors.oskar.darkGreen} 100%
+          );
           border: none;
           font-weight: 500;
         }
 
         .btn-success:hover {
-          background: linear-gradient(135deg, #0da271 0%, #047857 100%);
+          background: linear-gradient(
+            135deg,
+            ${colors.oskar.greenHover} 0%,
+            ${colors.oskar.darkGreen} 100%
+          );
           transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
+          box-shadow: 0 6px 20px ${colors.oskar.green}30;
         }
 
         .btn-outline-success {
-          color: #059669;
-          border-color: #10b981;
+          color: ${colors.oskar.green};
+          border-color: ${colors.oskar.green};
         }
 
         .btn-outline-success:hover {
-          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+          background: linear-gradient(
+            135deg,
+            ${colors.oskar.green} 0%,
+            ${colors.oskar.darkGreen} 100%
+          );
           color: white;
           border-color: transparent;
         }
@@ -1268,22 +1419,26 @@ export default function ModifierProfile() {
         }
 
         .progress-bar {
-          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+          background: linear-gradient(
+            135deg,
+            ${colors.oskar.green} 0%,
+            ${colors.oskar.darkGreen} 100%
+          );
         }
 
         .breadcrumb {
-          background: rgba(16, 185, 129, 0.1);
+          background: ${colors.oskar.green}10;
           border-radius: 10px;
         }
 
         .breadcrumb-item.active {
-          color: #059669;
+          color: ${colors.oskar.green};
           font-weight: 600;
         }
 
         .form-floating > .form-control:focus ~ label,
         .form-floating > .form-control:not(:placeholder-shown) ~ label {
-          color: #059669;
+          color: ${colors.oskar.green};
         }
 
         .badge {
@@ -1293,16 +1448,22 @@ export default function ModifierProfile() {
         }
 
         .badge.bg-gradient-success {
-          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+          background: linear-gradient(
+            135deg,
+            ${colors.oskar.green} 0%,
+            ${colors.oskar.darkGreen} 100%
+          );
         }
 
         .form-check-input:checked {
-          background-color: #10b981;
-          border-color: #10b981;
+          background-color: ${colors.oskar.green};
+          border-color: ${colors.oskar.green};
         }
 
         .form-switch .form-check-input:focus {
-          background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%2310b981'/%3e%3c/svg%3e");
+          background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='${encodeURIComponent(
+            colors.oskar.green,
+          )}'/%3e%3c/svg%3e");
         }
 
         .form-switch .form-check-input:checked {
@@ -1311,34 +1472,34 @@ export default function ModifierProfile() {
 
         /* Animation pour le spinner */
         .spinner-border.text-success {
-          border-color: #10b981;
+          border-color: ${colors.oskar.green};
           border-right-color: transparent;
         }
 
         /* Animation hover pour les cartes */
         .card.border-success:hover {
-          border-color: #10b981 !important;
-          box-shadow: 0 5px 15px rgba(16, 185, 129, 0.15) !important;
+          border-color: ${colors.oskar.green} !important;
+          box-shadow: 0 5px 15px ${colors.oskar.green}15 !important;
         }
 
         /* Style pour les icônes vertes */
         .fa-solid.text-success {
-          color: #059669 !important;
+          color: ${colors.oskar.green} !important;
         }
 
         /* Style pour les bordures vertes */
         .border-success {
-          border-color: #d1fae5 !important;
+          border-color: ${colors.oskar.lightGreen} !important;
         }
 
         /* Style pour les en-têtes de carte */
         .card-header.bg-success-subtle {
           background: linear-gradient(
             135deg,
-            rgba(16, 185, 129, 0.1) 0%,
-            rgba(5, 150, 105, 0.1) 100%
+            ${colors.oskar.green}10 0%,
+            ${colors.oskar.darkGreen}10 100%
           );
-          border-bottom: 2px solid #d1fae5;
+          border-bottom: 2px solid ${colors.oskar.lightGreen};
         }
       `}</style>
     </div>

@@ -43,6 +43,7 @@ import {
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { api } from "@/lib/api-client";
 import EditAgentModal from "../components/modals/EditAgentModal";
+import CreateAgentModal from "../components/modals/CreateAgentModal";
 
 // Types pour les agents test
 interface Agent {
@@ -985,19 +986,21 @@ export default function ListeAgentsActifsPage() {
 
   return (
     <>
-      *
-      {/* Modal de création d'agent
-        <CreateAgentModal
-          isOpen={showCreateModal}
-          onClose={() => setShowCreateModal(false)}
-          onSuccess={() => {
-            setSuccessMessage("Agent créé avec succès !");
-            fetchAgents();
-            setTimeout(() => setSuccessMessage(null), 3000);
-          }}
-        />
-        */}
-      {/* Modal de modification d'agent */}
+      *{/* Modal de création d'agent*/}
+      <CreateAgentModal
+        isOpen={showCreateModal}
+        onClose={() => {
+          setShowCreateModal(false);
+          setError(null);
+          setSuccessMessage(null);
+          setInfoMessage(null);
+        }}
+        onSuccess={() => {
+          setSuccessMessage("Agent créé avec succès !");
+          fetchAgents(); // Rafraîchir la liste
+          setTimeout(() => setSuccessMessage(null), 3000);
+        }}
+      />
       {/* Modal de modification d'agent */}
       <EditAgentModal
         isOpen={showEditModal}

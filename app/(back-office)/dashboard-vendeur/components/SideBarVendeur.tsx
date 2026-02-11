@@ -51,8 +51,9 @@ export default function SidebarVendeur({
       label: "Tableau de Bord",
       icon: "fa-chart-line",
       badge: null,
-      href: "/dashboard-vendeur/dashboard",
+      href: "/dashboard-vendeur",
     },
+    /*
     {
       id: "messages",
       label: "Messages",
@@ -60,6 +61,8 @@ export default function SidebarVendeur({
       badge: { count: 12, color: "bg-primary" },
       href: "/dashboard-vendeur/messages",
     },
+    */
+    /*
     {
       id: "notifications",
       label: "Notifications",
@@ -81,9 +84,11 @@ export default function SidebarVendeur({
       badge: null,
       href: "/dashboard-vendeur/rapports",
     },
+    */
   ];
 
   const managementItems = [
+    /*
     {
       id: "dons",
       label: "Gestion des Dons",
@@ -150,6 +155,8 @@ export default function SidebarVendeur({
         },
       ],
     },
+    */
+
     {
       id: "boutique",
       label: "Ma Boutique",
@@ -160,6 +167,7 @@ export default function SidebarVendeur({
           href: "/dashboard-vendeur/boutique/apercu",
           icon: "fa-eye text-info",
         },
+        /*
         {
           label: "Informations boutique",
           href: "/dashboard-vendeur/boutique/informations",
@@ -175,8 +183,35 @@ export default function SidebarVendeur({
           href: "/dashboard-vendeur/boutique/statistiques",
           icon: "fa-chart-bar text-success",
         },
+        */
       ],
     },
+    {
+      id: "annonces",
+      label: "Gestion des Annonces",
+      icon: "fa-bullhorn",
+      submenu: [
+        {
+          label: "Toutes les annonces",
+          href: "/dashboard-vendeur/annonces/liste-annonces",
+          icon: "fa-list text-primary",
+        },
+      ],
+    },
+    {
+      id: "favoris",
+      label: "Mes Favoris",
+      icon: "fa-heart",
+      submenu: [
+        {
+          label: "Tous mes favoris",
+          href: "/dashboard-vendeur/favoris",
+          icon: "fa-heart text-danger",
+          badge: { count: 8, color: "bg-danger" },
+        },
+      ],
+    },
+    /*
     {
       id: "commandes",
       label: "Gestion Commandes",
@@ -188,6 +223,7 @@ export default function SidebarVendeur({
           icon: "fa-clock text-warning",
           badge: { count: 3, color: "bg-warning" },
         },
+
         {
           label: "En cours",
           href: "/dashboard-vendeur/commandes/en-cours",
@@ -209,6 +245,7 @@ export default function SidebarVendeur({
           href: "/dashboard-vendeur/commandes/historique",
           icon: "fa-history text-secondary",
         },
+
       ],
     },
     {
@@ -221,6 +258,7 @@ export default function SidebarVendeur({
           href: "/dashboard-vendeur/stocks/niveau",
           icon: "fa-boxes text-info",
         },
+
         {
           label: "Alertes de stock bas",
           href: "/dashboard-vendeur/stocks/alertes",
@@ -242,8 +280,10 @@ export default function SidebarVendeur({
           href: "/dashboard-vendeur/stocks/rapports",
           icon: "fa-chart-line text-success",
         },
+
       ],
     },
+    */
     {
       id: "categories",
       label: "Gestion des Catégories",
@@ -257,6 +297,8 @@ export default function SidebarVendeur({
         ,
       ],
     },
+
+    /*
     {
       id: "types",
       label: "Types de Boutiques",
@@ -296,6 +338,7 @@ export default function SidebarVendeur({
         },
       ],
     },
+    */
   ];
 
   const profileItems = [
@@ -473,20 +516,20 @@ export default function SidebarVendeur({
                     <span className="flex-grow-1">{item.label}</span>
                     {item.badge && (
                       <span
-                        className={`badge ${item.badge.color} rounded-pill ${isNavActive(item.id) ? "bg-white text-dark" : ""}`}
+                        className={`badge ${item.badge} rounded-pill ${isNavActive(item.id) ? "bg-white text-dark" : ""}`}
                         style={{ fontSize: "0.7rem", padding: "0.2rem 0.4rem" }}
                       >
-                        {item.badge.count}
+                        {item.badge}
                       </span>
                     )}
                   </>
                 )}
                 {isCollapsed && item.badge && (
                   <span
-                    className={`position-absolute top-0 start-100 translate-middle badge ${item.badge.color} rounded-pill`}
+                    className={`position-absolute top-0 start-100 translate-middle badge ${item.badge} rounded-pill`}
                     style={{ fontSize: "0.55rem", padding: "0.15rem 0.3rem" }}
                   >
-                    {item.badge.count > 9 ? "9+" : item.badge.count}
+                    {item.badge > 9 ? "9+" : item.badge}
                   </span>
                 )}
               </Link>

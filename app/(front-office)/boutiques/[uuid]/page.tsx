@@ -1,926 +1,365 @@
+// components/BoutiquePremium.tsx
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faBox,
-  faEye,
-  faTrash,
-  faRefresh,
-  faFilter,
-  faSearch,
-  faTimes,
-  faCheckCircle,
-  faInfoCircle,
-  faExclamationTriangle,
-  faTag,
-  faMoneyBillWave,
-  faCalendar,
-  faSort,
-  faSortUp,
-  faSortDown,
-  faDownload,
-  faEdit,
-  faToggleOn,
-  faToggleOff,
-  faCheck,
-  faImage,
-  faUser,
   faStore,
-  faLayerGroup,
-  faChartLine,
+  faCalendar,
+  faBox,
+  faStar,
+  faUsers,
+  faShoppingBag,
+  faInfoCircle,
+  faTags,
+  faCheckCircle,
+  faClock,
+  faBan,
+  faLock,
+  faRefresh,
+  faExclamationTriangle,
   faSpinner,
-  faShop,
-  faLink,
-  faExternalLinkAlt,
+  faHeart,
+  faShare,
+  faShoppingCart,
+  faEye,
+  faChartLine,
+  faMoneyBillWave,
+  faThumbsUp,
+  faComment,
+  faMapMarkerAlt,
+  faPhone,
+  faEnvelope,
+  faGlobe,
+  faCreditCard,
+  faTruck,
+  faShieldAlt,
+  faSync,
+  faCrown,
+  faGem,
+  faAward,
+  faFire,
+  faBolt,
+  faRocket,
+  faMagic,
+  faLeaf,
+  faSeedling,
+  faTree,
+  faRecycle,
+  faGem as faDiamond,
 } from "@fortawesome/free-solid-svg-icons";
-import { api } from "@/lib/api-client";
-import colors from "@/app/shared/constants/colors";
 
-interface ProduitUtilisateur {
+// Types basés sur votre réponse API
+interface TypeBoutique {
+  uuid: string;
+  code: string;
+  libelle: string;
+  description: string | null;
+  peut_vendre_produits: boolean;
+  peut_vendre_biens: boolean;
+  image: string;
+  statut: string;
+}
+
+interface Produit {
   id: number;
   uuid: string;
   libelle: string;
-  description: string | null;
-  prix: string;
-  quantite: number;
+  slug: string;
+  image: string;
+  disponible: boolean;
   statut: string;
+  prix: string | null;
+  description: string | null;
+  quantite: number;
+  note_moyenne: number;
+  nombre_avis: number;
   estPublie: boolean;
-  createdAt: string | null;
-  updatedAt: string | null;
-  image: string | null;
+  estBloque: boolean;
   categorie: {
-    id: number;
     uuid: string;
-    type: string;
     libelle: string;
-    description: string;
+    type: string;
     image: string;
   };
-  source: {
-    type: "utilisateur" | "vendeur" | "boutique";
-    infos: {
-      uuid: string;
-      nom: string;
-      prenoms: string;
-      avatar: string;
-      email: string;
-      boutiqueNom?: string;
-      boutiqueUuid?: string;
-    };
-  };
-  boutique?: {
-    uuid: string;
-    nom: string;
-    image: string | null;
-    description: string | null;
-    slug: string;
-  };
-  utilisateur?: {
-    uuid: string;
-    nom: string;
-    prenoms: string;
-    avatar: string;
-    email: string;
-  };
-  estUtilisateur?: boolean;
-  estVendeur?: boolean;
 }
 
-interface SortConfig {
-  key: keyof ProduitUtilisateur;
-  direction: "asc" | "desc";
+interface Boutique {
+  uuid: string;
+  nom: string;
+  slug: string;
+  description: string | null;
+  logo: string;
+  banniere: string;
+  statut: "en_review" | "actif" | "bloque" | "ferme";
+  created_at: string;
+  updated_at: string;
+  type_boutique: TypeBoutique;
+  produits: Produit[];
+  est_bloque: boolean;
+  est_ferme: boolean;
+  politique_retour?: string;
+  conditions_utilisation?: string;
 }
 
-interface PaginationState {
-  page: number;
-  limit: number;
-  total: number;
-  pages: number;
-}
-
-export default function ListeProduitsCreeUtilisateur() {
-  const router = useRouter();
-  const [produits, setProduits] = useState<ProduitUtilisateur[]>([]);
+const BoutiquePremium = () => {
+  const [boutique, setBoutique] = useState<Boutique | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
-  const [selectedProduits, setSelectedProduits] = useState<string[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState("produits");
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
 
-  // Pagination
-  const [pagination, setPagination] = useState<PaginationState>({
-    page: 1,
-    limit: 10,
-    total: 0,
-    pages: 1,
-  });
+  // ID de la boutique
+  const boutiqueUuid = "bb2789fe-d015-4947-bfe1-eb0239e1a8d1";
 
-  // Filtres
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [publishFilter, setPublishFilter] = useState<string>("all");
-  const [sourceFilter, setSourceFilter] = useState<string>("all");
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 1000000]);
-
-  // Stats
-  const [stats, setStats] = useState({
-    total: 0,
-    totalValue: 0,
-    averagePrice: 0,
-    publishedCount: 0,
-    unpublishedCount: 0,
-    totalQuantity: 0,
-    withImageCount: 0,
-    utilisateurCount: 0,
-    vendeurCount: 0,
-    boutiqueCount: 0,
-  });
-
-  // Informations utilisateur
-  const [utilisateurInfo, setUtilisateurInfo] = useState<{
-    uuid: string;
-    nom: string;
-    prenoms: string;
-    avatar: string;
-    email: string;
-  } | null>(null);
-
-  // Charger les produits - VERSION CORRIGÉE
-  const fetchProduitsUtilisateur = useCallback(async () => {
+  const fetchBoutique = async () => {
     try {
       setLoading(true);
       setError(null);
-      console.log("🔄 Chargement des produits de l'utilisateur...");
 
-      // Récupérer le profil utilisateur d'abord
-      try {
-        const profileResponse = await api.get("/auth/utilisateur/profile");
-        if (profileResponse.data?.data) {
-          setUtilisateurInfo({
-            uuid: profileResponse.data.data.uuid,
-            nom: profileResponse.data.data.nom,
-            prenoms: profileResponse.data.data.prenoms,
-            avatar: profileResponse.data.data.avatar,
-            email: profileResponse.data.data.email,
-          });
-        }
-      } catch (profileErr) {
-        console.warn(
-          "⚠️ Impossible de charger le profil utilisateur:",
-          profileErr,
-        );
-      }
-
-      // Charger les produits
-      const response = await api.get(
-        "/produits/liste-mes-utilisateur-produits",
+      const response = await fetch(
+        `http://localhost:3005/boutiques/${boutiqueUuid}`,
       );
 
-      console.log("📦 Réponse API produits:", response.data);
-
-      if (!response.data) {
-        throw new Error("Aucune donnée reçue de l'API");
+      if (!response.ok) {
+        throw new Error(`Erreur ${response.status}: ${response.statusText}`);
       }
 
-      // Format 1: Votre API retourne { status: "success", data: { produits: [...] } }
-      if (response.data?.status === "success" && response.data.data) {
-        console.log("✅ Format détecté: status success avec data");
-
-        const data = response.data.data;
-
-        // Vérifier que data.produits existe et est un tableau
-        if (data.produits && Array.isArray(data.produits)) {
-          const produitsData = data.produits;
-          const paginationData = data.pagination;
-
-          console.log(`✅ ${produitsData.length} produit(s) trouvé(s)`);
-
-          // Traiter les produits pour extraire les infos boutique/utilisateur
-          const processedProduits = produitsData.map((produit: any) => {
-            // Déterminer le type de source
-            let sourceType: "utilisateur" | "vendeur" | "boutique" =
-              "utilisateur";
-            let sourceInfos = produit.source?.infos || {
-              uuid: "",
-              nom: "",
-              prenoms: "",
-              avatar: "",
-              email: "",
-            };
-
-            // Si le produit a une boutique
-            if (produit.boutique) {
-              sourceType = "boutique";
-              sourceInfos = {
-                uuid: produit.boutique.uuid || "",
-                nom: produit.boutique.nom || "",
-                prenoms: "",
-                avatar: produit.boutique.image || "",
-                email: "",
-                boutiqueNom: produit.boutique.nom,
-                boutiqueUuid: produit.boutique.uuid,
-              };
-            }
-            // Si le produit a un utilisateur (estUtilisateur: true)
-            else if (produit.estUtilisateur && produit.utilisateur) {
-              sourceType = "utilisateur";
-              sourceInfos = {
-                uuid: produit.utilisateur.uuid || "",
-                nom: produit.utilisateur.nom || "",
-                prenoms: produit.utilisateur.prenoms || "",
-                avatar: produit.utilisateur.avatar || "",
-                email: produit.utilisateur.email || "",
-              };
-            }
-            // Si le produit est d'un vendeur
-            else if (produit.estVendeur && produit.source?.infos) {
-              sourceType = "vendeur";
-            }
-
-            return {
-              ...produit,
-              source: {
-                type: sourceType,
-                infos: sourceInfos,
-              },
-              boutique: produit.boutique || null,
-              utilisateur: produit.utilisateur || null,
-            };
-          });
-
-          setProduits(processedProduits);
-
-          // Calculer les stats
-          const total = processedProduits.length;
-          const totalValue = processedProduits.reduce(
-            (sum: number, produit: ProduitUtilisateur) =>
-              sum + parseFloat(produit.prix) * produit.quantite,
-            0,
-          );
-          const averagePrice = total > 0 ? totalValue / total : 0;
-          const publishedCount = processedProduits.filter(
-            (p: ProduitUtilisateur) => p.estPublie,
-          ).length;
-          const unpublishedCount = total - publishedCount;
-          const totalQuantity = processedProduits.reduce(
-            (sum: number, produit: ProduitUtilisateur) =>
-              sum + produit.quantite,
-            0,
-          );
-          const withImageCount = processedProduits.filter(
-            (p: ProduitUtilisateur) => p.image,
-          ).length;
-
-          // Compter par type de source
-          const utilisateurCount = processedProduits.filter(
-            (p: ProduitUtilisateur) => p.source.type === "utilisateur",
-          ).length;
-          const vendeurCount = processedProduits.filter(
-            (p: ProduitUtilisateur) => p.source.type === "vendeur",
-          ).length;
-          const boutiqueCount = processedProduits.filter(
-            (p: ProduitUtilisateur) => p.source.type === "boutique",
-          ).length;
-
-          setStats({
-            total,
-            totalValue,
-            averagePrice,
-            publishedCount,
-            unpublishedCount,
-            totalQuantity,
-            withImageCount,
-            utilisateurCount,
-            vendeurCount,
-            boutiqueCount,
-          });
-
-          // Mettre à jour la pagination
-          if (paginationData) {
-            setPagination({
-              page: paginationData.page || 1,
-              limit: paginationData.limit || 10,
-              total: paginationData.total || processedProduits.length,
-              pages:
-                paginationData.totalPages ||
-                Math.ceil(processedProduits.length / 10),
-            });
-          } else {
-            setPagination({
-              page: 1,
-              limit: 10,
-              total: processedProduits.length,
-              pages: Math.ceil(processedProduits.length / 10),
-            });
-          }
-        } else {
-          console.warn("⚠️ data.produits n'est pas un tableau:", data.produits);
-          setProduits([]);
-          resetStats();
-        }
-      } else {
-        console.error("❌ Format de réponse inattendu:", response.data);
-        throw new Error("Format de réponse API non reconnu");
-      }
-    } catch (err: any) {
-      console.error("❌ Erreur lors du chargement des produits:", err);
-
-      let errorMessage = "Erreur lors du chargement de vos produits";
-
-      if (err.response?.status === 401) {
-        errorMessage = "Session expirée. Veuillez vous reconnecter.";
-      } else if (err.response?.status === 404) {
-        errorMessage = "Aucun produit trouvé pour votre compte.";
-      } else if (err.response?.status === 500) {
-        errorMessage = "Erreur serveur. Veuillez réessayer plus tard.";
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-
-      setError(errorMessage);
-      setProduits([]);
-      resetStats();
+      const data = await response.json();
+      setBoutique(data);
+    } catch (err) {
+      console.error("Erreur lors du chargement de la boutique:", err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Erreur lors du chargement des données",
+      );
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
-    fetchProduitsUtilisateur();
-  }, [fetchProduitsUtilisateur]);
+    fetchBoutique();
 
-  // Calcul des statistiques
-  const calculateStats = (produitsList: ProduitUtilisateur[]) => {
-    const total = produitsList.length;
-    const totalValue = produitsList.reduce(
-      (sum, produit) => sum + parseFloat(produit.prix) * produit.quantite,
-      0,
-    );
-    const averagePrice = total > 0 ? totalValue / total : 0;
-    const publishedCount = produitsList.filter((p) => p.estPublie).length;
-    const unpublishedCount = total - publishedCount;
-    const totalQuantity = produitsList.reduce(
-      (sum, produit) => sum + produit.quantite,
-      0,
-    );
-    const withImageCount = produitsList.filter((p) => p.image).length;
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 50);
 
-    const utilisateurCount = produitsList.filter(
-      (p) => p.source.type === "utilisateur",
-    ).length;
-    const vendeurCount = produitsList.filter(
-      (p) => p.source.type === "vendeur",
-    ).length;
-    const boutiqueCount = produitsList.filter(
-      (p) => p.source.type === "boutique",
-    ).length;
+      // Animation d'apparition
+      const scrollPosition = window.scrollY + window.innerHeight;
+      const elementPosition =
+        document.getElementById("stats-cards")?.offsetTop || 0;
+      if (scrollPosition > elementPosition + 100) {
+        setIsVisible(true);
+      }
+    };
 
-    setStats({
-      total,
-      totalValue,
-      averagePrice,
-      publishedCount,
-      unpublishedCount,
-      totalQuantity,
-      withImageCount,
-      utilisateurCount,
-      vendeurCount,
-      boutiqueCount,
+    window.addEventListener("scroll", handleScroll);
+
+    // Trigger initial visibility
+    setTimeout(() => {
+      setIsVisible(true);
+    }, 300);
+
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchBoutique();
+  };
+
+  const toggleFavorite = (produitUuid: string) => {
+    setFavorites((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(produitUuid)) {
+        newSet.delete(produitUuid);
+      } else {
+        newSet.add(produitUuid);
+      }
+      return newSet;
     });
   };
 
-  const resetStats = () => {
-    setStats({
-      total: 0,
-      totalValue: 0,
-      averagePrice: 0,
-      publishedCount: 0,
-      unpublishedCount: 0,
-      totalQuantity: 0,
-      withImageCount: 0,
-      utilisateurCount: 0,
-      vendeurCount: 0,
-      boutiqueCount: 0,
-    });
-  };
-
-  // Filtrage et tri
-  const filteredProduits = useMemo(() => {
-    let result = produits.filter((produit) => {
-      // Filtre par recherche
-      const searchLower = searchTerm.toLowerCase();
-      const matchesSearch =
-        produit.libelle.toLowerCase().includes(searchLower) ||
-        (produit.description &&
-          produit.description.toLowerCase().includes(searchLower)) ||
-        produit.prix.toString().includes(searchTerm) ||
-        produit.categorie.libelle.toLowerCase().includes(searchLower) ||
-        produit.source.infos.nom.toLowerCase().includes(searchLower) ||
-        (produit.source.infos.prenoms &&
-          produit.source.infos.prenoms.toLowerCase().includes(searchLower)) ||
-        (produit.boutique?.nom &&
-          produit.boutique.nom.toLowerCase().includes(searchLower));
-
-      // Filtre par statut
-      const matchesStatus =
-        statusFilter === "all" || produit.statut === statusFilter;
-
-      // Filtre par publication
-      const matchesPublish =
-        publishFilter === "all" ||
-        (publishFilter === "published" && produit.estPublie) ||
-        (publishFilter === "unpublished" && !produit.estPublie);
-
-      // Filtre par source
-      const matchesSource =
-        sourceFilter === "all" || produit.source.type === sourceFilter;
-
-      // Filtre par prix
-      const prixNumber = parseFloat(produit.prix);
-      const matchesPrice =
-        prixNumber >= priceRange[0] && prixNumber <= priceRange[1];
-
-      return (
-        matchesSearch &&
-        matchesStatus &&
-        matchesPublish &&
-        matchesSource &&
-        matchesPrice
-      );
-    });
-
-    // Tri
-    if (sortConfig) {
-      result.sort((a, b) => {
-        const aValue = a[sortConfig.key];
-        const bValue = b[sortConfig.key];
-
-        if (aValue == null && bValue == null) return 0;
-        if (aValue == null) return 1;
-        if (bValue == null) return -1;
-
-        // Gestion spéciale pour le prix (string)
-        if (sortConfig.key === "prix") {
-          const prixA = parseFloat(a.prix);
-          const prixB = parseFloat(b.prix);
-          return sortConfig.direction === "asc" ? prixA - prixB : prixB - prixA;
-        }
-
-        if (typeof aValue === "string" && typeof bValue === "string") {
-          return sortConfig.direction === "asc"
-            ? aValue.localeCompare(bValue)
-            : bValue.localeCompare(aValue);
-        }
-
-        if (typeof aValue === "number" && typeof bValue === "number") {
-          return sortConfig.direction === "asc"
-            ? aValue - bValue
-            : bValue - aValue;
-        }
-
-        return 0;
+  const shareBoutique = () => {
+    if (navigator.share) {
+      navigator.share({
+        title: boutique?.nom,
+        text: `Découvrez la boutique ${boutique?.nom}`,
+        url: window.location.href,
       });
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      alert("Lien copié dans le presse-papier !");
     }
-
-    // Mettre à jour la pagination locale
-    const newTotal = result.length;
-    const newPages = Math.ceil(newTotal / pagination.limit);
-
-    setPagination((prev) => ({
-      ...prev,
-      total: newTotal,
-      pages: newPages,
-      page: prev.page > newPages ? 1 : prev.page,
-    }));
-
-    return result;
-  }, [
-    produits,
-    searchTerm,
-    statusFilter,
-    publishFilter,
-    sourceFilter,
-    priceRange,
-    sortConfig,
-    pagination.limit,
-  ]);
-
-  // Produits de la page courante
-  const currentItems = useMemo(() => {
-    const startIndex = (pagination.page - 1) * pagination.limit;
-    const endIndex = startIndex + pagination.limit;
-    return filteredProduits.slice(startIndex, endIndex);
-  }, [filteredProduits, pagination.page, pagination.limit]);
-
-  const requestSort = (key: keyof ProduitUtilisateur) => {
-    let direction: "asc" | "desc" = "asc";
-    if (
-      sortConfig &&
-      sortConfig.key === key &&
-      sortConfig.direction === "asc"
-    ) {
-      direction = "desc";
-    }
-    setSortConfig({ key, direction });
   };
 
-  const getSortIcon = (key: keyof ProduitUtilisateur) => {
-    if (!sortConfig || sortConfig.key !== key) {
-      return (
-        <FontAwesomeIcon
-          icon={faSort}
-          className="text-muted ms-1"
-          style={{ fontSize: "0.8rem" }}
-        />
-      );
-    }
-    return sortConfig.direction === "asc" ? (
-      <FontAwesomeIcon
-        icon={faSortUp}
-        className="text-primary ms-1"
-        style={{ fontSize: "0.8rem" }}
-      />
-    ) : (
-      <FontAwesomeIcon
-        icon={faSortDown}
-        className="text-primary ms-1"
-        style={{ fontSize: "0.8rem" }}
-      />
-    );
-  };
-
-  // Formatage
-  const formatPrice = (price: string | number) => {
-    const numPrice = typeof price === "string" ? parseFloat(price) : price;
-    return new Intl.NumberFormat("fr-FR", {
-      style: "currency",
-      currency: "XOF",
-      minimumFractionDigits: 0,
-    }).format(numPrice || 0);
-  };
-
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return "Non spécifié";
+  // Fonction pour formater la date
+  const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString);
-      if (isNaN(date.getTime())) return "Date invalide";
-
       return date.toLocaleDateString("fr-FR", {
         day: "2-digit",
-        month: "2-digit",
+        month: "long",
         year: "numeric",
         hour: "2-digit",
         minute: "2-digit",
       });
     } catch {
-      return "Date invalide";
+      return "Date inconnue";
     }
   };
 
-  // Récupérer l'image du produit
-  const getProductImage = (produit: ProduitUtilisateur) => {
-    if (produit.image) {
-      return produit.image;
-    }
+  // Fonction pour formater le prix
+  const formatPrice = (price: string | null) => {
+    if (!price) return "Gratuit";
 
-    // Image par défaut avec les initiales du produit
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(produit.libelle)}&background=007bff&color=fff&size=80&bold=true`;
+    const numericPrice = parseFloat(price);
+    if (isNaN(numericPrice)) return "Prix sur demande";
+
+    return new Intl.NumberFormat("fr-FR", {
+      style: "currency",
+      currency: "XOF",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(numericPrice);
   };
 
-  // Récupérer l'image de la source (utilisateur/boutique)
-  const getSourceImage = (produit: ProduitUtilisateur) => {
-    const source = produit.source;
-
-    if (source.infos.avatar) {
-      return source.infos.avatar;
-    }
-
-    if (produit.boutique?.image) {
-      return produit.boutique.image;
-    }
-
-    // Image par défaut selon le type de source
-    const name =
-      source.type === "boutique"
-        ? source.infos.nom || "Boutique"
-        : `${source.infos.prenoms || ""} ${source.infos.nom || "Utilisateur"}`;
-
-    const background =
-      source.type === "boutique"
-        ? "10b981"
-        : source.type === "vendeur"
-          ? "f59e0b"
-          : "3b82f6";
-
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name.trim())}&background=${background}&color=fff&size=64`;
-  };
-
-  const getStatusBadge = (statut: string) => {
-    const statusMap: Record<string, { color: string; text: string }> = {
-      publie: { color: "success", text: "Publié" },
-      en_attente: { color: "warning", text: "En attente" },
-      rejete: { color: "danger", text: "Rejeté" },
-      brouillon: { color: "secondary", text: "Brouillon" },
-      bloque: { color: "danger", text: "Bloqué" },
-    };
-
-    const status = statusMap[statut] || { color: "info", text: statut };
-    return (
-      <span
-        className={`badge bg-${status.color} bg-opacity-10 text-${status.color}`}
-      >
-        {status.text}
-      </span>
-    );
-  };
-
-  const getSourceBadge = (type: string) => {
-    const typeMap: Record<string, { color: string; text: string; icon: any }> =
-      {
-        utilisateur: { color: "primary", text: "Utilisateur", icon: faUser },
-        vendeur: { color: "warning", text: "Vendeur", icon: faStore },
-        boutique: { color: "success", text: "Boutique", icon: faShop },
-      };
-
-    const typeInfo = typeMap[type] || {
-      color: "secondary",
-      text: type,
-      icon: faUser,
-    };
-    return (
-      <span
-        className={`badge bg-${typeInfo.color} bg-opacity-10 text-${typeInfo.color}`}
-      >
-        <FontAwesomeIcon icon={typeInfo.icon} className="me-1" />
-        {typeInfo.text}
-      </span>
-    );
-  };
-
-  // Navigation vers les profils
-  const navigateToProfile = (produit: ProduitUtilisateur) => {
-    const source = produit.source;
-
-    if (source.type === "boutique" && source.infos.boutiqueUuid) {
-      // Navigation vers la page de la boutique
-      router.push(`/boutiques/${source.infos.boutiqueUuid}`);
-    } else if (source.type === "utilisateur" && source.infos.uuid) {
-      // Navigation vers le profil utilisateur
-      router.push(`/utilisateurs/${source.infos.uuid}`);
-    } else if (source.type === "vendeur" && source.infos.uuid) {
-      // Navigation vers le profil vendeur
-      router.push(`/vendeurs/${source.infos.uuid}`);
-    } else {
-      console.warn(
-        "Impossible de naviguer: UUID manquant ou type inconnu",
-        source,
-      );
-    }
-  };
-
-  // Actions
-  const handleTogglePublish = async (
-    produitUuid: string,
-    currentState: boolean,
-  ) => {
-    const action = currentState ? "dépublier" : "publier";
-    if (!confirm(`Voulez-vous ${action} ce produit ?`)) return;
-
-    try {
-      // TODO: Implémenter l'appel API pour publier/dépublier
-      // const endpoint = currentState ? `/produits/${produitUuid}/unpublish` : `/produits/${produitUuid}/publish`;
-      // const response = await api.post(endpoint);
-
-      // Simulation
-      setProduits((prev) =>
-        prev.map((p) =>
-          p.uuid === produitUuid ? { ...p, estPublie: !currentState } : p,
+  // Calcul des statistiques
+  const stats = boutique
+    ? {
+        totalProduits: boutique.produits.length,
+        produitsPublies: boutique.produits.filter((p) => p.estPublie).length,
+        produitsBloques: boutique.produits.filter((p) => p.estBloque).length,
+        produitsDisponibles: boutique.produits.filter((p) => p.disponible)
+          .length,
+        valeurStock: boutique.produits.reduce((sum, p) => {
+          const prix = parseFloat(p.prix || "0") || 0;
+          return sum + prix * p.quantite;
+        }, 0),
+        noteMoyenne:
+          boutique.produits.length > 0
+            ? boutique.produits.reduce((sum, p) => sum + p.note_moyenne, 0) /
+              boutique.produits.length
+            : 0,
+        totalAvis: boutique.produits.reduce((sum, p) => sum + p.nombre_avis, 0),
+        totalFavoris: boutique.produits.reduce(
+          (sum, p) => sum + (favorites.has(p.uuid) ? 1 : 0),
+          0,
         ),
-      );
-
-      const successMsg = `Produit ${action} avec succès !`;
-      setSuccessMessage(successMsg);
-      setTimeout(() => setSuccessMessage(null), 3000);
-    } catch (err: any) {
-      console.error(`Erreur lors de ${action}:`, err);
-      setError(
-        err.response?.data?.message || `Erreur lors de ${action} du produit`,
-      );
-    }
-  };
-
-  const handleDeleteProduit = async (produitUuid: string) => {
-    if (
-      !confirm(
-        "Voulez-vous vraiment supprimer ce produit ? Cette action est irréversible.",
-      )
-    )
-      return;
-
-    try {
-      // TODO: Implémenter l'appel API pour supprimer
-      // const response = await api.delete(`/produits/${produitUuid}`);
-
-      setProduits((prev) => prev.filter((p) => p.uuid !== produitUuid));
-      const successMsg = "Produit supprimé avec succès !";
-      setSuccessMessage(successMsg);
-      setTimeout(() => setSuccessMessage(null), 3000);
-    } catch (err: any) {
-      console.error("Erreur lors de la suppression:", err);
-      setError(
-        err.response?.data?.message ||
-          "Erreur lors de la suppression du produit",
-      );
-    }
-  };
-
-  const handleEditProduit = (produitUuid: string) => {
-    console.log("Éditer le produit:", produitUuid);
-    router.push(`/produits/editer/${produitUuid}`);
-  };
-
-  const handleViewDetails = (produit: ProduitUtilisateur) => {
-    console.log("Voir détails:", produit);
-    router.push(`/produits/${produit.uuid}`);
-  };
-
-  // Actions en masse
-  const handleBulkAction = async (
-    action: "publish" | "unpublish" | "delete",
-  ) => {
-    if (selectedProduits.length === 0) {
-      setError("Veuillez sélectionner au moins un produit");
-      setTimeout(() => setError(null), 3000);
-      return;
-    }
-
-    const actionText = {
-      publish: "publier",
-      unpublish: "dépublier",
-      delete: "supprimer",
-    }[action];
-
-    if (
-      !confirm(
-        `Voulez-vous ${actionText} ${selectedProduits.length} produit(s) ?`,
-      )
-    )
-      return;
-
-    try {
-      // TODO: Implémenter les appels API en masse
-      if (action === "delete") {
-        setProduits((prev) =>
-          prev.filter((p) => !selectedProduits.includes(p.uuid)),
-        );
-      } else {
-        const newPublishedState = action === "publish";
-        setProduits((prev) =>
-          prev.map((p) =>
-            selectedProduits.includes(p.uuid)
-              ? { ...p, estPublie: newPublishedState }
-              : p,
-          ),
-        );
       }
+    : null;
 
-      setSelectedProduits([]);
-      const successMsg = `${selectedProduits.length} produit(s) ${actionText}(s) avec succès`;
-      setSuccessMessage(successMsg);
-      setTimeout(() => setSuccessMessage(null), 3000);
-    } catch (err: any) {
-      console.error(`Erreur lors de ${action}:`, err);
-      setError(`Erreur lors de ${action} des produits`);
-    }
-  };
-
-  const handleSelectProduit = (produitUuid: string) => {
-    setSelectedProduits((prev) =>
-      prev.includes(produitUuid)
-        ? prev.filter((id) => id !== produitUuid)
-        : [...prev, produitUuid],
+  // Générer des étoiles
+  const renderStars = (rating: number) => {
+    return (
+      <div className="d-flex">
+        {[...Array(5)].map((_, i) => (
+          <FontAwesomeIcon
+            key={i}
+            icon={faStar}
+            className={i < Math.floor(rating) ? "text-warning" : "text-muted"}
+            size="sm"
+          />
+        ))}
+      </div>
     );
   };
 
-  const handleSelectAll = () => {
-    if (
-      selectedProduits.length === currentItems.length &&
-      currentItems.length > 0
-    ) {
-      setSelectedProduits([]);
-    } else {
-      setSelectedProduits(currentItems.map((p) => p.uuid));
+  // Badge de statut
+  const getStatusBadge = (statut: string) => {
+    switch (statut) {
+      case "actif":
+        return (
+          <span className="badge rounded-pill bg-success bg-opacity-10 text-success border border-success border-opacity-25 animate-pulse">
+            <FontAwesomeIcon icon={faCheckCircle} className="me-2" />
+            Actif
+          </span>
+        );
+      case "en_review":
+        return (
+          <span className="badge rounded-pill bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25">
+            <FontAwesomeIcon icon={faClock} className="me-2" />
+            En revue
+          </span>
+        );
+      case "bloque":
+        return (
+          <span className="badge rounded-pill bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25">
+            <FontAwesomeIcon icon={faBan} className="me-2" />
+            Bloqué
+          </span>
+        );
+      case "ferme":
+        return (
+          <span className="badge rounded-pill bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25">
+            <FontAwesomeIcon icon={faLock} className="me-2" />
+            Fermé
+          </span>
+        );
+      default:
+        return (
+          <span className="badge rounded-pill bg-info bg-opacity-10 text-info border border-info border-opacity-25">
+            <FontAwesomeIcon icon={faInfoCircle} className="me-2" />
+            {statut}
+          </span>
+        );
     }
   };
 
-  // Export CSV
-  const handleExportCSV = () => {
-    if (filteredProduits.length === 0) {
-      setError("Aucun produit à exporter");
-      setTimeout(() => setError(null), 3000);
-      return;
-    }
-
-    const escapeCsv = (str: string) => {
-      if (!str) return '""';
-      return `"${str.toString().replace(/"/g, '""')}"`;
-    };
-
-    const headers = [
-      "UUID",
-      "Libellé",
-      "Description",
-      "Prix",
-      "Quantité",
-      "Statut",
-      "Publié",
-      "Catégorie",
-      "Source Type",
-      "Source Nom",
-      "Source Email",
-      "Date création",
-      "Date modification",
-    ];
-
-    const csvContent = [
-      headers.join(","),
-      ...filteredProduits.map((produit) =>
-        [
-          produit.uuid,
-          escapeCsv(produit.libelle),
-          escapeCsv(produit.description || ""),
-          produit.prix,
-          produit.quantite,
-          produit.statut,
-          produit.estPublie ? "Oui" : "Non",
-          escapeCsv(produit.categorie.libelle),
-          produit.source.type,
-          escapeCsv(produit.source.infos.nom),
-          escapeCsv(produit.source.infos.email || ""),
-          produit.createdAt ? formatDate(produit.createdAt) : "",
-          produit.updatedAt ? formatDate(produit.updatedAt) : "",
-        ].join(","),
-      ),
-    ].join("\n");
-
-    const blob = new Blob(["\uFEFF" + csvContent], {
-      type: "text/csv;charset=utf-8;",
-    });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute(
-      "download",
-      `mes-produits-${new Date().toISOString().split("T")[0]}.csv`,
-    );
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    const successMsg = "Export CSV réussi !";
-    setSuccessMessage(successMsg);
-    setTimeout(() => setSuccessMessage(null), 3000);
-  };
-
-  // Réinitialiser les filtres
-  const resetFilters = () => {
-    setSearchTerm("");
-    setStatusFilter("all");
-    setPublishFilter("all");
-    setSourceFilter("all");
-    setPriceRange([0, 1000000]);
-    setSortConfig(null);
-    setPagination((prev) => ({ ...prev, page: 1 }));
-    setSelectedProduits([]);
-  };
-
-  // Calculer le prix max pour le filtre
-  const maxPrice = useMemo(() => {
-    if (produits.length === 0) return 1000000;
-    const max = Math.max(...produits.map((p) => parseFloat(p.prix)));
-    return max > 0 ? max : 1000000;
-  }, [produits]);
-
-  // Composant de chargement
   if (loading) {
     return (
-      <div className="container-fluid py-4">
-        <div className="card border-0 shadow-sm">
-          <div className="card-body">
-            <div className="text-center py-5">
-              <FontAwesomeIcon
-                icon={faSpinner}
-                spin
-                className="text-primary"
-                style={{ fontSize: "3rem" }}
-              />
-              <h4 className="mt-4 fw-bold">Chargement de vos produits...</h4>
-              <p className="text-muted">
-                Veuillez patienter pendant le chargement de vos données
-              </p>
+      <div className="min-vh-100 d-flex align-items-center justify-content-center bg-gradient-eco">
+        <div className="text-center">
+          <div
+            className="spinner-border text-white mb-4 animate-spin"
+            style={{ width: "4rem", height: "4rem", borderWidth: "0.3rem" }}
+            role="status"
+          >
+            <span className="visually-hidden">Chargement...</span>
+          </div>
+          <h2 className="text-white mt-4 fw-light animate-fade-in">
+            Chargement de la boutique...
+          </h2>
+          <p className="text-white-50 animate-fade-in-delay">
+            Préparation de votre expérience shopping
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container py-5">
+        <div className="row justify-content-center">
+          <div className="col-md-6">
+            <div className="card border-0 shadow-lg rounded-3 overflow-hidden animate-slide-up">
+              <div className="card-header bg-danger text-white py-4">
+                <div className="d-flex align-items-center">
+                  <FontAwesomeIcon
+                    icon={faExclamationTriangle}
+                    className="fs-1 me-3"
+                  />
+                  <div>
+                    <h4 className="mb-0 fw-bold">Erreur de chargement</h4>
+                  </div>
+                </div>
+              </div>
+              <div className="card-body p-5 text-center">
+                <p className="text-muted mb-4">{error}</p>
+                <button
+                  className="btn btn-danger btn-lg px-5 hover-scale"
+                  onClick={handleRefresh}
+                >
+                  <FontAwesomeIcon icon={faRefresh} className="me-2" />
+                  Réessayer
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -928,1100 +367,1296 @@ export default function ListeProduitsCreeUtilisateur() {
     );
   }
 
+  if (!boutique) {
+    return (
+      <div className="container py-5">
+        <div className="alert alert-warning text-center py-5 animate-fade-in">
+          <FontAwesomeIcon icon={faStore} className="fs-1 mb-3" />
+          <h3>Boutique non trouvée</h3>
+          <p className="mb-0">Cette boutique n'existe pas ou a été supprimée</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="container-fluid py-4">
-      {/* En-tête avec info utilisateur */}
-      <div className="mb-4">
-        <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4">
-          <div>
-            <div className="d-flex align-items-center mb-3">
-              {utilisateurInfo?.avatar && (
-                <div className="position-relative me-3">
-                  <img
-                    src={utilisateurInfo.avatar}
-                    alt={`${utilisateurInfo.prenoms} ${utilisateurInfo.nom}`}
-                    className="rounded-circle border cursor-pointer"
-                    style={{
-                      width: "64px",
-                      height: "64px",
-                      objectFit: "cover",
-                    }}
-                    onClick={() =>
-                      router.push(`/utilisateurs/${utilisateurInfo.uuid}`)
-                    }
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src =
-                        `https://ui-avatars.com/api/?name=${encodeURIComponent(utilisateurInfo.prenoms + " " + utilisateurInfo.nom)}&background=007bff&color=fff&size=64`;
-                    }}
-                  />
-                  <div className="position-absolute bottom-0 end-0 translate-middle">
-                    <span
-                      className="badge bg-primary rounded-circle p-1"
-                      style={{ fontSize: "0.6rem" }}
-                      title="Voir mon profil"
-                    >
-                      <FontAwesomeIcon icon={faUser} />
+    <>
+      {/* Navigation */}
+      <nav
+        className={`navbar navbar-expand-lg navbar-light bg-white shadow-sm fixed-top transition-all ${isScrolled ? "py-2" : "py-3"} animate-slide-down`}
+        style={{ transition: "all 0.3s ease" }}
+      >
+        <div className="container">
+          <a className="navbar-brand fw-bold text-success" href="#">
+            <FontAwesomeIcon icon={faLeaf} className="me-2" />
+            <span className="gradient-text">Marketplace</span>
+          </a>
+
+          <div className="d-flex align-items-center">
+            <button
+              className="btn btn-outline-success me-3 hover-rotate"
+              onClick={handleRefresh}
+              disabled={refreshing}
+            >
+              <FontAwesomeIcon icon={faRefresh} spin={refreshing} />
+            </button>
+            <button
+              className="btn btn-success hover-scale"
+              onClick={shareBoutique}
+            >
+              <FontAwesomeIcon icon={faShare} className="me-2" />
+              Partager
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      {/* Hero Section */}
+      <div
+        className="position-relative overflow-hidden eco-hero animate-fade-in"
+        style={{ height: "500px", marginTop: "76px" }}
+      >
+        {/* Animated background elements */}
+        <div className="floating-leaves">
+          {[...Array(10)].map((_, i) => (
+            <div
+              key={i}
+              className="leaf"
+              style={{
+                animationDelay: `${i * 2}s`,
+                left: `${Math.random() * 100}%`,
+              }}
+            />
+          ))}
+        </div>
+
+        <div
+          className="position-absolute top-0 start-0 w-100 h-100 bg-cover bg-center"
+          style={{
+            backgroundImage: `url(${boutique.banniere})`,
+            filter: "brightness(0.6)",
+          }}
+        />
+
+        <div className="position-absolute top-0 start-0 w-100 h-100 eco-gradient" />
+
+        <div className="container position-relative h-100 d-flex align-items-center">
+          <div className="row w-100 animate-slide-up">
+            <div className="col-lg-8">
+              <div className="d-flex align-items-center mb-4">
+                <div className="me-4">
+                  <div className="logo-container rounded-circle border-4 border-white shadow-lg eco-pulse">
+                    <img
+                      src={boutique.logo}
+                      alt={boutique.nom}
+                      className="img-fluid"
+                      onError={(e) => {
+                        e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(boutique.nom)}&background=10b981&color=fff&size=120&bold=true`;
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <h1 className="text-white display-4 fw-bold mb-2 text-shadow">
+                    {boutique.nom}
+                  </h1>
+                  <div className="d-flex align-items-center gap-3 mb-3">
+                    {getStatusBadge(boutique.statut)}
+                    <span className="text-white-75">
+                      <FontAwesomeIcon icon={faCalendar} className="me-1" />
+                      Membre depuis{" "}
+                      {new Date(boutique.created_at).getFullYear()}
                     </span>
                   </div>
                 </div>
-              )}
-              <div>
-                <h1 className="h2 fw-bold mb-1">Mes Produits</h1>
-                {utilisateurInfo && (
+              </div>
+
+              <p className="text-white lead mb-4 opacity-75 animate-fade-in-delay">
+                {boutique.description ||
+                  "Boutique éco-responsable avec une sélection exceptionnelle de produits."}
+              </p>
+
+              <div className="d-flex gap-3">
+                <button className="btn btn-light btn-lg px-4 eco-btn hover-scale">
+                  <FontAwesomeIcon icon={faShoppingBag} className="me-2" />
+                  Visiter la boutique
+                </button>
+                <button className="btn btn-outline-light btn-lg px-4 hover-scale">
+                  <FontAwesomeIcon icon={faHeart} className="me-2" />
+                  Suivre
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      <div
+        id="stats-cards"
+        className={`container mt-n5 ${isVisible ? "animate-fade-in-up" : "opacity-0"}`}
+      >
+        <div className="row g-4">
+          {[
+            {
+              icon: faBox,
+              value: stats?.totalProduits || 0,
+              label: "Produits",
+              badge: `${stats?.produitsPublies || 0} publiés`,
+              color: "success",
+              delay: "0s",
+            },
+            {
+              icon: faMoneyBillWave,
+              value: stats?.valeurStock
+                ? new Intl.NumberFormat("fr-FR", {
+                    minimumFractionDigits: 0,
+                  }).format(stats.valeurStock)
+                : "0",
+              label: "Valeur stock",
+              suffix: " F CFA",
+              color: "success",
+              delay: "0.1s",
+            },
+            {
+              icon: faStar,
+              value: stats?.noteMoyenne?.toFixed(1) || "0.0",
+              label: "Note moyenne",
+              rating: stats?.noteMoyenne || 0,
+              color: "warning",
+              delay: "0.2s",
+            },
+            {
+              icon: faChartLine,
+              value: stats?.produitsDisponibles || 0,
+              label: "Disponibles",
+              badge: `${stats?.totalAvis || 0} avis`,
+              color: "info",
+              delay: "0.3s",
+            },
+          ].map((stat, index) => (
+            <div
+              key={index}
+              className="col-md-3"
+              style={{ animationDelay: stat.delay }}
+            >
+              <div className="card border-0 shadow-lg rounded-3 h-100 eco-card hover-lift">
+                <div className="card-body p-4">
                   <div className="d-flex align-items-center">
-                    <p className="text-muted mb-0 me-3">
-                      <FontAwesomeIcon icon={faUser} className="me-2" />
-                      {utilisateurInfo.prenoms} {utilisateurInfo.nom}
-                    </p>
-                    <button
-                      className="btn btn-sm btn-outline-primary"
-                      onClick={() =>
-                        router.push(`/utilisateurs/${utilisateurInfo.uuid}`)
-                      }
-                      title="Voir mon profil"
+                    <div
+                      className={`bg-${stat.color} bg-opacity-10 rounded-circle p-3 me-3 eco-icon`}
                     >
                       <FontAwesomeIcon
-                        icon={faExternalLinkAlt}
-                        className="me-1"
+                        icon={stat.icon}
+                        className={`text-${stat.color} fs-4`}
                       />
-                      Mon profil
-                    </button>
+                    </div>
+                    <div>
+                      <h3 className="mb-0 fw-bold">
+                        {stat.value}
+                        {stat.suffix && (
+                          <small className="fs-6 text-muted">
+                            {stat.suffix}
+                          </small>
+                        )}
+                      </h3>
+                      <p className="text-muted mb-0">{stat.label}</p>
+                    </div>
                   </div>
-                )}
+                  {stat.badge && (
+                    <div className="mt-3 animate-fade-in">
+                      <span
+                        className={`badge bg-${stat.color} bg-opacity-10 text-${stat.color}`}
+                      >
+                        {stat.badge}
+                      </span>
+                    </div>
+                  )}
+                  {stat.rating !== undefined && (
+                    <div className="mt-2">{renderStars(stat.rating)}</div>
+                  )}
+                </div>
               </div>
             </div>
-            <p className="text-muted mb-0">
-              Liste des produits que vous avez créés sur la plateforme
-              {searchTerm && ` - Recherche: "${searchTerm}"`}
+          ))}
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="container py-5">
+        <div className="row">
+          {/* Sidebar */}
+          <div className="col-lg-4 mb-4">
+            <div className="card border-0 shadow-lg rounded-3 mb-4 eco-card hover-lift">
+              <div className="card-header bg-white border-0 py-3">
+                <h5 className="mb-0 fw-bold">
+                  <FontAwesomeIcon
+                    icon={faInfoCircle}
+                    className="text-success me-2"
+                  />
+                  Informations
+                </h5>
+              </div>
+              <div className="card-body">
+                <ul className="list-group list-group-flush">
+                  <li className="list-group-item d-flex justify-content-between align-items-center border-0 px-0 py-3">
+                    <span className="text-muted">Type de boutique:</span>
+                    <span className="fw-semibold text-success">
+                      {boutique.type_boutique.libelle}
+                    </span>
+                  </li>
+                  <li className="list-group-item d-flex justify-content-between align-items-center border-0 px-0 py-3">
+                    <span className="text-muted">Code:</span>
+                    <code className="text-success">
+                      {boutique.type_boutique.code}
+                    </code>
+                  </li>
+                  <li className="list-group-item d-flex justify-content-between align-items-center border-0 px-0 py-3">
+                    <span className="text-muted">Slug:</span>
+                    <span className="fw-semibold text-success">
+                      {boutique.slug}
+                    </span>
+                  </li>
+                  <li className="list-group-item d-flex justify-content-between align-items-center border-0 px-0 py-3">
+                    <span className="text-muted">Créée le:</span>
+                    <span className="text-success">
+                      {formatDate(boutique.created_at)}
+                    </span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Type Boutique Card */}
+            <div className="card border-0 shadow-lg rounded-3 eco-card hover-lift">
+              <div className="card-header bg-white border-0 py-3">
+                <h5 className="mb-0 fw-bold">
+                  <FontAwesomeIcon
+                    icon={faTags}
+                    className="text-success me-2"
+                  />
+                  Type de boutique
+                </h5>
+              </div>
+              <div className="card-body">
+                <div className="d-flex align-items-start gap-3 mb-3">
+                  <img
+                    src={boutique.type_boutique.image}
+                    alt={boutique.type_boutique.libelle}
+                    className="rounded eco-img hover-rotate-slow"
+                    style={{
+                      width: "60px",
+                      height: "60px",
+                      objectFit: "cover",
+                    }}
+                    onError={(e) => {
+                      e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(boutique.type_boutique.libelle)}&background=10b981&color=fff&size=60`;
+                    }}
+                  />
+                  <div>
+                    <h6 className="fw-bold mb-1">
+                      {boutique.type_boutique.libelle}
+                    </h6>
+                    <p className="small text-muted mb-2">
+                      {boutique.type_boutique.code}
+                    </p>
+                  </div>
+                </div>
+                <div className="d-flex flex-wrap gap-2">
+                  {boutique.type_boutique.peut_vendre_produits && (
+                    <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 hover-scale">
+                      <FontAwesomeIcon icon={faShoppingBag} className="me-1" />
+                      Vente produits
+                    </span>
+                  )}
+                  {boutique.type_boutique.peut_vendre_biens && (
+                    <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 hover-scale">
+                      <FontAwesomeIcon icon={faDiamond} className="me-1" />
+                      Vente biens
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Features */}
+            <div className="card border-0 shadow-lg rounded-3 mt-4 eco-card hover-lift">
+              <div className="card-body">
+                <h6 className="fw-bold mb-3">
+                  <FontAwesomeIcon
+                    icon={faAward}
+                    className="text-warning me-2"
+                  />
+                  Avantages
+                </h6>
+                {[
+                  {
+                    icon: faShieldAlt,
+                    title: "Achat sécurisé",
+                    desc: "Paiement 100% sécurisé",
+                    color: "success",
+                  },
+                  {
+                    icon: faTruck,
+                    title: "Livraison rapide",
+                    desc: "Expédition sous 48h",
+                    color: "success",
+                  },
+                  {
+                    icon: faSync,
+                    title: "Retour gratuit",
+                    desc: "30 jours pour changer d'avis",
+                    color: "success",
+                  },
+                  {
+                    icon: faRecycle,
+                    title: "Éco-responsable",
+                    desc: "Emballages recyclables",
+                    color: "success",
+                  },
+                ].map((feature, idx) => (
+                  <div
+                    key={idx}
+                    className="d-flex align-items-center mb-3 animate-fade-in-slide"
+                    style={{ animationDelay: `${idx * 0.1}s` }}
+                  >
+                    <div
+                      className={`bg-${feature.color} bg-opacity-10 rounded-circle p-2 me-3 eco-icon hover-scale`}
+                    >
+                      <FontAwesomeIcon
+                        icon={feature.icon}
+                        className={`text-${feature.color}`}
+                      />
+                    </div>
+                    <div>
+                      <p className="mb-0 fw-semibold">{feature.title}</p>
+                      <small className="text-muted">{feature.desc}</small>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Main Content */}
+          <div className="col-lg-8">
+            {/* Tabs Navigation */}
+            <div className="card border-0 shadow-lg rounded-3 mb-4 eco-card hover-lift">
+              <div className="card-header bg-white border-0">
+                <ul className="nav nav-tabs nav-underline" role="tablist">
+                  {[
+                    {
+                      id: "produits",
+                      icon: faBox,
+                      label: `Produits (${boutique.produits.length})`,
+                    },
+                    { id: "about", icon: faInfoCircle, label: "À propos" },
+                    {
+                      id: "reviews",
+                      icon: faStar,
+                      label: `Avis (${stats?.totalAvis})`,
+                    },
+                  ].map((tab) => (
+                    <li key={tab.id} className="nav-item" role="presentation">
+                      <button
+                        className={`nav-link ${activeTab === tab.id ? "active" : ""} hover-scale`}
+                        onClick={() => setActiveTab(tab.id)}
+                      >
+                        <FontAwesomeIcon icon={tab.icon} className="me-2" />
+                        {tab.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Tab Content */}
+              <div className="card-body p-4">
+                <div
+                  className={`tab-content ${activeTab === "produits" ? "animate-fade-in" : "d-none"}`}
+                >
+                  {/* Produits Tab */}
+                  {activeTab === "produits" && (
+                    <div>
+                      <div className="d-flex justify-content-between align-items-center mb-4">
+                        <h4 className="mb-0 fw-bold">Nos Produits</h4>
+                        <div className="d-flex gap-2">
+                          <select className="form-select form-select-sm w-auto border-success">
+                            <option>Trier par : Pertinence</option>
+                            <option>Prix croissant</option>
+                            <option>Prix décroissant</option>
+                            <option>Meilleures notes</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {boutique.produits.length === 0 ? (
+                        <div className="text-center py-5">
+                          <div className="bg-light rounded-circle d-inline-flex p-4 mb-3 animate-spin-slow">
+                            <FontAwesomeIcon
+                              icon={faBox}
+                              className="text-muted fs-1"
+                            />
+                          </div>
+                          <h4 className="fw-bold mb-3">
+                            Aucun produit disponible
+                          </h4>
+                          <p className="text-muted mb-4">
+                            Cette boutique n'a pas encore ajouté de produits.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="row g-4">
+                          {boutique.produits.map((produit, index) => (
+                            <div
+                              key={produit.uuid}
+                              className="col-md-6 col-lg-6 animate-slide-up"
+                              style={{ animationDelay: `${index * 0.05}s` }}
+                            >
+                              <div className="card border-0 shadow-sm h-100 product-card hover-lift">
+                                <div className="position-relative">
+                                  <div
+                                    className="product-image hover-zoom"
+                                    style={{
+                                      height: "220px",
+                                      overflow: "hidden",
+                                    }}
+                                  >
+                                    <img
+                                      src={produit.image}
+                                      alt={produit.libelle}
+                                      className="img-fluid w-100 h-100 object-fit-cover"
+                                      onError={(e) => {
+                                        e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(produit.libelle)}&background=10b981&color=fff&size=400`;
+                                      }}
+                                    />
+                                  </div>
+                                  <div className="position-absolute top-0 end-0 m-3">
+                                    <button
+                                      className="btn btn-light btn-sm rounded-circle shadow hover-scale"
+                                      onClick={() =>
+                                        toggleFavorite(produit.uuid)
+                                      }
+                                    >
+                                      <FontAwesomeIcon
+                                        icon={faHeart}
+                                        className={
+                                          favorites.has(produit.uuid)
+                                            ? "text-danger"
+                                            : "text-muted"
+                                        }
+                                      />
+                                    </button>
+                                  </div>
+                                  <div className="position-absolute top-0 start-0 m-3">
+                                    {produit.estBloque ? (
+                                      <span className="badge bg-danger animate-pulse">
+                                        Bloqué
+                                      </span>
+                                    ) : produit.estPublie ? (
+                                      <span className="badge bg-success">
+                                        En stock
+                                      </span>
+                                    ) : (
+                                      <span className="badge bg-secondary">
+                                        Non publié
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="card-body">
+                                  <div className="mb-3">
+                                    <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">
+                                      {produit.categorie.libelle}
+                                    </span>
+                                  </div>
+
+                                  <h5 className="card-title fw-bold mb-2">
+                                    {produit.libelle}
+                                  </h5>
+
+                                  {produit.description && (
+                                    <p className="card-text text-muted small mb-3">
+                                      {produit.description.length > 100
+                                        ? `${produit.description.substring(0, 100)}...`
+                                        : produit.description}
+                                    </p>
+                                  )}
+
+                                  <div className="d-flex align-items-center mb-3">
+                                    {renderStars(produit.note_moyenne)}
+                                    <span className="text-muted small ms-2">
+                                      ({produit.note_moyenne.toFixed(1)})
+                                    </span>
+                                  </div>
+
+                                  <div className="d-flex justify-content-between align-items-center">
+                                    <div>
+                                      <h4 className="text-success fw-bold mb-0">
+                                        {formatPrice(produit.prix)}
+                                      </h4>
+                                      <small className="text-muted">
+                                        {produit.quantite > 0 ? (
+                                          <span className="text-success">
+                                            <FontAwesomeIcon
+                                              icon={faCheckCircle}
+                                              className="me-1"
+                                            />
+                                            {produit.quantite} en stock
+                                          </span>
+                                        ) : (
+                                          <span className="text-danger">
+                                            <FontAwesomeIcon
+                                              icon={faExclamationTriangle}
+                                              className="me-1"
+                                            />
+                                            Rupture de stock
+                                          </span>
+                                        )}
+                                      </small>
+                                    </div>
+
+                                    <div className="d-flex gap-2">
+                                      <button
+                                        className="btn btn-outline-success btn-sm hover-scale"
+                                        onClick={() =>
+                                          alert(
+                                            `Voir détails: ${produit.libelle}`,
+                                          )
+                                        }
+                                      >
+                                        <FontAwesomeIcon icon={faEye} />
+                                      </button>
+                                      <button
+                                        className="btn btn-success btn-sm hover-scale"
+                                        onClick={() =>
+                                          alert(
+                                            `Ajouter au panier: ${produit.libelle}`,
+                                          )
+                                        }
+                                        disabled={
+                                          !produit.disponible ||
+                                          produit.quantite === 0
+                                        }
+                                      >
+                                        <FontAwesomeIcon
+                                          icon={faShoppingCart}
+                                        />
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div
+                  className={`tab-content ${activeTab === "about" ? "animate-fade-in" : "d-none"}`}
+                >
+                  {/* About Tab */}
+                  {activeTab === "about" && (
+                    <div>
+                      <h4 className="fw-bold mb-4">
+                        À propos de cette boutique
+                      </h4>
+
+                      <div className="row mb-4">
+                        <div className="col-md-6">
+                          <div className="card bg-light border-0 mb-3 eco-card hover-lift">
+                            <div className="card-body">
+                              <h6 className="fw-bold">
+                                <FontAwesomeIcon
+                                  icon={faStore}
+                                  className="text-success me-2"
+                                />
+                                Description
+                              </h6>
+                              <p className="mb-0">
+                                {boutique.description ||
+                                  "Boutique éco-responsable offrant des produits de qualité."}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="col-md-6">
+                          <div className="card bg-light border-0 mb-3 eco-card hover-lift">
+                            <div className="card-body">
+                              <h6 className="fw-bold">
+                                <FontAwesomeIcon
+                                  icon={faCalendar}
+                                  className="text-success me-2"
+                                />
+                                Historique
+                              </h6>
+                              <p className="mb-0">
+                                Créée le {formatDate(boutique.created_at)}
+                              </p>
+                              <p className="mb-0">
+                                Dernière mise à jour :{" "}
+                                {formatDate(boutique.updated_at)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {boutique.politique_retour && (
+                        <div className="card border-0 shadow-sm mb-4 eco-card hover-lift">
+                          <div className="card-header bg-white">
+                            <h6 className="fw-bold mb-0">
+                              <FontAwesomeIcon
+                                icon={faSync}
+                                className="text-warning me-2"
+                              />
+                              Politique de retour
+                            </h6>
+                          </div>
+                          <div className="card-body">
+                            <p className="mb-0">{boutique.politique_retour}</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div
+                  className={`tab-content ${activeTab === "reviews" ? "animate-fade-in" : "d-none"}`}
+                >
+                  {/* Reviews Tab */}
+                  {activeTab === "reviews" && (
+                    <div>
+                      <h4 className="fw-bold mb-4">Avis des clients</h4>
+
+                      <div className="row mb-4">
+                        <div className="col-md-4">
+                          <div className="card border-0 shadow-sm text-center p-4 eco-card hover-lift">
+                            <h1 className="display-1 fw-bold text-warning animate-pulse">
+                              {stats?.noteMoyenne?.toFixed(1) || "0.0"}
+                            </h1>
+                            <div className="mb-3">
+                              {renderStars(stats?.noteMoyenne || 0)}
+                            </div>
+                            <p className="text-muted">
+                              Basé sur {stats?.totalAvis || 0} avis
+                            </p>
+                          </div>
+                        </div>
+                        <div className="col-md-8">
+                          <div className="card border-0 shadow-sm p-4 eco-card hover-lift">
+                            <h6 className="fw-bold mb-3">
+                              Répartition des notes
+                            </h6>
+                            <p className="text-muted mb-0">
+                              Les clients sont satisfaits de leurs achats dans
+                              cette boutique.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Exemple d'avis */}
+                      <div className="card border-0 shadow-sm mb-3 eco-card hover-lift">
+                        <div className="card-body">
+                          <div className="d-flex justify-content-between align-items-start mb-3">
+                            <div>
+                              <h6 className="fw-bold mb-1">Client satisfait</h6>
+                              <div className="d-flex align-items-center">
+                                {renderStars(5)}
+                                <span className="text-muted small ms-2">
+                                  Il y a 2 jours
+                                </span>
+                              </div>
+                            </div>
+                            <div className="animate-wiggle">
+                              <FontAwesomeIcon
+                                icon={faThumbsUp}
+                                className="text-success fs-4"
+                              />
+                            </div>
+                          </div>
+                          <p className="mb-0">
+                            Produits de qualité, livraison rapide et service
+                            client réactif. Je recommande cette boutique !
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Call to Action */}
+            <div className="card border-0 shadow-lg rounded-3 eco-gradient text-white animate-fade-in-up">
+              <div className="card-body p-5 text-center">
+                <div className="animate-bounce">
+                  <FontAwesomeIcon
+                    icon={faRocket}
+                    className="display-1 mb-4 opacity-75"
+                  />
+                </div>
+                <h3 className="fw-bold mb-3">
+                  Prêt à découvrir nos produits ?
+                </h3>
+                <p className="lead mb-4 opacity-75">
+                  Des produits exceptionnels vous attendent dans cette boutique
+                  éco-responsable
+                </p>
+                <div className="d-flex justify-content-center gap-3">
+                  <button className="btn btn-light btn-lg px-5 hover-scale">
+                    <FontAwesomeIcon icon={faShoppingBag} className="me-2" />
+                    Explorer la boutique
+                  </button>
+                  <button className="btn btn-outline-light btn-lg px-5 hover-scale">
+                    <FontAwesomeIcon icon={faHeart} className="me-2" />
+                    Suivre
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <footer className="bg-dark text-white py-5 mt-5">
+        <div className="container">
+          <div className="row">
+            <div className="col-lg-4 mb-4">
+              <h5 className="fw-bold mb-4">
+                <FontAwesomeIcon icon={faLeaf} className="text-success me-2" />
+                {boutique.nom}
+              </h5>
+              <p className="text-white-50">
+                Boutique éco-responsable offrant les meilleurs produits depuis{" "}
+                {new Date(boutique.created_at).getFullYear()}.
+              </p>
+            </div>
+            <div className="col-lg-2 col-md-4 mb-4">
+              <h6 className="fw-bold mb-4">Navigation</h6>
+              <ul className="list-unstyled">
+                <li>
+                  <a
+                    href="#"
+                    className="text-white-50 text-decoration-none hover-success"
+                  >
+                    Produits
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="#"
+                    className="text-white-50 text-decoration-none hover-success"
+                  >
+                    Catégories
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="#"
+                    className="text-white-50 text-decoration-none hover-success"
+                  >
+                    Promotions
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="#"
+                    className="text-white-50 text-decoration-none hover-success"
+                  >
+                    Nouveautés
+                  </a>
+                </li>
+              </ul>
+            </div>
+            <div className="col-lg-3 col-md-4 mb-4">
+              <h6 className="fw-bold mb-4">Contact</h6>
+              <ul className="list-unstyled">
+                <li className="mb-2">
+                  <FontAwesomeIcon
+                    icon={faMapMarkerAlt}
+                    className="text-success me-2"
+                  />
+                  <span className="text-white-50">Localisation</span>
+                </li>
+                <li className="mb-2">
+                  <FontAwesomeIcon
+                    icon={faPhone}
+                    className="text-success me-2"
+                  />
+                  <span className="text-white-50">Contact</span>
+                </li>
+                <li className="mb-2">
+                  <FontAwesomeIcon
+                    icon={faEnvelope}
+                    className="text-success me-2"
+                  />
+                  <span className="text-white-50">Email</span>
+                </li>
+              </ul>
+            </div>
+            <div className="col-lg-3 col-md-4 mb-4">
+              <h6 className="fw-bold mb-4">Sécurité</h6>
+              <div className="d-flex gap-3">
+                <FontAwesomeIcon
+                  icon={faShieldAlt}
+                  className="text-success fs-4 eco-pulse"
+                />
+                <FontAwesomeIcon
+                  icon={faCreditCard}
+                  className="text-success fs-4"
+                />
+                <FontAwesomeIcon icon={faLock} className="text-success fs-4" />
+              </div>
+            </div>
+          </div>
+          <hr className="bg-white-20 my-4" />
+          <div className="text-center text-white-50">
+            <p className="mb-0">
+              &copy; {new Date().getFullYear()} {boutique.nom}. Tous droits
+              réservés.
             </p>
           </div>
-          <div className="d-flex flex-wrap gap-2 mt-3 mt-md-0">
-            <button
-              onClick={fetchProduitsUtilisateur}
-              className="btn btn-outline-secondary d-flex align-items-center gap-2"
-              disabled={loading}
-            >
-              <FontAwesomeIcon icon={faRefresh} spin={loading} />
-              Rafraîchir
-            </button>
-            <button
-              onClick={handleExportCSV}
-              className="btn btn-outline-primary d-flex align-items-center gap-2"
-              disabled={filteredProduits.length === 0}
-            >
-              <FontAwesomeIcon icon={faDownload} />
-              Exporter CSV
-            </button>
-            <button
-              onClick={resetFilters}
-              className="btn btn-outline-danger d-flex align-items-center gap-2"
-            >
-              <FontAwesomeIcon icon={faTimes} />
-              Réinitialiser
-            </button>
-          </div>
         </div>
+      </footer>
 
-        {/* Messages d'alerte */}
-        {error && (
-          <div
-            className="alert alert-danger border-0 shadow-sm mb-4"
-            role="alert"
-          >
-            <div className="d-flex align-items-center">
-              <div className="flex-shrink-0">
-                <div
-                  className="rounded-circle p-2"
-                  style={{ backgroundColor: `${colors.oskar.red}20` }}
-                >
-                  <FontAwesomeIcon
-                    icon={faExclamationTriangle}
-                    className="text-danger"
-                  />
-                </div>
-              </div>
-              <div className="flex-grow-1 ms-3">
-                <h6 className="alert-heading mb-1 fw-bold">Erreur</h6>
-                <p className="mb-0">{error}</p>
-              </div>
-              <button
-                type="button"
-                className="btn-close"
-                onClick={() => setError(null)}
-                aria-label="Fermer"
-              />
-            </div>
-          </div>
-        )}
-
-        {successMessage && (
-          <div
-            className="alert alert-success border-0 shadow-sm mb-4"
-            role="alert"
-          >
-            <div className="d-flex align-items-center">
-              <div className="flex-shrink-0">
-                <div
-                  className="rounded-circle p-2"
-                  style={{ backgroundColor: `${colors.oskar.green}20` }}
-                >
-                  <FontAwesomeIcon
-                    icon={faCheckCircle}
-                    className="text-success"
-                  />
-                </div>
-              </div>
-              <div className="flex-grow-1 ms-3">
-                <h6 className="alert-heading mb-1 fw-bold">Succès</h6>
-                <p className="mb-0">{successMessage}</p>
-              </div>
-              <button
-                type="button"
-                className="btn-close"
-                onClick={() => setSuccessMessage(null)}
-                aria-label="Fermer"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Cartes de statistiques */}
-        <div className="row g-3 mb-4">
-          <div className="col-6 col-md-4 col-lg-2">
-            <div
-              className="card border-0 shadow-sm h-100"
-              style={{
-                background: `linear-gradient(135deg, ${colors.oskar.blue}15 0%, ${colors.oskar.blue}10 100%)`,
-              }}
-            >
-              <div className="card-body p-3">
-                <div className="d-flex align-items-center">
-                  <div
-                    className="rounded-circle d-flex align-items-center justify-content-center me-3"
-                    style={{
-                      width: "48px",
-                      height: "48px",
-                      backgroundColor: `${colors.oskar.blue}20`,
-                    }}
-                  >
-                    <FontAwesomeIcon icon={faBox} className="text-primary" />
-                  </div>
-                  <div>
-                    <div className="text-muted small">Total produits</div>
-                    <div className="fw-bold fs-4">{stats.total}</div>
-                    <div className="text-muted small">
-                      {filteredProduits.length} filtré(s)
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="col-6 col-md-4 col-lg-2">
-            <div
-              className="card border-0 shadow-sm h-100"
-              style={{
-                background: `linear-gradient(135deg, ${colors.oskar.green}15 0%, ${colors.oskar.green}10 100%)`,
-              }}
-            >
-              <div className="card-body p-3">
-                <div className="d-flex align-items-center">
-                  <div
-                    className="rounded-circle d-flex align-items-center justify-content-center me-3"
-                    style={{
-                      width: "48px",
-                      height: "48px",
-                      backgroundColor: `${colors.oskar.green}20`,
-                    }}
-                  >
-                    <FontAwesomeIcon
-                      icon={faToggleOn}
-                      className="text-success"
-                    />
-                  </div>
-                  <div>
-                    <div className="text-muted small">Publiés</div>
-                    <div className="fw-bold fs-4">{stats.publishedCount}</div>
-                    <div className="text-muted small">
-                      {stats.unpublishedCount} non publié(s)
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="col-6 col-md-4 col-lg-2">
-            <div
-              className="card border-0 shadow-sm h-100"
-              style={{
-                background: `linear-gradient(135deg, ${colors.oskar.yellow}15 0%, ${colors.oskar.yellow}10 100%)`,
-              }}
-            >
-              <div className="card-body p-3">
-                <div className="d-flex align-items-center">
-                  <div
-                    className="rounded-circle d-flex align-items-center justify-content-center me-3"
-                    style={{
-                      width: "48px",
-                      height: "48px",
-                      backgroundColor: `${colors.oskar.yellow}20`,
-                    }}
-                  >
-                    <FontAwesomeIcon
-                      icon={faMoneyBillWave}
-                      className="text-warning"
-                    />
-                  </div>
-                  <div>
-                    <div className="text-muted small">Valeur totale</div>
-                    <div className="fw-bold fs-4">
-                      {formatPrice(stats.totalValue)}
-                    </div>
-                    <div className="text-muted small">
-                      {formatPrice(stats.averagePrice)} moyenne
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="col-6 col-md-4 col-lg-2">
-            <div
-              className="card border-0 shadow-sm h-100"
-              style={{
-                background: `linear-gradient(135deg, ${colors.oskar.purple}15 0%, ${colors.oskar.purple}10 100%)`,
-              }}
-            >
-              <div className="card-body p-3">
-                <div className="d-flex align-items-center">
-                  <div
-                    className="rounded-circle d-flex align-items-center justify-content-center me-3"
-                    style={{
-                      width: "48px",
-                      height: "48px",
-                      backgroundColor: `${colors.oskar.purple}20`,
-                    }}
-                  >
-                    <FontAwesomeIcon icon={faUser} className="text-purple" />
-                  </div>
-                  <div>
-                    <div className="text-muted small">Utilisateurs</div>
-                    <div className="fw-bold fs-4">{stats.utilisateurCount}</div>
-                    <div className="text-muted small">
-                      {stats.vendeurCount} vendeurs
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="col-6 col-md-4 col-lg-2">
-            <div
-              className="card border-0 shadow-sm h-100"
-              style={{
-                background: `linear-gradient(135deg, ${colors.oskar.orange}15 0%, ${colors.oskar.orange}10 100%)`,
-              }}
-            >
-              <div className="card-body p-3">
-                <div className="d-flex align-items-center">
-                  <div
-                    className="rounded-circle d-flex align-items-center justify-content-center me-3"
-                    style={{
-                      width: "48px",
-                      height: "48px",
-                      backgroundColor: `${colors.oskar.orange}20`,
-                    }}
-                  >
-                    <FontAwesomeIcon icon={faShop} className="text-orange" />
-                  </div>
-                  <div>
-                    <div className="text-muted small">Boutiques</div>
-                    <div className="fw-bold fs-4">{stats.boutiqueCount}</div>
-                    <div className="text-muted small">Produits associés</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="col-6 col-md-4 col-lg-2">
-            <div
-              className="card border-0 shadow-sm h-100"
-              style={{
-                background: `linear-gradient(135deg, ${colors.oskar.red}15 0%, ${colors.oskar.red}10 100%)`,
-              }}
-            >
-              <div className="card-body p-3">
-                <div className="d-flex align-items-center">
-                  <div
-                    className="rounded-circle d-flex align-items-center justify-content-center me-3"
-                    style={{
-                      width: "48px",
-                      height: "48px",
-                      backgroundColor: `${colors.oskar.red}20`,
-                    }}
-                  >
-                    <FontAwesomeIcon icon={faStore} className="text-red" />
-                  </div>
-                  <div>
-                    <div className="text-muted small">Sélectionnés</div>
-                    <div className="fw-bold fs-4">
-                      {selectedProduits.length}
-                    </div>
-                    <div className="text-muted small">
-                      {selectedProduits.length > 0
-                        ? "Actions disponibles"
-                        : "Sélectionnez"}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Barre de recherche et filtres */}
-      <div className="card border-0 shadow-sm mb-4">
-        <div className="card-body">
-          <div className="row g-3">
-            <div className="col-md-3">
-              <div className="input-group">
-                <span className="input-group-text bg-white border-end-0">
-                  <FontAwesomeIcon icon={faSearch} className="text-muted" />
-                </span>
-                <input
-                  type="text"
-                  className="form-control border-start-0"
-                  placeholder="Rechercher par nom, catégorie, boutique..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  aria-label="Rechercher des produits"
-                />
-                {searchTerm && (
-                  <button
-                    className="btn btn-outline-secondary border-start-0"
-                    onClick={() => setSearchTerm("")}
-                    aria-label="Effacer la recherche"
-                  >
-                    <FontAwesomeIcon icon={faTimes} />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="col-md-2">
-              <div className="input-group">
-                <span className="input-group-text bg-white border-end-0">
-                  <FontAwesomeIcon icon={faFilter} className="text-muted" />
-                </span>
-                <select
-                  className="form-select border-start-0"
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  aria-label="Filtrer par statut"
-                >
-                  <option value="all">Tous les statuts</option>
-                  <option value="publie">Publié</option>
-                  <option value="en_attente">En attente</option>
-                  <option value="rejete">Rejeté</option>
-                  <option value="brouillon">Brouillon</option>
-                  <option value="bloque">Bloqué</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="col-md-2">
-              <div className="input-group">
-                <span className="input-group-text bg-white border-end-0">
-                  <FontAwesomeIcon icon={faToggleOn} className="text-muted" />
-                </span>
-                <select
-                  className="form-select border-start-0"
-                  value={publishFilter}
-                  onChange={(e) => setPublishFilter(e.target.value)}
-                  aria-label="Filtrer par publication"
-                >
-                  <option value="all">Tous</option>
-                  <option value="published">Publiés uniquement</option>
-                  <option value="unpublished">Non publiés</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="col-md-2">
-              <div className="input-group">
-                <span className="input-group-text bg-white border-end-0">
-                  <FontAwesomeIcon icon={faUser} className="text-muted" />
-                </span>
-                <select
-                  className="form-select border-start-0"
-                  value={sourceFilter}
-                  onChange={(e) => setSourceFilter(e.target.value)}
-                  aria-label="Filtrer par source"
-                >
-                  <option value="all">Toutes les sources</option>
-                  <option value="utilisateur">Utilisateurs</option>
-                  <option value="vendeur">Vendeurs</option>
-                  <option value="boutique">Boutiques</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="col-md-3">
-              <div className="input-group">
-                <span className="input-group-text bg-white border-end-0">
-                  <FontAwesomeIcon
-                    icon={faMoneyBillWave}
-                    className="text-muted"
-                  />
-                </span>
-                <input
-                  type="range"
-                  className="form-range border-start-0"
-                  min="0"
-                  max={maxPrice}
-                  step="1000"
-                  value={priceRange[1]}
-                  onChange={(e) => setPriceRange([0, parseInt(e.target.value)])}
-                  aria-label="Filtrer par prix maximum"
-                />
-                <span className="input-group-text">
-                  {formatPrice(priceRange[1])}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Informations de filtrage */}
-          <div className="row mt-3">
-            <div className="col-md-8">
-              <div className="d-flex align-items-center gap-3">
-                <small className="text-muted">
-                  <FontAwesomeIcon icon={faFilter} className="me-1" />
-                  {filteredProduits.length} produit(s) sur {produits.length}
-                  {searchTerm && (
-                    <>
-                      {" "}
-                      pour "<strong>{searchTerm}</strong>"
-                    </>
-                  )}
-                </small>
-                {selectedProduits.length > 0 && (
-                  <small className="text-primary fw-semibold">
-                    <FontAwesomeIcon icon={faCheck} className="me-1" />
-                    {selectedProduits.length} sélectionné(s)
-                  </small>
-                )}
-              </div>
-            </div>
-            <div className="col-md-4 text-end">
-              <small className="text-muted">
-                Page {pagination.page} sur {pagination.pages} •{" "}
-                {pagination.limit} par page
-              </small>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Actions en masse */}
-      {selectedProduits.length > 0 && (
-        <div className="card border-0 shadow-sm mb-4">
-          <div className="card-body py-3">
-            <div className="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
-              <div className="d-flex align-items-center">
-                <FontAwesomeIcon icon={faBox} className="text-primary me-2" />
-                <span className="fw-semibold">
-                  {selectedProduits.length} produit(s) sélectionné(s)
-                </span>
-              </div>
-              <div className="d-flex flex-wrap gap-2">
-                <button
-                  onClick={() => handleBulkAction("publish")}
-                  className="btn btn-sm btn-outline-success d-flex align-items-center gap-2"
-                  disabled={loading}
-                >
-                  <FontAwesomeIcon icon={faToggleOn} />
-                  Publier
-                </button>
-                <button
-                  onClick={() => handleBulkAction("unpublish")}
-                  className="btn btn-sm btn-outline-warning d-flex align-items-center gap-2"
-                  disabled={loading}
-                >
-                  <FontAwesomeIcon icon={faToggleOff} />
-                  Dépublier
-                </button>
-                <button
-                  onClick={() => handleBulkAction("delete")}
-                  className="btn btn-sm btn-outline-danger d-flex align-items-center gap-2"
-                  disabled={loading}
-                >
-                  <FontAwesomeIcon icon={faTrash} />
-                  Supprimer
-                </button>
-                <button
-                  onClick={() => setSelectedProduits([])}
-                  className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-2"
-                  disabled={loading}
-                >
-                  <FontAwesomeIcon icon={faTimes} />
-                  Annuler
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Tableau des produits */}
-      <div className="card border-0 shadow-sm">
-        <div className="card-body p-0">
-          {filteredProduits.length === 0 ? (
-            <div className="text-center py-5">
-              <div className="bg-light rounded-circle d-inline-flex p-4 mb-3">
-                <FontAwesomeIcon icon={faBox} className="fs-1 text-muted" />
-              </div>
-              <h4 className="fw-bold mb-3">
-                {produits.length === 0
-                  ? "Aucun produit créé"
-                  : "Aucun résultat"}
-              </h4>
-              <p className="text-muted mb-4">
-                {produits.length === 0
-                  ? "Vous n'avez pas encore créé de produits."
-                  : "Aucun produit ne correspond à vos critères de recherche."}
-              </p>
-              {(searchTerm ||
-                statusFilter !== "all" ||
-                publishFilter !== "all" ||
-                sourceFilter !== "all" ||
-                priceRange[1] < maxPrice) && (
-                <button onClick={resetFilters} className="btn btn-primary me-2">
-                  <FontAwesomeIcon icon={faTimes} className="me-2" />
-                  Réinitialiser les filtres
-                </button>
-              )}
-              <button
-                onClick={fetchProduitsUtilisateur}
-                className="btn btn-outline-secondary"
-              >
-                <FontAwesomeIcon icon={faRefresh} className="me-2" />
-                Recharger
-              </button>
-            </div>
-          ) : (
-            <>
-              <div className="table-responsive">
-                <table className="table table-hover mb-0">
-                  <thead className="table-light">
-                    <tr>
-                      <th style={{ width: "50px" }} className="text-center">
-                        <div className="form-check">
-                          <input
-                            type="checkbox"
-                            className="form-check-input"
-                            checked={
-                              selectedProduits.length === currentItems.length &&
-                              currentItems.length > 0
-                            }
-                            onChange={handleSelectAll}
-                            aria-label="Sélectionner tous les produits de la page"
-                          />
-                        </div>
-                      </th>
-                      <th style={{ width: "100px" }} className="text-center">
-                        Image
-                      </th>
-                      <th style={{ width: "250px" }}>
-                        <button
-                          className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
-                          onClick={() => requestSort("libelle")}
-                        >
-                          <FontAwesomeIcon icon={faTag} className="me-1" />
-                          Produit {getSortIcon("libelle")}
-                        </button>
-                      </th>
-                      <th style={{ width: "200px" }}>Source</th>
-                      <th style={{ width: "120px" }}>
-                        <button
-                          className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
-                          onClick={() => requestSort("prix")}
-                        >
-                          <FontAwesomeIcon
-                            icon={faMoneyBillWave}
-                            className="me-1"
-                          />
-                          Prix {getSortIcon("prix")}
-                        </button>
-                      </th>
-                      <th style={{ width: "100px" }}>Quantité</th>
-                      <th style={{ width: "120px" }}>Statut</th>
-                      <th style={{ width: "120px" }}>Publication</th>
-                      <th style={{ width: "150px" }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {currentItems.map((produit) => (
-                      <tr
-                        key={produit.uuid}
-                        className={
-                          selectedProduits.includes(produit.uuid)
-                            ? "table-active"
-                            : ""
-                        }
-                      >
-                        <td className="text-center">
-                          <div className="form-check">
-                            <input
-                              type="checkbox"
-                              className="form-check-input"
-                              checked={selectedProduits.includes(produit.uuid)}
-                              onChange={() => handleSelectProduit(produit.uuid)}
-                              aria-label={`Sélectionner ${produit.libelle}`}
-                            />
-                          </div>
-                        </td>
-                        <td className="text-center">
-                          <div
-                            className="position-relative mx-auto"
-                            style={{ width: "80px", height: "80px" }}
-                          >
-                            <img
-                              src={getProductImage(produit)}
-                              alt={produit.libelle}
-                              className="img-fluid rounded border cursor-pointer"
-                              style={{
-                                width: "100%",
-                                height: "100%",
-                                objectFit: "cover",
-                              }}
-                              onClick={() => handleViewDetails(produit)}
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src =
-                                  `https://ui-avatars.com/api/?name=${encodeURIComponent(produit.libelle)}&background=007bff&color=fff&size=80&bold=true`;
-                              }}
-                            />
-                            {!produit.image && (
-                              <div className="position-absolute bottom-0 end-0 translate-middle">
-                                <span
-                                  className="badge bg-warning rounded-circle p-1"
-                                  style={{ fontSize: "0.6rem" }}
-                                  title="Image par défaut"
-                                >
-                                  <FontAwesomeIcon icon={faImage} />
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                        <td>
-                          <div className="fw-semibold mb-1">
-                            {produit.libelle}
-                          </div>
-                          {produit.description && (
-                            <small
-                              className="text-muted text-truncate d-block"
-                              style={{ maxWidth: "200px" }}
-                              title={produit.description}
-                            >
-                              {produit.description.substring(0, 80)}
-                              {produit.description.length > 80 ? "..." : ""}
-                            </small>
-                          )}
-                          <div className="mt-2">
-                            <small className="text-muted">
-                              <FontAwesomeIcon
-                                icon={faCalendar}
-                                className="me-1"
-                              />
-                              Créé: {formatDate(produit.createdAt)}
-                            </small>
-                          </div>
-                        </td>
-                        <td>
-                          <div
-                            className="d-flex align-items-center cursor-pointer"
-                            onClick={() => navigateToProfile(produit)}
-                            title={`Voir le profil ${produit.source.type === "boutique" ? "de la boutique" : "de l'utilisateur"}`}
-                          >
-                            <div className="position-relative me-3">
-                              <img
-                                src={getSourceImage(produit)}
-                                alt={
-                                  produit.source.type === "boutique"
-                                    ? produit.source.infos.nom
-                                    : `${produit.source.infos.prenoms} ${produit.source.infos.nom}`
-                                }
-                                className="rounded-circle border"
-                                style={{
-                                  width: "48px",
-                                  height: "48px",
-                                  objectFit: "cover",
-                                }}
-                                onError={(e) => {
-                                  const name =
-                                    produit.source.type === "boutique"
-                                      ? produit.source.infos.nom || "Boutique"
-                                      : `${produit.source.infos.prenoms || ""} ${produit.source.infos.nom || "Utilisateur"}`;
-                                  const background =
-                                    produit.source.type === "boutique"
-                                      ? "10b981"
-                                      : produit.source.type === "vendeur"
-                                        ? "f59e0b"
-                                        : "3b82f6";
-                                  (e.target as HTMLImageElement).src =
-                                    `https://ui-avatars.com/api/?name=${encodeURIComponent(name.trim())}&background=${background}&color=fff&size=48`;
-                                }}
-                              />
-                              <div className="position-absolute bottom-0 end-0 translate-middle">
-                                <span
-                                  className="badge bg-info rounded-circle p-1"
-                                  style={{ fontSize: "0.6rem" }}
-                                  title="Voir le profil"
-                                >
-                                  <FontAwesomeIcon icon={faLink} />
-                                </span>
-                              </div>
-                            </div>
-                            <div>
-                              <div className="fw-medium">
-                                {produit.source.type === "boutique"
-                                  ? produit.source.infos.nom
-                                  : `${produit.source.infos.prenoms} ${produit.source.infos.nom}`}
-                              </div>
-                              <div className="mb-1">
-                                {getSourceBadge(produit.source.type)}
-                              </div>
-                              {produit.source.infos.email && (
-                                <small className="text-muted d-block">
-                                  {produit.source.infos.email}
-                                </small>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                        <td>
-                          <div className="fw-bold text-primary">
-                            {formatPrice(produit.prix)}
-                          </div>
-                          <small className="text-muted">par unité</small>
-                        </td>
-                        <td>
-                          <div className="fw-semibold">{produit.quantite}</div>
-                        </td>
-                        <td>{getStatusBadge(produit.statut)}</td>
-                        <td>
-                          {produit.estPublie ? (
-                            <span className="badge bg-success bg-opacity-10 text-success">
-                              <FontAwesomeIcon
-                                icon={faToggleOn}
-                                className="me-1"
-                              />
-                              Publié
-                            </span>
-                          ) : (
-                            <span className="badge bg-warning bg-opacity-10 text-warning">
-                              <FontAwesomeIcon
-                                icon={faToggleOff}
-                                className="me-1"
-                              />
-                              Non publié
-                            </span>
-                          )}
-                        </td>
-                        <td>
-                          <div className="btn-group btn-group-sm" role="group">
-                            <button
-                              className="btn btn-outline-info"
-                              title="Voir détails"
-                              onClick={() => handleViewDetails(produit)}
-                              aria-label={`Voir détails de ${produit.libelle}`}
-                            >
-                              <FontAwesomeIcon icon={faEye} />
-                            </button>
-                            <button
-                              className="btn btn-outline-warning"
-                              title="Éditer"
-                              onClick={() => handleEditProduit(produit.uuid)}
-                              aria-label={`Éditer ${produit.libelle}`}
-                            >
-                              <FontAwesomeIcon icon={faEdit} />
-                            </button>
-                            <button
-                              className={`btn ${produit.estPublie ? "btn-outline-warning" : "btn-outline-success"}`}
-                              title={
-                                produit.estPublie ? "Dépublier" : "Publier"
-                              }
-                              onClick={() =>
-                                handleTogglePublish(
-                                  produit.uuid,
-                                  produit.estPublie,
-                                )
-                              }
-                              aria-label={`${produit.estPublie ? "Dépublier" : "Publier"} ${produit.libelle}`}
-                            >
-                              <FontAwesomeIcon
-                                icon={
-                                  produit.estPublie ? faToggleOff : faToggleOn
-                                }
-                              />
-                            </button>
-                            <button
-                              className="btn btn-outline-danger"
-                              title="Supprimer"
-                              onClick={() => handleDeleteProduit(produit.uuid)}
-                              aria-label={`Supprimer ${produit.libelle}`}
-                            >
-                              <FontAwesomeIcon icon={faTrash} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Pagination */}
-              {pagination.pages > 1 && (
-                <div className="card-footer bg-white border-0 py-3">
-                  <div className="d-flex flex-column flex-md-row justify-content-between align-items-center">
-                    <div className="mb-2 mb-md-0">
-                      <small className="text-muted">
-                        Affichage de{" "}
-                        <strong>
-                          {(pagination.page - 1) * pagination.limit + 1}
-                        </strong>{" "}
-                        à{" "}
-                        <strong>
-                          {Math.min(
-                            pagination.page * pagination.limit,
-                            filteredProduits.length,
-                          )}
-                        </strong>{" "}
-                        sur <strong>{filteredProduits.length}</strong>{" "}
-                        produit(s)
-                      </small>
-                    </div>
-                    <nav>
-                      <ul className="pagination pagination-sm mb-0">
-                        <li
-                          className={`page-item ${pagination.page === 1 ? "disabled" : ""}`}
-                        >
-                          <button
-                            className="page-link"
-                            onClick={() =>
-                              setPagination((prev) => ({
-                                ...prev,
-                                page: prev.page - 1,
-                              }))
-                            }
-                            disabled={pagination.page === 1}
-                            aria-label="Page précédente"
-                          >
-                            &laquo;
-                          </button>
-                        </li>
-
-                        {(() => {
-                          const pages = [];
-                          const maxVisible = 5;
-                          let startPage = Math.max(
-                            1,
-                            pagination.page - Math.floor(maxVisible / 2),
-                          );
-                          let endPage = Math.min(
-                            pagination.pages,
-                            startPage + maxVisible - 1,
-                          );
-
-                          if (endPage - startPage + 1 < maxVisible) {
-                            startPage = Math.max(1, endPage - maxVisible + 1);
-                          }
-
-                          for (let i = startPage; i <= endPage; i++) {
-                            pages.push(
-                              <li
-                                key={i}
-                                className={`page-item ${pagination.page === i ? "active" : ""}`}
-                              >
-                                <button
-                                  className="page-link"
-                                  onClick={() =>
-                                    setPagination((prev) => ({
-                                      ...prev,
-                                      page: i,
-                                    }))
-                                  }
-                                >
-                                  {i}
-                                </button>
-                              </li>,
-                            );
-                          }
-                          return pages;
-                        })()}
-
-                        <li
-                          className={`page-item ${pagination.page === pagination.pages ? "disabled" : ""}`}
-                        >
-                          <button
-                            className="page-link"
-                            onClick={() =>
-                              setPagination((prev) => ({
-                                ...prev,
-                                page: prev.page + 1,
-                              }))
-                            }
-                            disabled={pagination.page === pagination.pages}
-                            aria-label="Page suivante"
-                          >
-                            &raquo;
-                          </button>
-                        </li>
-                      </ul>
-                    </nav>
-                    <div className="mt-2 mt-md-0">
-                      <select
-                        className="form-select form-select-sm"
-                        value={pagination.limit}
-                        onChange={(e) =>
-                          setPagination((prev) => ({
-                            ...prev,
-                            limit: parseInt(e.target.value),
-                            page: 1,
-                          }))
-                        }
-                        aria-label="Nombre d'éléments par page"
-                      >
-                        <option value="5">5 par page</option>
-                        <option value="10">10 par page</option>
-                        <option value="25">25 par page</option>
-                        <option value="50">50 par page</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Informations */}
-      <div className="mt-4">
-        <div className="alert alert-info border-0 shadow-sm" role="alert">
-          <div className="d-flex align-items-center">
-            <div className="flex-shrink-0">
-              <div
-                className="rounded-circle p-2"
-                style={{ backgroundColor: `${colors.oskar.blue}20` }}
-              >
-                <FontAwesomeIcon icon={faInfoCircle} className="text-info" />
-              </div>
-            </div>
-            <div className="flex-grow-1 ms-3">
-              <h6 className="alert-heading mb-1 fw-bold">
-                Gestion de vos produits
-              </h6>
-              <div className="row">
-                <div className="col-md-6">
-                  <ul className="mb-0">
-                    <li>
-                      <strong>Images des produits :</strong> Cliquez sur l'image
-                      du produit pour voir ses détails
-                    </li>
-                    <li>
-                      <strong>Images des profils :</strong> Cliquez sur l'image
-                      du profil pour voir les détails de l'utilisateur ou de la
-                      boutique
-                    </li>
-                    <li>
-                      <strong>Types de sources :</strong> Utilisateurs (bleu),
-                      Vendeurs (jaune), Boutiques (vert)
-                    </li>
-                  </ul>
-                </div>
-                <div className="col-md-6">
-                  <ul className="mb-0">
-                    <li>
-                      <strong>Export :</strong> Téléchargez la liste de vos
-                      produits au format CSV
-                    </li>
-                    <li>
-                      <strong>Filtres avancés :</strong> Recherchez par nom,
-                      catégorie, statut, prix, source et état de publication
-                    </li>
-                    <li>
-                      <strong>Actions groupées :</strong> Sélectionnez plusieurs
-                      produits pour des actions en masse
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
+      {/* Styles */}
       <style jsx>{`
-        .table > :not(caption) > * > * {
-          padding: 0.75rem 0.5rem;
-          vertical-align: middle;
+        .bg-gradient-eco {
+          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
         }
-        .table-active {
-          background-color: rgba(13, 110, 253, 0.05) !important;
+
+        .eco-gradient {
+          background: linear-gradient(
+            to bottom,
+            rgba(16, 185, 129, 0.2) 0%,
+            rgba(5, 150, 105, 0.8) 100%
+          );
         }
-        .form-check-input:checked {
-          background-color: #0d6efd;
-          border-color: #0d6efd;
+
+        .eco-hero {
+          position: relative;
+          overflow: hidden;
         }
-        .form-check-input:focus {
-          border-color: #86b7fe;
-          box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+
+        .floating-leaves {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          pointer-events: none;
+          z-index: 1;
+          overflow: hidden;
         }
-        .btn-group-sm > .btn {
-          padding: 0.25rem 0.5rem;
-          font-size: 0.875rem;
+
+        .leaf {
+          position: absolute;
+          width: 30px;
+          height: 30px;
+          background: rgba(255, 255, 255, 0.1);
+          clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+          animation: float 15s linear infinite;
+          opacity: 0.3;
         }
-        .badge {
-          font-weight: 500;
-          padding: 0.35em 0.65em;
+
+        .product-card {
+          transition: all 0.3s ease;
+          border: 1px solid rgba(16, 185, 129, 0.1) !important;
         }
-        .page-item.active .page-link {
-          background-color: #0d6efd;
-          border-color: #0d6efd;
+
+        .product-card:hover {
+          border-color: rgba(16, 185, 129, 0.3) !important;
+        }
+
+        .nav-underline .nav-link {
+          color: #6c757d;
+          border: none;
+          padding: 0.75rem 1rem;
+        }
+
+        .nav-underline .nav-link.active {
+          color: #10b981;
+          border-bottom: 3px solid #10b981;
+          font-weight: 600;
+        }
+
+        .object-fit-cover {
+          object-fit: cover;
+        }
+
+        .text-shadow {
+          text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .gradient-text {
+          background: linear-gradient(45deg, #10b981, #34d399);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+        }
+
+        .eco-card {
+          border: 1px solid rgba(16, 185, 129, 0.1) !important;
+          transition: all 0.3s ease;
+        }
+
+        .eco-card:hover {
+          border-color: rgba(16, 185, 129, 0.3) !important;
+        }
+
+        .eco-btn {
+          background: linear-gradient(45deg, #10b981, #34d399);
+          border: none;
           color: white;
         }
-        .page-link {
-          color: #0d6efd;
+
+        .eco-icon {
+          transition: all 0.3s ease;
         }
-        .page-link:hover {
-          color: #0a58ca;
-          background-color: #f8f9fa;
+
+        .eco-card:hover .eco-icon {
+          transform: scale(1.1);
         }
-        .form-range::-webkit-slider-thumb {
-          background-color: #0d6efd;
+
+        .eco-img {
+          transition: all 0.3s ease;
         }
-        .form-range::-moz-range-thumb {
-          background-color: #0d6efd;
+
+        .logo-container {
+          width: 120px;
+          height: 120px;
+          overflow: hidden;
+          position: relative;
         }
-        .spinner-border {
-          animation-duration: 0.75s;
+
+        .logo-container::after {
+          content: "";
+          position: absolute;
+          top: -2px;
+          left: -2px;
+          right: -2px;
+          bottom: -2px;
+          background: linear-gradient(45deg, #10b981, #34d399, #10b981);
+          border-radius: 50%;
+          z-index: -1;
+          animation: rotate 3s linear infinite;
         }
-        .cursor-pointer {
-          cursor: pointer;
+
+        /* Animations CSS */
+        @keyframes rotate {
+          0% {
+            transform: rotate(0deg);
+          }
+          100% {
+            transform: rotate(360deg);
+          }
         }
-        .cursor-pointer:hover {
-          opacity: 0.8;
+
+        @keyframes pulse {
+          0% {
+            transform: scale(1);
+            opacity: 1;
+          }
+          50% {
+            transform: scale(1.05);
+            opacity: 0.8;
+          }
+          100% {
+            transform: scale(1);
+            opacity: 1;
+          }
+        }
+
+        @keyframes float {
+          0% {
+            transform: translateY(-100px) rotate(0deg);
+            opacity: 0;
+          }
+          10% {
+            opacity: 0.3;
+          }
+          90% {
+            opacity: 0.3;
+          }
+          100% {
+            transform: translateY(500px) rotate(360deg);
+            opacity: 0;
+          }
+        }
+
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(30px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes slideUp {
+          from {
+            opacity: 0;
+            transform: translateY(50px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateY(-50px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes spin {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
+        @keyframes bounce {
+          0%,
+          100% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-10px);
+          }
+        }
+
+        @keyframes wiggle {
+          0%,
+          100% {
+            transform: rotate(0deg);
+          }
+          25% {
+            transform: rotate(5deg);
+          }
+          75% {
+            transform: rotate(-5deg);
+          }
+        }
+
+        @keyframes fadeInSlide {
+          from {
+            opacity: 0;
+            transform: translateX(-20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
+        /* Classes d'animation */
+        .animate-spin {
+          animation: spin 1s linear infinite;
+        }
+
+        .animate-spin-slow {
+          animation: spin 3s linear infinite;
+        }
+
+        .animate-pulse {
+          animation: pulse 2s infinite;
+        }
+
+        .animate-fade-in {
+          animation: fadeIn 0.8s ease-out;
+        }
+
+        .animate-fade-in-delay {
+          animation: fadeIn 0.8s ease-out 0.3s both;
+        }
+
+        .animate-fade-in-up {
+          animation: fadeInUp 0.8s ease-out;
+        }
+
+        .animate-slide-up {
+          animation: slideUp 0.6s ease-out;
+        }
+
+        .animate-slide-down {
+          animation: slideDown 0.6s ease-out;
+        }
+
+        .animate-bounce {
+          animation: bounce 2s infinite;
+        }
+
+        .animate-wiggle {
+          animation: wiggle 0.5s ease-in-out;
+        }
+
+        .animate-fade-in-slide {
+          animation: fadeInSlide 0.5s ease-out both;
+        }
+
+        /* Classes de hover */
+        .hover-scale {
+          transition: transform 0.2s ease;
+        }
+
+        .hover-scale:hover {
+          transform: scale(1.05);
+        }
+
+        .hover-rotate {
+          transition: transform 0.3s ease;
+        }
+
+        .hover-rotate:hover {
+          transform: rotate(180deg);
+        }
+
+        .hover-rotate-slow {
+          transition: transform 0.5s ease;
+        }
+
+        .hover-rotate-slow:hover {
+          transform: rotate(5deg);
+        }
+
+        .hover-lift {
+          transition: all 0.3s ease;
+        }
+
+        .hover-lift:hover {
+          transform: translateY(-5px);
+          box-shadow: 0 15px 35px rgba(16, 185, 129, 0.1) !important;
+        }
+
+        .hover-zoom {
+          transition: transform 0.5s ease;
+        }
+
+        .hover-zoom:hover {
+          transform: scale(1.1);
+        }
+
+        .hover-success:hover {
+          color: #10b981 !important;
+          padding-left: 5px;
+          transition: all 0.3s ease;
+        }
+
+        /* Couleurs vertes */
+        .bg-success {
+          background-color: #10b981 !important;
+        }
+
+        .text-success {
+          color: #10b981 !important;
+        }
+
+        .border-success {
+          border-color: #10b981 !important;
+        }
+
+        .btn-success {
+          background-color: #10b981;
+          border-color: #10b981;
+        }
+
+        .btn-success:hover {
+          background-color: #059669;
+          border-color: #059669;
+        }
+
+        .btn-outline-success {
+          color: #10b981;
+          border-color: #10b981;
+        }
+
+        .btn-outline-success:hover {
+          background-color: #10b981;
+          border-color: #10b981;
+          color: white;
+        }
+
+        .badge.bg-success {
+          background-color: #10b981 !important;
+        }
+
+        .bg-success.bg-opacity-10 {
+          background-color: rgba(16, 185, 129, 0.1) !important;
+        }
+
+        .text-success.text-opacity-25 {
+          color: rgba(16, 185, 129, 0.25) !important;
+        }
+
+        .border-success.border-opacity-25 {
+          border-color: rgba(16, 185, 129, 0.25) !important;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+          .eco-hero {
+            height: 400px;
+          }
+
+          .logo-container {
+            width: 80px;
+            height: 80px;
+          }
+
+          .display-4 {
+            font-size: 2.5rem;
+          }
+
+          .card-body.p-5 {
+            padding: 2rem !important;
+          }
+        }
+
+        /* Optimisations de performance */
+        .will-change-transform {
+          will-change: transform;
+        }
+
+        .backface-hidden {
+          backface-visibility: hidden;
+        }
+
+        /* Smooth transitions */
+        .transition-all {
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
       `}</style>
-    </div>
+    </>
   );
-}
+};
+
+export default BoutiquePremium;

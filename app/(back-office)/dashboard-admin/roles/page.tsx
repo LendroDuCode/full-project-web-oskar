@@ -44,6 +44,13 @@ import {
   faArchive,
   faUnlink,
   faListCheck,
+  faIdCard,
+  faCode,
+  faClock,
+  faCalendarAlt,
+  faHistory,
+  faCog,
+  faList,
 } from "@fortawesome/free-solid-svg-icons";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
@@ -177,6 +184,411 @@ const RoleTypeBadge = ({ name }: { name: string }) => {
       <FontAwesomeIcon icon={config.icon} className="fs-12" />
       <span className="fw-semibold">{name}</span>
     </span>
+  );
+};
+
+// Composant de modal pour voir les détails d'un rôle
+const ViewRoleModal = ({
+  show,
+  role,
+  onClose,
+}: {
+  show: boolean;
+  role: Role | null;
+  onClose: () => void;
+}) => {
+  if (!show || !role) return null;
+
+  const handleCopyUUID = () => {
+    navigator.clipboard.writeText(role.uuid);
+    alert("UUID copié dans le presse-papier !");
+  };
+
+  const handleCopyID = () => {
+    navigator.clipboard.writeText(role.id.toString());
+    alert("ID copié dans le presse-papier !");
+  };
+
+  return (
+    <div
+      className="modal fade show d-block"
+      style={{
+        backgroundColor: "rgba(0,0,0,0.5)",
+        backdropFilter: "blur(3px)",
+      }}
+      tabIndex={-1}
+    >
+      <div className="modal-dialog modal-dialog-centered modal-lg">
+        <div className="modal-content border-0 shadow-lg">
+          {/* En-tête de la modal */}
+          <div
+            className="modal-header border-0 text-white rounded-top-3"
+            style={{
+              background: `linear-gradient(135deg, ${colors.oskar.blue} 0%, ${colors.oskar.blueHover} 100%)`,
+            }}
+          >
+            <div className="d-flex align-items-center w-100">
+              <div className="bg-white bg-opacity-20 rounded-circle p-2 me-3">
+                <FontAwesomeIcon icon={faEye} className="fs-5" />
+              </div>
+              <div className="flex-grow-1">
+                <h5 className="modal-title mb-0 fw-bold">Détails du Rôle</h5>
+                <p className="mb-0 opacity-75 fs-14">
+                  Informations détaillées du rôle
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn-close btn-close-white"
+                onClick={onClose}
+                aria-label="Fermer"
+                style={{ filter: "brightness(0) invert(1)" }}
+              ></button>
+            </div>
+          </div>
+
+          {/* Corps de la modal */}
+          <div className="modal-body p-4">
+            <div className="row">
+              {/* Colonne gauche : Informations principales */}
+              <div className="col-md-8">
+                {/* Carte d'information générale */}
+                <div className="card border-0 shadow-sm mb-4">
+                  <div className="card-header bg-light border-0 py-3">
+                    <div className="d-flex align-items-center">
+                      <FontAwesomeIcon
+                        icon={faInfoCircle}
+                        className="me-2 text-primary"
+                      />
+                      <h6 className="mb-0 fw-bold">Informations Générales</h6>
+                    </div>
+                  </div>
+                  <div className="card-body">
+                    <div className="row g-3">
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label text-muted small mb-1">
+                            <FontAwesomeIcon icon={faIdCard} className="me-1" />
+                            Nom du Rôle
+                          </label>
+                          <div className="d-flex align-items-center gap-2">
+                            <span className="fw-bold fs-5">{role.name}</span>
+                            <RoleTypeBadge name={role.name} />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label text-muted small mb-1">
+                            <FontAwesomeIcon icon={faKey} className="me-1" />
+                            Feature
+                          </label>
+                          <div>
+                            <span className="badge bg-primary bg-opacity-10 text-primary border border-primary px-3 py-2">
+                              {role.feature || "Non spécifiée"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label text-muted small mb-1">
+                            <FontAwesomeIcon icon={faShield} className="me-1" />
+                            Statut
+                          </label>
+                          <div>
+                            <StatusBadge
+                              status={role.status}
+                              is_deleted={role.is_deleted}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label text-muted small mb-1">
+                            <FontAwesomeIcon
+                              icon={faDatabase}
+                              className="me-1"
+                            />
+                            ID
+                          </label>
+                          <div className="d-flex align-items-center gap-2">
+                            <code className="bg-light px-2 py-1 rounded">
+                              #{role.id}
+                            </code>
+                            <button
+                              onClick={handleCopyID}
+                              className="btn btn-sm btn-outline-secondary"
+                              title="Copier l'ID"
+                            >
+                              <FontAwesomeIcon icon={faCopy} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Carte des métadonnées */}
+                <div className="card border-0 shadow-sm">
+                  <div className="card-header bg-light border-0 py-3">
+                    <div className="d-flex align-items-center">
+                      <FontAwesomeIcon
+                        icon={faCog}
+                        className="me-2 text-primary"
+                      />
+                      <h6 className="mb-0 fw-bold">Métadonnées</h6>
+                    </div>
+                  </div>
+                  <div className="card-body">
+                    <div className="row g-3">
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label text-muted small mb-1">
+                            <FontAwesomeIcon
+                              icon={faCalendarAlt}
+                              className="me-1"
+                            />
+                            Créé le
+                          </label>
+                          <div className="d-flex align-items-center gap-2">
+                            <FontAwesomeIcon
+                              icon={faCalendar}
+                              className="text-muted"
+                            />
+                            <span className="fw-semibold">
+                              {formatDateTime(role.created_at)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="col-md-6">
+                        <div className="mb-3">
+                          <label className="form-label text-muted small mb-1">
+                            <FontAwesomeIcon
+                              icon={faHistory}
+                              className="me-1"
+                            />
+                            Dernière modification
+                          </label>
+                          <div className="d-flex align-items-center gap-2">
+                            <FontAwesomeIcon
+                              icon={faClock}
+                              className="text-muted"
+                            />
+                            <span className="fw-semibold">
+                              {role.updatedAt
+                                ? formatDateTime(role.updatedAt)
+                                : "Jamais modifié"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="col-12">
+                        <div className="mb-3">
+                          <label className="form-label text-muted small mb-1">
+                            <FontAwesomeIcon icon={faCode} className="me-1" />
+                            UUID
+                          </label>
+                          <div className="input-group">
+                            <input
+                              type="text"
+                              className="form-control"
+                              value={role.uuid}
+                              readOnly
+                              style={{
+                                fontFamily: "monospace",
+                                fontSize: "12px",
+                              }}
+                            />
+                            <button
+                              onClick={handleCopyUUID}
+                              className="btn btn-outline-secondary"
+                              type="button"
+                              title="Copier l'UUID"
+                            >
+                              <FontAwesomeIcon icon={faCopy} />
+                            </button>
+                          </div>
+                          <small className="text-muted mt-1">
+                            Identifiant unique du rôle dans le système
+                          </small>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Colonne droite : Statistiques et actions */}
+              <div className="col-md-4">
+                {/* Carte de statut */}
+                <div className="card border-0 shadow-sm mb-4">
+                  <div className="card-header bg-light border-0 py-3">
+                    <div className="d-flex align-items-center">
+                      <FontAwesomeIcon
+                        icon={faCheckCircle}
+                        className="me-2 text-success"
+                      />
+                      <h6 className="mb-0 fw-bold">Statut du Rôle</h6>
+                    </div>
+                  </div>
+                  <div className="card-body text-center">
+                    <div
+                      className={`rounded-circle p-4 d-inline-block mb-3 ${
+                        role.status === "actif"
+                          ? "bg-success bg-opacity-10"
+                          : "bg-warning bg-opacity-10"
+                      }`}
+                    >
+                      <FontAwesomeIcon
+                        icon={
+                          role.status === "actif"
+                            ? faCheckCircle
+                            : faExclamationTriangle
+                        }
+                        className={`fs-1 ${role.status === "actif" ? "text-success" : "text-warning"}`}
+                      />
+                    </div>
+                    <h5 className="mb-2">
+                      Rôle {role.status === "actif" ? "Actif" : "Inactif"}
+                    </h5>
+                    <p className="text-muted mb-0">
+                      {role.status === "actif"
+                        ? "Ce rôle est actuellement actif et peut être assigné aux utilisateurs."
+                        : "Ce rôle est inactif et ne peut pas être assigné."}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Carte d'actions rapides */}
+                <div className="card border-0 shadow-sm">
+                  <div className="card-header bg-light border-0 py-3">
+                    <div className="d-flex align-items-center">
+                      <FontAwesomeIcon
+                        icon={faList}
+                        className="me-2 text-primary"
+                      />
+                      <h6 className="mb-0 fw-bold">Actions Rapides</h6>
+                    </div>
+                  </div>
+                  <div className="card-body">
+                    <div className="d-grid gap-2">
+                      <button
+                        className="btn btn-outline-primary d-flex align-items-center justify-content-center gap-2"
+                        onClick={() => {
+                          onClose();
+                          // Naviguer vers les permissions du rôle
+                          window.open(
+                            `/dashboard-admin/roles/${role.uuid}/permissions`,
+                            "_blank",
+                          );
+                        }}
+                      >
+                        <FontAwesomeIcon icon={faShieldAlt} />
+                        Gérer les permissions
+                      </button>
+
+                      <button
+                        className="btn btn-outline-warning d-flex align-items-center justify-content-center gap-2"
+                        onClick={() => {
+                          onClose();
+                          // Ouvrir modal d'édition
+                          alert("Ouvrir modal d'édition");
+                        }}
+                      >
+                        <FontAwesomeIcon icon={faEdit} />
+                        Modifier le rôle
+                      </button>
+
+                      <button
+                        className={`btn d-flex align-items-center justify-content-center gap-2 ${
+                          role.status === "actif"
+                            ? "btn-outline-warning"
+                            : "btn-outline-success"
+                        }`}
+                        onClick={() => {
+                          onClose();
+                          // Basculer le statut
+                          alert("Basculer le statut du rôle");
+                        }}
+                      >
+                        <FontAwesomeIcon
+                          icon={
+                            role.status === "actif" ? faToggleOff : faToggleOn
+                          }
+                        />
+                        {role.status === "actif" ? "Désactiver" : "Activer"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Pied de la modal */}
+          <div className="modal-footer border-top-0 py-4 px-4">
+            <div className="d-flex justify-content-between w-100">
+              <button
+                type="button"
+                className="btn btn-outline-secondary d-flex align-items-center gap-2"
+                onClick={onClose}
+              >
+                <FontAwesomeIcon icon={faTimes} />
+                Fermer
+              </button>
+
+              <div className="d-flex gap-2">
+                <button
+                  type="button"
+                  className="btn btn-outline-primary d-flex align-items-center gap-2"
+                  onClick={handleCopyUUID}
+                >
+                  <FontAwesomeIcon icon={faCopy} />
+                  Copier l'UUID
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-primary d-flex align-items-center gap-2"
+                  onClick={() => {
+                    onClose();
+                    // Ouvrir modal d'édition
+                    alert("Ouvrir modal d'édition");
+                  }}
+                >
+                  <FontAwesomeIcon icon={faEdit} />
+                  Modifier ce rôle
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <style jsx>{`
+        .modal-content {
+          border-radius: 16px !important;
+          overflow: hidden;
+        }
+
+        .fs-14 {
+          font-size: 14px !important;
+        }
+
+        .card {
+          border-radius: 12px !important;
+        }
+      `}</style>
+    </div>
   );
 };
 
@@ -626,6 +1038,25 @@ const formatDate = (dateString: string | null | undefined) => {
   }
 };
 
+// Fonction pour formater la date et l'heure
+const formatDateTime = (dateString: string | null | undefined) => {
+  if (!dateString) return "N/A";
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "Date invalide";
+    return new Intl.DateTimeFormat("fr-FR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }).format(date);
+  } catch {
+    return "N/A";
+  }
+};
+
 // Fonction pour formater la date sans heure
 const formatDateOnly = (dateString: string | null | undefined) => {
   if (!dateString) return "N/A";
@@ -663,6 +1094,7 @@ export default function RolesPage() {
   // États pour les modals
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showBulkActionsModal, setShowBulkActionsModal] = useState(false);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
@@ -686,7 +1118,7 @@ export default function RolesPage() {
   // Options pour les éléments par page
   const itemsPerPageOptions = [5, 10, 20, 50];
 
-  // ✅ CORRIGÉ : Fonction pour charger les rôles
+  // ✅ Fonction pour charger les rôles
   const fetchRoles = async () => {
     try {
       setLoading(true);
@@ -694,7 +1126,7 @@ export default function RolesPage() {
 
       console.log("📡 Fetching roles from:", API_ENDPOINTS.ROLES.LIST);
 
-      // ✅ CORRECTION : L'API retourne directement un tableau
+      // ✅ L'API retourne directement un tableau
       const rolesData = await api.get<Role[]>(API_ENDPOINTS.ROLES.LIST);
 
       console.log("✅ Roles data received:", {
@@ -743,7 +1175,7 @@ export default function RolesPage() {
     }
   };
 
-  // ✅ CORRIGÉ : Fonction pour supprimer un rôle
+  // ✅ Fonction pour supprimer un rôle
   const deleteRole = async (uuid: string) => {
     try {
       setActionLoading(true);
@@ -764,7 +1196,7 @@ export default function RolesPage() {
     }
   };
 
-  // ✅ CORRIGÉ : Fonction pour basculer le statut d'un rôle
+  // ✅ Fonction pour basculer le statut d'un rôle
   const toggleRoleStatus = async (uuid: string) => {
     try {
       setActionLoading(true);
@@ -995,7 +1427,7 @@ export default function RolesPage() {
     fetchRoles();
   }, []);
 
-  // ✅ CORRIGÉ : Fonction pour gérer la suppression d'un rôle
+  // ✅ Fonction pour gérer la suppression d'un rôle
   const handleDeleteRole = async () => {
     if (!selectedRole) return;
 
@@ -1014,7 +1446,7 @@ export default function RolesPage() {
     }
   };
 
-  // ✅ CORRIGÉ : Fonction pour basculer le statut d'un rôle
+  // ✅ Fonction pour basculer le statut d'un rôle
   const handleToggleStatus = async (role: Role) => {
     try {
       await toggleRoleStatus(role.uuid);
@@ -1030,6 +1462,12 @@ export default function RolesPage() {
     }
   };
 
+  // ✅ Fonction pour ouvrir la modal de visualisation
+  const handleViewRole = (role: Role) => {
+    setSelectedRole(role);
+    setShowViewModal(true);
+  };
+
   // Fonction pour copier l'UUID dans le presse-papier
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -1037,14 +1475,14 @@ export default function RolesPage() {
     setTimeout(() => setInfoMessage(null), 2000);
   };
 
-  // ✅ CORRIGÉ : Fonction pour gérer la création d'un rôle
+  // ✅ Fonction pour gérer la création d'un rôle
   const handleRoleCreated = () => {
     setSuccessMessage("Rôle créé avec succès !");
     fetchRoles();
     setTimeout(() => setSuccessMessage(null), 3000);
   };
 
-  // ✅ CORRIGÉ : Fonction pour gérer la modification d'un rôle
+  // ✅ Fonction pour gérer la modification d'un rôle
   const handleRoleUpdated = () => {
     setSuccessMessage("Rôle modifié avec succès !");
     fetchRoles();
@@ -1056,7 +1494,7 @@ export default function RolesPage() {
     router.push(`/dashboard-admin/roles/${uuid}`);
   };
 
-  // ✅ CORRIGÉ : Fonction de tri
+  // ✅ Fonction de tri
   const sortRoles = (rolesList: Role[]) => {
     if (!sortConfig || !rolesList.length) return rolesList;
 
@@ -1110,7 +1548,7 @@ export default function RolesPage() {
     );
   };
 
-  // ✅ CORRIGÉ : Filtrer les rôles basé sur la recherche
+  // ✅ Filtrer les rôles basé sur la recherche
   const filteredRoles = useMemo(() => {
     let filtered = [...roles];
 
@@ -1138,14 +1576,14 @@ export default function RolesPage() {
     return sortRoles(filtered);
   }, [roles, searchTerm, selectedStatus, selectedType, sortConfig]);
 
-  // ✅ CORRIGÉ : Calculer les éléments actuels avec pagination
+  // ✅ Calculer les éléments actuels avec pagination
   const currentItems = useMemo(() => {
     const start = (pagination.page - 1) * pagination.limit;
     const end = start + pagination.limit;
     return filteredRoles.slice(start, end);
   }, [filteredRoles, pagination.page, pagination.limit]);
 
-  // ✅ CORRIGÉ : Calculer les statistiques
+  // ✅ Calculer les statistiques
   const statistics = useMemo(() => {
     const activeRoles = roles.filter(
       (role) => role.status === "actif" && !role.is_deleted,
@@ -1164,7 +1602,7 @@ export default function RolesPage() {
     };
   }, [roles, selection.selectedIds.size]);
 
-  // ✅ CORRIGÉ : Réinitialiser les filtres
+  // ✅ Réinitialiser les filtres
   const resetFilters = () => {
     setSearchTerm("");
     setSelectedStatus("all");
@@ -1174,7 +1612,7 @@ export default function RolesPage() {
     clearSelection();
   };
 
-  // ✅ CORRIGÉ : Obtenir les types de rôle uniques
+  // ✅ Obtenir les types de rôle uniques
   const roleTypes = useMemo(() => {
     if (!roles.length) return [];
     const types = roles.map((role) => role.name).filter(Boolean);
@@ -1199,6 +1637,16 @@ export default function RolesPage() {
           setSelectedRole(null);
         }}
         onSuccess={handleRoleUpdated}
+      />
+
+      {/* NOUVELLE MODAL : Visualisation des détails */}
+      <ViewRoleModal
+        show={showViewModal}
+        role={selectedRole}
+        onClose={() => {
+          setShowViewModal(false);
+          setSelectedRole(null);
+        }}
       />
 
       {/* Modal de suppression */}
@@ -1763,12 +2211,11 @@ export default function RolesPage() {
                                 className="btn-group btn-group-sm"
                                 role="group"
                               >
+                                {/* BOUTON VUE MODIFIÉ ICI */}
                                 <button
                                   className="btn btn-outline-primary"
                                   title="Voir détails"
-                                  onClick={() =>
-                                    navigateToRoleDetail(role.uuid)
-                                  }
+                                  onClick={() => handleViewRole(role)}
                                   disabled={actionLoading}
                                 >
                                   <FontAwesomeIcon icon={faEye} />

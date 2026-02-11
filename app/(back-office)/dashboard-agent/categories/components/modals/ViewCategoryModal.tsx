@@ -209,7 +209,7 @@ export default function ViewCategoryModal({
           <div
             className="modal-header text-white border-0 rounded-top-3"
             style={{
-              background: `linear-gradient(135deg, ${typeColor} 0%, ${typeColor} 100%)`,
+              background: colors.oskar.blue,
               borderBottom: `3px solid ${colors.oskar.blue}`,
             }}
           >

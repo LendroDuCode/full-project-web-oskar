@@ -106,6 +106,7 @@ export default function SidebarSuperAdmin({
       href: "/dashboard-admin",
       exact: true,
     },
+    /*
     {
       id: "messages",
       label: "Messages",
@@ -113,6 +114,9 @@ export default function SidebarSuperAdmin({
       badge: { count: 24, color: "bg-primary" },
       href: "/dashboard-admin/messages",
     },
+    */
+
+    /*
     {
       id: "reports",
       label: "Rapports",
@@ -134,6 +138,7 @@ export default function SidebarSuperAdmin({
       badge: null,
       href: "/dashboard-admin/monitoring",
     },
+    */
   ];
 
   const managementItems = [
@@ -212,6 +217,7 @@ export default function SidebarSuperAdmin({
         },
       ],
     },
+    /*
     {
       id: "history",
       label: "Historique",
@@ -238,6 +244,7 @@ export default function SidebarSuperAdmin({
         },
       ],
     },
+    */
     {
       id: "roles",
       label: "Gestion Rôles",
@@ -459,23 +466,23 @@ export default function SidebarSuperAdmin({
                     <span className="flex-grow-1 fw-medium">{item.label}</span>
                     {item.badge && (
                       <span
-                        className={`badge ${item.badge.color} rounded-pill ${isNavActive(item.id) ? "bg-white text-dark" : ""}`}
+                        className={`badge ${item.badge} rounded-pill ${isNavActive(item.id) ? "bg-white text-dark" : ""}`}
                         style={{
                           fontSize: "0.75rem",
                           padding: "0.25rem 0.5rem",
                         }}
                       >
-                        {item.badge.count}
+                        {item.badge}
                       </span>
                     )}
                   </>
                 )}
                 {isCollapsed && item.badge && (
                   <span
-                    className={`position-absolute top-0 start-100 translate-middle badge ${item.badge.color} rounded-pill`}
+                    className={`position-absolute top-0 start-100 translate-middle badge ${item.badge} rounded-pill`}
                     style={{ fontSize: "0.6rem", padding: "0.2rem 0.35rem" }}
                   >
-                    {item.badge.count > 9 ? "9+" : item.badge.count}
+                    {item.badge > 9 ? "9+" : item.badge}
                   </span>
                 )}
               </Link>

@@ -58,15 +58,33 @@ interface Role {
   status: string;
 }
 
-interface Vendeur extends FormData {
+// Types pour les vendeurs
+interface Vendeur {
   uuid: string;
-  code_vendeur?: string;
+  nom: string;
+  prenoms: string;
+  email: string;
+  code_vendeur: string;
+  telephone: string;
+  civilite_uuid?: string;
+
+  civilite?: {
+    libelle: string;
+  };
+  role?: {
+    uuid: string;
+    name: string;
+  };
+  est_verifie: boolean;
+  est_bloque: boolean;
+  is_deleted: boolean;
+  is_admin?: boolean;
+  type?: string;
   created_at?: string;
   updated_at?: string;
   deleted_at?: string;
-  is_deleted?: boolean;
-  civilite?: { libelle: string; uuid: string };
-  role?: { name: string; uuid: string };
+  code?: string;
+  avatar?: string;
 }
 
 interface ModifierVendeurModalProps {
@@ -517,7 +535,7 @@ export default function ModifierVendeurModal({
         email: vendeur.email || "",
         telephone: vendeur.telephone || "",
         civilite_uuid: vendeur.civilite_uuid || "",
-        role_uuid: vendeur.role_uuid || "",
+        role_uuid: vendeur.role?.uuid || "",
         password: "",
         confirmPassword: "",
         type: vendeur.type || "standard",
@@ -545,7 +563,7 @@ export default function ModifierVendeurModal({
           email: vendeurDetails.email || "",
           telephone: vendeurDetails.telephone || "",
           civilite_uuid: vendeurDetails.civilite_uuid || "",
-          role_uuid: vendeurDetails.role_uuid || "",
+          role_uuid: vendeurDetails.role?.uuid || "",
           password: "",
           confirmPassword: "",
           type: vendeurDetails.type || "standard",
@@ -807,7 +825,7 @@ export default function ModifierVendeurModal({
         email: vendeurDetails.email || "",
         telephone: vendeurDetails.telephone || "",
         civilite_uuid: vendeurDetails.civilite_uuid || "",
-        role_uuid: vendeurDetails.role_uuid || "",
+        role_uuid: vendeurDetails.role?.uuid || "",
         password: "",
         confirmPassword: "",
         type: vendeurDetails.type || "standard",
@@ -832,7 +850,7 @@ export default function ModifierVendeurModal({
       formData.civilite_uuid !==
         (vendeurDetails?.civilite_uuid || vendeur?.civilite_uuid) ||
       formData.role_uuid !==
-        (vendeurDetails?.role_uuid || vendeur?.role_uuid) ||
+        (vendeurDetails?.role?.uuid || vendeur?.role?.uuid) ||
       formData.type !== (vendeurDetails?.type || vendeur?.type) ||
       changePassword;
 

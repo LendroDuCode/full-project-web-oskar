@@ -50,22 +50,27 @@ import ViewEchangeModal from "../components/modals/ViewEchangeModal";
 // ============ TYPES ============
 interface Echange {
   uuid: string;
-  titre: string;
-  description: string;
-  createdAt: string | null;
-  statut: string;
-  image: string;
+  nomElementEchange: string;
+  nom_initiateur: string;
   prix: string;
-  numero: string;
-  categorie_uuid?: string;
-  quantite?: string;
-  objetPropose?: string;
-  objetDemande?: string;
-  typeEchange?: string;
-  nomElementEchange?: string;
-  message?: string;
-  is_deleted?: boolean;
-  deleted_at?: string | null;
+  image: string;
+  typeDestinataire: string;
+  typeEchange: string;
+  agent: string;
+  utilisateur: string;
+  vendeur: string;
+  objetPropose: string;
+  objetDemande: string;
+  estPublie: boolean | null;
+  statut: string;
+  message: string;
+  dateProposition: string;
+  dateAcceptation: string | null;
+  dateRefus: string | null;
+  categorie: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+  [key: string]: any;
 }
 
 interface EchangeStats {
@@ -817,8 +822,7 @@ export default function EchangesPage() {
   // Export PDF/CSV
   const handleExport = async () => {
     try {
-      const response = await api.get(API_ENDPOINTS.ECHANGES.EXPORT_PDF, {
-      });
+      const response = await api.get(API_ENDPOINTS.ECHANGES.EXPORT_PDF, {});
       const url = window.URL.createObjectURL(response);
       const link = document.createElement("a");
       link.href = url;
@@ -1009,7 +1013,8 @@ export default function EchangesPage() {
 
   return (
     <>
-      {/* Modals externes 
+      {/* Modals externes  */}
+
       {selectedEchange && (
         <EditEchangeModal
           isOpen={showEditModal}
@@ -1031,13 +1036,11 @@ export default function EchangesPage() {
           }}
         />
       )}
-      */}
       <CreateEchangeModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onSuccess={() => handleSuccess("Échange créé avec succès !")}
       />
-      
 
       {/* Modals de suppression intégrés */}
       <DeleteModal

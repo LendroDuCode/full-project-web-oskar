@@ -48,36 +48,125 @@ interface FormData {
   adresse_uuid?: string;
 }
 
+// Pour être sûr, mettez aussi à jour Civilite et Role :
 interface Civilite {
   uuid: string;
   libelle: string;
-  slug: string;
-  statut: string;
+  slug?: string; // Rendez optionnel
+  statut?: string; // Rendez optionnel
+  code?: string; // Ajoutez si nécessaire
+  ordre?: number; // Ajoutez si nécessaire
 }
 
 interface Role {
   uuid: string;
   name: string;
-  feature: string;
-  status: string;
+  feature?: string; // Rendez optionnel
+  status?: string; // Rendez optionnel
+  description?: string; // Ajoutez si nécessaire
+  permissions?: string[]; // Ajoutez si nécessaire
+  is_default?: boolean; // Ajoutez si nécessaire
 }
 
 interface StatutMatrimonial {
   uuid: string;
   libelle: string;
-  statut: string;
+  code?: string; // Ajoutez cette ligne - code est dans la page mais pas dans la modal
+  description?: string; // Ajoutez cette ligne
+  created_at?: string; // Ajoutez cette ligne
+  updated_at?: string; // Ajoutez cette ligne
+  statut?: string; // Rendez optionnel
 }
 
-interface User extends FormData {
+// Ajoutez l'interface UserProfile manquante
+interface UserProfile {
+  uuid: string;
+  user_uuid: string;
+  bio?: string;
+  site_web?: string;
+  reseaux_sociaux?: {
+    facebook?: string;
+    twitter?: string;
+    linkedin?: string;
+    instagram?: string;
+  };
+  preferences?: {
+    langue?: string;
+    fuseau_horaire?: string;
+    notifications_email?: boolean;
+    notifications_push?: boolean;
+    theme?: "light" | "dark" | "auto";
+  };
+  statistiques?: {
+    nombre_connexions: number;
+    derniere_activite?: string;
+    temps_total_session?: number;
+  };
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface User {
+  // Identifiant unique
   uuid: string;
   code_utilisateur?: string;
+
+  // Informations personnelles
+  nom: string;
+  prenoms: string;
+  email: string;
+  telephone: string;
+  date_naissance?: string;
+  lieu_naissance?: string;
+  nationalite?: string;
+  photo_profil?: string;
+
+  // Authentification
+  mot_de_passe?: string;
+  est_verifie: boolean;
+  est_bloque: boolean;
+  statut: string;
+  is_deleted?: boolean;
+  raison_blocage?: string;
+  date_derniere_connexion?: string;
+  date_derniere_deconnexion?: string;
+
+  // Rôles et permissions
+  role_uuid: string;
+  is_admin: boolean;
+  adresse_uuid: string;
+  permissions?: string[];
+
+  // Civilité
+  civilite_uuid?: string;
+
+  // Statut matrimonial
+  statut_matrimonial_uuid?: string;
+
+  // Adresse
+  adresse?: string;
+  ville?: string;
+  code_postal?: string;
+  pays?: string;
+
+  // Informations professionnelles
+  profession?: string;
+  employeur?: string;
+  secteur_activite?: string;
+
+  // Métadonnées
   created_at?: string;
   updated_at?: string;
   deleted_at?: string;
-  is_deleted?: boolean;
-  civilite?: { libelle: string; uuid: string };
-  role?: { name: string; uuid: string };
-  statut_matrimonial?: { libelle: string; uuid: string };
+  created_by?: string;
+  updated_by?: string;
+  deleted_by?: string;
+
+  // Relations (optionnelles selon le contexte)
+  civilite?: Civilite;
+  role?: Role;
+  statut_matrimonial?: StatutMatrimonial;
+  user_profile?: UserProfile; // Maintenant UserProfile est défini
 }
 
 interface EditUserModalProps {
@@ -254,7 +343,7 @@ function CustomAlert({
           background: rgba(0, 0, 0, 0.5);
           backdrop-filter: blur(4px);
           display: flex;
-          align-items: center;
+          align-items-center;
           justify-content: center;
           z-index: 9999;
           animation: fadeIn 0.3s ease;

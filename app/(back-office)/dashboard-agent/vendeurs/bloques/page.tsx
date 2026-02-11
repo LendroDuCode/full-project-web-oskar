@@ -40,17 +40,21 @@ import { api } from "@/lib/api-client";
 import EditVendeurModal from "../components/modals/ModifierVendeurModal";
 
 // Types pour les vendeurs
+// Types pour les vendeurs
 interface Vendeur {
   uuid: string;
   nom: string;
   prenoms: string;
   email: string;
+  code_vendeur: string;
   telephone: string;
   civilite_uuid?: string;
+
   civilite?: {
     libelle: string;
   };
   role?: {
+    uuid: string;
     name: string;
   };
   est_verifie: boolean;
@@ -1096,8 +1100,7 @@ export default function ListeVendeursBloquesPage() {
     try {
       const response = await api.get(
         API_ENDPOINTS.ADMIN.VENDEURS.EXPORT_BLOCKED_PDF,
-        {
-        },
+        {},
       );
 
       const url = window.URL.createObjectURL(response);
@@ -1182,7 +1185,7 @@ export default function ListeVendeursBloquesPage() {
 
   return (
     <>
-      {/* Modal de modification de vendeur
+      {/* Modal de modification de vendeur*/}
       <EditVendeurModal
         isOpen={showEditModal}
         vendeur={selectedVendeurForEdit}
@@ -1196,8 +1199,6 @@ export default function ListeVendeursBloquesPage() {
           setTimeout(() => setSuccessMessage(null), 3000);
         }}
       />
-      */}
-      
 
       {/* Modal de déblocage simple */}
       <UnblockModal

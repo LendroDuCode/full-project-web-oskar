@@ -12,6 +12,7 @@ import {
   faRefresh,
   faDownload,
   faSearch,
+  faTimes,
   faFilter,
   faSort,
   faSortUp,
@@ -21,35 +22,21 @@ import {
   faTimesCircle,
   faClock,
   faBan,
+  faSignOutAlt,
   faLock,
   faLockOpen,
   faInfoCircle,
-  faCheck,
-  faTimes,
-  faSpinner,
-  faImage,
-  faExclamationTriangle,
-  faShoppingBag,
-  faStar,
-  faBoxes,
-  faChartLine,
-  faGlobe,
-  faUsers,
   faTags,
-  faHeart,
-  faStoreAlt,
-  faCheckSquare,
-  faSquare,
-  faShoppingBasket,
-  faLayerGroup,
-  faToggleOn,
-  faToggleOff,
-  faEllipsisV,
-  faBan as faBanSolid,
   faStore as faStoreSolid,
+  faSpinner,
 } from "@fortawesome/free-solid-svg-icons";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
+import CreateBoutiqueModal from "./components/modals/CreateBoutiqueModal";
+import EditBoutiqueModal from "./components/modals/EditBoutiqueModal";
+import DeleteBoutiqueModal from "./components/modals/DeleteBoutiqueModal";
+import BoutiqueStatusBadge from "./components/modals/BoutiqueStatusBadge";
+import Pagination from "./components/modals/Pagination";
 
 // ============ TYPES ============
 interface TypeBoutique {
@@ -96,264 +83,6 @@ interface PaginatedResponse {
   totalPages: number;
 }
 
-// ============ COMPOSANTS ============
-
-// Composant de badge de statut boutique
-const BoutiqueStatusBadge = ({
-  statut,
-  est_bloque,
-  est_ferme,
-}: {
-  statut: string;
-  est_bloque: boolean;
-  est_ferme: boolean;
-}) => {
-  if (est_bloque) {
-    return (
-      <span className="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25">
-        <FontAwesomeIcon icon={faBanSolid} className="me-1" />
-        Bloqué
-      </span>
-    );
-  }
-
-  if (est_ferme) {
-    return (
-      <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25">
-        <FontAwesomeIcon icon={faLock} className="me-1" />
-        Fermé
-      </span>
-    );
-  }
-
-  switch (statut) {
-    case "actif":
-      return (
-        <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">
-          <FontAwesomeIcon icon={faCheckCircle} className="me-1" />
-          Actif
-        </span>
-      );
-    case "en_review":
-      return (
-        <span className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25">
-          <FontAwesomeIcon icon={faClock} className="me-1" />
-          En revue
-        </span>
-      );
-    case "bloque":
-      return (
-        <span className="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25">
-          <FontAwesomeIcon icon={faBan} className="me-1" />
-          Bloqué
-        </span>
-      );
-    case "ferme":
-      return (
-        <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25">
-          <FontAwesomeIcon icon={faLock} className="me-1" />
-          Fermé
-        </span>
-      );
-    default:
-      return (
-        <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25">
-          <FontAwesomeIcon icon={faInfoCircle} className="me-1" />
-          {statut}
-        </span>
-      );
-  }
-};
-
-// Composant de pagination
-const Pagination = ({
-  currentPage,
-  totalPages,
-  totalItems,
-  itemsPerPage,
-  onPageChange,
-  onLimitChange,
-}: {
-  currentPage: number;
-  totalPages: number;
-  totalItems: number;
-  itemsPerPage: number;
-  onPageChange: (page: number) => void;
-  onLimitChange: (limit: number) => void;
-}) => {
-  const indexOfFirstItem = (currentPage - 1) * itemsPerPage + 1;
-  const indexOfLastItem = Math.min(currentPage * itemsPerPage, totalItems);
-
-  return (
-    <div className="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3 p-3 border-top">
-      <div className="d-flex align-items-center gap-3">
-        <div className="text-muted small">
-          Affichage de <span className="fw-semibold">{indexOfFirstItem}</span> à{" "}
-          <span className="fw-semibold">{indexOfLastItem}</span> sur{" "}
-          <span className="fw-semibold">{totalItems}</span> boutiques
-        </div>
-        <select
-          className="form-select form-select-sm"
-          style={{ width: "100px" }}
-          value={itemsPerPage}
-          onChange={(e) => onLimitChange(Number(e.target.value))}
-        >
-          <option value="5">5 / page</option>
-          <option value="10">10 / page</option>
-          <option value="20">20 / page</option>
-          <option value="50">50 / page</option>
-        </select>
-      </div>
-
-      <nav>
-        <ul className="pagination mb-0">
-          <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
-            <button
-              className="page-link"
-              onClick={() => onPageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-            >
-              Précédent
-            </button>
-          </li>
-
-          {[...Array(totalPages)].map((_, i) => {
-            const pageNumber = i + 1;
-            const showPage =
-              pageNumber === 1 ||
-              pageNumber === totalPages ||
-              (pageNumber >= currentPage - 1 && pageNumber <= currentPage + 1);
-
-            if (!showPage) {
-              if (
-                pageNumber === currentPage - 2 ||
-                pageNumber === currentPage + 2
-              ) {
-                return (
-                  <li key={i} className="page-item disabled">
-                    <span className="page-link">...</span>
-                  </li>
-                );
-              }
-              return null;
-            }
-
-            return (
-              <li
-                key={i}
-                className={`page-item ${currentPage === pageNumber ? "active" : ""}`}
-              >
-                <button
-                  className="page-link"
-                  onClick={() => onPageChange(pageNumber)}
-                >
-                  {pageNumber}
-                </button>
-              </li>
-            );
-          })}
-
-          <li
-            className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}
-          >
-            <button
-              className="page-link"
-              onClick={() => onPageChange(currentPage + 1)}
-              disabled={currentPage === totalPages}
-            >
-              Suivant
-            </button>
-          </li>
-        </ul>
-      </nav>
-    </div>
-  );
-};
-
-// Composant de modal de suppression multiple
-const BulkDeleteModal = ({
-  show,
-  count,
-  loading,
-  onClose,
-  onConfirm,
-}: {
-  show: boolean;
-  count: number;
-  loading: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-}) => {
-  if (!show) return null;
-
-  return (
-    <div
-      className="modal fade show d-block"
-      style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
-      tabIndex={-1}
-    >
-      <div className="modal-dialog modal-dialog-centered">
-        <div className="modal-content border-0 shadow-lg">
-          <div className="modal-header border-0 bg-danger text-white rounded-top-3">
-            <h5 className="modal-title fw-bold">
-              <FontAwesomeIcon icon={faTrash} className="me-2" />
-              Suppression multiple de boutiques
-            </h5>
-            <button
-              type="button"
-              className="btn-close btn-close-white"
-              onClick={onClose}
-              disabled={loading}
-            ></button>
-          </div>
-          <div className="modal-body p-4">
-            <div className="alert alert-warning mb-3 border-0">
-              <FontAwesomeIcon icon={faExclamationTriangle} className="me-2" />
-              <strong>Attention :</strong> Cette action est définitive
-            </div>
-            <p className="mb-3">
-              Êtes-vous sûr de vouloir supprimer{" "}
-              <strong>{count} boutique(s)</strong> sélectionnée(s) ?
-            </p>
-            <div className="text-danger small">
-              Cette action est irréversible. Tous les produits, commandes et
-              données associés à ces boutiques seront perdus.
-            </div>
-          </div>
-          <div className="modal-footer border-0">
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={onClose}
-              disabled={loading}
-            >
-              Annuler
-            </button>
-            <button
-              type="button"
-              className="btn btn-danger"
-              onClick={onConfirm}
-              disabled={loading}
-            >
-              {loading ? (
-                <>
-                  <span className="spinner-border spinner-border-sm me-2"></span>
-                  Suppression...
-                </>
-              ) : (
-                <>
-                  <FontAwesomeIcon icon={faTrash} className="me-2" />
-                  Supprimer {count} boutique(s)
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 // ============ PAGE PRINCIPALE ============
 
 export default function ListeBoutiquesVendeur() {
@@ -364,14 +93,17 @@ export default function ListeBoutiquesVendeur() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [authLoading, setAuthLoading] = useState(true);
 
-  // États pour la sélection multiple
-  const [selectedBoutiques, setSelectedBoutiques] = useState<Set<string>>(
-    new Set(),
+  // États pour les modales
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedBoutique, setSelectedBoutique] = useState<Boutique | null>(
+    null,
   );
-  const [selectAll, setSelectAll] = useState(false);
-  const [bulkActionLoading, setBulkActionLoading] = useState(false);
-  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
   // États pour les filtres
   const [searchTerm, setSearchTerm] = useState("");
@@ -393,57 +125,130 @@ export default function ListeBoutiquesVendeur() {
   // États pour les types de boutique uniques (pour les filtres)
   const [uniqueTypes, setUniqueTypes] = useState<TypeBoutique[]>([]);
 
+  // Fonction pour vérifier si l'utilisateur est authentifié
+  const checkAuthentication = useCallback(() => {
+    try {
+      // Vérifier si le token existe dans localStorage
+      const token =
+        typeof window !== "undefined"
+          ? localStorage.getItem("oskar_token")
+          : null;
+      console.log("🔐 Vérification authentification:", {
+        hasToken: !!token,
+        tokenLength: token?.length,
+      });
+
+      if (!token) {
+        console.warn("⚠️ Utilisateur non authentifié");
+        setIsAuthenticated(false);
+        setError("Veuillez vous connecter pour accéder à cette page");
+
+        // Rediriger vers la page de connexion après un délai
+        setTimeout(() => {
+          router.push("/login");
+        }, 2000);
+
+        return false;
+      }
+
+      setIsAuthenticated(true);
+      return true;
+    } catch (error) {
+      console.error("❌ Erreur vérification authentification:", error);
+      setIsAuthenticated(false);
+      return false;
+    }
+  }, [router]);
+
+  // Fonction pour déconnecter l'utilisateur
+  const clearAuthToken = useCallback(() => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("oskar_token");
+      localStorage.removeItem("user_type");
+    }
+  }, []);
+
   // Charger les boutiques
   const fetchBoutiques = useCallback(async () => {
+    // Vérifier d'abord l'authentification
+    if (!checkAuthentication()) {
+      setAuthLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
-
-      const params: any = {
-        page: pagination.page,
-        limit: pagination.limit,
-      };
-
-      if (searchTerm) params.search = searchTerm;
-      if (statusFilter !== "all") params.statut = statusFilter;
+      console.log("📥 Chargement des boutiques...");
 
       const response = await api.get<PaginatedResponse>(
         API_ENDPOINTS.BOUTIQUES.LISTE_BOUTIQUES_CREE_PAR_VENDEUR,
       );
 
-      setBoutiques(response.data);
-      setPagination({
-        page: response.page,
-        limit: response.limit,
+      console.log("✅ Boutiques chargées:", {
+        count: response.data?.length || 0,
         total: response.total,
-        pages: response.totalPages,
+      });
+
+      setBoutiques(response.data || []);
+      setPagination({
+        page: response.page || 1,
+        limit: response.limit || 10,
+        total: response.total || 0,
+        pages: response.totalPages || 1,
       });
 
       // Extraire les types de boutique uniques pour les filtres
-      const types = response.data.reduce((acc: TypeBoutique[], boutique) => {
-        if (!acc.find((t) => t.uuid === boutique.type_boutique.uuid)) {
-          acc.push(boutique.type_boutique);
-        }
-        return acc;
-      }, []);
-      setUniqueTypes(types);
+      if (response.data && response.data.length > 0) {
+        const types = response.data.reduce((acc: TypeBoutique[], boutique) => {
+          if (
+            boutique.type_boutique &&
+            !acc.find((t) => t.uuid === boutique.type_boutique.uuid)
+          ) {
+            acc.push(boutique.type_boutique);
+          }
+          return acc;
+        }, []);
+        setUniqueTypes(types);
+      } else {
+        setUniqueTypes([]);
+      }
     } catch (err: any) {
       console.error("❌ Erreur lors du chargement des boutiques:", err);
-      setError(
-        err.response?.data?.message ||
-          err.message ||
-          "Erreur lors du chargement des boutiques",
-      );
+
+      // Vérifier si c'est une erreur d'authentification
+      if (
+        err.status === 401 ||
+        err.message?.includes("401") ||
+        err.response?.status === 401 ||
+        err.message?.includes("Non authentifié") ||
+        err.message?.includes("Unauthorized")
+      ) {
+        setError("Session expirée. Veuillez vous reconnecter.");
+        setIsAuthenticated(false);
+        clearAuthToken();
+
+        // Rediriger vers la page de connexion
+        setTimeout(() => {
+          router.push("/login");
+        }, 2000);
+      } else {
+        setError(err.message || "Erreur lors du chargement des boutiques");
+      }
+
       setBoutiques([]);
     } finally {
       setLoading(false);
+      setAuthLoading(false);
     }
-  }, [pagination.page, pagination.limit, searchTerm, statusFilter]);
+  }, [checkAuthentication, router, clearAuthToken]);
 
-  // Charger les données au montage et quand les paramètres changent
+  // Charger les données au montage
   useEffect(() => {
+    console.log("🚀 Initialisation page boutiques");
+    checkAuthentication();
     fetchBoutiques();
-  }, [fetchBoutiques]);
+  }, [fetchBoutiques, checkAuthentication]);
 
   // Formater la date
   const formatDate = (dateString: string) => {
@@ -487,6 +292,30 @@ export default function ListeBoutiquesVendeur() {
   const filteredBoutiques = useMemo(() => {
     let result = [...boutiques];
 
+    // Filtrage par terme de recherche
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(
+        (boutique) =>
+          boutique.nom.toLowerCase().includes(term) ||
+          (boutique.description?.toLowerCase() || "").includes(term) ||
+          boutique.slug.toLowerCase().includes(term),
+      );
+    }
+
+    // Filtrage par statut
+    if (statusFilter !== "all") {
+      result = result.filter((boutique) => {
+        if (statusFilter === "bloque") {
+          return boutique.est_bloque || boutique.statut === "bloque";
+        }
+        if (statusFilter === "ferme") {
+          return boutique.est_ferme || boutique.statut === "ferme";
+        }
+        return boutique.statut === statusFilter;
+      });
+    }
+
     // Filtrage par type de boutique
     if (typeFilter !== "all") {
       result = result.filter(
@@ -523,7 +352,7 @@ export default function ListeBoutiquesVendeur() {
     }
 
     return result;
-  }, [boutiques, typeFilter, sortConfig]);
+  }, [boutiques, searchTerm, statusFilter, typeFilter, sortConfig]);
 
   // Gestion des succès
   const handleSuccess = (message: string) => {
@@ -532,215 +361,303 @@ export default function ListeBoutiquesVendeur() {
     setTimeout(() => setSuccessMessage(null), 3000);
   };
 
-  // Gestion de la sélection multiple
-  const handleSelectBoutique = (boutiqueUuid: string) => {
-    setSelectedBoutiques((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(boutiqueUuid)) {
-        newSet.delete(boutiqueUuid);
-      } else {
-        newSet.add(boutiqueUuid);
-      }
-      return newSet;
-    });
-  };
-
-  const handleSelectAll = () => {
-    if (selectAll) {
-      // Désélectionner tout
-      setSelectedBoutiques(new Set());
-    } else {
-      // Sélectionner toutes les boutiques filtrées
-      const allBoutiqueIds = new Set(filteredBoutiques.map((b) => b.uuid));
-      setSelectedBoutiques(allBoutiqueIds);
-    }
-    setSelectAll(!selectAll);
-  };
-
-  const handleSelectAllOnPage = () => {
-    const allSelected = filteredBoutiques.every((b) =>
-      selectedBoutiques.has(b.uuid),
-    );
-
-    if (allSelected) {
-      // Désélectionner toutes les boutiques de la page
-      const newSet = new Set(selectedBoutiques);
-      filteredBoutiques.forEach((b) => newSet.delete(b.uuid));
-      setSelectedBoutiques(newSet);
-    } else {
-      // Sélectionner toutes les boutiques de la page
-      const newSet = new Set(selectedBoutiques);
-      filteredBoutiques.forEach((b) => newSet.add(b.uuid));
-      setSelectedBoutiques(newSet);
-    }
-  };
-
-  // Mettre à jour selectAll quand selectedBoutiques change
-  useEffect(() => {
-    if (filteredBoutiques.length > 0) {
-      const allSelected = filteredBoutiques.every((b) =>
-        selectedBoutiques.has(b.uuid),
-      );
-      setSelectAll(allSelected);
-    } else {
-      setSelectAll(false);
-    }
-  }, [selectedBoutiques, filteredBoutiques]);
-
   // Navigation vers les détails d'une boutique
   const handleViewBoutique = (boutiqueUuid: string) => {
     router.push(`/dashboard-vendeur/boutique/apercu/${boutiqueUuid}`);
   };
 
-  // Navigation vers l'édition d'une boutique
-  const handleEditBoutique = (boutiqueUuid: string) => {
-    router.push(`/dashboard/boutiques/${boutiqueUuid}/edit`);
-  };
-
-  // Actions en masse sur les boutiques
-  const handleBulkAction = async (
-    action:
-      | "activate"
-      | "deactivate"
-      | "block"
-      | "unblock"
-      | "close"
-      | "open"
-      | "delete",
-  ) => {
-    if (selectedBoutiques.size === 0) {
-      setError("Veuillez sélectionner au moins une boutique");
-      setTimeout(() => setError(null), 3000);
+  // Ouvrir modale de création
+  const handleOpenCreateModal = () => {
+    if (!isAuthenticated) {
+      setError("Veuillez vous connecter pour créer une boutique");
+      router.push("/login");
       return;
     }
+    setShowCreateModal(true);
+  };
 
-    if (action === "delete") {
-      setShowBulkDeleteModal(true);
+  // Ouvrir modale d'édition
+  const handleOpenEditModal = (boutique: Boutique) => {
+    if (!isAuthenticated) {
+      setError("Veuillez vous connecter pour modifier une boutique");
+      router.push("/login");
       return;
     }
+    setSelectedBoutique(boutique);
+    setShowEditModal(true);
+  };
 
+  // Ouvrir modale de suppression
+  const handleOpenDeleteModal = (boutique: Boutique) => {
+    if (!isAuthenticated) {
+      setError("Veuillez vous connecter pour supprimer une boutique");
+      router.push("/login");
+      return;
+    }
+    setSelectedBoutique(boutique);
+    setShowDeleteModal(true);
+  };
+
+  // CRÉATION d'une boutique
+  const handleCreateBoutique = async (data: any) => {
     try {
-      setBulkActionLoading(true);
-      let successCount = 0;
-      let errorCount = 0;
-
-      for (const boutiqueUuid of selectedBoutiques) {
-        try {
-          const boutique = boutiques.find((b) => b.uuid === boutiqueUuid);
-          if (!boutique) continue;
-
-          switch (action) {
-            case "block":
-              await api.put(API_ENDPOINTS.BOUTIQUES.BLOCK(boutiqueUuid));
-              break;
-            case "unblock":
-              await api.put(API_ENDPOINTS.BOUTIQUES.UNBLOCK(boutiqueUuid));
-              break;
-            case "close":
-              await api.put(API_ENDPOINTS.BOUTIQUES.CLOSE(boutiqueUuid));
-              break;
-            case "open":
-              // Note: Vérifiez si vous avez un endpoint pour réouvrir une boutique
-              // Sinon, utilisez un endpoint de mise à jour
-              await api.put(API_ENDPOINTS.BOUTIQUES.UNBLOCK(boutiqueUuid));
-              break;
-            case "activate":
-              // Pour changer le statut en "actif"
-              await api.put(API_ENDPOINTS.BOUTIQUES.DETAIL(boutiqueUuid), {
-                statut: "actif",
-              });
-              break;
-            case "deactivate":
-              // Pour changer le statut en "en_review"
-              await api.put(API_ENDPOINTS.BOUTIQUES.DETAIL(boutiqueUuid), {
-                statut: "en_review",
-              });
-              break;
-          }
-          successCount++;
-        } catch (err) {
-          console.error(`Erreur pour la boutique ${boutiqueUuid}:`, err);
-          errorCount++;
-        }
+      // Vérifier l'authentification
+      if (!checkAuthentication()) {
+        throw new Error("Authentification requise");
       }
 
-      handleSuccess(
-        `${successCount} boutique(s) traité(s) avec succès${errorCount > 0 ? ` (${errorCount} échec(s))` : ""}`,
+      setActionLoading(true);
+      console.log("🚀 Création d'une nouvelle boutique...");
+
+      const formData = new FormData();
+      formData.append("nom", data.nom);
+      formData.append("type_boutique_uuid", data.type_boutique_uuid);
+
+      if (data.description) {
+        formData.append("description", data.description);
+      }
+
+      if (data.logo) {
+        console.log("📸 Logo ajouté:", data.logo.name);
+        formData.append("logo", data.logo);
+      }
+
+      if (data.banniere) {
+        console.log("🎨 Bannière ajoutée:", data.banniere.name);
+        formData.append("banniere", data.banniere);
+      }
+
+      if (data.politique_retour) {
+        formData.append("politique_retour", data.politique_retour);
+      }
+
+      if (data.conditions_utilisation) {
+        formData.append("conditions_utilisation", data.conditions_utilisation);
+      }
+
+      console.log("📤 Envoi à l'API:", {
+        endpoint: API_ENDPOINTS.BOUTIQUES.CREATE,
+        data: {
+          nom: data.nom,
+          type: data.type_boutique_uuid,
+          hasLogo: !!data.logo,
+          hasBanniere: !!data.banniere,
+        },
+      });
+
+      const response = await api.postFormData(
+        API_ENDPOINTS.BOUTIQUES.CREATE,
+        formData,
       );
 
-      // Rafraîchir la liste et réinitialiser la sélection
-      fetchBoutiques();
-      setSelectedBoutiques(new Set());
-      setSelectAll(false);
+      console.log("✅ Boutique créée avec succès:", response);
+      handleSuccess("Boutique créée avec succès !");
+      setShowCreateModal(false);
     } catch (err: any) {
-      console.error("Erreur lors de l'action en masse:", err);
-      setError("Erreur lors de l'action en masse");
-      setTimeout(() => setError(null), 3000);
+      console.error("❌ Erreur création boutique:", err);
+
+      // Gestion spécifique des erreurs d'authentification
+      if (
+        err.status === 401 ||
+        err.message?.includes("401") ||
+        err.response?.status === 401 ||
+        err.message?.includes("Authentification")
+      ) {
+        setError("Session expirée. Veuillez vous reconnecter.");
+        setIsAuthenticated(false);
+        clearAuthToken();
+
+        // Rediriger vers la page de connexion
+        setTimeout(() => {
+          router.push("/login");
+        }, 2000);
+      } else {
+        setError(
+          err.message ||
+            "Erreur lors de la création de la boutique. Vérifiez vos informations.",
+        );
+      }
+
+      setTimeout(() => setError(null), 5000);
     } finally {
-      setBulkActionLoading(false);
+      setActionLoading(false);
     }
   };
 
-  // Suppression en masse des boutiques
-  const handleBulkDelete = async () => {
-    try {
-      setBulkActionLoading(true);
-      let successCount = 0;
-      let errorCount = 0;
+  // MODIFICATION d'une boutique
+  const handleUpdateBoutique = async (data: any) => {
+    if (!selectedBoutique) return;
 
-      for (const boutiqueUuid of selectedBoutiques) {
-        try {
-          await api.delete(API_ENDPOINTS.BOUTIQUES.DELETE(boutiqueUuid));
-          successCount++;
-        } catch (err) {
-          console.error(`Erreur pour la boutique ${boutiqueUuid}:`, err);
-          errorCount++;
-        }
+    try {
+      // Vérifier l'authentification
+      if (!checkAuthentication()) {
+        throw new Error("Authentification requise");
       }
 
-      handleSuccess(
-        `${successCount} boutique(s) supprimée(s) avec succès${errorCount > 0 ? ` (${errorCount} échec(s))` : ""}`,
+      setActionLoading(true);
+      console.log("✏️ Modification boutique:", selectedBoutique.uuid);
+
+      const formData = new FormData();
+      formData.append("nom", data.nom);
+      formData.append("type_boutique_uuid", data.type_boutique_uuid);
+
+      if (data.description) {
+        formData.append("description", data.description);
+      }
+
+      if (data.logo) {
+        formData.append("logo", data.logo);
+      }
+
+      if (data.banniere) {
+        formData.append("banniere", data.banniere);
+      }
+
+      if (data.politique_retour) {
+        formData.append("politique_retour", data.politique_retour);
+      }
+
+      if (data.conditions_utilisation) {
+        formData.append("conditions_utilisation", data.conditions_utilisation);
+      }
+
+      const response = await api.putFormData(
+        API_ENDPOINTS.BOUTIQUES.DETAIL(selectedBoutique.uuid),
+        formData,
       );
 
-      // Rafraîchir la liste et réinitialiser la sélection
-      fetchBoutiques();
-      setSelectedBoutiques(new Set());
-      setSelectAll(false);
-      setShowBulkDeleteModal(false);
+      console.log("✅ Boutique modifiée avec succès:", response);
+      handleSuccess("Boutique modifiée avec succès !");
+      setShowEditModal(false);
+      setSelectedBoutique(null);
     } catch (err: any) {
-      console.error("Erreur lors de la suppression en masse:", err);
-      setError("Erreur lors de la suppression en masse");
+      console.error("❌ Erreur modification boutique:", err);
+
+      if (
+        err.status === 401 ||
+        err.message?.includes("401") ||
+        err.response?.status === 401 ||
+        err.message?.includes("Authentification")
+      ) {
+        setError("Session expirée. Veuillez vous reconnecter.");
+        setIsAuthenticated(false);
+        clearAuthToken();
+
+        setTimeout(() => {
+          router.push("/login");
+        }, 2000);
+      } else {
+        setError(err.message || "Erreur lors de la modification");
+      }
+
       setTimeout(() => setError(null), 3000);
     } finally {
-      setBulkActionLoading(false);
+      setActionLoading(false);
     }
   };
 
-  // Suppression d'une boutique individuelle
-  const handleDeleteBoutique = async (boutiqueUuid: string) => {
+  // SUPPRESSION d'une boutique
+  const handleDeleteBoutique = async () => {
+    if (!selectedBoutique) return;
+
     try {
-      await api.delete(API_ENDPOINTS.BOUTIQUES.DELETE(boutiqueUuid));
+      // Vérifier l'authentification
+      if (!checkAuthentication()) {
+        throw new Error("Authentification requise");
+      }
+
+      setActionLoading(true);
+      console.log("🗑️ Suppression boutique:", selectedBoutique.uuid);
+
+      await api.delete(API_ENDPOINTS.BOUTIQUES.DELETE(selectedBoutique.uuid));
+
+      console.log("✅ Boutique supprimée avec succès");
       handleSuccess("Boutique supprimée avec succès !");
+      setShowDeleteModal(false);
+      setSelectedBoutique(null);
     } catch (err: any) {
-      console.error("❌ Erreur suppression:", err);
-      setError(err.response?.data?.message || "Erreur lors de la suppression");
+      console.error("❌ Erreur suppression boutique:", err);
+
+      if (
+        err.status === 401 ||
+        err.message?.includes("401") ||
+        err.response?.status === 401 ||
+        err.message?.includes("Authentification")
+      ) {
+        setError("Session expirée. Veuillez vous reconnecter.");
+        setIsAuthenticated(false);
+        clearAuthToken();
+
+        setTimeout(() => {
+          router.push("/login");
+        }, 2000);
+      } else {
+        setError(err.message || "Erreur lors de la suppression");
+      }
+
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // BLOQUER/DÉBLOQUER une boutique
+  const handleToggleBlockBoutique = async (boutique: Boutique) => {
+    try {
+      // Vérifier l'authentification
+      if (!checkAuthentication()) {
+        throw new Error("Authentification requise");
+      }
+
+      if (boutique.est_bloque) {
+        await api.put(API_ENDPOINTS.BOUTIQUES.UNBLOCK(boutique.uuid));
+        handleSuccess("Boutique débloquée avec succès !");
+      } else {
+        await api.put(API_ENDPOINTS.BOUTIQUES.BLOCK(boutique.uuid));
+        handleSuccess("Boutique bloquée avec succès !");
+      }
+    } catch (err: any) {
+      console.error("❌ Erreur changement statut:", err);
+
+      if (
+        err.status === 401 ||
+        err.message?.includes("401") ||
+        err.response?.status === 401 ||
+        err.message?.includes("Authentification")
+      ) {
+        setError("Session expirée. Veuillez vous reconnecter.");
+        setIsAuthenticated(false);
+        clearAuthToken();
+
+        setTimeout(() => {
+          router.push("/login");
+        }, 2000);
+      } else {
+        setError(err.message || "Erreur lors du changement de statut");
+      }
+
       setTimeout(() => setError(null), 3000);
     }
   };
 
-  // Navigation vers la création d'une boutique
-  const handleCreateBoutique = () => {
-    router.push("/dashboard/boutiques/create");
+  // Déconnexion
+  const handleLogout = async () => {
+    try {
+      await api.post(API_ENDPOINTS.AUTH.VENDEUR.LOGOUT);
+    } catch (error) {
+      console.error("❌ Erreur lors de la déconnexion:", error);
+    } finally {
+      clearAuthToken();
+      router.push("/login");
+    }
   };
 
-  // Réinitialiser les filtres et la sélection
+  // Réinitialiser les filtres
   const resetFilters = () => {
     setSearchTerm("");
     setStatusFilter("all");
     setTypeFilter("all");
     setSortConfig(null);
-    setSelectedBoutiques(new Set());
-    setSelectAll(false);
     setPagination((prev) => ({ ...prev, page: 1 }));
   };
 
@@ -756,7 +673,7 @@ export default function ListeBoutiquesVendeur() {
       ["Nom", "Type", "Statut", "Slug", "Date création", "Bloqué", "Fermé"],
       ...boutiques.map((boutique) => [
         `"${boutique.nom || ""}"`,
-        boutique.type_boutique.libelle,
+        boutique.type_boutique?.libelle || "N/A",
         boutique.statut,
         boutique.slug,
         formatDate(boutique.created_at),
@@ -797,24 +714,117 @@ export default function ListeBoutiquesVendeur() {
     };
   }, [boutiques, uniqueTypes]);
 
-  // Effet pour réinitialiser la sélection quand les filtres changent
-  useEffect(() => {
-    setSelectedBoutiques(new Set());
-    setSelectAll(false);
-  }, [searchTerm, statusFilter, typeFilter]);
+  // Affichage du chargement d'authentification
+  if (authLoading) {
+    return (
+      <div className="container-fluid p-5">
+        <div className="text-center py-5">
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Chargement...</span>
+          </div>
+          <p className="mt-3 text-muted">
+            Vérification de l'authentification...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Si non authentifié
+  if (!isAuthenticated) {
+    return (
+      <div className="container-fluid p-5">
+        <div className="row justify-content-center">
+          <div className="col-md-6 col-lg-4">
+            <div className="card border-0 shadow-lg text-center">
+              <div className="card-body py-5">
+                <div className="mb-4">
+                  <FontAwesomeIcon
+                    icon={faStore}
+                    className="text-danger fs-1 mb-3"
+                  />
+                  <h4 className="fw-bold">Accès non autorisé</h4>
+                  <p className="text-muted">
+                    Vous devez être connecté pour accéder à cette page
+                  </p>
+                </div>
+                <div className="d-grid gap-2">
+                  <button
+                    onClick={() => router.push("/login")}
+                    className="btn btn-primary btn-lg"
+                  >
+                    <FontAwesomeIcon icon={faSignOutAlt} className="me-2" />
+                    Se connecter
+                  </button>
+                  <button
+                    onClick={() => router.push("/")}
+                    className="btn btn-outline-secondary"
+                  >
+                    Retour à l'accueil
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
-      {/* Modal de suppression en masse */}
-      <BulkDeleteModal
-        show={showBulkDeleteModal}
-        count={selectedBoutiques.size}
-        loading={bulkActionLoading}
-        onClose={() => setShowBulkDeleteModal(false)}
-        onConfirm={handleBulkDelete}
+      {/* Modales */}
+      <CreateBoutiqueModal
+        show={showCreateModal}
+        loading={actionLoading}
+        onClose={() => setShowCreateModal(false)}
+        onCreate={handleCreateBoutique}
+      />
+
+      <EditBoutiqueModal
+        show={showEditModal}
+        boutique={selectedBoutique}
+        loading={actionLoading}
+        onClose={() => {
+          setShowEditModal(false);
+          setSelectedBoutique(null);
+        }}
+        onUpdate={handleUpdateBoutique}
+      />
+
+      <DeleteBoutiqueModal
+        show={showDeleteModal}
+        boutique={selectedBoutique}
+        loading={actionLoading}
+        onClose={() => {
+          setShowDeleteModal(false);
+          setSelectedBoutique(null);
+        }}
+        onConfirm={handleDeleteBoutique}
       />
 
       <div className="container-fluid p-3 p-md-4">
+        {/* Barre d'authentification */}
+        <div className="row mb-3">
+          <div className="col-12">
+            <div className="alert alert-success d-flex align-items-center justify-content-between py-2">
+              <div className="d-flex align-items-center">
+                <FontAwesomeIcon icon={faCheckCircle} className="me-2" />
+                <small className="fw-semibold">
+                  Connecté en tant que vendeur
+                </small>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="btn btn-sm btn-outline-danger"
+              >
+                <FontAwesomeIcon icon={faSignOutAlt} className="me-1" />
+                Déconnexion
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* En-tête de la page */}
         <div className="row mb-4">
           <div className="col-12">
@@ -858,8 +868,9 @@ export default function ListeBoutiquesVendeur() {
                 </button>
 
                 <button
-                  onClick={handleCreateBoutique}
+                  onClick={handleOpenCreateModal}
                   className="btn btn-success d-flex align-items-center gap-2"
+                  disabled={!isAuthenticated}
                 >
                   <FontAwesomeIcon icon={faPlus} />
                   <span className="d-none d-md-inline">Nouvelle boutique</span>
@@ -1001,6 +1012,7 @@ export default function ListeBoutiquesVendeur() {
                           setSearchTerm(e.target.value);
                           setPagination((prev) => ({ ...prev, page: 1 }));
                         }}
+                        disabled={!isAuthenticated}
                       />
                     </div>
                   </div>
@@ -1020,6 +1032,7 @@ export default function ListeBoutiquesVendeur() {
                           setStatusFilter(e.target.value);
                           setPagination((prev) => ({ ...prev, page: 1 }));
                         }}
+                        disabled={!isAuthenticated}
                       >
                         <option value="all">Tous les statuts</option>
                         <option value="actif">Actives</option>
@@ -1039,7 +1052,7 @@ export default function ListeBoutiquesVendeur() {
                         className="form-select border-start-0 ps-0"
                         value={typeFilter}
                         onChange={(e) => setTypeFilter(e.target.value)}
-                        disabled={uniqueTypes.length === 0}
+                        disabled={uniqueTypes.length === 0 || !isAuthenticated}
                       >
                         <option value="all">Tous les types</option>
                         {uniqueTypes.map((type) => (
@@ -1055,7 +1068,7 @@ export default function ListeBoutiquesVendeur() {
                     <button
                       onClick={resetFilters}
                       className="btn btn-outline-secondary w-100 d-flex align-items-center justify-content-center gap-2"
-                      disabled={loading}
+                      disabled={loading || !isAuthenticated}
                     >
                       <FontAwesomeIcon icon={faTimes} />
                       <span className="d-none d-md-inline">Reset</span>
@@ -1118,82 +1131,6 @@ export default function ListeBoutiquesVendeur() {
         <div className="row">
           <div className="col-12">
             <div className="card border-0 shadow-sm">
-              {/* Barre d'actions en masse */}
-              {selectedBoutiques.size > 0 && (
-                <div className="p-3 border-bottom bg-warning bg-opacity-10">
-                  <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
-                    <div className="d-flex align-items-center gap-2">
-                      <FontAwesomeIcon
-                        icon={faShoppingBasket}
-                        className="text-warning"
-                      />
-                      <span className="fw-semibold">
-                        {selectedBoutiques.size} boutique(s) sélectionnée(s)
-                      </span>
-                    </div>
-
-                    <div className="d-flex flex-wrap gap-2">
-                      <button
-                        className="btn btn-sm btn-outline-success d-flex align-items-center gap-1"
-                        onClick={() => handleBulkAction("activate")}
-                        disabled={bulkActionLoading}
-                      >
-                        <FontAwesomeIcon icon={faCheckCircle} />
-                        <span>Activer</span>
-                      </button>
-
-                      <button
-                        className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
-                        onClick={() => handleBulkAction("deactivate")}
-                        disabled={bulkActionLoading}
-                      >
-                        <FontAwesomeIcon icon={faClock} />
-                        <span>En revue</span>
-                      </button>
-
-                      <button
-                        className="btn btn-sm btn-outline-danger d-flex align-items-center gap-1"
-                        onClick={() => handleBulkAction("block")}
-                        disabled={bulkActionLoading}
-                      >
-                        <FontAwesomeIcon icon={faBan} />
-                        <span>Bloquer</span>
-                      </button>
-
-                      <button
-                        className="btn btn-sm btn-outline-success d-flex align-items-center gap-1"
-                        onClick={() => handleBulkAction("unblock")}
-                        disabled={bulkActionLoading}
-                      >
-                        <FontAwesomeIcon icon={faLockOpen} />
-                        <span>Débloquer</span>
-                      </button>
-
-                      <button
-                        className="btn btn-sm btn-outline-danger d-flex align-items-center gap-1"
-                        onClick={() => handleBulkAction("delete")}
-                        disabled={bulkActionLoading}
-                      >
-                        <FontAwesomeIcon icon={faTrash} />
-                        <span>Supprimer</span>
-                      </button>
-
-                      <button
-                        className="btn btn-sm btn-outline-dark d-flex align-items-center gap-1"
-                        onClick={() => {
-                          setSelectedBoutiques(new Set());
-                          setSelectAll(false);
-                        }}
-                        disabled={bulkActionLoading}
-                      >
-                        <FontAwesomeIcon icon={faTimes} />
-                        <span>Annuler</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               <div className="card-body p-0">
                 {loading ? (
                   <div className="text-center py-5">
@@ -1226,8 +1163,9 @@ export default function ListeBoutiquesVendeur() {
                       </p>
                       {boutiques.length === 0 && (
                         <button
-                          onClick={handleCreateBoutique}
+                          onClick={handleOpenCreateModal}
                           className="btn btn-primary mt-3"
+                          disabled={!isAuthenticated}
                         >
                           <FontAwesomeIcon icon={faPlus} className="me-2" />
                           Créer ma première boutique
@@ -1237,86 +1175,54 @@ export default function ListeBoutiquesVendeur() {
                   </div>
                 ) : (
                   <>
-                    {/* Options de sélection */}
+                    {/* Options de tri */}
                     <div className="p-4 border-bottom">
                       <div className="d-flex justify-content-between align-items-center">
                         <div className="d-flex align-items-center gap-3">
-                          <button
-                            onClick={handleSelectAll}
-                            className="btn btn-sm btn-outline-primary d-flex align-items-center gap-2"
-                            disabled={filteredBoutiques.length === 0}
-                            title={
-                              selectAll
-                                ? "Tout désélectionner"
-                                : "Tout sélectionner"
-                            }
-                          >
-                            <FontAwesomeIcon
-                              icon={selectAll ? faCheckSquare : faSquare}
-                            />
-                            <span className="d-none d-md-inline">
-                              {selectAll
-                                ? "Tout désélectionner"
-                                : "Tout sélectionner"}
-                            </span>
-                          </button>
-
-                          <button
-                            onClick={handleSelectAllOnPage}
-                            className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-2"
-                            disabled={filteredBoutiques.length === 0}
-                            title="Sélectionner/désélectionner cette page"
-                          >
-                            <FontAwesomeIcon icon={faLayerGroup} />
-                            <span className="d-none d-md-inline">
-                              Page actuelle
-                            </span>
-                          </button>
+                          <small className="text-muted">
+                            {filteredBoutiques.length} boutique(s) trouvée(s)
+                          </small>
                         </div>
-
-                        <div className="d-flex align-items-center gap-3">
-                          {selectedBoutiques.size > 0 && (
-                            <small className="text-primary fw-semibold">
-                              {selectedBoutiques.size} sélectionnée(s)
-                            </small>
-                          )}
-                          <div className="dropdown">
-                            <button
-                              className="btn btn-outline-secondary btn-sm dropdown-toggle"
-                              type="button"
-                              data-bs-toggle="dropdown"
-                              aria-expanded="false"
-                            >
-                              <FontAwesomeIcon icon={faSort} className="me-1" />
-                              Trier
-                            </button>
-                            <ul className="dropdown-menu">
-                              <li>
-                                <button
-                                  className="dropdown-item"
-                                  onClick={() => requestSort("nom")}
-                                >
-                                  Par nom {getSortIcon("nom")}
-                                </button>
-                              </li>
-                              <li>
-                                <button
-                                  className="dropdown-item"
-                                  onClick={() => requestSort("created_at")}
-                                >
-                                  Par date {getSortIcon("created_at")}
-                                </button>
-                              </li>
-                              <li>
-                                <button
-                                  className="dropdown-item"
-                                  onClick={() => requestSort("statut")}
-                                >
-                                  Par statut {getSortIcon("statut")}
-                                </button>
-                              </li>
-                            </ul>
-                          </div>
+                        <div className="dropdown">
+                          <button
+                            className="btn btn-outline-secondary btn-sm dropdown-toggle"
+                            type="button"
+                            data-bs-toggle="dropdown"
+                            aria-expanded="false"
+                            disabled={!isAuthenticated}
+                          >
+                            <FontAwesomeIcon icon={faSort} className="me-1" />
+                            Trier
+                          </button>
+                          <ul className="dropdown-menu">
+                            <li>
+                              <button
+                                className="dropdown-item"
+                                onClick={() => requestSort("nom")}
+                                disabled={!isAuthenticated}
+                              >
+                                Par nom {getSortIcon("nom")}
+                              </button>
+                            </li>
+                            <li>
+                              <button
+                                className="dropdown-item"
+                                onClick={() => requestSort("created_at")}
+                                disabled={!isAuthenticated}
+                              >
+                                Par date {getSortIcon("created_at")}
+                              </button>
+                            </li>
+                            <li>
+                              <button
+                                className="dropdown-item"
+                                onClick={() => requestSort("statut")}
+                                disabled={!isAuthenticated}
+                              >
+                                Par statut {getSortIcon("statut")}
+                              </button>
+                            </li>
+                          </ul>
                         </div>
                       </div>
                     </div>
@@ -1326,27 +1232,6 @@ export default function ListeBoutiquesVendeur() {
                       <table className="table table-hover mb-0">
                         <thead className="table-light">
                           <tr>
-                            <th
-                              style={{ width: "50px" }}
-                              className="text-center"
-                            >
-                              <div className="form-check d-flex justify-content-center">
-                                <input
-                                  type="checkbox"
-                                  className="form-check-input"
-                                  checked={
-                                    selectAll && filteredBoutiques.length > 0
-                                  }
-                                  onChange={handleSelectAll}
-                                  disabled={filteredBoutiques.length === 0}
-                                  title={
-                                    selectAll
-                                      ? "Tout désélectionner"
-                                      : "Tout sélectionner"
-                                  }
-                                />
-                              </div>
-                            </th>
                             <th style={{ width: "40px" }}>#</th>
                             <th style={{ width: "80px" }}>
                               <span className="fw-semibold">Logo</span>
@@ -1355,6 +1240,7 @@ export default function ListeBoutiquesVendeur() {
                               <button
                                 className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
                                 onClick={() => requestSort("nom")}
+                                disabled={!isAuthenticated}
                               >
                                 Nom de la boutique
                                 {getSortIcon("nom")}
@@ -1367,6 +1253,7 @@ export default function ListeBoutiquesVendeur() {
                               <button
                                 className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
                                 onClick={() => requestSort("statut")}
+                                disabled={!isAuthenticated}
                               >
                                 Statut
                                 {getSortIcon("statut")}
@@ -1379,6 +1266,7 @@ export default function ListeBoutiquesVendeur() {
                               <button
                                 className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
                                 onClick={() => requestSort("created_at")}
+                                disabled={!isAuthenticated}
                               >
                                 Date création
                                 {getSortIcon("created_at")}
@@ -1397,27 +1285,9 @@ export default function ListeBoutiquesVendeur() {
                             const startIndex =
                               (pagination.page - 1) * pagination.limit;
                             const displayIndex = startIndex + index + 1;
-                            const isSelected = selectedBoutiques.has(
-                              boutique.uuid,
-                            );
 
                             return (
-                              <tr
-                                key={boutique.uuid}
-                                className={`align-middle ${isSelected ? "table-active" : ""}`}
-                              >
-                                <td className="text-center">
-                                  <div className="form-check d-flex justify-content-center">
-                                    <input
-                                      type="checkbox"
-                                      className="form-check-input"
-                                      checked={isSelected}
-                                      onChange={() =>
-                                        handleSelectBoutique(boutique.uuid)
-                                      }
-                                    />
-                                  </div>
-                                </td>
+                              <tr key={boutique.uuid} className="align-middle">
                                 <td className="text-center text-muted fw-semibold">
                                   {displayIndex}
                                 </td>
@@ -1464,7 +1334,7 @@ export default function ListeBoutiquesVendeur() {
                                 </td>
                                 <td>
                                   <span className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">
-                                    {boutique.type_boutique.libelle}
+                                    {boutique.type_boutique?.libelle || "N/A"}
                                   </span>
                                 </td>
                                 <td>
@@ -1499,6 +1369,7 @@ export default function ListeBoutiquesVendeur() {
                                       onClick={() =>
                                         handleViewBoutique(boutique.uuid)
                                       }
+                                      disabled={!isAuthenticated}
                                     >
                                       <FontAwesomeIcon icon={faEye} />
                                     </button>
@@ -1506,38 +1377,39 @@ export default function ListeBoutiquesVendeur() {
                                       className="btn btn-outline-warning"
                                       title="Modifier"
                                       onClick={() =>
-                                        handleEditBoutique(boutique.uuid)
+                                        handleOpenEditModal(boutique)
                                       }
+                                      disabled={!isAuthenticated}
                                     >
                                       <FontAwesomeIcon icon={faEdit} />
                                     </button>
-                                    {boutique.est_bloque ? (
-                                      <button
-                                        className="btn btn-outline-success"
-                                        title="Débloquer"
-                                        onClick={() =>
-                                          handleBulkAction("unblock")
+                                    <button
+                                      className={`btn ${boutique.est_bloque ? "btn-outline-success" : "btn-outline-secondary"}`}
+                                      title={
+                                        boutique.est_bloque
+                                          ? "Débloquer"
+                                          : "Bloquer"
+                                      }
+                                      onClick={() =>
+                                        handleToggleBlockBoutique(boutique)
+                                      }
+                                      disabled={!isAuthenticated}
+                                    >
+                                      <FontAwesomeIcon
+                                        icon={
+                                          boutique.est_bloque
+                                            ? faLockOpen
+                                            : faBan
                                         }
-                                      >
-                                        <FontAwesomeIcon icon={faLockOpen} />
-                                      </button>
-                                    ) : (
-                                      <button
-                                        className="btn btn-outline-secondary"
-                                        title="Bloquer"
-                                        onClick={() =>
-                                          handleBulkAction("block")
-                                        }
-                                      >
-                                        <FontAwesomeIcon icon={faBan} />
-                                      </button>
-                                    )}
+                                      />
+                                    </button>
                                     <button
                                       className="btn btn-outline-danger"
                                       title="Supprimer"
                                       onClick={() =>
-                                        handleDeleteBoutique(boutique.uuid)
+                                        handleOpenDeleteModal(boutique)
                                       }
+                                      disabled={!isAuthenticated}
                                     >
                                       <FontAwesomeIcon icon={faTrash} />
                                     </button>
@@ -1577,20 +1449,22 @@ export default function ListeBoutiquesVendeur() {
         </div>
 
         {/* Bouton flottant pour création rapide */}
-        <button
-          onClick={handleCreateBoutique}
-          className="btn btn-success rounded-circle shadow-lg position-fixed"
-          style={{
-            bottom: "30px",
-            right: "30px",
-            width: "60px",
-            height: "60px",
-            zIndex: 1000,
-          }}
-          title="Créer une nouvelle boutique"
-        >
-          <FontAwesomeIcon icon={faPlus} className="fs-5" />
-        </button>
+        {isAuthenticated && (
+          <button
+            onClick={handleOpenCreateModal}
+            className="btn btn-success rounded-circle shadow-lg position-fixed"
+            style={{
+              bottom: "30px",
+              right: "30px",
+              width: "60px",
+              height: "60px",
+              zIndex: 1000,
+            }}
+            title="Créer une nouvelle boutique"
+          >
+            <FontAwesomeIcon icon={faPlus} className="fs-5" />
+          </button>
+        )}
       </div>
 
       <style jsx>{`
@@ -1615,17 +1489,6 @@ export default function ListeBoutiquesVendeur() {
         .breadcrumb {
           background-color: transparent;
           padding: 0;
-        }
-        .table-active {
-          background-color: rgba(13, 110, 253, 0.05) !important;
-        }
-        .form-check-input:checked {
-          background-color: #0d6efd;
-          border-color: #0d6efd;
-        }
-        .form-check-input:focus {
-          border-color: #86b7fe;
-          box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
         }
         .btn-group-sm > .btn {
           padding: 0.25rem 0.5rem;

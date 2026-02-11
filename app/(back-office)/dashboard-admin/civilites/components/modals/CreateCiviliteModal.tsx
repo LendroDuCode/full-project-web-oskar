@@ -318,7 +318,7 @@ export default function CreateCiviliteModal({
           {/* En-tête de la modal */}
           <div
             className="modal-header text-white border-0 rounded-top-3"
-            style={styles.modalHeader}
+            style={{ backgroundColor: colors.oskar.green }}
           >
             <div className="d-flex align-items-center">
               <div className="bg-white bg-opacity-20 rounded-circle p-2 me-3">
@@ -701,7 +701,7 @@ export default function CreateCiviliteModal({
                 className="btn d-flex align-items-center gap-2"
                 onClick={handleReset}
                 disabled={loading}
-                style={styles.secondaryButton}
+                style={{ backgroundColor: colors.oskar.green }}
                 onMouseEnter={(e) => {
                   Object.assign(
                     e.currentTarget.style,
@@ -745,7 +745,7 @@ export default function CreateCiviliteModal({
                   className="btn text-white d-flex align-items-center gap-2"
                   onClick={handleSubmit}
                   disabled={loading}
-                  style={styles.primaryButton}
+                  style={{ backgroundColor: colors.oskar.green }}
                   onMouseEnter={(e) => {
                     Object.assign(
                       e.currentTarget.style,

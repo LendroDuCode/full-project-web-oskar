@@ -66,6 +66,7 @@ interface EchangeVendeur {
   categorie: string;
   createdAt: string | null;
   updatedAt: string | null;
+  [key: string]: any;
 }
 
 interface ApiResponse {
@@ -820,8 +821,8 @@ export default function EchangesVendeurPage() {
 
   return (
     <>
-      {/* Modals
-      
+      {/* Modals */}
+
       {selectedEchange && (
         <EditEchangeModal
           isOpen={showEditModal}
@@ -844,13 +845,11 @@ export default function EchangesVendeurPage() {
           }}
         />
       )}
-      */}
       <CreateEchangeModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onSuccess={() => handleSuccess("Échange créé avec succès !")}
       />
-
 
       {/* Modal de suppression individuelle */}
       {showDeleteModal && selectedEchange && (

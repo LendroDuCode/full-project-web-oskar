@@ -100,7 +100,7 @@ interface PaginationData {
   pages: number;
 }
 
-// Service pour gérer les utilisateurs supprimés
+// Service pour gérer les utilisateurs supprimés - VERSION CORRIGÉE
 const deletedUserService = {
   // Récupérer les utilisateurs supprimés
   async getDeletedUsers(params?: {
@@ -115,25 +115,28 @@ const deletedUserService = {
     const response = await api.get(
       API_ENDPOINTS.ADMIN.USERS.DELETED, // "/admin/liste-utilisateurs-supprimes"
     );
-    return response.data;
+    return response;
   },
 
-  // Restaurer un utilisateur
+  // Restaurer un utilisateur - CORRECTION ICI
   async restoreUser(uuid: string) {
-    const response = await api.post(API_ENDPOINTS.ADMIN.USERS.RESTORE(uuid));
-    return response.data;
+    // Note: La méthode DELETE pour restaurer peut sembler contre-intuitive
+    // mais c'est ce que ton endpoint semble utiliser
+    const response = await api.delete(API_ENDPOINTS.ADMIN.USERS.RESTORE(uuid));
+    // Retourner toute la réponse, pas seulement response.data
+    return response;
   },
 
   // Supprimer définitivement un utilisateur
   async permanentDeleteUser(uuid: string) {
     const response = await api.delete(API_ENDPOINTS.ADMIN.USERS.DELETE(uuid));
-    return response.data;
+    return response;
   },
 
   // Vider la corbeille
   async emptyTrash() {
     const response = await api.delete(API_ENDPOINTS.ADMIN.USERS.EMPTY_TRASH);
-    return response.data;
+    return response;
   },
 };
 

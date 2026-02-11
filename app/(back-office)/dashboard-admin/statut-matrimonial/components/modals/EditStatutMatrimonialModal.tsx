@@ -35,27 +35,27 @@ interface FormData {
 interface StatutMatrimonialType {
   // Identifiant unique
   uuid: string;
-  
+
   // Informations principales
   libelle: string;
   code: string;
   description?: string;
-  
+
   // Statut et configuration
   statut: "actif" | "inactif";
   defaut: boolean;
   ordre?: number;
-  
+
   // Métadonnées
   createdAt?: string;
   updatedAt?: string;
   createdBy?: string;
   updatedBy?: string;
-  
+
   // Données statistiques (optionnelles)
   nombreUtilisations?: number;
   derniereUtilisation?: string;
-  
+
   // Historique des modifications
   historique?: Array<{
     date: string;
@@ -63,7 +63,7 @@ interface StatutMatrimonialType {
     utilisateur: string;
     details?: string;
   }>;
-  
+
   // Relations (optionnelles selon les besoins)
   utilisateurs?: Array<{
     uuid: string;
@@ -71,7 +71,7 @@ interface StatutMatrimonialType {
     prenom: string;
     email: string;
   }>;
-  
+
   // Validation et contraintes
   estValide?: boolean;
   contraintes?: {
@@ -163,7 +163,12 @@ interface StatutMatrimonialValidationError {
 interface StatutMatrimonialHistoryType {
   id: string;
   statutId: string;
-  action: "creation" | "modification" | "suppression" | "activation" | "desactivation";
+  action:
+    | "creation"
+    | "modification"
+    | "suppression"
+    | "activation"
+    | "desactivation";
   ancienneValeur?: Partial<StatutMatrimonialType>;
   nouvelleValeur?: Partial<StatutMatrimonialType>;
   utilisateurId: string;
@@ -195,7 +200,7 @@ interface EditStatutMatrimonialModalProps {
   isOpen: boolean;
   statut: StatutMatrimonialType | null;
   onClose: () => void;
-  onSuccess?: () => void;
+  onSuccess?: (message?: string) => void; // Ajoutez un paramètre optionnel
 }
 
 export default function EditStatutMatrimonialModal({
@@ -510,7 +515,7 @@ export default function EditStatutMatrimonialModal({
           {/* En-tête de la modal */}
           <div
             className="modal-header text-white border-0 rounded-top-3"
-            style={styles.modalHeader}
+            style={{ backgroundColor: colors.oskar.yellow }}
           >
             <div className="d-flex align-items-center">
               <div className="bg-white bg-opacity-20 rounded-circle p-2 me-3">
@@ -553,7 +558,7 @@ export default function EditStatutMatrimonialModal({
                   <div className="flex-shrink-0">
                     <div
                       className="rounded-circle p-2"
-                      style={{ backgroundColor: `${colors.oskar.orange}20` }}
+                      style={{ backgroundColor: `${colors.oskar.green}20` }}
                     >
                       <FontAwesomeIcon
                         icon={faExclamationTriangle}
@@ -629,17 +634,17 @@ export default function EditStatutMatrimonialModal({
                     <div className="d-flex align-items-center">
                       <div
                         className="rounded-circle p-2 me-3"
-                        style={{ backgroundColor: `${colors.oskar.pink}15` }}
+                        style={{ backgroundColor: `${colors.oskar.green}15` }}
                       >
                         <FontAwesomeIcon
                           icon={faHeart}
-                          style={{ color: colors.oskar.pink }}
+                          style={{ color: colors.oskar.green }}
                         />
                       </div>
                       <div>
                         <h6
                           className="mb-0 fw-bold"
-                          style={{ color: colors.oskar.pink }}
+                          style={{ color: colors.oskar.green }}
                         >
                           Informations du Statut Matrimonial
                         </h6>
@@ -958,7 +963,7 @@ export default function EditStatutMatrimonialModal({
                 className="btn d-flex align-items-center gap-2"
                 onClick={handleReset}
                 disabled={loading || loadingStatut || !statutInfo}
-                style={styles.secondaryButton}
+                style={{ backgroundColor: colors.oskar.yellow }}
                 onMouseEnter={(e) => {
                   Object.assign(
                     e.currentTarget.style,
@@ -1002,7 +1007,7 @@ export default function EditStatutMatrimonialModal({
                   className="btn text-white d-flex align-items-center gap-2"
                   onClick={handleSubmit}
                   disabled={loading || loadingStatut}
-                  style={styles.primaryButton}
+                  style={{ backgroundColor: colors.oskar.yellow }}
                   onMouseEnter={(e) => {
                     Object.assign(
                       e.currentTarget.style,

@@ -793,7 +793,7 @@ export default function ListeVendeursSupprimesPage() {
       setActionLoading(true);
 
       const promises = uuids.map((uuid) =>
-        api.post(API_ENDPOINTS.ADMIN.VENDEURS.RESTORE(uuid)),
+        api.delete(API_ENDPOINTS.ADMIN.VENDEURS.RESTORE(uuid)),
       );
 
       await Promise.all(promises);

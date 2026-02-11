@@ -43,9 +43,12 @@ import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import CreateCiviliteModal from "@/app/(back-office)/dashboard-admin/civilites/components/modals/CreateCiviliteModal";
 import EditCiviliteModal from "@/app/(back-office)/dashboard-admin/civilites/components/modals/EditCiviliteModal";
+import colors from "@/app/shared/constants/colors";
+import ViewCiviliteModal from "./components/modals/ViewCiviliteModal";
 
 // Types
-interface Civilite {
+// types/civilite.ts
+export interface Civilite {
   id: number;
   uuid: string;
   statut: string;
@@ -55,7 +58,11 @@ interface Civilite {
   createdAt: string | null;
   updatedAt: string | null;
   is_deleted: boolean;
-  deleted_at: string | null;
+  deleted_at: string | undefined;
+  description?: string;
+  code?: string | null;
+  libelle_court?: string;
+  ordre?: number;
 }
 
 // Types pour les actions groupées
@@ -1026,6 +1033,14 @@ export default function CivilitesPage() {
     setTimeout(() => setSuccess(null), 3000);
   };
 
+  const [showViewModal, setShowViewModal] = useState(false);
+
+  // Fonction pour ouvrir le modal de visualisation
+  const openViewModal = (civilite: Civilite) => {
+    setSelectedCivilite(civilite);
+    setShowViewModal(true);
+  };
+
   // Vérifier si une ligne de la page courante est sélectionnée
   const isPageAllSelected = useMemo(() => {
     return (
@@ -1077,6 +1092,16 @@ export default function CivilitesPage() {
         onSuccess={() => handleSuccess("Civilité modifiée avec succès")}
       />
 
+      {/* Modal de visualisation */}
+      <ViewCiviliteModal
+        isOpen={showViewModal}
+        civilite={selectedCivilite}
+        onClose={() => {
+          setShowViewModal(false);
+          setSelectedCivilite(null);
+        }}
+      />
+
       <div className="p-3 p-md-4">
         <div className="card border-0 shadow-sm overflow-hidden">
           <div className="card-header bg-white border-0 py-3">
@@ -1094,6 +1119,90 @@ export default function CivilitesPage() {
                   <span className="badge bg-primary bg-opacity-10 text-primary">
                     {stats.total} civilité(s)
                   </span>
+                </div>
+              </div>
+
+              {/* BOUTONS D'ACTIONS DANS L'EN-TÊTE */}
+              <div className="d-flex flex-wrap gap-2">
+                {/* Bouton Nouvelle Civilité */}
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="btn btn-primary d-flex align-items-center gap-2"
+                  disabled={loading}
+                  style={{ background: colors.oskar.green }}
+                >
+                  <FontAwesomeIcon icon={faPlus} />
+                  Nouvelle Civilité
+                </button>
+
+                {/* Bouton Actualiser */}
+                <button
+                  onClick={() => fetchCivilites()}
+                  className="btn btn-outline-secondary d-flex align-items-center gap-2"
+                  disabled={loading}
+                >
+                  <FontAwesomeIcon icon={faRefresh} spin={loading} />
+                  Actualiser
+                </button>
+
+                {/* Bouton Export CSV */}
+                <button
+                  onClick={handleCSVExport}
+                  className="btn btn-outline-success d-flex align-items-center gap-2"
+                  disabled={loading || civilites.length === 0}
+                  title="Exporter en CSV"
+                >
+                  <FontAwesomeIcon icon={faDownload} />
+                  Export CSV
+                </button>
+
+                {/* Statistiques */}
+                <div className="dropdown">
+                  <button
+                    className="btn btn-outline-info d-flex align-items-center gap-2"
+                    type="button"
+                    data-bs-toggle="dropdown"
+                    aria-expanded="false"
+                    disabled={loading}
+                  >
+                    <FontAwesomeIcon icon={faChartBar} />
+                    Statistiques
+                  </button>
+                  <ul
+                    className="dropdown-menu dropdown-menu-end p-3"
+                    style={{ width: "300px" }}
+                  >
+                    <li>
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <span>Total:</span>
+                        <span className="fw-bold">{stats.total}</span>
+                      </div>
+                    </li>
+                    <li>
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <span>Actives:</span>
+                        <span className="badge bg-success bg-opacity-10 text-success">
+                          {stats.actifs}
+                        </span>
+                      </div>
+                    </li>
+                    <li>
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <span>Inactives:</span>
+                        <span className="badge bg-warning bg-opacity-10 text-warning">
+                          {stats.inactifs}
+                        </span>
+                      </div>
+                    </li>
+                    <li>
+                      <div className="d-flex justify-content-between align-items-center">
+                        <span>Supprimées:</span>
+                        <span className="badge bg-danger bg-opacity-10 text-danger">
+                          {stats.supprimes}
+                        </span>
+                      </div>
+                    </li>
+                  </ul>
                 </div>
               </div>
             </div>
@@ -1462,9 +1571,10 @@ export default function CivilitesPage() {
                                 role="group"
                               >
                                 <button
-                                  className="btn btn-outline-primary"
+                                  className="btn btn-outline-info"
                                   title="Voir détails"
-                                  onClick={() => openEditModal(civilite)}
+                                  onClick={() => openViewModal(civilite)}
+                                  disabled={loading}
                                 >
                                   <FontAwesomeIcon icon={faEye} />
                                 </button>

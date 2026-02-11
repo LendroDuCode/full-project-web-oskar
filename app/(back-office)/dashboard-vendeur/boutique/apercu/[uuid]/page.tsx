@@ -103,6 +103,9 @@ interface Produit {
   etoile: string;
   vendeurUuid: string;
   boutiqueUuid: string;
+  lieu: string;
+  condition: string;
+  garantie: string;
   categorie_uuid: string;
   categorie: {
     uuid: string;
@@ -253,7 +256,7 @@ const ProductAvailabilityBadge = ({ disponible }: { disponible: boolean }) => {
   );
 };
 
-// Composant de carte statistique
+// Composant de carte statistique (CORRIGÉ pour gérer NaN)
 const StatCard = ({
   title,
   value,
@@ -275,6 +278,30 @@ const StatCard = ({
     info: "bg-info bg-opacity-10 text-info",
   };
 
+  // Fonction pour formater la valeur en toute sécurité
+  const formatValue = (val: string | number) => {
+    if (typeof val === "number") {
+      // Vérifier si la valeur est NaN ou Infinity
+      if (isNaN(val) || !isFinite(val)) {
+        return "0";
+      }
+      // Si c'est un nombre décimal, formater avec 2 décimales
+      if (Math.floor(val) !== val) {
+        return val.toFixed(2);
+      }
+      return val.toString();
+    }
+
+    // Si c'est une chaîne, vérifier si c'est un nombre
+    const num = parseFloat(val);
+    if (!isNaN(num) && isFinite(num)) {
+      return num.toString();
+    }
+
+    // Sinon retourner la valeur telle quelle
+    return val || "0";
+  };
+
   return (
     <div className="card border-0 shadow-sm h-100">
       <div className="card-body">
@@ -283,7 +310,7 @@ const StatCard = ({
             <FontAwesomeIcon icon={icon} className="fs-4" />
           </div>
           <div className="text-end">
-            <h3 className="mb-0 fw-bold">{value}</h3>
+            <h3 className="mb-0 fw-bold">{formatValue(value)}</h3>
             <small className="text-muted">{title}</small>
           </div>
         </div>
@@ -404,6 +431,10 @@ const BulkActionBar = ({
   onDelete: () => void;
   onClearSelection: () => void;
 }) => {
+  // Calcul sécurisé du pourcentage
+  const percentage =
+    totalCount > 0 ? Math.round((selectedCount / totalCount) * 100) : 0;
+
   return (
     <div className="p-3 border-bottom bg-primary bg-opacity-10">
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
@@ -412,9 +443,7 @@ const BulkActionBar = ({
           <span className="fw-semibold">
             {selectedCount} produit(s) sélectionné(s)
           </span>
-          <span className="badge bg-primary">
-            {Math.round((selectedCount / totalCount) * 100)}%
-          </span>
+          <span className="badge bg-primary">{percentage}%</span>
         </div>
 
         <div className="d-flex flex-wrap gap-2">
@@ -501,6 +530,9 @@ const BulkSelectionControls = ({
   totalCount: number;
   disabled: boolean;
 }) => {
+  // Calcul sécurisé du pourcentage
+  const percentage = totalCount > 0 ? (selectedCount / totalCount) * 100 : 0;
+
   return (
     <div className="d-flex justify-content-between align-items-center mb-3">
       <div className="d-flex align-items-center gap-3">
@@ -554,7 +586,7 @@ const BulkSelectionControls = ({
             <div
               className="progress-bar bg-primary"
               role="progressbar"
-              style={{ width: `${(selectedCount / totalCount) * 100}%` }}
+              style={{ width: `${percentage}%` }}
               aria-valuenow={selectedCount}
               aria-valuemin={0}
               aria-valuemax={totalCount}
@@ -819,6 +851,8 @@ export default function BoutiqueApercu() {
 
   // Formater la valeur totale
   const formatTotalValue = (value: number) => {
+    if (isNaN(value)) return "0 FCFA";
+
     return new Intl.NumberFormat("fr-FR", {
       style: "currency",
       currency: "XOF",
@@ -853,16 +887,26 @@ export default function BoutiqueApercu() {
 
     const valeurStock = produits.reduce((sum, p) => {
       const prix = parseFloat(p.prix) || 0;
-      return sum + prix * p.quantite;
+      const quantite = p.quantite || 0;
+      return sum + prix * quantite;
     }, 0);
 
-    const noteMoyenne =
-      produits.reduce((sum, p) => {
-        return sum + (parseFloat(p.note_moyenne) || 0);
-      }, 0) / totalProduits;
+    // Calcul sécurisé de la note moyenne
+    const totalNotes = produits.reduce((sum, p) => {
+      const note = parseFloat(p.note_moyenne);
+      return sum + (isNaN(note) ? 0 : note);
+    }, 0);
 
-    const totalAvis = produits.reduce((sum, p) => sum + p.nombre_avis, 0);
-    const totalFavoris = produits.reduce((sum, p) => sum + p.nombre_favoris, 0);
+    const noteMoyenne = totalProduits > 0 ? totalNotes / totalProduits : 0;
+
+    const totalAvis = produits.reduce(
+      (sum, p) => sum + (p.nombre_avis || 0),
+      0,
+    );
+    const totalFavoris = produits.reduce(
+      (sum, p) => sum + (p.nombre_favoris || 0),
+      0,
+    );
 
     return {
       totalProduits,
@@ -870,8 +914,8 @@ export default function BoutiqueApercu() {
       produitsBloques,
       produitsEnStock,
       produitsEpuises,
-      valeurStock,
-      noteMoyenne: isNaN(noteMoyenne) ? 0 : parseFloat(noteMoyenne.toFixed(2)),
+      valeurStock: isNaN(valeurStock) ? 0 : valeurStock,
+      noteMoyenne: isNaN(noteMoyenne) ? 0 : parseFloat(noteMoyenne.toFixed(1)),
       totalAvis,
       totalFavoris,
     };
@@ -1341,6 +1385,17 @@ export default function BoutiqueApercu() {
     handleClearSelection();
   }, [searchTerm, statusFilter, availabilityFilter]);
 
+  // Gestion de l'ouverture des modales View et Edit
+  const handleOpenViewModal = (product: Produit) => {
+    setSelectedProduct(product);
+    setShowViewModal(true);
+  };
+
+  const handleOpenEditModal = (product: Produit) => {
+    setSelectedProduct(product);
+    setShowEditModal(true);
+  };
+
   if (loading) {
     return (
       <div className="d-flex justify-content-center align-items-center min-vh-50">
@@ -1374,8 +1429,8 @@ export default function BoutiqueApercu() {
 
   return (
     <>
-      {/* Modals
-        {selectedProduct && (
+      {/* Modales */}
+      {selectedProduct && (
         <EditProductModal
           isOpen={showEditModal}
           product={selectedProduct}
@@ -1398,8 +1453,6 @@ export default function BoutiqueApercu() {
         />
       )}
 
-      */}
-    
       {/* Modal de suppression en masse */}
       <BulkDeleteModal
         show={showBulkDeleteModal}
@@ -1458,7 +1511,7 @@ export default function BoutiqueApercu() {
             className="position-relative"
             style={{
               height: "300px",
-              backgroundImage: `url(${boutique.banniere})`,
+              backgroundImage: `url(${boutique.banniere || "https://via.placeholder.com/1200x300/cccccc/ffffff?text=Bannière"})`,
               backgroundSize: "cover",
               backgroundPosition: "center",
             }}
@@ -1471,7 +1524,10 @@ export default function BoutiqueApercu() {
                   style={{ marginTop: "-80px" }}
                 >
                   <img
-                    src={boutique.logo}
+                    src={
+                      boutique.logo ||
+                      `https://via.placeholder.com/160/cccccc/ffffff?text=${boutique.nom.charAt(0)}`
+                    }
                     alt={boutique.nom}
                     className="rounded-circle border border-4 border-white shadow"
                     style={{
@@ -1505,7 +1561,9 @@ export default function BoutiqueApercu() {
                     )}
                   </div>
 
-                  <p className="mb-3 opacity-75">{boutique.description}</p>
+                  <p className="mb-3 opacity-75">
+                    {boutique.description || "Aucune description"}
+                  </p>
 
                   <div className="d-flex flex-wrap gap-3">
                     <div className="d-flex align-items-center gap-2">
@@ -1568,7 +1626,7 @@ export default function BoutiqueApercu() {
           <div className="col-md-3 col-sm-6">
             <StatCard
               title="Note moyenne"
-              value={stats.noteMoyenne.toFixed(1)}
+              value={stats.noteMoyenne}
               icon={faStar}
               color="warning"
               subtitle={`${stats.totalAvis} avis`}
@@ -1707,6 +1765,15 @@ export default function BoutiqueApercu() {
                         ? "Aucun produit ne correspond à vos critères."
                         : "Cette boutique n'a pas encore de produits."}
                     </p>
+                    {boutique.produits.length === 0 && (
+                      <button
+                        onClick={() => handleCreateProduct()}
+                        className="btn btn-primary mt-3"
+                      >
+                        <FontAwesomeIcon icon={faPlus} className="me-2" />
+                        Ajouter votre premier produit
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="table-responsive">
@@ -1795,7 +1862,10 @@ export default function BoutiqueApercu() {
                               </td>
                               <td>
                                 <img
-                                  src={product.image}
+                                  src={
+                                    product.image ||
+                                    `https://via.placeholder.com/60/cccccc/ffffff?text=${product.libelle?.charAt(0) || "P"}`
+                                  }
                                   alt={product.libelle}
                                   className="rounded"
                                   style={{
@@ -1811,7 +1881,7 @@ export default function BoutiqueApercu() {
                               </td>
                               <td>
                                 <div className="fw-semibold">
-                                  {product.libelle}
+                                  {product.libelle || "Sans nom"}
                                 </div>
                                 {product.categorie && (
                                   <small className="text-muted">
@@ -1838,21 +1908,15 @@ export default function BoutiqueApercu() {
                                 <span
                                   className={`badge ${product.quantite > 0 ? "bg-success" : "bg-danger"}`}
                                 >
-                                  {product.quantite}
+                                  {product.quantite || 0}
                                 </span>
                               </td>
                               <td onClick={(e) => e.stopPropagation()}>
                                 <ProductActionsButtons
                                   product={product}
                                   isSelected={isSelected}
-                                  onView={() => {
-                                    setSelectedProduct(product);
-                                    setShowViewModal(true);
-                                  }}
-                                  onEdit={() => {
-                                    setSelectedProduct(product);
-                                    setShowEditModal(true);
-                                  }}
+                                  onView={() => handleOpenViewModal(product)}
+                                  onEdit={() => handleOpenEditModal(product)}
                                   onPublish={() =>
                                     handlePublishProduct(product.uuid)
                                   }
@@ -1912,7 +1976,7 @@ export default function BoutiqueApercu() {
                   </li>
                   <li className="list-group-item d-flex justify-content-between align-items-center border-0 px-0 py-2">
                     <span className="text-muted">Vendeur:</span>
-                    <code>{boutique.vendeurUuid}</code>
+                    <code>{boutique.vendeurUuid || "N/A"}</code>
                   </li>
                 </ul>
               </div>
@@ -1929,7 +1993,10 @@ export default function BoutiqueApercu() {
               <div className="card-body">
                 <div className="d-flex align-items-start gap-3">
                   <img
-                    src={boutique.type_boutique.image}
+                    src={
+                      boutique.type_boutique.image ||
+                      `https://via.placeholder.com/80/cccccc/ffffff?text=${boutique.type_boutique.libelle.charAt(0)}`
+                    }
                     alt={boutique.type_boutique.libelle}
                     className="rounded"
                     style={{
@@ -1947,7 +2014,7 @@ export default function BoutiqueApercu() {
                       {boutique.type_boutique.libelle}
                     </h5>
                     <p className="small text-muted mb-2">
-                      {boutique.type_boutique.code}
+                      {boutique.type_boutique.code || "N/A"}
                     </p>
                     <div className="d-flex flex-wrap gap-2">
                       {boutique.type_boutique.peut_vendre_produits && (

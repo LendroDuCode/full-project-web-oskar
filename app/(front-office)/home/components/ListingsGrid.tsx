@@ -1,11 +1,10 @@
-// ListingsGrid.tsx - VERSION CORRIGÉE
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import colors from "../../../shared/constants/colors";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
-import { API_CONFIG, buildApiUrl } from "@/config/env";
+
 interface ListingItem {
   uuid: string;
   type: "produit" | "echange" | "don";
@@ -38,6 +37,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const isMountedRef = useRef(true); // AJOUT: pour suivre si le composant est monté
 
   const MAX_RETRIES = 3;
   const PLACEHOLDER_IMAGE =
@@ -56,21 +56,24 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
     return PLACEHOLDER_IMAGE;
   }, []);
 
-  const abortCurrentRequest = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+  // CORRECTION: Fonction safe pour abort
+  const abortCurrentRequest = useCallback(() => {
+    if (abortControllerRef.current && isMountedRef.current) {
+      try {
+        abortControllerRef.current.abort();
+      } catch (err) {
+        // Ignorer les erreurs d'abort
+        console.log("Abort ignoré (composant démonté)");
+      }
       abortControllerRef.current = null;
     }
-  };
+  }, []);
 
-  // Fonction pour corriger les URLs si nécessaire
+  // CORRECTION: Fonction getApiUrl sécurisée
   const getApiUrl = useCallback((endpoint: string): string => {
-    // Si l'endpoint est déjà une URL complète, l'utiliser directement
     if (endpoint.startsWith("http://") || endpoint.startsWith("https://")) {
-      // Si on utilise le proxy, convertir en chemin relatif
       const useProxy = process.env.NEXT_PUBLIC_USE_PROXY === "true";
       if (useProxy) {
-        // Extraire le chemin après la base URL
         const baseUrl =
           process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
         if (endpoint.startsWith(baseUrl)) {
@@ -80,13 +83,17 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
       }
       return endpoint;
     }
-
-    // Sinon, c'est déjà un chemin relatif
     return endpoint;
   }, []);
 
+  // CORRECTION: Fonction fetchListings avec gestion d'état améliorée
   const fetchListings = useCallback(async () => {
+    // Nettoyer la requête précédente
     abortCurrentRequest();
+
+    // Vérifier si le composant est toujours monté
+    if (!isMountedRef.current) return;
+
     setLoading(true);
     setError(null);
 
@@ -112,11 +119,14 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
       abortControllerRef.current = controller;
       const { signal } = controller;
 
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 secondes
+      // CORRECTION: Timeout plus long avec nettoyage sûr
+      const timeoutId = setTimeout(() => {
+        if (isMountedRef.current) {
+          controller.abort();
+        }
+      }, 15000); // 15 secondes
 
-      // Utiliser getApiUrl pour corriger l'URL
       const url = getApiUrl(endpoint);
-
       console.log("🌐 Fetching from:", url);
 
       const response = await fetch(url, {
@@ -130,13 +140,16 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
         signal,
       });
 
+      // CORRECTION: Nettoyer le timeout
       clearTimeout(timeoutId);
+
+      // Vérifier si le composant est toujours monté
+      if (!isMountedRef.current) return;
 
       if (!response.ok) {
         throw new Error(`Erreur ${response.status}: ${response.statusText}`);
       }
 
-      // Vérifier si c'est du HTML
       const contentType = response.headers.get("content-type");
       const responseText = await response.text();
 
@@ -144,29 +157,23 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
         contentType?.includes("text/html") ||
         responseText.trim().startsWith("<!DOCTYPE")
       ) {
-        console.error(
-          "❌ Le backend retourne du HTML:",
-          responseText.substring(0, 300),
-        );
+        console.error("❌ HTML reçu:", responseText.substring(0, 300));
         throw new Error(
-          `Le serveur a retourné une page HTML au lieu de données JSON. ` +
-            `Vérifiez que l'endpoint '${endpoint}' existe sur le backend.`,
+          `Le serveur a retourné une page HTML. Vérifiez l'endpoint '${endpoint}'.`,
         );
       }
 
-      // Parser le JSON
       let apiData;
       try {
         apiData = JSON.parse(responseText);
       } catch (parseError) {
-        console.error(
-          "❌ Erreur parsing JSON:",
-          responseText.substring(0, 500),
-        );
-        throw new Error("Réponse invalide du serveur (non-JSON)");
+        console.error("❌ JSON invalide:", responseText.substring(0, 500));
+        throw new Error("Réponse invalide du serveur");
       }
 
-      // Transformer les données
+      // CORRECTION: Vérifier encore si le composant est monté
+      if (!isMountedRef.current) return;
+
       let transformedData: ListingItem[] = [];
       const dataArray = Array.isArray(apiData) ? apiData : [apiData];
 
@@ -225,7 +232,6 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
         }));
       }
 
-      // Appliquer le tri
       const sortedData = [...transformedData].sort((a, b) => {
         switch (sortOption) {
           case "price-asc": {
@@ -248,19 +254,29 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
         }
       });
 
-      setListings(sortedData);
-      setRetryCount(0);
+      // CORRECTION: Vérifier une dernière fois avant de mettre à jour l'état
+      if (isMountedRef.current) {
+        setListings(sortedData);
+        setRetryCount(0);
+      }
     } catch (err: any) {
+      // CORRECTION: Ne pas loguer les erreurs d'abort
+      if (err.name === "AbortError") {
+        console.log("Requête annulée");
+        return;
+      }
+
       console.error("Erreur fetch:", err);
 
-      if (err.name === "AbortError") return;
+      // Vérifier si le composant est toujours monté
+      if (!isMountedRef.current) return;
 
       if (retryCount >= MAX_RETRIES) {
         setError(
           "Impossible de charger les données. " +
             (err.message?.includes("HTML")
-              ? "Le backend semble avoir des problèmes de configuration."
-              : "Vérifiez votre connexion et réessayez."),
+              ? "Problème de configuration backend."
+              : "Vérifiez votre connexion."),
         );
         return;
       }
@@ -269,49 +285,35 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
       setRetryCount((prev) => prev + 1);
       setListings([]);
     } finally {
-      setLoading(false);
-      abortControllerRef.current = null;
-    }
-  }, [filterType, sortOption, retryCount, normalizeImageUrl, getApiUrl]);
-
-  // [Le reste du code reste identique...]
-
-  // Fonction de tri (garder la même)
-  const sortListings = useCallback(
-    (data: ListingItem[], sortBy: string): ListingItem[] => {
-      const sorted = [...data];
-      switch (sortBy) {
-        case "price-asc":
-          return sorted.sort((a, b) => {
-            const priceA = a.prix ? parseFloat(a.prix.toString()) : 0;
-            const priceB = b.prix ? parseFloat(b.prix.toString()) : 0;
-            return priceA - priceB;
-          });
-        case "price-desc":
-          return sorted.sort((a, b) => {
-            const priceA = a.prix ? parseFloat(a.prix.toString()) : 0;
-            const priceB = b.prix ? parseFloat(b.prix.toString()) : 0;
-            return priceB - priceA;
-          });
-        case "recent":
-          return sorted.sort((a, b) => {
-            const dateA = a.date ? new Date(a.date).getTime() : 0;
-            const dateB = b.date ? new Date(b.date).getTime() : 0;
-            return dateB - dateA;
-          });
-        default:
-          return sorted;
+      // CORRECTION: Vérifier avant de mettre à jour l'état
+      if (isMountedRef.current) {
+        setLoading(false);
+        abortControllerRef.current = null;
       }
-    },
-    [],
-  );
+    }
+  }, [
+    filterType,
+    sortOption,
+    retryCount,
+    normalizeImageUrl,
+    getApiUrl,
+    abortCurrentRequest,
+  ]);
 
+  // CORRECTION: useEffect avec cleanup amélioré
   useEffect(() => {
-    fetchListings();
-    return () => abortCurrentRequest();
-  }, [fetchListings]);
+    isMountedRef.current = true;
 
-  // [Les autres fonctions utilitaires restent identiques...]
+    fetchListings();
+
+    return () => {
+      isMountedRef.current = false;
+      // CORRECTION: Appeler abort avec vérification de montage
+      abortCurrentRequest();
+    };
+  }, [fetchListings, abortCurrentRequest]);
+
+  // Les autres fonctions restent les mêmes...
   const getTypeLabel = useCallback((type: string) => {
     switch (type) {
       case "don":
@@ -382,7 +384,6 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
     fetchListings();
   };
 
-  // [Le JSX reste identique...]
   if (loading) {
     return (
       <div className="d-flex flex-column justify-content-center align-items-center py-5">

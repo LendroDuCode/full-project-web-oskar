@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faBox,
@@ -30,6 +30,15 @@ import {
   faLayerGroup,
   faChartLine,
   faSpinner,
+  faTimesCircle,
+  faUpload,
+  faChevronDown,
+  faPercent,
+  faWeightHanging,
+  faRulerVertical,
+  faBarcode,
+  faPalette,
+  faClock,
 } from "@fortawesome/free-solid-svg-icons";
 import { api } from "@/lib/api-client";
 import colors from "@/app/shared/constants/colors";
@@ -78,6 +87,1080 @@ interface PaginationState {
   pages: number;
 }
 
+// ================================
+// COMPOSANT MODAL VIEW
+// ================================
+function ViewProduitModal({
+  isOpen,
+  produit,
+  onClose,
+}: {
+  isOpen: boolean;
+  produit: ProduitUtilisateur | null;
+  onClose: () => void;
+}) {
+  if (!isOpen || !produit) return null;
+
+  const [activeTab, setActiveTab] = useState("details");
+  const [zoomImage, setZoomImage] = useState(false);
+
+  const formatPrice = (price: string | number) => {
+    const numPrice = typeof price === "string" ? parseFloat(price) : price;
+    return new Intl.NumberFormat("fr-FR", {
+      style: "currency",
+      currency: "XOF",
+      minimumFractionDigits: 0,
+    }).format(numPrice || 0);
+  };
+
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return "Non spécifié";
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "Date invalide";
+
+      return date.toLocaleDateString("fr-FR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return "Date invalide";
+    }
+  };
+
+  const getStatusBadge = (statut: string) => {
+    const statusMap: Record<string, { color: string; text: string }> = {
+      publie: { color: "success", text: "Publié" },
+      en_attente: { color: "warning", text: "En attente" },
+      rejete: { color: "danger", text: "Rejeté" },
+      brouillon: { color: "secondary", text: "Brouillon" },
+    };
+
+    const status = statusMap[statut] || { color: "info", text: statut };
+    return (
+      <span
+        className={`badge bg-${status.color} bg-opacity-10 text-${status.color}`}
+      >
+        {status.text}
+      </span>
+    );
+  };
+
+  const getProductImage = (produit: ProduitUtilisateur) => {
+    if (produit.image) {
+      return produit.image;
+    }
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(produit.libelle)}&background=007bff&color=fff&size=300&bold=true`;
+  };
+
+  return (
+    <div
+      className="modal fade show d-block"
+      tabIndex={-1}
+      style={{
+        backgroundColor: "rgba(0,0,0,0.6)",
+        backdropFilter: "blur(4px)",
+        zIndex: 1050,
+      }}
+      role="dialog"
+      aria-labelledby="viewProduitModalLabel"
+      aria-modal="true"
+    >
+      <div className="modal-dialog modal-dialog-centered modal-lg">
+        <div
+          className="modal-content border-0 shadow-lg overflow-hidden"
+          style={{
+            borderRadius: "20px",
+            border: `2px solid ${colors.oskar.blue}30`,
+          }}
+        >
+          {/* En-tête */}
+          <div
+            className="modal-header text-white border-0"
+            style={{
+              background: `linear-gradient(135deg, ${colors.oskar.blue} 0%, ${colors.oskar.blueHover} 100%)`,
+              padding: "1.5rem 2rem",
+            }}
+          >
+            <div className="d-flex align-items-center w-100">
+              <div
+                className="bg-white bg-opacity-25 rounded-circle p-2 me-3 d-flex align-items-center justify-content-center"
+                style={{ width: "48px", height: "48px" }}
+              >
+                <FontAwesomeIcon icon={faEye} className="fs-4" />
+              </div>
+              <div className="flex-grow-1">
+                <h5 className="modal-title mb-1 fw-bold fs-4">
+                  Détails du produit
+                </h5>
+                <p className="mb-0 opacity-85" style={{ fontSize: "0.95rem" }}>
+                  Informations complètes sur votre produit
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn-close btn-close-white"
+              onClick={onClose}
+              aria-label="Fermer"
+              style={{
+                filter: "brightness(0) invert(1)",
+                opacity: 0.9,
+              }}
+            />
+          </div>
+
+          {/* Corps */}
+          <div className="modal-body p-4">
+            <div className="row">
+              {/* Image */}
+              <div className="col-md-5 mb-4 mb-md-0">
+                <div className="position-relative">
+                  <img
+                    src={getProductImage(produit)}
+                    alt={produit.libelle}
+                    className="img-fluid rounded-3 shadow-lg w-100"
+                    style={{ height: "300px", objectFit: "cover" }}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src =
+                        `https://ui-avatars.com/api/?name=${encodeURIComponent(produit.libelle)}&background=007bff&color=fff&size=300&bold=true`;
+                    }}
+                  />
+                  {produit.estPublie && (
+                    <div className="position-absolute top-0 end-0 m-3">
+                      <span
+                        className="badge bg-success"
+                        style={{ fontSize: "0.9rem" }}
+                      >
+                        <FontAwesomeIcon
+                          icon={faCheckCircle}
+                          className="me-1"
+                        />
+                        Publié
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Indicateurs rapides */}
+                <div className="mt-4">
+                  <div className="card border-0 shadow-sm">
+                    <div className="card-body">
+                      <h6 className="fw-bold mb-3">
+                        <FontAwesomeIcon
+                          icon={faInfoCircle}
+                          className="me-2 text-primary"
+                        />
+                        Informations rapides
+                      </h6>
+                      <div className="row g-2">
+                        <div className="col-6">
+                          <small className="text-muted d-block">Statut</small>
+                          <div className="mt-1">
+                            {getStatusBadge(produit.statut)}
+                          </div>
+                        </div>
+                        <div className="col-6">
+                          <small className="text-muted d-block">
+                            Publication
+                          </small>
+                          <div className="mt-1">
+                            {produit.estPublie ? (
+                              <span className="badge bg-success bg-opacity-10 text-success">
+                                <FontAwesomeIcon
+                                  icon={faToggleOn}
+                                  className="me-1"
+                                />
+                                Publié
+                              </span>
+                            ) : (
+                              <span className="badge bg-warning bg-opacity-10 text-warning">
+                                <FontAwesomeIcon
+                                  icon={faToggleOff}
+                                  className="me-1"
+                                />
+                                Non publié
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="col-6">
+                          <small className="text-muted d-block">Quantité</small>
+                          <div className="fw-semibold mt-1">
+                            {produit.quantite}
+                          </div>
+                        </div>
+                        <div className="col-6">
+                          <small className="text-muted d-block">
+                            Prix unitaire
+                          </small>
+                          <div className="fw-semibold text-primary mt-1">
+                            {formatPrice(produit.prix)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Détails */}
+              <div className="col-md-7">
+                <h2 className="fw-bold mb-3">{produit.libelle}</h2>
+
+                {/* Catégorie */}
+                <div className="mb-4">
+                  <div className="d-flex align-items-center mb-2">
+                    <FontAwesomeIcon
+                      icon={faLayerGroup}
+                      className="me-2 text-muted"
+                    />
+                    <span className="fw-semibold me-3">Catégorie:</span>
+                    <div className="d-flex align-items-center">
+                      {produit.categorie.image && (
+                        <img
+                          src={produit.categorie.image}
+                          alt={produit.categorie.libelle}
+                          className="rounded me-2"
+                          style={{
+                            width: "32px",
+                            height: "32px",
+                            objectFit: "cover",
+                          }}
+                        />
+                      )}
+                      <div>
+                        <div className="fw-medium">
+                          {produit.categorie.libelle}
+                        </div>
+                        <small className="text-muted">
+                          {produit.categorie.type}
+                        </small>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div className="mb-4">
+                  <h6 className="fw-bold mb-2">
+                    <FontAwesomeIcon
+                      icon={faTag}
+                      className="me-2 text-primary"
+                    />
+                    Description
+                  </h6>
+                  {produit.description ? (
+                    <div className="bg-light rounded p-3">
+                      <p className="mb-0" style={{ lineHeight: "1.6" }}>
+                        {produit.description}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="text-muted fst-italic">
+                      Aucune description disponible
+                    </div>
+                  )}
+                </div>
+
+                {/* Dates */}
+                <div className="row mb-4">
+                  <div className="col-md-6 mb-3">
+                    <h6 className="fw-bold mb-2">
+                      <FontAwesomeIcon
+                        icon={faCalendar}
+                        className="me-2 text-primary"
+                      />
+                      Date de création
+                    </h6>
+                    <div className="fw-semibold">
+                      {formatDate(produit.createdAt)}
+                    </div>
+                  </div>
+                  <div className="col-md-6 mb-3">
+                    <h6 className="fw-bold mb-2">
+                      <FontAwesomeIcon
+                        icon={faCalendar}
+                        className="me-2 text-primary"
+                      />
+                      Dernière modification
+                    </h6>
+                    <div className="fw-semibold">
+                      {formatDate(produit.updatedAt)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Informations vendeur */}
+                <div className="card border-0 shadow-sm">
+                  <div className="card-body">
+                    <h6 className="fw-bold mb-3">
+                      <FontAwesomeIcon
+                        icon={faUser}
+                        className="me-2 text-primary"
+                      />
+                      Informations du vendeur
+                    </h6>
+                    <div className="d-flex align-items-center gap-3">
+                      {produit.source.infos.avatar && (
+                        <img
+                          src={produit.source.infos.avatar}
+                          alt={`${produit.source.infos.prenoms} ${produit.source.infos.nom}`}
+                          className="rounded-circle"
+                          style={{
+                            width: "60px",
+                            height: "60px",
+                            objectFit: "cover",
+                          }}
+                        />
+                      )}
+                      <div>
+                        <div className="fw-bold">
+                          {produit.source.infos.prenoms}{" "}
+                          {produit.source.infos.nom}
+                        </div>
+                        <div className="text-muted">{produit.source.type}</div>
+                        {produit.source.infos.email && (
+                          <div className="text-muted small">
+                            {produit.source.infos.email}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* UUID */}
+                <div className="mt-4 pt-4 border-top">
+                  <small className="text-muted d-block">
+                    Identifiant unique
+                  </small>
+                  <code className="text-muted">{produit.uuid}</code>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Pied de page */}
+          <div className="modal-footer border-top-0">
+            <div className="d-flex justify-content-between w-100">
+              <button
+                type="button"
+                className="btn btn-outline-secondary"
+                onClick={onClose}
+                style={{ borderRadius: "10px", padding: "0.75rem 2rem" }}
+              >
+                <FontAwesomeIcon icon={faTimes} className="me-2" />
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <style jsx>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .modal-content {
+          border-radius: 20px !important;
+          overflow: hidden;
+          animation: fadeIn 0.4s ease-out;
+        }
+
+        .btn {
+          border-radius: 10px !important;
+          transition: all 0.3s ease;
+          font-weight: 500;
+        }
+
+        .btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// ================================
+// COMPOSANT MODAL EDIT
+// ================================
+function EditProduitModal({
+  isOpen,
+  produit,
+  onClose,
+  onSuccess,
+}: {
+  isOpen: boolean;
+  produit: ProduitUtilisateur | null;
+  onClose: () => void;
+  onSuccess: (message: string) => void;
+}) {
+  const [formData, setFormData] = useState<{
+    libelle: string;
+    description: string;
+    prix: string;
+    quantite: number;
+    statut: string;
+    estPublie: boolean;
+    categorie_uuid: string;
+  }>({
+    libelle: "",
+    description: "",
+    prix: "",
+    quantite: 1,
+    statut: "publie",
+    estPublie: false,
+    categorie_uuid: "",
+  });
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [categories, setCategories] = useState<
+    Array<{
+      uuid: string;
+      libelle: string;
+      image?: string;
+      type: string;
+    }>
+  >([]);
+  const [activeStep, setActiveStep] = useState(1);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (produit) {
+      setFormData({
+        libelle: produit.libelle,
+        description: produit.description || "",
+        prix: produit.prix,
+        quantite: produit.quantite,
+        statut: produit.statut,
+        estPublie: produit.estPublie,
+        categorie_uuid: produit.categorie.uuid,
+      });
+    }
+  }, [produit]);
+
+  // Charger les catégories
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const response = await api.get("/categories");
+        if (response.data) {
+          setCategories(response.data);
+        }
+      } catch (err) {
+        console.error("Erreur chargement catégories:", err);
+      }
+    };
+
+    if (isOpen) {
+      loadCategories();
+      setActiveStep(1);
+    }
+  }, [isOpen]);
+
+  const handleChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >,
+  ) => {
+    const { name, value, type } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]:
+        type === "checkbox"
+          ? (e.target as HTMLInputElement).checked
+          : type === "number"
+            ? parseFloat(value)
+            : value,
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!produit) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Simulation d'API - À remplacer par votre appel API réel
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      onSuccess(`Produit "${formData.libelle}" modifié avec succès !`);
+      onClose();
+    } catch (err: any) {
+      setError(err.message || "Erreur lors de la modification du produit");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!isOpen || !produit) return null;
+
+  const formatPrice = (price: string | number) => {
+    const numPrice = typeof price === "string" ? parseFloat(price) : price;
+    return new Intl.NumberFormat("fr-FR", {
+      style: "currency",
+      currency: "XOF",
+      minimumFractionDigits: 0,
+    }).format(numPrice || 0);
+  };
+
+  const steps = [
+    { number: 1, title: "Informations", icon: faTag },
+    { number: 2, title: "Détails", icon: faMoneyBillWave },
+    { number: 3, title: "Confirmation", icon: faCheckCircle },
+  ];
+
+  return (
+    <div
+      className="modal fade show d-block"
+      tabIndex={-1}
+      style={{
+        backgroundColor: "rgba(0,0,0,0.6)",
+        backdropFilter: "blur(4px)",
+        zIndex: 1060,
+      }}
+      role="dialog"
+      aria-labelledby="editProduitModalLabel"
+      aria-modal="true"
+    >
+      <div className="modal-dialog modal-dialog-centered modal-lg">
+        <div
+          className="modal-content border-0 shadow-lg overflow-hidden"
+          style={{
+            borderRadius: "20px",
+            border: `2px solid ${colors.oskar.yellow}30`,
+          }}
+        >
+          {/* En-tête */}
+          <div
+            className="modal-header text-white border-0"
+            style={{
+              background: `linear-gradient(135deg, ${colors.oskar.yellow} 0%, ${colors.oskar.yellowHover} 100%)`,
+              padding: "1.5rem 2rem",
+            }}
+          >
+            <div className="d-flex align-items-center w-100">
+              <div
+                className="bg-white bg-opacity-25 rounded-circle p-2 me-3 d-flex align-items-center justify-content-center"
+                style={{ width: "48px", height: "48px" }}
+              >
+                <FontAwesomeIcon icon={faEdit} className="fs-4" />
+              </div>
+              <div className="flex-grow-1">
+                <h5 className="modal-title mb-1 fw-bold fs-4">
+                  Modifier le produit
+                </h5>
+                <p className="mb-0 opacity-85" style={{ fontSize: "0.95rem" }}>
+                  Mettez à jour les informations de votre produit
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn-close btn-close-white"
+              onClick={onClose}
+              disabled={loading}
+              aria-label="Fermer"
+              style={{
+                filter: "brightness(0) invert(1)",
+                opacity: 0.9,
+              }}
+            />
+          </div>
+
+          {/* Barre de progression */}
+          <div className="px-4 pt-4">
+            <div className="d-flex justify-content-between align-items-center mb-4">
+              {steps.map((step, index) => (
+                <div key={step.number} className="d-flex align-items-center">
+                  <div
+                    className={`rounded-circle d-flex align-items-center justify-content-center ${activeStep >= step.number ? "text-white" : "text-muted"}`}
+                    style={{
+                      width: "40px",
+                      height: "40px",
+                      background:
+                        activeStep >= step.number
+                          ? `linear-gradient(135deg, ${colors.oskar.yellow} 0%, ${colors.oskar.yellowHover} 100%)`
+                          : colors.oskar.lightGrey,
+                      border: `2px solid ${activeStep >= step.number ? colors.oskar.yellowHover : colors.oskar.grey}30`,
+                      fontSize: "0.9rem",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    <FontAwesomeIcon icon={step.icon} />
+                  </div>
+                  {index < steps.length - 1 && (
+                    <div
+                      className="mx-3"
+                      style={{
+                        width: "40px",
+                        height: "2px",
+                        background:
+                          activeStep > step.number
+                            ? colors.oskar.yellow
+                            : colors.oskar.lightGrey,
+                      }}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Messages d'erreur/succès */}
+          {error && (
+            <div className="alert alert-danger mx-4 mb-4" role="alert">
+              <FontAwesomeIcon icon={faExclamationTriangle} className="me-2" />
+              {error}
+            </div>
+          )}
+
+          {/* Formulaire */}
+          <form onSubmit={handleSubmit}>
+            <div className="modal-body p-4">
+              {activeStep === 1 && (
+                <div className="row g-3">
+                  <div className="col-md-6">
+                    <label className="form-label fw-semibold">
+                      <FontAwesomeIcon icon={faTag} className="me-2" />
+                      Nom du produit *
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      name="libelle"
+                      value={formData.libelle}
+                      onChange={handleChange}
+                      required
+                      disabled={loading}
+                      placeholder="Entrez le nom du produit"
+                    />
+                  </div>
+
+                  <div className="col-md-6">
+                    <label className="form-label fw-semibold">
+                      <FontAwesomeIcon
+                        icon={faMoneyBillWave}
+                        className="me-2"
+                      />
+                      Prix *
+                    </label>
+                    <div className="input-group">
+                      <input
+                        type="number"
+                        className="form-control"
+                        name="prix"
+                        value={formData.prix}
+                        onChange={handleChange}
+                        required
+                        disabled={loading}
+                        min="0"
+                        step="0.01"
+                      />
+                      <span className="input-group-text">CFA</span>
+                    </div>
+                  </div>
+
+                  <div className="col-12">
+                    <label className="form-label fw-semibold">
+                      <FontAwesomeIcon icon={faEdit} className="me-2" />
+                      Description
+                    </label>
+                    <textarea
+                      className="form-control"
+                      name="description"
+                      rows={3}
+                      value={formData.description}
+                      onChange={handleChange}
+                      disabled={loading}
+                      placeholder="Décrivez votre produit..."
+                    />
+                  </div>
+
+                  <div className="col-md-6">
+                    <label className="form-label fw-semibold">
+                      <FontAwesomeIcon icon={faBox} className="me-2" />
+                      Quantité *
+                    </label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      name="quantite"
+                      value={formData.quantite}
+                      onChange={handleChange}
+                      required
+                      disabled={loading}
+                      min="0"
+                    />
+                  </div>
+
+                  <div className="col-md-6">
+                    <label className="form-label fw-semibold">
+                      <FontAwesomeIcon icon={faLayerGroup} className="me-2" />
+                      Catégorie *
+                    </label>
+                    <select
+                      className="form-select"
+                      name="categorie_uuid"
+                      value={formData.categorie_uuid}
+                      onChange={handleChange}
+                      required
+                      disabled={loading}
+                    >
+                      <option value="">Sélectionnez une catégorie</option>
+                      {categories.map((category) => (
+                        <option key={category.uuid} value={category.uuid}>
+                          {category.libelle} ({category.type})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {activeStep === 2 && (
+                <div className="row g-3">
+                  <div className="col-md-6">
+                    <label className="form-label fw-semibold">
+                      <FontAwesomeIcon icon={faToggleOn} className="me-2" />
+                      Statut
+                    </label>
+                    <select
+                      className="form-select"
+                      name="statut"
+                      value={formData.statut}
+                      onChange={handleChange}
+                      disabled={loading}
+                    >
+                      <option value="publie">Publié</option>
+                      <option value="en_attente">En attente</option>
+                      <option value="brouillon">Brouillon</option>
+                      <option value="rejete">Rejeté</option>
+                    </select>
+                  </div>
+
+                  <div className="col-md-6">
+                    <label className="form-label fw-semibold d-block">
+                      <FontAwesomeIcon icon={faCheckCircle} className="me-2" />
+                      Publication
+                    </label>
+                    <div className="form-check form-switch">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        role="switch"
+                        id="edit-estPublie"
+                        name="estPublie"
+                        checked={formData.estPublie}
+                        onChange={handleChange}
+                        disabled={loading}
+                      />
+                      <label
+                        className="form-check-label"
+                        htmlFor="edit-estPublie"
+                      >
+                        {formData.estPublie ? "Publié" : "Non publié"}
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="col-12">
+                    <label className="form-label fw-semibold">
+                      <FontAwesomeIcon icon={faImage} className="me-2" />
+                      Image du produit
+                    </label>
+                    <div className="border rounded p-3 text-center">
+                      <FontAwesomeIcon
+                        icon={faUpload}
+                        className="fs-1 text-muted mb-2"
+                      />
+                      <p className="mb-2">Cliquez pour télécharger une image</p>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        className="form-control d-none"
+                        accept="image/*"
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-secondary"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={loading}
+                      >
+                        <FontAwesomeIcon icon={faUpload} className="me-2" />
+                        Choisir un fichier
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeStep === 3 && (
+                <div className="text-center py-4">
+                  <div className="mb-4">
+                    <FontAwesomeIcon
+                      icon={faCheckCircle}
+                      className="text-success"
+                      style={{ fontSize: "4rem" }}
+                    />
+                  </div>
+                  <h4 className="fw-bold mb-3">Confirmer les modifications</h4>
+                  <p className="text-muted mb-4">
+                    Vérifiez les informations ci-dessous avant de sauvegarder
+                  </p>
+
+                  <div className="card border-0 shadow-sm">
+                    <div className="card-body">
+                      <div className="row">
+                        <div className="col-md-6">
+                          <h6 className="fw-bold">Produit</h6>
+                          <p className="mb-1">{formData.libelle}</p>
+                          <small className="text-muted">
+                            {formData.description.substring(0, 100)}...
+                          </small>
+                        </div>
+                        <div className="col-md-6">
+                          <h6 className="fw-bold">Détails</h6>
+                          <p className="mb-1">
+                            Prix: {formatPrice(formData.prix)}
+                          </p>
+                          <p className="mb-1">Quantité: {formData.quantite}</p>
+                          <p className="mb-1">Statut: {formData.statut}</p>
+                          <p className="mb-0">
+                            Publication: {formData.estPublie ? "Oui" : "Non"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Pied de page */}
+            <div className="modal-footer border-top-0">
+              <div className="d-flex justify-content-between w-100">
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  onClick={() =>
+                    activeStep > 1 ? setActiveStep(activeStep - 1) : onClose()
+                  }
+                  disabled={loading}
+                >
+                  {activeStep > 1 ? "Précédent" : "Annuler"}
+                </button>
+
+                {activeStep < steps.length ? (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => setActiveStep(activeStep + 1)}
+                    disabled={loading}
+                  >
+                    Suivant
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    className="btn btn-warning"
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <>
+                        <FontAwesomeIcon
+                          icon={faSpinner}
+                          spin
+                          className="me-2"
+                        />
+                        Enregistrement...
+                      </>
+                    ) : (
+                      <>
+                        <FontAwesomeIcon
+                          icon={faCheckCircle}
+                          className="me-2"
+                        />
+                        Enregistrer les modifications
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <style jsx>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .modal-content {
+          border-radius: 20px !important;
+          overflow: hidden;
+          animation: fadeIn 0.4s ease-out;
+        }
+
+        .form-control,
+        .form-select {
+          border-radius: 10px !important;
+        }
+
+        .btn {
+          border-radius: 10px !important;
+          font-weight: 500;
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// ================================
+// COMPOSANT MODAL DELETE
+// ================================
+function DeleteProduitModal({
+  show,
+  produit,
+  loading,
+  onClose,
+  onConfirm,
+  type = "single",
+  count = 0,
+}: {
+  show: boolean;
+  produit: ProduitUtilisateur | null;
+  loading: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  type?: "single" | "multiple";
+  count?: number;
+}) {
+  if (!show) return null;
+
+  return (
+    <div
+      className="modal fade show d-block"
+      style={{
+        backgroundColor: "rgba(0,0,0,0.5)",
+        zIndex: 1070,
+      }}
+      tabIndex={-1}
+    >
+      <div className="modal-dialog modal-dialog-centered">
+        <div className="modal-content border-0 shadow-lg">
+          <div className="modal-header border-0 bg-danger text-white rounded-top-3">
+            <h5 className="modal-title fw-bold">
+              <FontAwesomeIcon icon={faTrash} className="me-2" />
+              {type === "multiple"
+                ? "Suppression multiple"
+                : "Confirmer la suppression"}
+            </h5>
+            <button
+              type="button"
+              className="btn-close btn-close-white"
+              onClick={onClose}
+              disabled={loading}
+            ></button>
+          </div>
+          <div className="modal-body p-4">
+            <div className="alert alert-warning mb-3 border-0">
+              <FontAwesomeIcon icon={faExclamationTriangle} className="me-2" />
+              <strong>Attention :</strong> Cette action est définitive
+            </div>
+            {type === "single" && produit ? (
+              <>
+                <p className="mb-3">
+                  Êtes-vous sûr de vouloir supprimer le produit{" "}
+                  <strong>{produit.libelle}</strong> ?
+                </p>
+                <div className="text-danger">
+                  <small>
+                    Cette action est irréversible. Toutes les données associées
+                    à ce produit seront perdues.
+                  </small>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="mb-3">
+                  Êtes-vous sûr de vouloir supprimer{" "}
+                  <strong>{count} produit(s)</strong> ?
+                </p>
+                <div className="text-danger">
+                  <small>
+                    Cette action est irréversible. Toutes les données associées
+                    seront perdues.
+                  </small>
+                </div>
+              </>
+            )}
+          </div>
+          <div className="modal-footer border-0">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onClose}
+              disabled={loading}
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={onConfirm}
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-2"></span>
+                  {type === "multiple"
+                    ? "Suppression en cours..."
+                    : "Suppression..."}
+                </>
+              ) : (
+                <>
+                  <FontAwesomeIcon icon={faTrash} className="me-2" />
+                  {type === "multiple"
+                    ? `Supprimer ${count} produit(s)`
+                    : "Supprimer définitivement"}
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ================================
+// COMPOSANT PRINCIPAL
+// ================================
 export default function ListeProduitsCreeUtilisateur() {
   const [produits, setProduits] = useState<ProduitUtilisateur[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,6 +1169,15 @@ export default function ListeProduitsCreeUtilisateur() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
   const [selectedProduits, setSelectedProduits] = useState<string[]>([]);
+
+  // États pour les modals
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [selectedProduit, setSelectedProduit] =
+    useState<ProduitUtilisateur | null>(null);
+  const [deleteType, setDeleteType] = useState<"single" | "multiple">("single");
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Pagination
   const [pagination, setPagination] = useState<PaginationState>({
@@ -119,46 +1211,24 @@ export default function ListeProduitsCreeUtilisateur() {
     avatar: string;
   } | null>(null);
 
-  // Charger les produits - VERSION CORRIGÉE
+  // Charger les produits
   const fetchProduitsUtilisateur = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      console.log("🔄 Chargement des produits de l'utilisateur...");
 
       const response = await api.get(
         "/produits/liste-mes-utilisateur-produits",
       );
 
-      console.log("📦 Réponse API complète:", response);
-
-      // Vérifier que response.data existe
-      if (!response.data) {
-        throw new Error("Aucune donnée reçue de l'API");
-      }
-
-      console.log("📦 response.data:", response.data);
-      console.log("📦 Status:", response.data?.status);
-      console.log("📦 Has data property:", !!response.data?.data);
-      console.log("📦 Data content:", response.data?.data);
-
-      // Format 1: Votre API retourne { status: "success", data: { produits: [...] } }
       if (response.data?.status === "success" && response.data.data) {
-        console.log("✅ Format détecté: status success avec data");
-
         const data = response.data.data;
-        console.log("📦 Données extraites:", data);
 
-        // Vérifier que data.produits existe et est un tableau
         if (data.produits && Array.isArray(data.produits)) {
           const produitsData = data.produits;
           const paginationData = data.pagination;
           const utilisateurData = data.utilisateur;
 
-          console.log(`✅ ${produitsData.length} produit(s) trouvé(s)`);
-          console.log("📦 Premier produit:", produitsData[0]);
-
-          // Mettre à jour les états
           setProduits(produitsData);
 
           if (utilisateurData) {
@@ -215,27 +1285,19 @@ export default function ListeProduitsCreeUtilisateur() {
             });
           }
         } else {
-          console.warn("⚠️ data.produits n'est pas un tableau:", data.produits);
           setProduits([]);
           resetStats();
         }
-      }
-      // Format alternatif: produits directement dans data
-      else if (Array.isArray(response.data)) {
-        console.log("✅ Format détecté: tableau direct");
+      } else if (Array.isArray(response.data)) {
         setProduits(response.data);
         calculateStats(response.data);
-      }
-      // Format alternatif: produits dans une propriété 'produits'
-      else if (
+      } else if (
         response.data.produits &&
         Array.isArray(response.data.produits)
       ) {
-        console.log("✅ Format détecté: produits direct");
         setProduits(response.data.produits);
         calculateStats(response.data.produits);
       } else {
-        console.error("❌ Format de réponse inattendu:", response.data);
         throw new Error("Format de réponse API non reconnu");
       }
     } catch (err: any) {
@@ -258,13 +1320,94 @@ export default function ListeProduitsCreeUtilisateur() {
       resetStats();
     } finally {
       setLoading(false);
-      console.log("🏁 Chargement terminé");
     }
   }, []);
 
   useEffect(() => {
     fetchProduitsUtilisateur();
   }, [fetchProduitsUtilisateur]);
+
+  // Fonctions pour les modals
+  const handleViewDetails = (produit: ProduitUtilisateur) => {
+    setSelectedProduit(produit);
+    setIsViewModalOpen(true);
+  };
+
+  const handleEditProduit = (produit: ProduitUtilisateur) => {
+    setSelectedProduit(produit);
+    setIsEditModalOpen(true);
+  };
+
+  const handleDeleteProduit = (produitUuid: string) => {
+    const produit = produits.find((p) => p.uuid === produitUuid);
+    if (produit) {
+      setSelectedProduit(produit);
+      setDeleteType("single");
+      setIsDeleteModalOpen(true);
+    }
+  };
+
+  const handleBulkDelete = () => {
+    setDeleteType("multiple");
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    setDeleteLoading(true);
+
+    try {
+      if (deleteType === "single" && selectedProduit) {
+        // Simulation d'API - À remplacer par votre appel API réel
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        setProduits((prev) =>
+          prev.filter((p) => p.uuid !== selectedProduit.uuid),
+        );
+        setSuccessMessage(
+          `Produit "${selectedProduit.libelle}" supprimé avec succès !`,
+        );
+      } else if (deleteType === "multiple") {
+        // Simulation d'API - À remplacer par votre appel API réel
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        setProduits((prev) =>
+          prev.filter((p) => !selectedProduits.includes(p.uuid)),
+        );
+        setSuccessMessage(
+          `${selectedProduits.length} produit(s) supprimé(s) avec succès !`,
+        );
+        setSelectedProduits([]);
+      }
+
+      setIsDeleteModalOpen(false);
+      setSelectedProduit(null);
+
+      setTimeout(() => setSuccessMessage(null), 3000);
+    } catch (err: any) {
+      setError(err.message || "Erreur lors de la suppression");
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const handleCloseViewModal = () => {
+    setIsViewModalOpen(false);
+    setSelectedProduit(null);
+  };
+
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false);
+    setSelectedProduit(null);
+  };
+
+  const handleCloseDeleteModal = () => {
+    setIsDeleteModalOpen(false);
+    setSelectedProduit(null);
+  };
+
+  const handleEditSuccess = (message: string) => {
+    setSuccessMessage(message);
+    setTimeout(() => setSuccessMessage(null), 3000);
+    fetchProduitsUtilisateur();
+  };
 
   // Calcul des statistiques
   const calculateStats = (produitsList: ProduitUtilisateur[]) => {
@@ -307,10 +1450,6 @@ export default function ListeProduitsCreeUtilisateur() {
 
   // Filtrage et tri
   const filteredProduits = useMemo(() => {
-    console.log("🔍 Filtrage des produits...");
-    console.log("📦 Produits totaux:", produits.length);
-    console.log("🔍 Terme de recherche:", searchTerm);
-
     let result = produits.filter((produit) => {
       // Filtre par recherche
       const searchLower = searchTerm.toLowerCase();
@@ -339,11 +1478,8 @@ export default function ListeProduitsCreeUtilisateur() {
       return matchesSearch && matchesStatus && matchesPublish && matchesPrice;
     });
 
-    console.log("✅ Produits filtrés:", result.length);
-
     // Tri
     if (sortConfig) {
-      console.log("🔀 Tri par:", sortConfig.key, sortConfig.direction);
       result.sort((a, b) => {
         const aValue = a[sortConfig.key];
         const bValue = b[sortConfig.key];
@@ -401,13 +1537,7 @@ export default function ListeProduitsCreeUtilisateur() {
   const currentItems = useMemo(() => {
     const startIndex = (pagination.page - 1) * pagination.limit;
     const endIndex = startIndex + pagination.limit;
-    const items = filteredProduits.slice(startIndex, endIndex);
-
-    console.log("📄 Page courante:", pagination.page);
-    console.log("📄 Items sur la page:", items.length);
-    console.log("📄 Index:", startIndex, "à", endIndex);
-
-    return items;
+    return filteredProduits.slice(startIndex, endIndex);
   }, [filteredProduits, pagination.page, pagination.limit]);
 
   const requestSort = (key: keyof ProduitUtilisateur) => {
@@ -513,9 +1643,6 @@ export default function ListeProduitsCreeUtilisateur() {
 
     try {
       // TODO: Implémenter l'appel API pour publier/dépublier
-      // const endpoint = currentState ? `/produits/${produitUuid}/unpublish` : `/produits/${produitUuid}/publish`;
-      // const response = await api.post(endpoint);
-
       // Simulation
       setProduits((prev) =>
         prev.map((p) =>
@@ -534,53 +1661,6 @@ export default function ListeProduitsCreeUtilisateur() {
     }
   };
 
-  const handleDeleteProduit = async (produitUuid: string) => {
-    if (
-      !confirm(
-        "Voulez-vous vraiment supprimer ce produit ? Cette action est irréversible.",
-      )
-    )
-      return;
-
-    try {
-      // TODO: Implémenter l'appel API pour supprimer
-      // const response = await api.delete(`/produits/${produitUuid}`);
-
-      setProduits((prev) => prev.filter((p) => p.uuid !== produitUuid));
-      const successMsg = "Produit supprimé avec succès !";
-      setSuccessMessage(successMsg);
-      setTimeout(() => setSuccessMessage(null), 3000);
-    } catch (err: any) {
-      console.error("Erreur lors de la suppression:", err);
-      setError(
-        err.response?.data?.message ||
-          "Erreur lors de la suppression du produit",
-      );
-    }
-  };
-
-  const handleEditProduit = (produitUuid: string) => {
-    // TODO: Rediriger vers la page d'édition
-    console.log("Éditer le produit:", produitUuid);
-    alert(`Redirection vers l'édition du produit: ${produitUuid}`);
-    // window.location.href = `/produits/editer/${produitUuid}`;
-  };
-
-  const handleViewDetails = (produit: ProduitUtilisateur) => {
-    console.log("Voir détails:", produit);
-    alert(
-      `Détails du produit:\n\n` +
-        `Nom: ${produit.libelle}\n` +
-        `Prix: ${formatPrice(produit.prix)}\n` +
-        `Quantité: ${produit.quantite}\n` +
-        `Statut: ${produit.statut}\n` +
-        `Publié: ${produit.estPublie ? "Oui" : "Non"}\n` +
-        `Catégorie: ${produit.categorie.libelle}\n` +
-        `Date de création: ${formatDate(produit.createdAt)}\n` +
-        `Dernière modification: ${formatDate(produit.updatedAt)}`,
-    );
-  };
-
   // Actions en masse
   const handleBulkAction = async (
     action: "publish" | "unpublish" | "delete",
@@ -597,6 +1677,11 @@ export default function ListeProduitsCreeUtilisateur() {
       delete: "supprimer",
     }[action];
 
+    if (action === "delete") {
+      handleBulkDelete();
+      return;
+    }
+
     if (
       !confirm(
         `Voulez-vous ${actionText} ${selectedProduits.length} produit(s) ?`,
@@ -606,20 +1691,14 @@ export default function ListeProduitsCreeUtilisateur() {
 
     try {
       // TODO: Implémenter les appels API en masse
-      if (action === "delete") {
-        setProduits((prev) =>
-          prev.filter((p) => !selectedProduits.includes(p.uuid)),
-        );
-      } else {
-        const newPublishedState = action === "publish";
-        setProduits((prev) =>
-          prev.map((p) =>
-            selectedProduits.includes(p.uuid)
-              ? { ...p, estPublie: newPublishedState }
-              : p,
-          ),
-        );
-      }
+      const newPublishedState = action === "publish";
+      setProduits((prev) =>
+        prev.map((p) =>
+          selectedProduits.includes(p.uuid)
+            ? { ...p, estPublie: newPublishedState }
+            : p,
+        ),
+      );
 
       setSelectedProduits([]);
       const successMsg = `${selectedProduits.length} produit(s) ${actionText}(s) avec succès`;
@@ -1502,7 +2581,7 @@ export default function ListeProduitsCreeUtilisateur() {
                             <button
                               className="btn btn-outline-warning"
                               title="Éditer"
-                              onClick={() => handleEditProduit(produit.uuid)}
+                              onClick={() => handleEditProduit(produit)}
                               aria-label={`Éditer ${produit.libelle}`}
                             >
                               <FontAwesomeIcon icon={faEdit} />
@@ -1688,32 +2767,32 @@ export default function ListeProduitsCreeUtilisateur() {
                 <div className="col-md-6">
                   <ul className="mb-0">
                     <li>
-                      <strong>Images :</strong> Les produits avec des images
-                      réelles sont marqués d'un badge vert
-                    </li>
-                    <li>
-                      <strong>Publier/Dépublier :</strong> Contrôlez la
-                      visibilité de vos produits sur la plateforme
+                      <strong>Voir détails :</strong> Affiche les informations
+                      complètes du produit
                     </li>
                     <li>
                       <strong>Éditer :</strong> Modifiez les informations de vos
-                      produits existants
+                      produits
+                    </li>
+                    <li>
+                      <strong>Publier/Dépublier :</strong> Contrôlez la
+                      visibilité de vos produits
                     </li>
                   </ul>
                 </div>
                 <div className="col-md-6">
                   <ul className="mb-0">
                     <li>
-                      <strong>Export :</strong> Téléchargez la liste de vos
-                      produits au format CSV
-                    </li>
-                    <li>
-                      <strong>Filtres avancés :</strong> Recherchez par nom,
-                      catégorie, statut, prix et état de publication
+                      <strong>Supprimer :</strong> Retirez définitivement un
+                      produit
                     </li>
                     <li>
                       <strong>Actions groupées :</strong> Sélectionnez plusieurs
                       produits pour des actions en masse
+                    </li>
+                    <li>
+                      <strong>Export :</strong> Téléchargez la liste de vos
+                      produits au format CSV
                     </li>
                   </ul>
                 </div>
@@ -1722,6 +2801,30 @@ export default function ListeProduitsCreeUtilisateur() {
           </div>
         </div>
       </div>
+
+      {/* Modals */}
+      <ViewProduitModal
+        isOpen={isViewModalOpen}
+        produit={selectedProduit}
+        onClose={handleCloseViewModal}
+      />
+
+      <EditProduitModal
+        isOpen={isEditModalOpen}
+        produit={selectedProduit}
+        onClose={handleCloseEditModal}
+        onSuccess={handleEditSuccess}
+      />
+
+      <DeleteProduitModal
+        show={isDeleteModalOpen}
+        produit={selectedProduit}
+        loading={deleteLoading}
+        onClose={handleCloseDeleteModal}
+        onConfirm={confirmDelete}
+        type={deleteType}
+        count={selectedProduits.length}
+      />
 
       <style jsx>{`
         .table > :not(caption) > * > * {

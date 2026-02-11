@@ -32,22 +32,37 @@ interface Category {
   type?: string;
 }
 
-interface Product {
+interface Produit {
+  is_deleted: boolean;
+  deleted_at: string | null;
+  id: number;
   uuid: string;
-  nom: string;
-  prix: number;
+  libelle: string;
+  slug: string;
+  type: string | null;
   image: string;
-  date: string;
   disponible: boolean;
+  statut: "publie" | "non_publie" | "en_attente" | "bloque";
+  prix: string;
   description: string | null;
+  etoile: string;
+  vendeurUuid: string;
+  boutiqueUuid: string;
+  categorie_uuid: string;
+  categorie: {
+    uuid: string;
+    libelle: string;
+    type: string;
+    image: string;
+  };
+  estPublie: boolean;
+  estBloque: boolean;
   createdAt: string | null;
-  quantite?: number;
-  categorie_uuid?: string;
-  lieu?: string;
-  condition?: string;
-  type?: string;
-  garantie?: string;
-  etoile?: string;
+  updatedAt: string | null;
+  quantite: number;
+  note_moyenne: string;
+  nombre_avis: number;
+  nombre_favoris: number;
 }
 
 interface ProductFormData {
@@ -71,6 +86,42 @@ interface EditProductModalProps {
   onSuccess: (message: string) => void;
 }
 
+interface Product {
+  is_deleted: boolean;
+  deleted_at: string | null;
+  id: number;
+  uuid: string;
+  libelle: string;
+  slug: string;
+  type: string | null;
+  image: string;
+  disponible: boolean;
+  statut: "publie" | "non_publie" | "en_attente" | "bloque";
+  prix: string;
+  description: string | null;
+  etoile: string;
+  vendeurUuid: string;
+  boutiqueUuid: string;
+  lieu: string;
+  condition: string;
+  garantie: string;
+  categorie_uuid: string;
+  categorie: {
+    uuid: string;
+    libelle: string;
+    type: string;
+    image: string;
+  };
+  estPublie: boolean;
+  estBloque: boolean;
+  createdAt: string | null;
+  updatedAt: string | null;
+  quantite: number;
+  note_moyenne: string;
+  nombre_avis: number;
+  nombre_favoris: number;
+}
+
 const conditions = [
   { value: "neuf", label: "Neuf" },
   { value: "tres_bon_etat", label: "Très bon état" },
@@ -87,7 +138,7 @@ export default function EditProductModal({
 }: EditProductModalProps) {
   // États du formulaire
   const [formData, setFormData] = useState<ProductFormData>({
-    nom: product.nom || "",
+    nom: product.libelle || "",
     prix: product.prix?.toString() || "",
     description: product.description || "",
     quantite: product.quantite?.toString() || "1",
@@ -118,7 +169,7 @@ export default function EditProductModal({
   useEffect(() => {
     if (isOpen) {
       setFormData({
-        nom: product.nom || "",
+        nom: product.libelle || "",
         prix: product.prix?.toString() || "",
         description: product.description || "",
         quantite: product.quantite?.toString() || "1",
@@ -363,7 +414,7 @@ export default function EditProductModal({
 
     // Vérifier s'il y a des modifications
     const hasChanges =
-      formData.nom !== product.nom ||
+      formData.nom !== product.libelle ||
       formData.prix !== product.prix.toString() ||
       formData.description !== (product.description || "") ||
       formData.quantite !== (product.quantite?.toString() || "1") ||

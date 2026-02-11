@@ -170,12 +170,13 @@ export default function DashboardHeaderUtilisateur({
     setNotificationCount(0);
   };
 
-  const handleCartClick = () => {
-    router.push("/dashboard-utilisateur/panier");
-  };
-
   const handleFavoritesClick = () => {
     router.push("/dashboard-utilisateur/favoris");
+  };
+
+  const handleHomeClick = () => {
+    setShowUserMenu(false);
+    router.push("/");
   };
 
   const handleLogout = async () => {
@@ -207,11 +208,6 @@ export default function DashboardHeaderUtilisateur({
     router.push("/dashboard-utilisateur/messages");
   };
 
-  const handlePurchasesClick = () => {
-    setShowUserMenu(false);
-    router.push("/dashboard-utilisateur/mes-achats");
-  };
-
   // Utilitaires
   const getDefaultAvatar = useCallback((nom: string, prenoms: string) => {
     const initials =
@@ -232,6 +228,16 @@ export default function DashboardHeaderUtilisateur({
   const formatDateNaissance = useCallback((date: string | null) => {
     if (!date) return "Non spécifiée";
     return new Date(date).toLocaleDateString("fr-FR");
+  }, []);
+
+  const formatTelephone = useCallback((telephone: string | null) => {
+    if (!telephone) return "";
+    // Formater le numéro au format français
+    const cleaned = telephone.replace(/\D/g, "");
+    if (cleaned.length === 9) {
+      return `+225 ${cleaned.slice(0, 2)} ${cleaned.slice(2, 4)} ${cleaned.slice(4, 6)} ${cleaned.slice(6)}`;
+    }
+    return telephone;
   }, []);
 
   // Gestion des touches clavier
@@ -256,7 +262,7 @@ export default function DashboardHeaderUtilisateur({
 
     if (profile.est_verifie) {
       return (
-        <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 ms-2">
+        <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 mx-1">
           <i className="fa-solid fa-check-circle me-1"></i>
           Vérifié
         </span>
@@ -265,7 +271,7 @@ export default function DashboardHeaderUtilisateur({
 
     if (profile.est_bloque) {
       return (
-        <span className="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 ms-2">
+        <span className="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 mx-1">
           <i className="fa-solid fa-ban me-1"></i>
           Bloqué
         </span>
@@ -273,7 +279,7 @@ export default function DashboardHeaderUtilisateur({
     }
 
     return (
-      <span className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 ms-2">
+      <span className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 mx-1">
         <i className="fa-solid fa-clock me-1"></i>
         Non vérifié
       </span>
@@ -295,7 +301,7 @@ export default function DashboardHeaderUtilisateur({
 
     return (
       <span
-        className={`badge bg-${color} bg-opacity-10 text-${color} border border-${color} border-opacity-25 ms-2`}
+        className={`badge bg-${color} bg-opacity-10 text-${color} border border-${color} border-opacity-25 mx-1`}
       >
         {profile.statut.charAt(0).toUpperCase() + profile.statut.slice(1)}
       </span>
@@ -307,7 +313,7 @@ export default function DashboardHeaderUtilisateur({
     if (!profile?.is_admin) return null;
 
     return (
-      <span className="badge bg-purple bg-opacity-10 text-purple border border-purple border-opacity-25 ms-2">
+      <span className="badge bg-purple bg-opacity-10 text-purple border border-purple border-opacity-25 mx-1">
         <i className="fa-solid fa-shield me-1"></i>
         Admin
       </span>
@@ -358,65 +364,64 @@ export default function DashboardHeaderUtilisateur({
                 </button>
               </div>
             ) : profile ? (
-              <div className="d-flex flex-wrap align-items-center gap-2">
-                <i
-                  className="fa-solid fa-user text-muted"
-                  style={{ fontSize: "0.875rem" }}
-                ></i>
-                <div className="d-flex align-items-center flex-wrap gap-2">
+              <div className="d-flex flex-column flex-md-row align-items-start align-items-md-center gap-2">
+                {/* Nom et badges */}
+                <div className="d-flex flex-wrap align-items-center gap-1">
+                  <i
+                    className="fa-solid fa-user text-muted me-2"
+                    style={{ fontSize: "0.875rem" }}
+                  ></i>
                   <span
-                    className="fw-medium text-dark"
+                    className="fw-medium text-dark me-2"
                     style={{ fontSize: "0.95rem" }}
                   >
                     {getFullName()}
                   </span>
-                  <VerificationBadge />
-                  <StatusBadge />
-                  <AdminBadge />
+                  <div className="d-flex flex-wrap align-items-center gap-1">
+                    <VerificationBadge />
+                    <StatusBadge />
+                    <AdminBadge />
+                  </div>
                 </div>
 
-                <div className="d-flex align-items-center flex-wrap gap-1 gap-md-2">
+                {/* Informations de contact */}
+                <div className="d-flex flex-wrap align-items-center gap-2">
                   {profile.email && (
-                    <>
-                      <span className="text-muted mx-1 d-none d-md-inline">
-                        •
-                      </span>
-                      <span
-                        className="text-muted d-none d-md-inline"
-                        style={{ fontSize: "0.875rem" }}
-                      >
-                        <i className="fa-solid fa-envelope me-1"></i>
-                        {profile.email}
-                      </span>
-                    </>
+                    <span
+                      className="text-muted d-flex align-items-center gap-1"
+                      style={{ fontSize: "0.875rem" }}
+                    >
+                      <i className="fa-solid fa-envelope"></i>
+                      {profile.email}
+                    </span>
                   )}
+
+                  {profile.email && profile.telephone && (
+                    <span className="text-muted d-none d-md-inline">•</span>
+                  )}
+
                   {profile.telephone && (
-                    <>
-                      <span className="text-muted mx-1 d-none d-lg-inline">
-                        •
-                      </span>
-                      <span
-                        className="text-muted d-none d-lg-inline"
-                        style={{ fontSize: "0.875rem" }}
-                      >
-                        <i className="fa-solid fa-phone me-1"></i>
-                        {profile.telephone}
-                      </span>
-                    </>
+                    <span
+                      className="text-muted d-flex align-items-center gap-1"
+                      style={{ fontSize: "0.875rem" }}
+                    >
+                      <i className="fa-solid fa-phone"></i>
+                      {formatTelephone(profile.telephone)}
+                    </span>
                   )}
+
+                  {profile.telephone && profile.date_naissance && (
+                    <span className="text-muted d-none d-lg-inline">•</span>
+                  )}
+
                   {profile.date_naissance && (
-                    <>
-                      <span className="text-muted mx-1 d-none d-xl-inline">
-                        •
-                      </span>
-                      <span
-                        className="text-muted d-none d-xl-inline"
-                        style={{ fontSize: "0.875rem" }}
-                      >
-                        <i className="fa-solid fa-birthday-cake me-1"></i>
-                        {formatDateNaissance(profile.date_naissance)}
-                      </span>
-                    </>
+                    <span
+                      className="text-muted d-flex align-items-center gap-1"
+                      style={{ fontSize: "0.875rem" }}
+                    >
+                      <i className="fa-solid fa-birthday-cake"></i>
+                      {formatDateNaissance(profile.date_naissance)}
+                    </span>
                   )}
                 </div>
               </div>
@@ -517,35 +522,6 @@ export default function DashboardHeaderUtilisateur({
 
             {/* Groupe d'icônes d'action */}
             <div className="d-flex align-items-center gap-1 border-start ps-2 ms-1">
-              {/* Panier */}
-              {showCart && (
-                <button
-                  onClick={handleCartClick}
-                  onKeyDown={(e) => handleKeyDown(e, handleCartClick)}
-                  className="btn btn-light btn-sm position-relative p-2"
-                  aria-label="Panier"
-                  title="Panier"
-                  style={{ borderRadius: "8px" }}
-                  disabled={loading}
-                >
-                  <i className="fa-solid fa-shopping-cart text-muted"></i>
-                  {cartCount > 0 && (
-                    <span
-                      className="position-absolute top-0 end-0 translate-middle bg-warning rounded-circle"
-                      style={{
-                        width: "8px",
-                        height: "8px",
-                        border: "2px solid white",
-                      }}
-                    >
-                      <span className="visually-hidden">
-                        Articles dans le panier
-                      </span>
-                    </span>
-                  )}
-                </button>
-              )}
-
               {/* Favoris */}
               {showFavorites && (
                 <button
@@ -779,6 +755,21 @@ export default function DashboardHeaderUtilisateur({
                     )}
 
                     <div className="py-2">
+                      {/* Bouton Accueil en PREMIÈRE position */}
+                      <button
+                        onClick={handleHomeClick}
+                        onKeyDown={(e) => handleKeyDown(e, handleHomeClick)}
+                        className="btn btn-link text-dark text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
+                        role="menuitem"
+                      >
+                        <i
+                          className="fa-solid fa-home text-muted"
+                          style={{ width: "20px" }}
+                          aria-hidden="true"
+                        ></i>
+                        <span>Accueil</span>
+                      </button>
+
                       <button
                         onClick={handleProfileClick}
                         onKeyDown={(e) => handleKeyDown(e, handleProfileClick)}
@@ -791,22 +782,6 @@ export default function DashboardHeaderUtilisateur({
                           aria-hidden="true"
                         ></i>
                         <span>Mon profil</span>
-                      </button>
-
-                      <button
-                        onClick={handlePurchasesClick}
-                        onKeyDown={(e) =>
-                          handleKeyDown(e, handlePurchasesClick)
-                        }
-                        className="btn btn-link text-dark text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
-                        role="menuitem"
-                      >
-                        <i
-                          className="fa-solid fa-bag-shopping text-muted"
-                          style={{ width: "20px" }}
-                          aria-hidden="true"
-                        ></i>
-                        <span>Mes achats</span>
                       </button>
 
                       <button
@@ -908,6 +883,15 @@ export default function DashboardHeaderUtilisateur({
         }
         .hover-bg-light:hover {
           background-color: #f8f9fa;
+        }
+        @media (max-width: 768px) {
+          .d-flex.flex-column.flex-md-row {
+            gap: 0.5rem !important;
+          }
+          .badge {
+            margin: 0.1rem !important;
+            font-size: 0.75rem;
+          }
         }
       `}</style>
     </>

@@ -41,26 +41,48 @@ import ViewDonModal from "../components/modals/ViewDonModal";
 
 // Types basés sur la réponse API
 interface DonBloque {
-  uuid: string;
-  type_don: string;
+  id: number;
   nom: string;
-  prix: number | null;
-  categorie: string;
-  image: string;
-  localisation: string;
-  description: string;
-  statut: string;
+  uuid: string;
+  titre: string;
   date_debut: string;
-  date_fin: string | null;
-  estPublie: boolean;
-  est_bloque: boolean | null;
-  lieu_retrait: string;
-  est_public: number;
-  vendeur: string;
-  utilisateur: string;
-  agent: string;
+  date_fin: string;
+  description: string;
+  est_public: number | boolean; // Change from boolean to number | boolean
+  statut: string;
+  est_bloque: boolean;
+  prix: number | null;
+  image: string;
+  numero: string;
   createdAt: string | null;
-  updatedAt: string | null;
+  type_don?: string;
+  localisation?: string;
+  quantite?: number | string;
+  condition?: string;
+  estPublie: boolean;
+  disponibilite?: string;
+  nom_donataire?: string;
+  lieu_retrait?: string;
+  categorie_uuid?: string;
+  categorie?: {
+    libelle: string;
+    type: string;
+  };
+  vendeur?: {
+    id: number;
+    uuid: string;
+    nom: string;
+  };
+  utilisateur?: {
+    id: number;
+    uuid: string;
+    nom: string;
+    prenom: string;
+    email: string;
+    telephone: string;
+    createdAt: string;
+    updatedAt: string;
+  };
 }
 
 interface ApiResponse {
@@ -696,7 +718,7 @@ export default function DonsBloquesUtilisateur() {
         don.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         don.type_don?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         don.localisation?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        don.categorie?.toLowerCase().includes(searchTerm.toLowerCase());
+        don.categorie?.libelle.toLowerCase().includes(searchTerm.toLowerCase());
 
       const matchesStatus =
         selectedStatus === "all" ||
@@ -968,8 +990,8 @@ export default function DonsBloquesUtilisateur() {
 
   return (
     <>
-      {/* Modals 
-        {selectedDon && (
+      {/* Modals */}
+      {selectedDon && (
         <ViewDonModal
           isOpen={showViewModal}
           don={selectedDon}
@@ -979,8 +1001,6 @@ export default function DonsBloquesUtilisateur() {
           }}
         />
       )}
-      */}
-    
 
       <DeleteModal
         show={showDeleteModal}
@@ -1440,7 +1460,9 @@ export default function DonsBloquesUtilisateur() {
                             </div>
                             <div>
                               <small className="text-muted">Catégorie:</small>
-                              <div className="fw-semibold">{don.categorie}</div>
+                              <div className="fw-semibold">
+                                {don.categorie?.libelle}
+                              </div>
                             </div>
                           </div>
                         </td>

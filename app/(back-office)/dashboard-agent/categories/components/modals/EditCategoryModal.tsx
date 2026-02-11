@@ -484,13 +484,42 @@ export default function EditCategoryModal({
       const endpoint = API_ENDPOINTS.CATEGORIES.UPDATE(category.uuid);
       console.log("🚀 Envoi PATCH vers:", endpoint);
 
-      // Utiliser api.request directement pour garantir FormData
-      const response = await api.request(endpoint, {
+      // Solution avec fetch directement pour éviter le problème de méthode privée
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+      const fullUrl = `${apiUrl}${endpoint}`;
+
+      console.log("🌐 Envoi PATCH avec fetch vers:", fullUrl);
+
+      const fetchResponse = await fetch(fullUrl, {
         method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          // Note: Ne pas définir Content-Type pour FormData
+          // Le navigateur le fera automatiquement avec la boundary correcte
+        },
         body: formDataToSend,
-        requiresAuth: true,
-        isFormData: true, // Forcer FormData
       });
+
+      // Gérer la réponse
+      let response;
+      try {
+        response = await fetchResponse.json();
+      } catch (parseError) {
+        console.error("❌ Erreur de parsing de la réponse:", parseError);
+        response = {
+          success: false,
+          message: "Erreur de parsing de la réponse",
+          status: fetchResponse.status,
+          statusText: fetchResponse.statusText,
+        };
+      }
+
+      if (!fetchResponse.ok) {
+        throw new Error(
+          response.message ||
+            `Erreur ${fetchResponse.status}: ${fetchResponse.statusText}`,
+        );
+      }
 
       console.log("✅ Réponse API complète:", response);
 
@@ -637,7 +666,7 @@ export default function EditCategoryModal({
       const response = await api.delete(
         API_ENDPOINTS.CATEGORIES.DELETE(category.uuid),
         {
-         // requiresAuth: true,
+          // requiresAuth: true,
         },
       );
 
@@ -812,7 +841,7 @@ export default function EditCategoryModal({
           <div
             className="modal-header text-white border-0 rounded-top-3"
             style={{
-              background: `linear-gradient(135deg, ${colors.oskar.orange} 0%, ${colors.oskar.orange} 100%)`,
+              background: `linear-gradient(135deg, ${colors.oskar.yellow} 0%, ${colors.oskar.yellow} 100%)`,
               borderBottom: `3px solid ${colors.oskar.blue}`,
             }}
           >
@@ -1440,8 +1469,8 @@ export default function EditCategoryModal({
                     background:
                       hasChanges && !isDeleted
                         ? colors.oskar.orange
-                        : colors.oskar.grey,
-                    border: `1px solid ${hasChanges && !isDeleted ? colors.oskar.orange : colors.oskar.grey}`,
+                        : colors.oskar.yellow,
+                    border: `1px solid ${hasChanges && !isDeleted ? colors.oskar.orange : colors.oskar.yellow}`,
                     borderRadius: "8px",
                     fontWeight: "500",
                     opacity: !hasChanges || isDeleted ? 0.6 : 1,

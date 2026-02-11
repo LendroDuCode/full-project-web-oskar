@@ -1,4 +1,4 @@
-// app/(back-office)/dashboard-admin/messages/liste-messages/page.tsx
+// app/(back-office)/dashboard-agent/messages/page.tsx
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -412,7 +412,7 @@ const MessageItem = ({
               className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
               onClick={(e) => {
                 e.stopPropagation();
-                // Gérer la réponse plus tard
+                onSelect(message);
               }}
               style={{ fontSize: "0.8rem" }}
             >
@@ -541,6 +541,7 @@ export default function ListeMessages() {
 
   // États pour les erreurs
   const [error, setError] = useState<string | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   // États pour les filtres
   const [searchTerm, setSearchTerm] = useState("");
@@ -560,7 +561,7 @@ export default function ListeMessages() {
     destinataireEmail: "",
     sujet: "",
     contenu: "",
-    type: "NOTIFICATION",
+    type: "notification",
     expediteurNom: "Agent SONEC",
     expediteurEmail: "",
   });
@@ -582,21 +583,41 @@ export default function ListeMessages() {
   // Profil de l'agent connecté
   const [agentProfile, setAgentProfile] = useState<Agent | null>(null);
 
+  // Debug state
+  const [debugInfo, setDebugInfo] = useState<any>(null);
+
   // Charger le profil de l'agent connecté
   const fetchAgentProfile = useCallback(async () => {
     try {
+      console.log("🔍 Chargement du profil agent...");
       const response = await api.get(API_ENDPOINTS.AUTH.AGENT.PROFILE);
-      if (response.data?.type === "success" && response.data.data) {
-        const profile = response.data.data;
+      console.log("✅ Réponse profil agent:", response);
+
+      if (response && (response.data || response.nom)) {
+        const profile = response.data || response;
+        console.log("👤 Profil agent chargé:", {
+          nom: profile.nom,
+          prenoms: profile.prenoms,
+          email: profile.email,
+          type: profile.type,
+        });
+
         setAgentProfile(profile);
         setNewMessage((prev) => ({
           ...prev,
           expediteurEmail: profile.email,
-          expediteurNom: `${profile.prenoms} ${profile.nom}`,
+          expediteurNom: `${profile.prenoms || ""} ${profile.nom || ""}`.trim(),
         }));
+      } else {
+        console.warn("⚠️ Structure de réponse inattendue:", response);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("❌ Erreur lors du chargement du profil agent:", err);
+      console.error("📋 Détails erreur:", {
+        message: err.message,
+        status: err.status,
+        data: err.data,
+      });
     }
   }, []);
 
@@ -604,48 +625,23 @@ export default function ListeMessages() {
   const fetchSuperAdmins = useCallback(async () => {
     setLoading((prev) => ({ ...prev, superAdmins: true }));
     try {
+      console.log("🔄 Chargement des super-admins...");
       const response = await api.get<{
         data: SuperAdmin[];
         count: number;
         status: string;
       }>(API_ENDPOINTS.AUTH.ADMIN.LISTE_ADMIN);
-      setSuperAdmins(response?.data || []);
-    } catch (err: any) {
-      console.error("❌ Error fetching super admins:", err);
-      setError("Erreur lors du chargement des super-admins");
 
-      // Données de démonstration pour les super-admins
-      const demoSuperAdmins: SuperAdmin[] = [
-        {
-          uuid: "super-admin-1",
-          nom: "Admin",
-          prenoms: "Super",
-          email: "superadmin@sonec.com",
-          telephone: "+2250700000000",
-          est_verifie: true,
-          est_bloque: false,
-          is_deleted: false,
-          is_super_admin: true,
-          is_admin: true,
-          created_at: new Date().toISOString(),
-          statut: "actif",
-        },
-        {
-          uuid: "super-admin-2",
-          nom: "Admin",
-          prenoms: "Principal",
-          email: "admin.principal@sonec.com",
-          telephone: "+2250700000001",
-          est_verifie: true,
-          est_bloque: false,
-          is_deleted: false,
-          is_super_admin: true,
-          is_admin: true,
-          created_at: new Date().toISOString(),
-          statut: "actif",
-        },
-      ];
-      setSuperAdmins(demoSuperAdmins);
+      if (response?.data) {
+        setSuperAdmins(response.data);
+        console.log(`✅ ${response.data.length} super-admins chargés`);
+      } else {
+        console.warn("⚠️ Réponse super-admins vide ou structure différente");
+        setSuperAdmins([]);
+      }
+    } catch (err: any) {
+      console.error("❌ Erreur chargement super-admins:", err);
+      setError("Erreur lors du chargement des super-admins");
     } finally {
       setLoading((prev) => ({ ...prev, superAdmins: false }));
     }
@@ -660,10 +656,11 @@ export default function ListeMessages() {
         count: number;
         status: string;
       }>(API_ENDPOINTS.ADMIN.AGENTS.LIST);
-      setAgents(response?.data || []);
+      if (response?.data) {
+        setAgents(response.data);
+      }
     } catch (err: any) {
       console.error("❌ Error fetching agents:", err);
-      setError("Erreur lors du chargement des agents");
     } finally {
       setLoading((prev) => ({ ...prev, agents: false }));
     }
@@ -678,10 +675,11 @@ export default function ListeMessages() {
         count: number;
         status: string;
       }>(API_ENDPOINTS.ADMIN.VENDEURS.LIST);
-      setVendeurs(response?.data || []);
+      if (response?.data) {
+        setVendeurs(response.data);
+      }
     } catch (err: any) {
       console.error("❌ Error fetching vendeurs:", err);
-      setError("Erreur lors du chargement des vendeurs");
     } finally {
       setLoading((prev) => ({ ...prev, vendeurs: false }));
     }
@@ -696,74 +694,62 @@ export default function ListeMessages() {
         count: number;
         status: string;
       }>(API_ENDPOINTS.ADMIN.USERS.LIST);
-      setUtilisateurs(response?.data || []);
+      if (response?.data) {
+        setUtilisateurs(response.data);
+      }
     } catch (err: any) {
       console.error("❌ Error fetching utilisateurs:", err);
-      setError("Erreur lors du chargement des utilisateurs");
     } finally {
       setLoading((prev) => ({ ...prev, utilisateurs: false }));
     }
   }, []);
 
-  // Charger les messages reçus - CORRECTION
+  // Charger les messages reçus
   const fetchMessagesRecus = useCallback(async () => {
     setLoading((prev) => ({ ...prev, messages: true }));
     try {
-      console.log("🔄 Chargement des messages reçus...");
-      const response = await api.get<MessageReceived[]>(
+      console.log("📥 Chargement des messages reçus...");
+      const response = await api.get<MessageReceived[] | Message[]>(
         API_ENDPOINTS.MESSAGERIE.RECEIVED,
       );
 
-      if (!response || response.length === 0) {
-        console.warn("⚠️ Réponse API vide (messages reçus)");
-        setMessages([]);
-        return;
-      }
+      console.log("📨 Réponse messages reçus:", response);
 
-      // CORRECTION : Type correct pour la réponse
-      const responseData = response as MessageReceived[];
-
-      // Transformer les données pour correspondre au format attendu
-      const transformedMessages = responseData
-        .map((item: MessageReceived) => {
-          if (!item || !item.message) return null;
-
-          // CORRECTION : Créer un objet Message avec tous les champs requis
-          const transformed: Message = {
-            uuid: item.message.uuid || "",
-            sujet: item.message.sujet || "",
-            contenu: item.message.contenu || "",
-            expediteurNom: item.message.expediteurNom || "",
-            expediteurEmail: item.message.expediteurEmail || "",
-            destinataireEmail: item.message.destinataireEmail || "",
-            type: item.message.type || "NOTIFICATION",
-            estEnvoye: item.message.estEnvoye || false,
+      if (Array.isArray(response)) {
+        const formattedMessages = response.map((item: any) => {
+          // Gérer les deux formats possibles
+          const message = item.message || item;
+          return {
+            uuid: message.uuid || Math.random().toString(),
+            sujet: message.sujet || "Sans sujet",
+            contenu: message.contenu || "",
+            expediteurNom: message.expediteurNom || "Expéditeur inconnu",
+            expediteurEmail: message.expediteurEmail || "",
+            destinataireEmail: message.destinataireEmail || "",
+            type: (message.type || "notification").toUpperCase(),
+            estEnvoye:
+              message.estEnvoye !== undefined ? message.estEnvoye : true,
             envoyeLe:
-              item.dateReception ||
-              item.message.envoyeLe ||
+              message.envoyeLe ||
+              message.dateReception ||
               new Date().toISOString(),
-            estLu: item.estLu || false,
-            dateLecture: item.dateLecture || null,
-            dateCreation: item.message.dateCreation,
-          };
-
-          return transformed;
-        })
-        .filter((item): item is Message => item !== null);
-
-      console.log("📨 Messages transformés:", transformedMessages.length);
-      setMessages(transformedMessages);
+            estLu: message.estLu || item.estLu || false,
+            dateLecture: message.dateLecture || item.dateLecture || null,
+          } as Message;
+        });
+        setMessages(formattedMessages);
+      } else {
+        console.warn("⚠️ Format de réponse inattendu pour messages reçus");
+        setMessages([]);
+      }
     } catch (err: any) {
-      console.error("❌ Error fetching messages:", err);
-      setError("Erreur lors du chargement des messages");
-
-      // Données de démonstration adaptées avec types corrects
+      console.error("❌ Erreur chargement messages:", err);
+      // Données de démonstration
       const demoMessages: Message[] = [
         {
-          uuid: "c5d30cbd-b606-4721-8ec7-5a00f7df9e87",
+          uuid: "demo-1",
           sujet: "Confirmation de votre inscription",
-          contenu:
-            "Bienvenue Agent ! Votre compte SONEC a été créé avec succès. Connectez-vous dès maintenant pour découvrir nos services.",
+          contenu: "Bienvenue Agent ! Votre compte a été créé avec succès.",
           expediteurNom: "Super Admin",
           expediteurEmail: "superadmin@sonec.com",
           destinataireEmail: agentProfile?.email || "agent@sonec.com",
@@ -772,20 +758,6 @@ export default function ListeMessages() {
           envoyeLe: new Date().toISOString(),
           estLu: false,
           dateLecture: null,
-        },
-        {
-          uuid: "2",
-          sujet: "Notification de sécurité importante",
-          contenu:
-            "Nous avons détecté une activité suspecte sur votre compte. Veuillez vérifier vos activités récentes...",
-          expediteurNom: "Système de sécurité",
-          expediteurEmail: "security@sonec.com",
-          destinataireEmail: agentProfile?.email || "agent@sonec.com",
-          type: "ALERT",
-          estEnvoye: true,
-          envoyeLe: new Date(Date.now() - 3600000).toISOString(),
-          estLu: true,
-          dateLecture: new Date(Date.now() - 3500000).toISOString(),
         },
       ];
       setMessages(demoMessages);
@@ -797,106 +769,45 @@ export default function ListeMessages() {
   // Charger les messages envoyés
   const fetchMessagesEnvoyes = useCallback(async () => {
     try {
-      console.log("🔄 Chargement des messages envoyés...");
       const response = await api.get<Message[]>(API_ENDPOINTS.MESSAGERIE.SENT);
 
-      if (!response || response.length === 0) {
-        console.warn("⚠️ Réponse API vide (messages envoyés)");
-        setMessagesEnvoyes([]);
-        return;
+      if (Array.isArray(response)) {
+        const formattedMessages = response.map(
+          (msg: any) =>
+            ({
+              uuid: msg.uuid || Math.random().toString(),
+              sujet: msg.sujet || "Sans sujet",
+              contenu: msg.contenu || "",
+              expediteurNom: msg.expediteurNom || "Agent SONEC",
+              expediteurEmail: msg.expediteurEmail || agentProfile?.email || "",
+              destinataireEmail: msg.destinataireEmail || "",
+              type: (msg.type || "notification").toUpperCase(),
+              estEnvoye: msg.estEnvoye !== undefined ? msg.estEnvoye : true,
+              envoyeLe: msg.envoyeLe || new Date().toISOString(),
+              estLu: msg.estLu || false,
+              dateLecture: msg.dateLecture || null,
+            }) as Message,
+        );
+        setMessagesEnvoyes(formattedMessages);
       }
-
-      // CORRECTION : S'assurer que les données sont un tableau
-      const responseData = Array.isArray(response) ? response : [];
-
-      const formattedMessages = responseData
-        .map((msg: any) => {
-          if (!msg) return null;
-
-          return {
-            uuid: msg.uuid || "",
-            sujet: msg.sujet || "",
-            contenu: msg.contenu || "",
-            expediteurNom: msg.expediteurNom || "Agent SONEC",
-            expediteurEmail: msg.expediteurEmail || agentProfile?.email || "",
-            destinataireEmail: msg.destinataireEmail || "",
-            type: (msg.type || "notification").toUpperCase(),
-            estEnvoye: msg.estEnvoye !== undefined ? msg.estEnvoye : true,
-            envoyeLe: msg.envoyeLe || new Date().toISOString(),
-            estLu: msg.estLu || false,
-            dateLecture: msg.dateLecture || null,
-            dateCreation: msg.dateCreation,
-          } as Message;
-        })
-        .filter((msg): msg is Message => msg !== null);
-
-      console.log("📤 Messages envoyés transformés:", formattedMessages.length);
-      setMessagesEnvoyes(formattedMessages);
     } catch (err: any) {
       console.error("❌ Error fetching sent messages:", err);
-      setError("Erreur lors du chargement des messages envoyés");
-
-      // Données de démonstration avec types corrects
-      const demoSentMessages: Message[] = [
-        {
-          uuid: "sent-1",
-          sujet: "Demande d'assistance",
-          contenu:
-            "Bonjour Super Admin, j'ai besoin d'assistance pour gérer un utilisateur problématique...",
-          expediteurNom: agentProfile
-            ? `${agentProfile.prenoms} ${agentProfile.nom}`
-            : "Agent SONEC",
-          expediteurEmail: agentProfile?.email || "agent@sonec.com",
-          destinataireEmail: "superadmin@sonec.com",
-          type: "SUPER_ADMIN",
-          estEnvoye: true,
-          envoyeLe: new Date(Date.now() - 7200000).toISOString(),
-          estLu: true,
-          dateLecture: new Date(Date.now() - 7000000).toISOString(),
-        },
-        {
-          uuid: "sent-2",
-          sujet: "Rapport mensuel",
-          contenu: "Voici mon rapport d'activité pour le mois dernier...",
-          expediteurNom: agentProfile
-            ? `${agentProfile.prenoms} ${agentProfile.nom}`
-            : "Agent SONEC",
-          expediteurEmail: agentProfile?.email || "agent@sonec.com",
-          destinataireEmail: "admin.principal@sonec.com",
-          type: "SUPER_ADMIN",
-          estEnvoye: true,
-          envoyeLe: new Date(Date.now() - 43200000).toISOString(),
-          estLu: false,
-          dateLecture: null,
-        },
-      ];
-      setMessagesEnvoyes(demoSentMessages);
     }
   }, [agentProfile]);
 
-  // Recharger les messages périodiquement
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (activeTab === "received") {
-        fetchMessagesRecus();
-      } else if (activeTab === "sent") {
-        fetchMessagesEnvoyes();
-      }
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [activeTab, fetchMessagesRecus, fetchMessagesEnvoyes]);
-
   // Charger toutes les données au montage
   useEffect(() => {
-    console.log("🚀 Chargement des données...");
-    fetchAgentProfile();
-    fetchSuperAdmins();
-    fetchAgents();
-    fetchVendeurs();
-    fetchUtilisateurs();
-    fetchMessagesRecus();
-    fetchMessagesEnvoyes();
+    const loadData = async () => {
+      console.log("🚀 Initialisation de la messagerie...");
+      await fetchAgentProfile();
+      fetchSuperAdmins();
+      fetchAgents();
+      fetchVendeurs();
+      fetchUtilisateurs();
+      fetchMessagesRecus();
+      fetchMessagesEnvoyes();
+    };
+    loadData();
   }, []);
 
   // Mettre à jour les statistiques
@@ -962,7 +873,6 @@ export default function ListeMessages() {
   const filteredUsers = useMemo(() => {
     let result = allUsers.filter((v) => !v.is_deleted);
 
-    // Filtrer par recherche
     if (searchTerm.trim()) {
       const searchLower = searchTerm.toLowerCase();
       result = result.filter(
@@ -974,7 +884,6 @@ export default function ListeMessages() {
       );
     }
 
-    // Filtrer par statut
     if (selectedStatus !== "all") {
       if (selectedStatus === "active") {
         result = result.filter((v) => !v.est_bloque && v.est_verifie);
@@ -1019,9 +928,9 @@ export default function ListeMessages() {
     prenoms?: string,
     userType?: string,
   ) => {
-    let type = "NOTIFICATION";
+    let type = "notification";
     if (userType === "super_admin") {
-      type = "SUPER_ADMIN";
+      type = "super_admin";
     }
 
     setNewMessage((prev) => ({
@@ -1032,9 +941,11 @@ export default function ListeMessages() {
         "Message important",
       type: type,
     }));
+    setInfoMessage(`Destinataire sélectionné: ${email}`);
+    setTimeout(() => setInfoMessage(null), 3000);
   };
 
-  // Envoyer un message
+  // Envoyer un message - VERSION CORRIGÉE
   const handleSendMessage = async () => {
     if (
       !newMessage.destinataireEmail.trim() ||
@@ -1046,46 +957,95 @@ export default function ListeMessages() {
       return;
     }
 
+    // Préparer les données pour l'envoi
+    const messageData = {
+      destinataireEmail: newMessage.destinataireEmail.trim(),
+      sujet: newMessage.sujet.trim(),
+      contenu: newMessage.contenu.trim(),
+      type: newMessage.type.toLowerCase(), // Backend attend lowercase
+      // Le backend devrait récupérer automatiquement l'expéditeur via le token
+    };
+
+    console.log("📤 Tentative d'envoi de message:", {
+      endpoint: API_ENDPOINTS.MESSAGERIE.SEND,
+      data: messageData,
+      agentProfile: agentProfile?.email,
+    });
+
     setLoading((prev) => ({ ...prev, envoi: true }));
     setError(null);
+    setApiError(null);
 
     try {
-      const response = await api.post<Message>(API_ENDPOINTS.MESSAGERIE.SEND, {
-        destinataireEmail: newMessage.destinataireEmail,
-        sujet: newMessage.sujet,
-        contenu: newMessage.contenu,
-        type: newMessage.type.toLowerCase(),
-      });
+      console.log("🚀 Envoi du message à l'API...");
+      const response = await api.post(
+        API_ENDPOINTS.MESSAGERIE.SEND,
+        messageData,
+      );
+
+      console.log("✅ Réponse API:", response);
 
       setSuccessMessage("Message envoyé avec succès !");
+      setDebugInfo({
+        success: true,
+        timestamp: new Date().toISOString(),
+        data: messageData,
+        response,
+      });
 
       // Réinitialiser le formulaire
       setNewMessage({
         destinataireEmail: "",
         sujet: "",
         contenu: "",
-        type: "NOTIFICATION",
+        type: "notification",
         expediteurNom: agentProfile
-          ? `${agentProfile.prenoms} ${agentProfile.nom}`
+          ? `${agentProfile.prenoms || ""} ${agentProfile.nom || ""}`.trim()
           : "Agent SONEC",
         expediteurEmail: agentProfile?.email || "",
       });
 
       // Recharger les messages envoyés
-      fetchMessagesEnvoyes();
-
-      // Basculer vers l'onglet des messages envoyés
-      setActiveTab("sent");
+      setTimeout(() => {
+        fetchMessagesEnvoyes();
+        setActiveTab("sent");
+      }, 1000);
     } catch (err: any) {
-      console.error("❌ Error sending message:", err);
-      setError(
-        err.response?.data?.message || "Erreur lors de l'envoi du message",
-      );
+      console.error("❌ Erreur détaillée lors de l'envoi:", {
+        error: err,
+        message: err.message,
+        status: err.status,
+        data: err.data,
+        stack: err.stack,
+      });
+
+      let errorMessage = "Erreur lors de l'envoi du message";
+
+      if (err.status === 500) {
+        errorMessage =
+          "Erreur interne du serveur. Veuillez réessayer plus tard.";
+      } else if (err.status === 401) {
+        errorMessage = "Session expirée. Veuillez vous reconnecter.";
+      } else if (err.status === 403) {
+        errorMessage = "Vous n'avez pas la permission d'envoyer des messages.";
+      } else if (err.data?.message) {
+        errorMessage = err.data.message;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
+      setApiError(errorMessage);
+      setDebugInfo({
+        success: false,
+        timestamp: new Date().toISOString(),
+        error: err,
+        data: messageData,
+      });
     } finally {
       setLoading((prev) => ({ ...prev, envoi: false }));
       setTimeout(() => {
         setSuccessMessage(null);
-        setError(null);
+        setApiError(null);
       }, 5000);
     }
   };
@@ -1114,11 +1074,11 @@ export default function ListeMessages() {
       sujet: `RE: ${message.sujet}`,
       contenu: `\n\n--- Message original ---\n${message.contenu}`,
       type:
-        message.type.toUpperCase() === "SUPER_ADMIN"
-          ? "SUPER_ADMIN"
-          : "NOTIFICATION",
+        message.type.toLowerCase() === "super_admin"
+          ? "super_admin"
+          : "notification",
       expediteurNom: agentProfile
-        ? `${agentProfile.prenoms} ${agentProfile.nom}`
+        ? `${agentProfile.prenoms || ""} ${agentProfile.nom || ""}`.trim()
         : "Agent SONEC",
       expediteurEmail: agentProfile?.email || "",
     });
@@ -1201,6 +1161,20 @@ export default function ListeMessages() {
     }
   };
 
+  // Afficher les informations de debug
+  const showDebugInfo = () => {
+    if (!debugInfo) return null;
+
+    return (
+      <div className="mt-3 p-3 bg-dark text-white rounded">
+        <h6 className="mb-2">Debug Info:</h6>
+        <pre style={{ fontSize: "0.7rem", margin: 0 }}>
+          {JSON.stringify(debugInfo, null, 2)}
+        </pre>
+      </div>
+    );
+  };
+
   return (
     <>
       <div className="container-fluid px-3 py-3">
@@ -1221,6 +1195,12 @@ export default function ListeMessages() {
               Gérez vos messages et communiquez avec les administrateurs et
               utilisateurs
             </p>
+            {agentProfile && (
+              <small className="text-success d-flex align-items-center gap-2 mt-1">
+                <FontAwesomeIcon icon={faUserTie} />
+                Connecté en tant que: {agentProfile.email}
+              </small>
+            )}
           </div>
           <div className="d-flex gap-3">
             <button
@@ -1291,6 +1271,37 @@ export default function ListeMessages() {
             />
           </div>
         </div>
+
+        {/* Messages d'erreur API */}
+        {apiError && (
+          <div
+            className="alert alert-danger alert-dismissible fade show mb-3"
+            role="alert"
+          >
+            <div className="d-flex align-items-center">
+              <FontAwesomeIcon
+                icon={faExclamationCircle}
+                className="me-2 fs-4"
+              />
+              <div className="flex-grow-1">
+                <h6
+                  className="alert-heading mb-1"
+                  style={{ fontSize: "0.85rem" }}
+                >
+                  Erreur d'envoi
+                </h6>
+                <p className="mb-0" style={{ fontSize: "0.8rem" }}>
+                  {apiError}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn-close"
+              onClick={() => setApiError(null)}
+            ></button>
+          </div>
+        )}
 
         {/* Onglets principaux améliorés */}
         <div className="card border-0 shadow-lg mb-4 overflow-hidden">
@@ -1727,6 +1738,12 @@ export default function ListeMessages() {
                           >
                             Rédigez et envoyez un message
                           </p>
+                          {agentProfile && (
+                            <small className="text-info d-flex align-items-center gap-1 mt-1">
+                              <FontAwesomeIcon icon={faUserTie} />
+                              Expéditeur: {agentProfile.email}
+                            </small>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1760,39 +1777,6 @@ export default function ListeMessages() {
                             type="button"
                             className="btn-close"
                             onClick={() => setSuccessMessage(null)}
-                          ></button>
-                        </div>
-                      )}
-
-                      {error && (
-                        <div
-                          className="alert alert-danger alert-dismissible fade show mb-3"
-                          role="alert"
-                        >
-                          <div className="d-flex align-items-center">
-                            <FontAwesomeIcon
-                              icon={faExclamationCircle}
-                              className="me-2 fs-4"
-                            />
-                            <div>
-                              <h6
-                                className="alert-heading mb-1"
-                                style={{ fontSize: "0.85rem" }}
-                              >
-                                Erreur
-                              </h6>
-                              <p
-                                className="mb-0"
-                                style={{ fontSize: "0.8rem" }}
-                              >
-                                {error}
-                              </p>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            className="btn-close"
-                            onClick={() => setError(null)}
                           ></button>
                         </div>
                       )}
@@ -1889,11 +1873,11 @@ export default function ListeMessages() {
                             }
                             style={{ fontSize: "0.85rem" }}
                           >
-                            <option value="NOTIFICATION">Notification</option>
-                            <option value="ALERT">Alerte</option>
-                            <option value="INFO">Information</option>
-                            <option value="WARNING">Avertissement</option>
-                            <option value="SUPER_ADMIN">Super Admin</option>
+                            <option value="notification">Notification</option>
+                            <option value="alert">Alerte</option>
+                            <option value="info">Information</option>
+                            <option value="warning">Avertissement</option>
+                            <option value="super_admin">Super Admin</option>
                           </select>
                         </div>
 
@@ -1948,6 +1932,10 @@ export default function ListeMessages() {
                           </button>
                         </div>
                       </form>
+
+                      {/* Debug info - à enlever en production */}
+                      {process.env.NODE_ENV === "development" &&
+                        showDebugInfo()}
                     </div>
                   </div>
                 </div>
@@ -2342,7 +2330,7 @@ export default function ListeMessages() {
                                       className="text-muted"
                                       style={{ fontSize: "0.75rem" }}
                                     >
-                                      {message.expediteurEmail}
+                                      Expéditeur: {message.expediteurEmail}
                                     </small>
                                   </td>
                                   <td className="py-2 px-3">
@@ -2412,12 +2400,12 @@ export default function ListeMessages() {
                                           sujet: `RE: ${message.sujet}`,
                                           contenu: "",
                                           type:
-                                            message.type.toUpperCase() ===
-                                            "SUPER_ADMIN"
-                                              ? "SUPER_ADMIN"
-                                              : "NOTIFICATION",
+                                            message.type.toLowerCase() ===
+                                            "super_admin"
+                                              ? "super_admin"
+                                              : "notification",
                                           expediteurNom: agentProfile
-                                            ? `${agentProfile.prenoms} ${agentProfile.nom}`
+                                            ? `${agentProfile.prenoms || ""} ${agentProfile.nom || ""}`.trim()
                                             : "Agent SONEC",
                                           expediteurEmail:
                                             agentProfile?.email || "",

@@ -16,7 +16,7 @@ interface HeaderProps {
   showNotification?: boolean;
   showExportButton?: boolean;
   showPublishButton?: boolean;
-  showHelpButton?: boolean; // Nouvelle prop pour le bouton Aide
+  showHelpButton?: boolean;
 }
 
 interface AgentProfile {
@@ -41,7 +41,7 @@ export default function DashboardHeader({
   showNotification = true,
   showExportButton = true,
   showPublishButton = true,
-  showHelpButton = true, // Bouton Aide activé par défaut
+  showHelpButton = true,
 }: HeaderProps) {
   const [selectedPeriod, setSelectedPeriod] = useState("Aujourd'hui");
   const [notificationCount, setNotificationCount] = useState(1);
@@ -51,7 +51,7 @@ export default function DashboardHeader({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showPublishModal, setShowPublishModal] = useState(false);
-  const [showHelpModal, setShowHelpModal] = useState(false); // État pour le modal d'aide
+  const [showHelpModal, setShowHelpModal] = useState(false);
 
   const userMenuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -133,6 +133,7 @@ export default function DashboardHeader({
     fetchProfile();
   }, [router]);
 
+  // Gestion des événements
   const handleExport = () => {
     console.log("Exporting dashboard data...");
     alert("Export fonctionnel - À implémenter");
@@ -140,24 +141,20 @@ export default function DashboardHeader({
 
   const handlePublish = useCallback(() => {
     if (!isLoggedIn) {
-      // Si l'utilisateur n'est pas connecté, ouvrir le modal de connexion
       openLoginModal();
       return;
     }
     setShowPublishModal(true);
   }, [isLoggedIn, openLoginModal]);
 
-  // Fonction pour ouvrir le modal d'aide
   const handleHelpClick = useCallback(() => {
     setShowHelpModal(true);
   }, []);
 
-  // Fonction pour fermer le modal d'aide
   const handleCloseHelpModal = useCallback(() => {
     setShowHelpModal(false);
   }, []);
 
-  // Fonction pour fermer le modal de publication
   const handleClosePublishModal = useCallback(() => {
     setShowPublishModal(false);
   }, []);
@@ -177,6 +174,12 @@ export default function DashboardHeader({
     }, 1000);
   };
 
+  // Gestion des clics sur les menus
+  const handleHomeClick = () => {
+    setShowUserMenu(false);
+    router.push("/");
+  };
+
   const handleProfileClick = () => {
     setShowUserMenu(false);
     router.push("/dashboard-agent/profile");
@@ -187,33 +190,39 @@ export default function DashboardHeader({
     router.push("/dashboard-agent/parametres");
   };
 
-  // Avatar par défaut avec les initiales
+  const handleMessagesClick = () => {
+    setShowUserMenu(false);
+    router.push("/dashboard-agent/messages");
+  };
+
+  const handleAnnoncesClick = () => {
+    setShowUserMenu(false);
+    router.push("/dashboard-agent/annonces");
+  };
+
+  // Utilitaires
   const getDefaultAvatar = useCallback((nom: string, prenoms: string) => {
     const initials =
       `${prenoms?.charAt(0) || ""}${nom?.charAt(0) || ""}`.toUpperCase();
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=16a34a&color=fff&size=40`;
   }, []);
 
-  // Formater le nom complet
   const getFullName = useCallback(() => {
     if (!profile) return "Agent";
     return `${profile.prenoms} ${profile.nom}`;
   }, [profile]);
 
-  // Récupérer l'avatar
   const getAvatarUrl = useCallback(() => {
     if (!profile) return getDefaultAvatar("", "");
     return profile.avatar || getDefaultAvatar(profile.nom, profile.prenoms);
   }, [profile, getDefaultAvatar]);
 
-  // Obtenir le rôle de l'utilisateur
   const getUserRole = useCallback(() => {
     if (!profile) return "Agent";
     if (profile.is_admin) return "Agent Administrateur";
     return "Agent";
   }, [profile]);
 
-  // Formater la date
   const formatDate = useCallback((dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("fr-FR", {
@@ -427,46 +436,32 @@ export default function DashboardHeader({
 
             {/* Groupe d'icônes d'action */}
             <div className="d-flex align-items-center gap-1 border-start ps-2 ms-1">
-              {/* Panier */}
-              <Link
-                href="/panier"
+              {/* Messages (remplace Panier) */}
+              <button
+                onClick={handleMessagesClick}
+                onKeyDown={(e) => handleKeyDown(e, handleMessagesClick)}
                 className="btn btn-light btn-sm position-relative p-2"
-                aria-label="Panier"
-                title="Panier"
+                aria-label="Messages"
+                title="Messages"
                 style={{ borderRadius: "8px" }}
+                disabled={loading}
               >
                 <i
-                  className="fa-solid fa-shopping-cart text-muted"
+                  className="fa-solid fa-envelope text-muted"
                   aria-hidden="true"
                 ></i>
                 <span
-                  className="position-absolute top-0 end-0 translate-middle bg-warning rounded-circle"
+                  className="position-absolute top-0 end-0 translate-middle bg-primary rounded-circle"
                   style={{
                     width: "8px",
                     height: "8px",
                     border: "2px solid white",
                   }}
-                  aria-label="Articles dans le panier"
+                  aria-label="Nouveaux messages"
                 >
-                  <span className="visually-hidden">
-                    Articles dans le panier
-                  </span>
+                  <span className="visually-hidden">Nouveaux messages</span>
                 </span>
-              </Link>
-
-              {/* Favoris */}
-              <Link
-                href="/liste-favoris"
-                className="btn btn-light btn-sm p-2"
-                aria-label="Favoris"
-                title="Favoris"
-                style={{ borderRadius: "8px" }}
-              >
-                <i
-                  className="fa-solid fa-heart text-muted"
-                  aria-hidden="true"
-                ></i>
-              </Link>
+              </button>
 
               {/* Notification */}
               {showNotification && (
@@ -666,6 +661,23 @@ export default function DashboardHeader({
                   )}
 
                   <div className="py-2">
+                    {/* Accueil - EN PREMIÈRE POSITION */}
+                    <button
+                      onClick={handleHomeClick}
+                      onKeyDown={(e) => handleKeyDown(e, handleHomeClick)}
+                      className="btn btn-link text-dark text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
+                      disabled={!profile}
+                      role="menuitem"
+                      style={{ borderBottom: "1px solid #f0f0f0" }}
+                    >
+                      <i
+                        className="fa-solid fa-home text-primary"
+                        aria-hidden="true"
+                      ></i>
+                      <span className="fw-medium">Accueil</span>
+                    </button>
+
+                    {/* Mon profil */}
                     <button
                       onClick={handleProfileClick}
                       onKeyDown={(e) => handleKeyDown(e, handleProfileClick)}
@@ -680,6 +692,45 @@ export default function DashboardHeader({
                       <span>Mon profil</span>
                     </button>
 
+                    {/* Mes annonces */}
+                    <button
+                      onClick={handleAnnoncesClick}
+                      onKeyDown={(e) => handleKeyDown(e, handleAnnoncesClick)}
+                      className="btn btn-link text-dark text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
+                      disabled={!profile}
+                      role="menuitem"
+                    >
+                      <i
+                        className="fa-solid fa-list text-muted"
+                        aria-hidden="true"
+                      ></i>
+                      <span>Mes annonces</span>
+                    </button>
+
+                    {/* Messages */}
+                    <button
+                      onClick={handleMessagesClick}
+                      onKeyDown={(e) => handleKeyDown(e, handleMessagesClick)}
+                      className="btn btn-link text-dark text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
+                      disabled={!profile}
+                      role="menuitem"
+                    >
+                      <i
+                        className="fa-solid fa-envelope text-muted"
+                        aria-hidden="true"
+                      ></i>
+                      <span>Messages</span>
+                      <span className="ms-auto">
+                        <span
+                          className="badge bg-primary rounded-pill"
+                          aria-label="Nouveaux messages"
+                        >
+                          2
+                        </span>
+                      </span>
+                    </button>
+
+                    {/* Paramètres */}
                     <button
                       onClick={handleSettingsClick}
                       onKeyDown={(e) => handleKeyDown(e, handleSettingsClick)}
@@ -696,6 +747,7 @@ export default function DashboardHeader({
 
                     <div className="border-top my-2" role="separator"></div>
 
+                    {/* Déconnexion */}
                     <button
                       onClick={handleLogout}
                       onKeyDown={(e) => handleKeyDown(e, handleLogout)}

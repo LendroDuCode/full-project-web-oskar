@@ -43,21 +43,39 @@ import EditProductModal from "../components/modals/EditProductModal";
 import ViewProductModal from "../components/modals/ViewProductModal";
 // ============ TYPES ============
 interface Product {
+  is_deleted: boolean;
+  deleted_at: string | null;
+  id: number;
   uuid: string;
-  nom: string;
-  prix: number;
+  libelle: string;
+  slug: string;
+  type: string | null;
   image: string;
-  date: string;
   disponible: boolean;
+  statut: "publie" | "non_publie" | "en_attente" | "bloque";
+  prix: string;
   description: string | null;
+  etoile: string;
+  vendeurUuid: string;
+  boutiqueUuid: string;
+  lieu: string;
+  condition: string;
+  garantie: string;
+  categorie_uuid: string;
+  categorie: {
+    uuid: string;
+    libelle: string;
+    type: string;
+    image: string;
+  };
+  estPublie: boolean;
+  estBloque: boolean;
   createdAt: string | null;
-  quantite?: number;
-  categorie_uuid?: string;
-  lieu?: string;
-  condition?: string;
-  type?: string;
-  garantie?: string;
-  etoile?: string;
+  updatedAt: string | null;
+  quantite: number;
+  note_moyenne: string;
+  nombre_avis: number;
+  nombre_favoris: number;
 }
 
 // ============ COMPOSANTS ============
@@ -200,7 +218,7 @@ const DeleteModal = ({
             </div>
             <p className="mb-3">
               Êtes-vous sûr de vouloir supprimer le produit{" "}
-              <strong>{product?.nom}</strong> ?
+              <strong>{product?.libelle}</strong> ?
             </p>
             <div className="text-danger small">
               Cette action est irréversible. Toutes les données associées à ce
@@ -373,7 +391,7 @@ export default function ProduitsVendeurPage() {
       const term = searchTerm.toLowerCase();
       result = result.filter(
         (product) =>
-          product.nom?.toLowerCase().includes(term) ||
+          product.libelle?.toLowerCase().includes(term) ||
           product.description?.toLowerCase().includes(term) ||
           product.type?.toLowerCase().includes(term),
       );
@@ -597,10 +615,10 @@ export default function ProduitsVendeurPage() {
     const csvContent = [
       ["Nom", "Prix (FCFA)", "Disponible", "Date", "Description"],
       ...products.map((product) => [
-        `"${product.nom || ""}"`,
+        `"${product.libelle || ""}"`,
         product.prix,
         product.disponible ? "Oui" : "Non",
-        formatDate(product.date),
+        formatDate(product.createdAt),
         `"${product.description || ""}"`,
       ]),
     ]
@@ -636,14 +654,23 @@ export default function ProduitsVendeurPage() {
 
   // Statistiques
   const stats = useMemo(() => {
+    // Convertir tous les prix en nombres
+    const productsWithNumericPrices = products
+      .map((p) => ({
+        ...p,
+        prix: typeof p.prix === "string" ? parseFloat(p.prix) : p.prix,
+      }))
+      .filter((p) => !isNaN(p.prix)); // Filtrer les prix invalides
+
     return {
       total: products.length,
       available: products.filter((p) => p.disponible).length,
       unavailable: products.filter((p) => !p.disponible).length,
-      totalValue: products.reduce((sum, p) => sum + p.prix, 0),
+      totalValue: productsWithNumericPrices.reduce((sum, p) => sum + p.prix, 0),
       averagePrice:
-        products.length > 0
-          ? products.reduce((sum, p) => sum + p.prix, 0) / products.length
+        productsWithNumericPrices.length > 0
+          ? productsWithNumericPrices.reduce((sum, p) => sum + p.prix, 0) /
+            productsWithNumericPrices.length
           : 0,
     };
   }, [products]);
@@ -1014,10 +1041,10 @@ export default function ProduitsVendeurPage() {
                       <th style={{ width: "200px" }}>
                         <button
                           className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
-                          onClick={() => requestSort("nom")}
+                          onClick={() => requestSort("libelle")}
                         >
                           Nom du produit
-                          {getSortIcon("nom")}
+                          {getSortIcon("libelle")}
                         </button>
                       </th>
                       <th style={{ width: "120px" }}>
@@ -1035,10 +1062,10 @@ export default function ProduitsVendeurPage() {
                       <th style={{ width: "150px" }}>
                         <button
                           className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
-                          onClick={() => requestSort("date")}
+                          onClick={() => requestSort("createdAt")}
                         >
                           Date
-                          {getSortIcon("date")}
+                          {getSortIcon("createdAt")}
                         </button>
                       </th>
                       <th style={{ width: "160px" }} className="text-center">
@@ -1078,7 +1105,7 @@ export default function ProduitsVendeurPage() {
                             {product.image ? (
                               <img
                                 src={product.image}
-                                alt={product.nom}
+                                alt={product.libelle}
                                 className="rounded border"
                                 style={{
                                   width: "60px",
@@ -1087,7 +1114,7 @@ export default function ProduitsVendeurPage() {
                                 }}
                                 onError={(e) => {
                                   (e.target as HTMLImageElement).src =
-                                    `https://via.placeholder.com/60/cccccc/ffffff?text=${product.nom?.charAt(0) || "P"}`;
+                                    `https://via.placeholder.com/60/cccccc/ffffff?text=${product.libelle?.charAt(0) || "P"}`;
                                 }}
                               />
                             ) : (
@@ -1103,7 +1130,7 @@ export default function ProduitsVendeurPage() {
                             )}
                           </td>
                           <td>
-                            <div className="fw-semibold">{product.nom}</div>
+                            <div className="fw-semibold">{product.libelle}</div>
                             {product.description && (
                               <small
                                 className="text-muted d-block"
@@ -1115,7 +1142,7 @@ export default function ProduitsVendeurPage() {
                           </td>
                           <td>
                             <div className="fw-bold text-success">
-                              {formatPrice(product.prix)}
+                              {formatPrice(parseFloat(product.prix))}{" "}
                             </div>
                             {product.quantite && (
                               <small className="text-muted">
@@ -1135,7 +1162,7 @@ export default function ProduitsVendeurPage() {
                                   icon={faCalendar}
                                   className="me-1"
                                 />
-                                {formatDate(product.date)}
+                                {formatDate(product.createdAt)}
                               </div>
                               {product.createdAt && (
                                 <div className="text-muted">

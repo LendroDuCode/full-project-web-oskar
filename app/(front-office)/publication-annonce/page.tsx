@@ -1,8 +1,6 @@
-// components/PublishAdModal/PublishAdModal.tsx
-
 "use client";
 
-import { useState, ChangeEvent } from "react";
+import { useState, ChangeEvent, useEffect } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faStore,
@@ -18,6 +16,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import colors from "../../shared/constants/colors";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
+import { api } from "@/lib/api-client";
 import {
   AdTypeOption,
   Category,
@@ -25,6 +24,9 @@ import {
   EchangeData,
   PublishAdModalProps,
   VenteData,
+  Boutique,
+  SaleMode,
+  ConditionOption, // ← IMPORT THIS
 } from "./components/constantes/types";
 import DonForm from "./components/DonForm";
 import EchangeForm from "./components/ExchangeForm";
@@ -35,17 +37,21 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
   onHide,
   isLoggedIn,
   onLoginRequired,
+  user,
 }) => {
   const [adType, setAdType] = useState<"don" | "exchange" | "sale" | null>(
     null,
   );
+  const [saleMode, setSaleMode] = useState<SaleMode>("particulier");
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [boutiqueCreated] = useState(false);
+  const [createdBoutiqueUuid] = useState<string | null>(null);
 
-  // ✅ États initiaux COMPLETS – évite le warning React
+  // États initiaux
   const [donData, setDonData] = useState<DonData>({
     description: "",
     type_don: "",
@@ -77,7 +83,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
   });
 
   const [venteData, setVenteData] = useState<VenteData>({
-    boutiqueUuid: "728a280c-f65b-4e38-8187-4d826c78dc0b",
+    boutiqueUuid: "",
     libelle: "",
     type: "",
     disponible: true,
@@ -91,7 +97,13 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     lieu: "",
     condition: "neuf",
     garantie: "non",
+    saleMode: "particulier",
   });
+
+  const [boutiques, setBoutiques] = useState<Boutique[]>([]);
+  const [selectedBoutique, setSelectedBoutique] = useState<Boutique | null>(
+    null,
+  );
 
   const adTypeOptions: AdTypeOption[] = [
     {
@@ -174,13 +186,92 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     },
   ];
 
-  const conditions = [
+  // ✅ FIXED: Properly typed conditions array
+  const conditions: ConditionOption[] = [
     { value: "neuf", label: "Neuf (jamais utilisé)" },
     { value: "tresbon", label: "Très bon état" },
     { value: "bon", label: "Bon état" },
     { value: "moyen", label: "État moyen" },
     { value: "areparer", label: "À réparer" },
   ];
+
+  // Charger les boutiques
+  useEffect(() => {
+    const fetchBoutiques = async () => {
+      if (!isLoggedIn || adType !== "sale") {
+        setBoutiques([]);
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem("oskar_token");
+        if (!token) return;
+
+        const url = API_ENDPOINTS.BOUTIQUES.LISTE_BOUTIQUES_CREE_PAR_VENDEUR;
+        console.log("🛍️ Chargement des boutiques:", url);
+
+        const response = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Erreur ${response.status}`);
+        }
+
+        const data = await response.json();
+        let boutiquesData: Boutique[] = [];
+
+        if (Array.isArray(data)) {
+          boutiquesData = data;
+        } else if (data && Array.isArray(data.data)) {
+          boutiquesData = data.data;
+        } else if (data && data.data && Array.isArray(data.data.data)) {
+          boutiquesData = data.data.data;
+        } else if (data && data.success && Array.isArray(data.data)) {
+          boutiquesData = data.data;
+        }
+
+        const boutiquesActives = boutiquesData.filter(
+          (boutique) =>
+            !boutique.est_bloque &&
+            !boutique.est_ferme &&
+            (boutique.statut === "actif" || boutique.statut === "en_review"),
+        );
+
+        console.log(`📊 ${boutiquesActives.length} boutique(s) active(s)`);
+        setBoutiques(boutiquesActives);
+
+        // Si l'utilisateur est un vendeur et n'a pas de boutique sélectionnée,
+        // présélectionner la première boutique active
+        if (
+          user?.type === "vendeur" &&
+          !venteData.boutiqueUuid &&
+          boutiquesActives.length > 0
+        ) {
+          const premiereBoutique = boutiquesActives[0];
+          handleBoutiqueChange(premiereBoutique.uuid);
+          console.log(`✅ Boutique présélectionnée: ${premiereBoutique.nom}`);
+        }
+      } catch (err) {
+        console.error("❌ Erreur chargement boutiques:", err);
+        setBoutiques([]);
+      }
+    };
+
+    if (visible && isLoggedIn && adType === "sale") {
+      fetchBoutiques();
+    }
+  }, [visible, isLoggedIn, adType, user?.type, venteData.boutiqueUuid]);
+
+  // Mettre à jour selectedBoutique quand boutiqueUuid change
+  useEffect(() => {
+    if (venteData.boutiqueUuid && boutiques.length > 0) {
+      const boutique = boutiques.find((b) => b.uuid === venteData.boutiqueUuid);
+      setSelectedBoutique(boutique || null);
+    } else {
+      setSelectedBoutique(null);
+    }
+  }, [venteData.boutiqueUuid, boutiques]);
 
   const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -259,10 +350,31 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     await sendFormData(formData, API_ENDPOINTS.ECHANGES.CREATE, "échange");
   };
 
-  // ✅ ✨ Soumission VENTE – API /produits/creer
+  // ✅ Soumission VENTE - CORRIGÉE
   const submitVente = async (): Promise<void> => {
+    console.log("🚀 Début submitVente");
+    console.log("📊 État venteData:", venteData);
+    console.log("👤 Type utilisateur:", user?.type);
+
     const formData = new FormData();
-    formData.append("boutiqueUuid", venteData.boutiqueUuid);
+
+    // CORRECTION IMPORTANTE : Utiliser "boutiqueUuid" (camelCase)
+    const boutiqueId = venteData.boutiqueUuid;
+    console.log("📝 boutiqueUuid à envoyer:", boutiqueId);
+
+    if (boutiqueId) {
+      formData.append("boutiqueUuid", boutiqueId);
+    } else if (user?.type === "vendeur") {
+      // Si l'utilisateur est un vendeur mais n'a pas de boutique
+      console.error("❌ ERREUR: Vendeur sans boutiqueUuid!");
+      setSubmitError(
+        "Veuillez sélectionner une boutique pour vendre ce produit",
+      );
+      setLoading(false);
+      return;
+    }
+
+    // Ajouter les autres champs
     formData.append("libelle", venteData.libelle.trim());
     formData.append("type", venteData.type.trim());
     formData.append("disponible", String(venteData.disponible));
@@ -275,38 +387,74 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     formData.append("lieu", venteData.lieu.trim());
     formData.append("condition", venteData.condition);
     formData.append("garantie", venteData.garantie);
-    if (venteData.image) formData.append("image", venteData.image);
+
+    if (venteData.image) {
+      formData.append("image", venteData.image);
+    }
 
     await sendFormData(formData, API_ENDPOINTS.PRODUCTS.CREATE, "vente");
   };
 
-  // ✅ Fonction générique pour envoyer FormData
+  // ✅ Fonction générique pour envoyer FormData - CORRIGÉE
   const sendFormData = async (
     formData: FormData,
     endpoint: string,
     type: "don" | "échange" | "vente",
   ) => {
     setLoading(true);
+    setSubmitError(null);
+
     try {
-      const token =
-        typeof window !== "undefined"
-          ? localStorage.getItem("oskar_token")
-          : null;
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
-        method: "POST",
-        body: formData,
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (!res.ok) throw new Error(await res.text());
+      console.log(`📤 Envoi ${type} vers:`, endpoint);
+      console.log("📋 Données FormData:");
+      for (let [key, value] of formData.entries()) {
+        console.log(
+          `  ${key}:`,
+          value instanceof File ? `File(${value.name})` : value,
+        );
+      }
+
+      // CORRECTION : Utiliser api.post() au lieu de api()
+      const result = await api.post(endpoint, formData);
+
+      console.log(`✅ ${type} créé avec succès:`, result);
 
       resetForm();
       showSuccessNotification(
-        `Votre ${type === "don" ? "don" : type === "échange" ? "échange" : "annonce de vente"} a été publiée !`,
+        `Votre ${
+          type === "don"
+            ? "don"
+            : type === "échange"
+              ? "échange"
+              : "annonce de vente"
+        } a été publié(e) avec succès !`,
       );
-      setTimeout(onHide, 1500);
+
+      setTimeout(() => {
+        onHide();
+        window.location.reload();
+      }, 1500);
     } catch (err: any) {
-      setSubmitError(err.message || `Erreur lors de la publication du ${type}`);
-      throw err;
+      console.error(`❌ Erreur publication ${type}:`, err);
+
+      let errorMessage = err.message;
+
+      // Messages d'erreur spécifiques
+      if (
+        errorMessage.includes("boutiqueUuid") ||
+        errorMessage.includes("boutique_uuid")
+      ) {
+        errorMessage =
+          "Veuillez sélectionner une boutique pour vendre ce produit";
+      } else if (errorMessage.includes("400")) {
+        errorMessage = "Veuillez vérifier les informations du formulaire";
+      } else if (errorMessage.includes("401")) {
+        errorMessage = "Session expirée. Veuillez vous reconnecter";
+      } else if (errorMessage.includes("vendeur")) {
+        errorMessage = "Les vendeurs doivent vendre via une boutique";
+      }
+
+      setSubmitError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -314,10 +462,24 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
     if (!isLoggedIn) {
       onLoginRequired();
       return;
     }
+
+    // Validation supplémentaire pour les vendeurs
+    if (
+      adType === "sale" &&
+      user?.type === "vendeur" &&
+      !venteData.boutiqueUuid
+    ) {
+      setSubmitError(
+        "Veuillez sélectionner une boutique pour vendre ce produit",
+      );
+      return;
+    }
+
     try {
       switch (adType) {
         case "don":
@@ -331,12 +493,13 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
           break;
       }
     } catch (error) {
-      // Erreur déjà gérée dans sendFormData
+      // Erreur déjà gérée
     }
   };
 
   const resetForm = () => {
     setAdType(null);
+    setSaleMode("particulier");
     setDonData({
       description: "",
       type_don: "",
@@ -366,7 +529,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       type_destinataire: "autre",
     });
     setVenteData({
-      boutiqueUuid: "728a280c-f65b-4e38-8187-4d826c78dc0b",
+      boutiqueUuid: "",
       libelle: "",
       type: "",
       disponible: true,
@@ -380,10 +543,13 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       lieu: "",
       condition: "neuf",
       garantie: "non",
+      saleMode: "particulier",
     });
     setImagePreview(null);
     setStep(1);
     setSubmitError(null);
+    setBoutiques([]);
+    setSelectedBoutique(null);
   };
 
   const nextStep = () => step < 3 && setStep(step + 1);
@@ -392,6 +558,11 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     setAdType(type);
     setStep(2);
     setSubmitError(null);
+  };
+
+  const handleBoutiqueChange = (boutiqueUuid: string) => {
+    console.log(`🔄 Changement de boutique: ${boutiqueUuid}`);
+    setVenteData({ ...venteData, boutiqueUuid });
   };
 
   const renderStep1 = () => (
@@ -409,7 +580,9 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         {adTypeOptions.map((option) => (
           <div key={option.id} className="col-md-4">
             <div
-              className={`card h-100 border-0 shadow-lg-hover cursor-pointer ${adType === option.id ? "border-3 border-" + option.color : ""}`}
+              className={`card h-100 border-0 shadow-lg-hover cursor-pointer ${
+                adType === option.id ? "border-3 border-" + option.color : ""
+              }`}
               onClick={() => selectAdType(option.id)}
               style={{
                 minHeight: "280px",
@@ -427,21 +600,33 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
                 >
                   <FontAwesomeIcon
                     icon={option.icon}
-                    className={`fs-1 ${adType === option.id ? "text-" + option.color : "text-" + option.color}`}
+                    className={`fs-1 ${
+                      adType === option.id
+                        ? "text-" + option.color
+                        : "text-" + option.color
+                    }`}
                   />
                 </div>
                 <h4
-                  className={`fw-bold mb-3 ${adType === option.id ? "text-white" : "text-dark"}`}
+                  className={`fw-bold mb-3 ${
+                    adType === option.id ? "text-white" : "text-dark"
+                  }`}
                 >
                   {option.title}
                 </h4>
                 <p
-                  className={`mb-4 ${adType === option.id ? "text-white text-opacity-90" : "text-muted"}`}
+                  className={`mb-4 ${
+                    adType === option.id
+                      ? "text-white text-opacity-90"
+                      : "text-muted"
+                  }`}
                 >
                   {option.description}
                 </p>
                 <div
-                  className={`rounded-circle border-2 d-flex align-items-center justify-content-center ${adType === option.id ? "border-white" : "border-light"}`}
+                  className={`rounded-circle border-2 d-flex align-items-center justify-content-center ${
+                    adType === option.id ? "border-white" : "border-light"
+                  }`}
                   style={{ width: "28px", height: "28px" }}
                 >
                   {adType === option.id && (
@@ -568,13 +753,17 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
                     <div className="step-name">Type</div>
                   </div>
                   <div
-                    className={`stepper-item ${step >= 2 ? "completed" : ""} ${step === 2 ? "active" : ""}`}
+                    className={`stepper-item ${
+                      step >= 2 ? "completed" : ""
+                    } ${step === 2 ? "active" : ""}`}
                   >
                     <div className="step-counter">2</div>
                     <div className="step-name">Détails</div>
                   </div>
                   <div
-                    className={`stepper-item ${step === 3 ? "completed active" : ""}`}
+                    className={`stepper-item ${
+                      step === 3 ? "completed active" : ""
+                    }`}
                   >
                     <div className="step-counter">3</div>
                     <div className="step-name">Validation</div>
@@ -620,16 +809,20 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
                 )}
                 {adType === "sale" && (
                   <VenteForm
-                    {...{
-                      venteData,
-                      categories,
-                      conditions,
-                      imagePreview,
-                      onChange: setVenteData,
-                      onImageUpload: handleImageUpload,
-                      onRemoveImage: removeImage,
-                      step,
-                    }}
+                    venteData={venteData}
+                    conditions={conditions}
+                    imagePreview={imagePreview}
+                    onChange={setVenteData}
+                    onImageUpload={handleImageUpload}
+                    onRemoveImage={removeImage}
+                    step={step}
+                    boutiques={boutiques}
+                    selectedBoutique={selectedBoutique}
+                    onBoutiqueChange={handleBoutiqueChange}
+                    user={user || null}
+                    saleMode={saleMode}
+                    boutiqueCreated={boutiqueCreated}
+                    createdBoutiqueUuid={createdBoutiqueUuid}
                   />
                 )}
 

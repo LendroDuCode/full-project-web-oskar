@@ -374,7 +374,7 @@ export default function DetailUtilisateurPage() {
             <button
               className="btn btn-primary me-2"
               onClick={() =>
-                router.push("/dashboard-admin/utilisateurs/liste-utilisateurs")
+                router.push("/dashboard-agent/utilisateurs/liste-utilisateurs")
               }
             >
               <FontAwesomeIcon icon={faArrowLeft} className="me-2" />

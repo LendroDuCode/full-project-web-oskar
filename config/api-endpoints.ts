@@ -67,6 +67,8 @@ export const API_ENDPOINTS = {
       PROFILE: withBaseUrl("/auth/utilisateur/profile"),
       UPDATE_PROFILE: withBaseUrl("/auth/utilisateur/modifier/profile"),
       OTP: withBaseUrl("/auth/utilisateur/otp"),
+      DEMANDE_VENDEUR: (uuid: string) =>
+        withBaseUrl(`/auth/utilisateur/${uuid}/devenir-vendeur`),
       RESEND_OTP: withBaseUrl("/auth/utilisateur/resend/otp"),
       FORGOT_PASSWORD: withBaseUrl("/auth/utilisateur/generate/forget/link"),
       VERIFY_FORGET_TOKEN: withBaseUrl("/auth/utilisateur/verify/forget/token"),
@@ -273,11 +275,9 @@ export const API_ENDPOINTS = {
     BY_CODE: (code: string) => withBaseUrl(`/pays/by-code/${code}`),
     BY_NOM: (nom: string) => withBaseUrl(`/pays/by-nom/${nom}`),
     TOGGLE_STATUS: (uuid: string) => withBaseUrl(`/pays/${uuid}/toggle-status`),
-    DETAIL: (uuid: string) => withBaseUrl(`/pays/${uuid}`),
+    DETAIL: (uuid: string) => withBaseUrl(`/pays/${uuid}`), // <-- CECI devrait être l'endpoint GET
     CREATE: withBaseUrl("/pays/creer"),
-    UPDATE: (uuid: string) => withBaseUrl(`/pays/${uuid}`),
-    UPDATE_INDICATIF: (uuid: string, indicatif: string) =>
-      withBaseUrl(`/pays/${uuid}/indicatif/${indicatif}`),
+    UPDATE: (uuid: string) => withBaseUrl(`/pays/${uuid}`), // <-- CECI est PUT
     DELETE: (uuid: string) => withBaseUrl(`/pays/${uuid}`),
     EXPORT_PDF: withBaseUrl("/pays/export-pays-pdf"),
   },
@@ -490,6 +490,7 @@ export const API_ENDPOINTS = {
     ALL: withBaseUrl("/produits/tous-produits"),
     PUBLISHED: withBaseUrl("/produits/published"),
     UNPUBLISH: (uuid: string) => withBaseUrl(`/produits/${uuid}/restore`),
+    USER_BLOCKED: withBaseUrl("/produits/produits-utilisateur-bloques"),
     PUBLISH: (uuid: string) => withBaseUrl(`/produits/${uuid}/restore`),
     PUBLLIER: withBaseUrl("/produits/publier"),
     DELETED: withBaseUrl("/produits/deleted"),
@@ -529,6 +530,14 @@ export const API_ENDPOINTS = {
     DETAIL: (uuid: string) => withBaseUrl(`/categories/${uuid}`),
     BY_SLUG: (slug: string) => withBaseUrl(`/categories/by-slug/${slug}`),
     CREATE: withBaseUrl("/categories/creer-categorie"),
+    CREATE_SOUS_CATEGORIE: (uuid: string) =>
+      withBaseUrl(`/categories/${uuid}/sous-categories`),
+    LISTE_SOUS_CATEGORIE: (uuid: string) =>
+      withBaseUrl(`/categories/${uuid}/liste-sous-categories`),
+    RECUPERER_SOUS_CATEGORIE_UUID: (uuid: string) =>
+      withBaseUrl(`/categories/${uuid}/sous-categories/${uuid}`),
+    RECUPERER_CATEGORIE_UUID_PAR_LISTE_SOUS_CATEGORIE: (parrentUuid: string) =>
+      withBaseUrl(`/categories/${parrentUuid}/sous-categories`),
     UPDATE: (uuid: string) => withBaseUrl(`/categories/modifier/${uuid}`),
     DELETE: (uuid: string) => withBaseUrl(`/categories/${uuid}`),
     ALL_ELEMENTS: (uuid: string) =>

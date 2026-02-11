@@ -1,26 +1,80 @@
-// lib/api-client.ts - VERSION CORRIGÉE
+// lib/api-client.ts
+"use client";
+
+import { API_ENDPOINTS } from "@/config/api-endpoints";
+
+// Définir l'interface en DEHORS de la classe
+interface RequestOptions extends RequestInit {
+  requiresAuth?: boolean;
+  isFormData?: boolean;
+  retryCount?: number;
+  maxRetries?: number;
+}
 
 class ApiClient {
   private useProxy: boolean;
   private isProduction: boolean;
+  private baseApiUrl: string;
+  private requestCount: number = 0;
+  private maxRetries: number = 3;
+  private retryDelay: number = 1000;
 
   constructor() {
-    // Lire les variables d'environnement
     this.useProxy = process.env.NEXT_PUBLIC_USE_PROXY === "true";
     this.isProduction = process.env.NODE_ENV === "production";
+    this.baseApiUrl =
+      process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
 
     if (!this.isProduction) {
       console.log("🔧 ApiClient initialisé:", {
         useProxy: this.useProxy,
         isProduction: this.isProduction,
-        apiUrl: process.env.NEXT_PUBLIC_API_URL,
+        baseApiUrl: this.baseApiUrl,
       });
+    }
+  }
+
+  /**
+   * Méthode spéciale pour envoyer des messages via la messagerie
+   */
+  async sendMessage(messageData: any): Promise<any> {
+    try {
+      console.log("📤 Envoi de message avec données:", {
+        ...messageData,
+        contenu: messageData.contenu
+          ? `${messageData.contenu.substring(0, 50)}...`
+          : "vide",
+      });
+
+      // Essayer d'abord l'endpoint de messagerie publique
+      return await this.post(API_ENDPOINTS.MESSAGERIE.PUBLIC_SEND, messageData);
+    } catch (error: any) {
+      console.warn("⚠️ Envoi via endpoint public échoué:", error.message);
+
+      // Si l'endpoint public échoue, essayer l'endpoint standard
+      if (error.status === 404 || error.status === 401) {
+        return await this.post(API_ENDPOINTS.MESSAGERIE.SEND, messageData);
+      }
+      throw error;
     }
   }
 
   private getAuthToken(): string | null {
     if (typeof window === "undefined") return null;
 
+    // Priorité 1: Token spécifique Oskar
+    const oskarToken = localStorage.getItem("oskar_token");
+    if (oskarToken) {
+      if (!this.isProduction) {
+        console.log(
+          "🔑 Token Oskar trouvé:",
+          oskarToken.substring(0, 20) + "...",
+        );
+      }
+      return oskarToken;
+    }
+
+    // Priorité 2: Cookies
     const getCookie = (name: string) => {
       const value = `; ${document.cookie}`;
       const parts = value.split(`; ${name}=`);
@@ -28,19 +82,42 @@ class ApiClient {
       return null;
     };
 
-    const tokenSources = [
-      getCookie("oskar_token"),
-      getCookie("access_token"),
-      getCookie("token"),
-      localStorage.getItem("oskar_token"),
+    const cookieToken =
+      getCookie("oskar_token") ||
+      getCookie("access_token") ||
+      getCookie("token");
+    if (cookieToken) {
+      if (!this.isProduction) {
+        console.log("🍪 Token cookie trouvé");
+      }
+      return cookieToken;
+    }
+
+    // Priorité 3: Autres local storage
+    const otherTokens = [
       localStorage.getItem("access_token"),
       localStorage.getItem("token"),
       sessionStorage.getItem("oskar_token"),
       sessionStorage.getItem("access_token"),
-      sessionStorage.getItem("token"),
     ];
 
-    return tokenSources.find((token) => token !== null) || null;
+    const foundToken = otherTokens.find((token) => token !== null);
+    if (foundToken) {
+      if (!this.isProduction) {
+        console.log("🔑 Token alternatif trouvé");
+      }
+      return foundToken;
+    }
+
+    if (!this.isProduction) {
+      console.warn("⚠️ Aucun token d'authentification trouvé");
+    }
+    return null;
+  }
+
+  private getUserType(): string | null {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem("oskar_user_type");
   }
 
   public getToken(): string | null {
@@ -48,268 +125,389 @@ class ApiClient {
   }
 
   /**
-   * CORRECTION : Les endpoints dans API_ENDPOINTS contiennent déjà les URLs complètes
-   * Cette méthode adapte l'URL pour utiliser le proxy si nécessaire
+   * Construire l'URL finale en fonction de la configuration
    */
-  private buildUrl(fullUrl: string): string {
-    // DEBUG
-    if (!this.isProduction) {
-      console.log("🔗 buildUrl input:", fullUrl);
+  private buildUrl(endpoint: string): string {
+    // Si l'URL est déjà complète (commence par http), la retourner telle quelle
+    if (endpoint.startsWith("http://") || endpoint.startsWith("https://")) {
+      if (this.useProxy) {
+        try {
+          const urlObj = new URL(endpoint);
+          const baseApi = new URL(this.baseApiUrl);
+
+          // Vérifier si c'est la même base API
+          if (urlObj.origin === baseApi.origin) {
+            const proxyPath = `/api${urlObj.pathname}${urlObj.search}`;
+            if (!this.isProduction) {
+              console.log("🔗 URL API -> Proxy:", { endpoint, proxyPath });
+            }
+            return proxyPath;
+          }
+        } catch (error) {
+          console.error("❌ Erreur parsing URL:", error);
+        }
+      }
+      return endpoint;
     }
 
-    // Si nous utilisons le proxy, convertir en chemin relatif /api/
+    // Si c'est déjà un chemin proxy
+    if (endpoint.startsWith("/api/")) {
+      return endpoint;
+    }
+
+    // Construire l'URL finale
     if (this.useProxy) {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
-
-      // Si l'URL commence par l'URL de base de l'API
-      if (fullUrl.startsWith(apiUrl)) {
-        const path = fullUrl.substring(apiUrl.length);
-        // Nettoyer le chemin (enlever les doubles slashes)
-        const cleanPath = path.replace(/^\/+/, "");
-        const proxyUrl = `/api/${cleanPath}`;
-
-        if (!this.isProduction) {
-          console.log("🔗 Conversion proxy:", {
-            fullUrl,
-            apiUrl,
-            path,
-            proxyUrl,
-          });
-        }
-
-        return proxyUrl;
+      // Ajouter /api devant le chemin
+      const proxyPath = `/api${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+      if (!this.isProduction) {
+        console.log("🔗 Chemin -> Proxy:", { endpoint, proxyPath });
       }
-
-      // Si c'est déjà un chemin relatif /api/, le garder tel quel
-      if (fullUrl.startsWith("/api/")) {
-        return fullUrl;
+      return proxyPath;
+    } else {
+      // Construire l'URL complète
+      const fullUrl = `${this.baseApiUrl}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+      if (!this.isProduction) {
+        console.log("🔗 Chemin -> URL directe:", { endpoint, fullUrl });
       }
-
-      // Pour les autres cas, utiliser l'URL complète
       return fullUrl;
     }
-
-    // Si nous n'utilisons pas le proxy, utiliser l'URL complète directement
-    return fullUrl;
   }
 
+  /**
+   * Gestion robuste des réponses HTTP avec retry
+   */
   private async handleResponse<T>(response: Response): Promise<T> {
+    const requestUrl = response.url;
+    const status = response.status;
+    const statusText = response.statusText;
+
     if (!this.isProduction) {
       console.log("📥 API Response:", {
-        status: response.status,
+        url: requestUrl,
+        status,
+        statusText,
         ok: response.ok,
-        url: response.url,
-        statusText: response.statusText,
       });
     }
 
-    // Récupérer d'abord le texte de la réponse pour analyse
-    const responseText = await response.text();
-    const contentType = response.headers.get("content-type") || "";
-
-    // Vérifier si c'est du HTML (erreur du backend)
-    const isHtmlResponse =
-      responseText.trim().startsWith("<!DOCTYPE") ||
-      responseText.includes("<html") ||
-      contentType.includes("text/html");
-
-    if (isHtmlResponse) {
-      console.error("❌ Backend retourne du HTML au lieu de JSON:", {
-        status: response.status,
-        url: response.url,
-        preview: responseText.substring(0, 300),
-      });
-
-      // Analyser le type d'erreur HTML
-      let errorMessage = `Le serveur a retourné du HTML (${response.status}). `;
-
-      if (response.status === 404 || responseText.includes("404")) {
-        errorMessage += "La route n'existe pas sur le backend.";
-      } else if (response.status === 500 || responseText.includes("500")) {
-        errorMessage += "Erreur interne du serveur.";
-      } else if (
-        responseText.includes("Cannot GET") ||
-        responseText.includes("Cannot POST")
-      ) {
-        errorMessage += "Route non implémentée sur le backend.";
-      } else {
-        errorMessage += "Vérifiez la configuration du backend.";
-      }
-
-      throw new Error(errorMessage);
-    }
-
-    if (response.status === 401) {
-      console.error("❌ Erreur 401: Non authentifié");
-      this.clearAuthTokens();
-      throw new Error("Authentification requise. Veuillez vous reconnecter.");
-    }
-
-    if (!response.ok) {
-      let errorData;
-
-      try {
-        // Essayer de parser comme JSON
-        errorData = JSON.parse(responseText);
-      } catch {
-        // Si ce n'est pas du JSON valide
-        errorData = {
-          message: `HTTP ${response.status}: ${response.statusText}`,
-          status: response.status,
-          rawResponse: responseText.substring(0, 500),
-        };
-      }
-
-      const error = new Error(errorData.message || `HTTP ${response.status}`);
-      Object.assign(error, {
-        status: response.status,
-        data: errorData,
-        response,
-      });
-      throw error;
-    }
-
-    if (response.status === 204) {
+    // Gérer les réponses vides
+    if (status === 204 || response.headers.get("content-length") === "0") {
       return {} as T;
     }
 
-    // Essayer de parser la réponse JSON
+    // Essayer de récupérer le texte de la réponse
+    let responseText = "";
     try {
-      return JSON.parse(responseText);
+      responseText = await response.text();
     } catch (error) {
-      console.error("❌ Erreur parsing JSON:", {
-        url: response.url,
-        status: response.status,
-        contentType: contentType,
-        preview: responseText.substring(0, 500),
-      });
-      throw new Error(
-        `Réponse invalide du serveur. Attendu: JSON, Reçu: ${contentType}`,
-      );
+      console.error("❌ Erreur lors de la lecture de la réponse:", error);
+      responseText = "";
     }
+
+    // IMPORTANT: Si c'est un succès (200-299), traiter comme un succès
+    if (response.ok) {
+      try {
+        if (responseText.trim() === "") {
+          return {} as T;
+        }
+        const data = JSON.parse(responseText);
+
+        // Vérifier la structure standard de l'API
+        if (data && typeof data === "object") {
+          // Si l'API retourne un format standard {success, message, data}
+          if (data.success !== undefined) {
+            return data as T;
+          }
+          // Si l'API retourne directement les données
+          return data as T;
+        }
+
+        return {} as T;
+      } catch (error) {
+        console.warn("⚠️ Réponse JSON invalide mais statut OK:", {
+          url: requestUrl,
+          status,
+          preview: responseText.substring(0, 200),
+        });
+        return {} as T;
+      }
+    }
+
+    // GESTION DES ERREURS
+    let errorMessage = `Erreur ${status}: ${statusText}`;
+    let errorData: any = { message: errorMessage };
+
+    try {
+      if (responseText && responseText.trim()) {
+        if (
+          responseText.trim().startsWith("{") ||
+          responseText.trim().startsWith("[")
+        ) {
+          errorData = JSON.parse(responseText);
+          errorMessage = errorData.message || errorData.error || errorMessage;
+
+          // Messages spécifiques pour les erreurs communes
+          if (status === 404) {
+            errorMessage = `Ressource non trouvée: ${errorMessage}`;
+          } else if (status === 401) {
+            errorMessage = `Authentification requise: ${errorMessage}`;
+          } else if (status === 403) {
+            errorMessage = `Accès refusé: ${errorMessage}`;
+          } else if (status === 500) {
+            errorMessage = `Erreur serveur: ${errorMessage}`;
+          }
+        } else {
+          errorMessage = responseText;
+        }
+      }
+    } catch (parseError) {
+      console.warn("⚠️ Impossible de parser l'erreur:", parseError);
+    }
+
+    // Créer l'erreur personnalisée
+    const error = new Error(errorMessage);
+    Object.assign(error, {
+      status,
+      data: errorData,
+      response,
+      url: requestUrl,
+      isApiError: true,
+    });
+
+    // Pour les erreurs 401, on log mais on ne déconnecte pas automatiquement
+    if (status === 401) {
+      console.warn("⚠️ Erreur 401 (Non authentifié) - URL:", requestUrl);
+      console.warn("Message:", errorMessage);
+
+      // On peut rediriger vers la page de connexion pour les erreurs d'authentification claires
+      if (
+        errorMessage.includes("token") ||
+        errorMessage.includes("authentification")
+      ) {
+        // Attendre un peu avant de rediriger pour éviter les boucles
+        setTimeout(() => {
+          if (
+            typeof window !== "undefined" &&
+            !window.location.pathname.includes("connexion")
+          ) {
+            console.log("🔐 Redirection vers la page de connexion...");
+            window.location.href = "/connexion";
+          }
+        }, 1000);
+      }
+    }
+
+    throw error;
   }
 
   private clearAuthTokens(): void {
     if (typeof window === "undefined") return;
 
-    document.cookie =
-      "oskar_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    document.cookie =
-      "access_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    console.log("🧹 Nettoyage des tokens d'authentification...");
 
+    // Cookies
+    const cookies = ["oskar_token", "access_token", "token"];
+    cookies.forEach((cookie) => {
+      document.cookie = `${cookie}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${window.location.hostname};`;
+    });
+
+    // LocalStorage - on ne nettoie que les tokens, pas toute la configuration
     localStorage.removeItem("oskar_token");
     localStorage.removeItem("access_token");
     localStorage.removeItem("token");
+    // On garde le type d'utilisateur pour le diagnostic
+    // localStorage.removeItem("oskar_user_type");
 
+    // SessionStorage
     sessionStorage.removeItem("oskar_token");
     sessionStorage.removeItem("access_token");
-    sessionStorage.removeItem("token");
   }
 
-  async request<T = any>(
-    endpointOrUrl: string, // Peut être un endpoint d'API_ENDPOINTS (URL complète) ou un chemin
-    options: RequestInit & {
-      requiresAuth?: boolean;
-      isFormData?: boolean;
-    } = {},
+  /**
+   * Méthode de requête avec retry automatique
+   */
+  private async requestWithRetry<T = any>(
+    endpoint: string,
+    options: RequestOptions = {},
   ): Promise<T> {
-    // DEBUG
-    if (!this.isProduction) {
-      console.log("🌐 API Request (avant buildUrl):", endpointOrUrl);
+    const retryCount = options.retryCount || 0;
+    const maxRetries = options.maxRetries || this.maxRetries;
+
+    try {
+      return await this.request<T>(endpoint, options);
+    } catch (error: any) {
+      // Vérifier si on doit retenter
+      const shouldRetry =
+        retryCount < maxRetries &&
+        (error.status === 429 || // Too Many Requests
+          error.status === 500 || // Internal Server Error
+          error.status === 502 || // Bad Gateway
+          error.status === 503 || // Service Unavailable
+          error.status === 504 || // Gateway Timeout
+          error.name === "TypeError" || // Erreurs réseau
+          error.message.includes("fetch failed") ||
+          error.message.includes("network"));
+
+      if (shouldRetry) {
+        const delay = this.retryDelay * Math.pow(2, retryCount); // Exponential backoff
+        console.log(
+          `🔄 Retry ${retryCount + 1}/${maxRetries} dans ${delay}ms...`,
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, delay));
+
+        return this.requestWithRetry<T>(endpoint, {
+          ...options,
+          retryCount: retryCount + 1,
+        });
+      }
+
+      throw error;
+    }
+  }
+
+  // lib/api-client.ts - CORRECTION de la ligne 442
+
+  // ... votre code existant ...
+
+  private async request<T = any>(
+    endpoint: string,
+    options: RequestOptions = {},
+  ): Promise<T> {
+    this.requestCount++;
+    if (this.requestCount > 100) {
+      console.error("❌ Trop de requêtes API, arrêt pour éviter la boucle");
+      throw new Error("Trop de requêtes API");
     }
 
-    const url = this.buildUrl(endpointOrUrl);
+    const url = this.buildUrl(endpoint);
 
     if (!this.isProduction) {
-      console.log("🌐 API Request:", {
-        input: endpointOrUrl,
+      console.log(`🌐 API Request #${this.requestCount}:`, {
+        endpoint,
         finalUrl: url,
         method: options.method || "GET",
         useProxy: this.useProxy,
-        isProduction: this.isProduction,
+        requiresAuth: options.requiresAuth,
       });
     }
 
+    // Préparer les headers
     const headers: HeadersInit = {};
 
+    // Content-Type
     const isFormData = options.isFormData || options.body instanceof FormData;
-    if (!isFormData) {
+    if (!isFormData && options.body) {
       headers["Content-Type"] = "application/json";
     }
-
     headers["Accept"] = "application/json";
 
-    if (options.requiresAuth !== false) {
-      const token = this.getAuthToken();
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      } else if (!this.isProduction) {
-        console.warn("⚠️  Aucun token d'authentification trouvé");
+    // Authentification
+    const token = this.getAuthToken();
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+
+      // Ajouter le type d'utilisateur pour le backend
+      const userType = this.getUserType();
+      if (userType) {
+        headers["X-User-Type"] = userType;
       }
+    } else if (options.requiresAuth === true) {
+      throw new Error("Authentification requise. Aucun token trouvé.");
     }
 
+    // Headers pour éviter le cache
+    headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+    headers["Pragma"] = "no-cache";
+    headers["Expires"] = "0";
+
+    // Préparer la configuration
     const config: RequestInit = {
       method: options.method || "GET",
       headers,
-      credentials: this.useProxy ? "include" : "omit", // IMPORTANT: Inclure les cookies seulement si on utilise le proxy
+      credentials: this.useProxy ? "include" : "same-origin",
       cache: "no-store",
-      ...options,
     };
+
+    // Supprimer les propriétés personnalisées des options avant de les étendre
+    const {
+      requiresAuth,
+      isFormData: _,
+      retryCount,
+      maxRetries,
+      ...restOptions
+    } = options;
+
+    // Étendre avec les options restantes
+    Object.assign(config, restOptions);
+
+    // Gestion spéciale pour FormData
+    if (isFormData) {
+      // CORRECTION : Utiliser un type assertion pour supprimer Content-Type
+      delete (config.headers as any)["Content-Type"];
+    } else if (config.body && typeof config.body !== "string") {
+      config.body = JSON.stringify(config.body);
+    }
 
     try {
       const response = await fetch(url, config);
       return await this.handleResponse<T>(response);
     } catch (error: any) {
-      // GESTION D'ERREUR AMÉLIORÉE
+      // Log détaillé des erreurs
       const errorDetails = {
-        endpointOrUrl,
+        endpoint,
         finalUrl: url,
         method: options.method || "GET",
-        errorName: error?.name,
-        errorMessage: error?.message || "Unknown error",
-        errorStack: error?.stack,
-        errorCode: error?.code,
-        errorStatus: error?.status,
+        error: error?.name,
+        message: error?.message,
+        status: error?.status,
+        data: error?.data,
+        isApiError: error?.isApiError,
       };
 
       console.error("❌ API Request failed:", errorDetails);
 
-      // Si c'est une erreur de réseau
-      if (error?.name === "TypeError" && error?.message?.includes("fetch")) {
+      // Messages d'erreur plus explicites
+      if (error?.message?.includes("ENOENT")) {
         throw new Error(
-          `Impossible de se connecter à l'API à l'URL: ${url}. ` +
-            `Vérifiez que le serveur backend est démarré et accessible.`,
+          "Erreur serveur: Ressource non trouvée. Veuillez contacter l'administrateur.",
         );
-      }
-
-      // Si c'est une erreur Mixed Content
-      if (error?.message?.includes("Mixed Content")) {
+      } else if (error?.message?.includes("Erreur interne du serveur")) {
         throw new Error(
-          "Erreur Mixed Content: Le site est en HTTPS mais l'API est appelée en HTTP. " +
-            "Vérifiez la configuration.",
+          "Le serveur a rencontré une erreur interne. Veuillez réessayer plus tard.",
         );
+      } else if (
+        error?.message?.includes("fetch failed") ||
+        error?.name === "TypeError"
+      ) {
+        if (this.useProxy) {
+          throw new Error(
+            `Impossible de contacter le serveur via le proxy. ` +
+              `Vérifiez que le serveur backend est démarré sur ${this.baseApiUrl}.`,
+          );
+        } else {
+          throw new Error(
+            `Impossible de contacter le serveur API à l'adresse: ${url}. ` +
+              `Vérifiez votre connexion internet et que le serveur est démarré.`,
+          );
+        }
       }
 
-      // Si l'erreur a un message, le propager
-      if (error?.message) {
-        throw error;
-      }
-
-      // Sinon, créer une nouvelle erreur avec les détails
-      throw new Error(
-        `API Request failed: ${JSON.stringify(errorDetails, null, 2)}`,
-      );
+      throw error;
+    } finally {
+      this.requestCount--;
     }
   }
 
-  // Méthodes HTTP spécialisées pour FormData
+  // ... reste de votre code ...
+
+  // Méthodes HTTP avec gestion FormData
   postFormData<T = any>(
     endpoint: string,
     formData: FormData,
-    options?: Omit<RequestInit, "method" | "body">,
+    options?: Omit<RequestOptions, "method" | "body">,
   ) {
-    return this.request<T>(endpoint, {
+    return this.requestWithRetry<T>(endpoint, {
       ...options,
       method: "POST",
       body: formData,
@@ -320,9 +518,9 @@ class ApiClient {
   putFormData<T = any>(
     endpoint: string,
     formData: FormData,
-    options?: Omit<RequestInit, "method" | "body">,
+    options?: Omit<RequestOptions, "method" | "body">,
   ) {
-    return this.request<T>(endpoint, {
+    return this.requestWithRetry<T>(endpoint, {
       ...options,
       method: "PUT",
       body: formData,
@@ -330,34 +528,21 @@ class ApiClient {
     });
   }
 
-  patchFormData<T = any>(
-    endpoint: string,
-    formData: FormData,
-    options?: Omit<RequestInit, "method" | "body">,
-  ) {
-    return this.request<T>(endpoint, {
-      ...options,
-      method: "PATCH",
-      body: formData,
-      isFormData: true,
-    });
-  }
-
-  // Méthodes HTTP standard avec détection automatique de FormData
-  get<T = any>(endpoint: string, options?: Omit<RequestInit, "method">) {
-    return this.request<T>(endpoint, { ...options, method: "GET" });
+  // Méthodes HTTP standard avec retry
+  get<T = any>(endpoint: string, options?: Omit<RequestOptions, "method">) {
+    return this.requestWithRetry<T>(endpoint, { ...options, method: "GET" });
   }
 
   post<T = any>(
     endpoint: string,
     data?: any,
-    options?: Omit<RequestInit, "method" | "body">,
+    options?: Omit<RequestOptions, "method" | "body">,
   ) {
     if (data instanceof FormData) {
       return this.postFormData<T>(endpoint, data, options);
     }
 
-    return this.request<T>(endpoint, {
+    return this.requestWithRetry<T>(endpoint, {
       ...options,
       method: "POST",
       body: data ? JSON.stringify(data) : undefined,
@@ -367,13 +552,13 @@ class ApiClient {
   put<T = any>(
     endpoint: string,
     data?: any,
-    options?: Omit<RequestInit, "method" | "body">,
+    options?: Omit<RequestOptions, "method" | "body">,
   ) {
     if (data instanceof FormData) {
       return this.putFormData<T>(endpoint, data, options);
     }
 
-    return this.request<T>(endpoint, {
+    return this.requestWithRetry<T>(endpoint, {
       ...options,
       method: "PUT",
       body: data ? JSON.stringify(data) : undefined,
@@ -383,21 +568,17 @@ class ApiClient {
   patch<T = any>(
     endpoint: string,
     data?: any,
-    options?: Omit<RequestInit, "method" | "body">,
+    options?: Omit<RequestOptions, "method" | "body">,
   ) {
-    if (data instanceof FormData) {
-      return this.patchFormData<T>(endpoint, data, options);
-    }
-
-    return this.request<T>(endpoint, {
+    return this.requestWithRetry<T>(endpoint, {
       ...options,
       method: "PATCH",
       body: data ? JSON.stringify(data) : undefined,
     });
   }
 
-  delete<T = any>(endpoint: string, options?: Omit<RequestInit, "method">) {
-    return this.request<T>(endpoint, { ...options, method: "DELETE" });
+  delete<T = any>(endpoint: string, options?: Omit<RequestOptions, "method">) {
+    return this.requestWithRetry<T>(endpoint, { ...options, method: "DELETE" });
   }
 
   // Méthodes utilitaires
@@ -407,16 +588,69 @@ class ApiClient {
 
   async getCurrentUser<T = any>() {
     try {
-      // Utiliser le bon endpoint de votre API_ENDPOINTS
-      return await this.get<T>("/auth/profile");
+      const userType = this.getUserType();
+      if (!userType) return null;
+
+      let endpoint = "";
+      switch (userType) {
+        case "agent":
+          endpoint = "/auth/agent/profile";
+          break;
+        case "admin":
+          endpoint = "/auth/admin/profile";
+          break;
+        case "vendeur":
+          endpoint = "/auth/vendeur/profile";
+          break;
+        case "utilisateur":
+          endpoint = "/auth/utilisateur/profile";
+          break;
+        default:
+          return null;
+      }
+
+      return await this.get<T>(endpoint);
     } catch (error) {
       if (!this.isProduction) {
-        console.error("❌ Erreur lors de la récupération du profil:", error);
+        console.error("❌ Erreur récupération profil:", error);
       }
       return null;
     }
   }
+
+  // Nouvelle méthode pour tester directement une URL
+  async testEndpoint(endpoint: string): Promise<{
+    success: boolean;
+    status: number;
+    data: any;
+    error?: string;
+  }> {
+    try {
+      const data = await this.get(endpoint);
+      return {
+        success: true,
+        status: 200,
+        data,
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        status: error.status || 0,
+        data: error.data || null,
+        error: error.message,
+      };
+    }
+  }
+
+  // Méthode pour récupérer la configuration
+  getConfig() {
+    return {
+      useProxy: this.useProxy,
+      baseApiUrl: this.baseApiUrl,
+      isProduction: this.isProduction,
+    };
+  }
 }
 
-// Instance unique de l'ApiClient
+// Instance unique exportée
 export const api = new ApiClient();

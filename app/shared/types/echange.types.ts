@@ -12,76 +12,28 @@ import type { BaseEntity, StatusType } from "./base.entity";
  * Type principal pour les échanges
  */
 export interface Echange extends BaseEntity {
-  // Informations de base
-  titre: string;
-  description?: string;
-  statut: EchangeStatut;
-  categorie_uuid: string;
-  type_echange: EchangeType;
-
-  // Informations de contact
-  numero: string;
-  email?: string;
-  adresse?: string;
-  ville_uuid?: string;
-  pays_uuid?: string;
-
-  // Objets de l'échange
-  objetPropose?: string;
-  objetDemande?: string;
-  montantPropose?: number;
-  montantDemande?: number;
-  prix_estime?: string;
-
-  // Caractéristiques
-  quantite?: number;
-  unite_mesure?: string;
-  condition_objet?: ObjetCondition;
-  garantie_disponible?: boolean;
-  garantie_duree?: number; // en mois
-  livraison_incluse?: boolean;
-
-  // Images et médias
-  image?: string;
-  images?: string[];
-  video_url?: string;
-
-  // État et visibilité
-  is_featured?: boolean;
-  is_urgent?: boolean;
-  is_negotiable?: boolean;
-  vue_count?: number;
-  like_count?: number;
-  share_count?: number;
-
-  // Dates importantes
-  date_disponibilite?: string;
-  date_expiration?: string;
-  date_acceptation?: string;
-  date_finalisation?: string;
-
-  // Relations
-  utilisateur_uuid: string;
-  acheteur_uuid?: string;
-  transaction_uuid?: string;
-  categorie?: CategorieEchange;
-  ville?: Ville;
-  pays?: Pays;
-  utilisateur?: UtilisateurEchange;
-  acheteur?: UtilisateurEchange;
-  evaluations?: Evaluation[];
-  messages?: MessageEchange[];
-
-  // Métadonnées supplémentaires
-  tags?: string[];
-  reference?: string;
-  code_promo?: string;
-  notes_admin?: string;
-
-  // Statistiques
-  duree_publication?: number; // en jours
-  taux_reponse?: number;
-  taux_success?: number;
+  uuid: string;
+  nomElementEchange: string;
+  nom_initiateur: string;
+  prix: string;
+  image: string;
+  typeDestinataire: string;
+  typeEchange: string;
+  agent: string;
+  utilisateur: string;
+  vendeur: string;
+  objetPropose: string;
+  objetDemande: string;
+  estPublie: boolean | null;
+  statut: string;
+  message: string;
+  dateProposition: string;
+  dateAcceptation: string | null;
+  dateRefus: string | null;
+  categorie: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+  [key: string]: any;
 }
 
 /**

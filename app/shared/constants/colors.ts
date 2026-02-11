@@ -55,6 +55,21 @@ const colors = {
     pinkHover: "#DB2777", // Variante hover
     pinkLight: "#FCE7F3", // Rose clair (backgrounds)
   },
+
+  status: {
+    published: "#10B981",
+    pending: "#F59E0B",
+    draft: "#6B7280",
+    blocked: "#EF4444",
+    available: "#3B82F6",
+    validated: "#059669",
+    rejected: "#9CA3AF",
+  },
+  type: {
+    product: "#10B981",
+    don: "#8B5CF6",
+    exchange: "#F59E0B",
+  },
 };
 
 export default colors;

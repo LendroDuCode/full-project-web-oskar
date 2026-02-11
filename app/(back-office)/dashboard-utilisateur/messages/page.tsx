@@ -138,7 +138,7 @@ interface MessageReceived {
 
 // Type pour les contacts combinés
 interface ContactWithType extends UtilisateurBase {
-  userType: "agent" | "vendeur";
+  userType: "agent" | "vendeur" | "utilisateur";
   boutique?: {
     nom: string;
     uuid: string;
@@ -520,6 +520,7 @@ export default function MessagerieUtilisateur() {
   // États pour les données
   const [agents, setAgents] = useState<Agent[]>([]);
   const [vendeurs, setVendeurs] = useState<Vendeur[]>([]);
+  const [utilisateurs, setUtilisateurs] = useState<Utilisateur[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [messagesEnvoyes, setMessagesEnvoyes] = useState<Message[]>([]);
 
@@ -527,6 +528,7 @@ export default function MessagerieUtilisateur() {
   const [loading, setLoading] = useState({
     agents: false,
     vendeurs: false,
+    utilisateurs: false,
     messages: false,
     envoi: false,
     profile: false,
@@ -760,6 +762,76 @@ export default function MessagerieUtilisateur() {
     }
   }, []);
 
+  // Charger les autres utilisateurs (pour contacter d'autres utilisateurs)
+  const fetchUtilisateurs = useCallback(async () => {
+    setLoading((prev) => ({ ...prev, utilisateurs: true }));
+    try {
+      console.log("🔄 Chargement des autres utilisateurs...");
+      const response = await api.get<{
+        data?: Utilisateur[];
+        count?: number;
+        status?: string;
+      }>(API_ENDPOINTS.ADMIN.USERS.LIST);
+
+      if (response && response.data) {
+        // Filtrer l'utilisateur connecté
+        const filteredUsers = response.data.filter(
+          (user) => user.uuid !== userProfile?.uuid,
+        );
+        setUtilisateurs(filteredUsers);
+      } else {
+        // Données de démonstration pour les utilisateurs
+        const demoUtilisateurs: Utilisateur[] = [
+          {
+            uuid: "utilisateur-1",
+            nom: "Dupont",
+            prenoms: "Jean",
+            email: "jean.dupont@example.com",
+            telephone: "+2250700000004",
+            est_verifie: true,
+            est_bloque: false,
+            is_deleted: false,
+            created_at: new Date().toISOString(),
+            statut: "actif",
+          },
+          {
+            uuid: "utilisateur-2",
+            nom: "Martin",
+            prenoms: "Marie",
+            email: "marie.martin@example.com",
+            telephone: "+2250700000005",
+            est_verifie: true,
+            est_bloque: false,
+            is_deleted: false,
+            created_at: new Date().toISOString(),
+            statut: "actif",
+          },
+        ];
+        setUtilisateurs(demoUtilisateurs);
+      }
+    } catch (err: any) {
+      console.error("❌ Erreur lors du chargement des utilisateurs:", err);
+      // Données de démonstration en cas d'erreur
+      const demoUtilisateurs: Utilisateur[] = [
+        {
+          uuid: "utilisateur-1",
+          nom: "Exemple",
+          prenoms: "Utilisateur",
+          email: "autre.utilisateur@example.com",
+          telephone: "+2250700000004",
+          est_verifie: true,
+          est_bloque: false,
+          is_deleted: false,
+          created_at: new Date().toISOString(),
+          statut: "actif",
+        },
+      ];
+      setUtilisateurs(demoUtilisateurs);
+    } finally {
+      setLoading((prev) => ({ ...prev, utilisateurs: false }));
+    }
+  }, [userProfile?.uuid]);
+
   // Charger les messages reçus
   const fetchMessagesRecus = useCallback(async () => {
     setLoading((prev) => ({ ...prev, messages: true }));
@@ -979,6 +1051,7 @@ export default function MessagerieUtilisateur() {
     fetchUserProfile().then(() => {
       fetchAgents();
       fetchVendeurs();
+      fetchUtilisateurs();
       fetchMessagesRecus();
       fetchMessagesEnvoyes();
     });
@@ -986,7 +1059,7 @@ export default function MessagerieUtilisateur() {
 
   // Mettre à jour les statistiques
   useEffect(() => {
-    const totalContacts = agents.length + vendeurs.length;
+    const totalContacts = agents.length + vendeurs.length + utilisateurs.length;
     const totalMessages = messages.length + messagesEnvoyes.length;
     const unreadMessages = messages.filter((m) => !m.estLu).length;
 
@@ -996,7 +1069,7 @@ export default function MessagerieUtilisateur() {
       unreadMessages,
       sentMessages: messagesEnvoyes.length,
     });
-  }, [agents, vendeurs, messages, messagesEnvoyes]);
+  }, [agents, vendeurs, utilisateurs, messages, messagesEnvoyes]);
 
   // Combiner tous les contacts
   const allContacts = useMemo(() => {
@@ -1022,9 +1095,19 @@ export default function MessagerieUtilisateur() {
       );
     }
 
+    if (selectedType === "all" || selectedType === "utilisateur") {
+      contacts.push(
+        ...utilisateurs.map((utilisateur) => ({
+          ...utilisateur,
+          userType: "utilisateur" as const,
+          boutique: undefined,
+        })),
+      );
+    }
+
     console.log("👥 Tous les contacts combinés:", contacts.length);
     return contacts;
-  }, [agents, vendeurs, selectedType]);
+  }, [agents, vendeurs, utilisateurs, selectedType]);
 
   // Filtrer les contacts
   const filteredContacts = useMemo(() => {
@@ -1101,6 +1184,8 @@ export default function MessagerieUtilisateur() {
       sujet = `Message pour ${nom || ""} ${prenoms || ""}`.trim();
     } else if (userType === "agent") {
       sujet = "Demande de support";
+    } else if (userType === "utilisateur") {
+      sujet = "Message entre utilisateurs";
     }
 
     setNewMessage((prev) => ({
@@ -1110,14 +1195,23 @@ export default function MessagerieUtilisateur() {
     }));
   };
 
-  // Fonction corrigée pour l'envoi de message
+  // Fonction corrigée pour l'envoi de message avec validation
   const handleSendMessage = async () => {
-    if (
-      !newMessage.destinataireEmail.trim() ||
-      !newMessage.sujet.trim() ||
-      !newMessage.contenu.trim()
-    ) {
-      setInfoMessage("Veuillez remplir tous les champs obligatoires");
+    // Validation
+    if (!newMessage.destinataireEmail.trim()) {
+      setInfoMessage("Veuillez saisir une adresse email valide");
+      setTimeout(() => setInfoMessage(null), 3000);
+      return;
+    }
+
+    if (!newMessage.sujet.trim()) {
+      setInfoMessage("Veuillez saisir un sujet");
+      setTimeout(() => setInfoMessage(null), 3000);
+      return;
+    }
+
+    if (!newMessage.contenu.trim()) {
+      setInfoMessage("Veuillez saisir un message");
       setTimeout(() => setInfoMessage(null), 3000);
       return;
     }
@@ -1127,49 +1221,45 @@ export default function MessagerieUtilisateur() {
 
     try {
       const messageData = {
-        destinataireEmail: newMessage.destinataireEmail,
-        sujet: newMessage.sujet,
-        contenu: newMessage.contenu,
+        destinataireEmail: newMessage.destinataireEmail.trim(),
+        sujet: newMessage.sujet.trim(),
+        contenu: newMessage.contenu.trim(),
         type: newMessage.type.toLowerCase(),
       };
 
       console.log("📤 Envoi du message avec les données:", messageData);
+      console.log("📤 URL d'envoi:", API_ENDPOINTS.MESSAGERIE.PUBLIC_SEND);
 
-      const response = await api.post<Message>(
-        API_ENDPOINTS.MESSAGERIE.SEND,
+      // Utiliser l'endpoint public pour l'envoi de message
+      // Correction: Supprimer l'option requiresAuth si elle n'est pas supportée
+      const response = await api.post<any>(
+        API_ENDPOINTS.MESSAGERIE.PUBLIC_SEND,
         messageData,
       );
 
       console.log("✅ Réponse de l'API:", response);
 
       if (response) {
-        const sentMessage = response as unknown as Message;
+        // Créer un message local pour l'affichage immédiat
+        const sentMessage: Message = {
+          uuid: `temp-${Date.now()}`,
+          sujet: messageData.sujet,
+          contenu: messageData.contenu,
+          expediteurNom: newMessage.expediteurNom,
+          expediteurEmail: newMessage.expediteurEmail,
+          destinataireEmail: messageData.destinataireEmail,
+          type: newMessage.type.toUpperCase(),
+          estEnvoye: true,
+          envoyeLe: new Date().toISOString(),
+          estLu: false,
+          dateLecture: null,
+        };
 
-        setMessagesEnvoyes((prev) => [
-          {
-            uuid: sentMessage.uuid || `msg-${Date.now()}`,
-            sujet: sentMessage.sujet || newMessage.sujet,
-            contenu: sentMessage.contenu || newMessage.contenu,
-            expediteurNom:
-              sentMessage.expediteurNom || newMessage.expediteurNom,
-            expediteurEmail:
-              sentMessage.expediteurEmail || newMessage.expediteurEmail,
-            destinataireEmail:
-              sentMessage.destinataireEmail || newMessage.destinataireEmail,
-            type: (sentMessage.type || newMessage.type).toUpperCase(),
-            estEnvoye:
-              sentMessage.estEnvoye !== undefined
-                ? sentMessage.estEnvoye
-                : true,
-            envoyeLe: sentMessage.envoyeLe || new Date().toISOString(),
-            estLu: sentMessage.estLu !== undefined ? sentMessage.estLu : false,
-            dateLecture: sentMessage.dateLecture || null,
-          },
-          ...prev,
-        ]);
+        setMessagesEnvoyes((prev) => [sentMessage, ...prev]);
 
         setSuccessMessage("Message envoyé avec succès !");
 
+        // Réinitialiser le formulaire
         setNewMessage({
           destinataireEmail: "",
           sujet: "",
@@ -1179,7 +1269,13 @@ export default function MessagerieUtilisateur() {
           expediteurEmail: newMessage.expediteurEmail,
         });
 
+        // Basculer sur l'onglet des messages envoyés
         setActiveTab("sent");
+
+        // Recharger les messages envoyés après un court délai
+        setTimeout(() => {
+          fetchMessagesEnvoyes();
+        }, 1000);
       }
     } catch (err: any) {
       console.error("❌ Erreur lors de l'envoi du message:", err);
@@ -1200,7 +1296,8 @@ export default function MessagerieUtilisateur() {
         } else if (err.response.status === 403) {
           errorMessage = "Vous n'êtes pas autorisé à envoyer ce message.";
         } else if (err.response.status === 500) {
-          errorMessage = "Erreur serveur. Veuillez réessayer plus tard.";
+          errorMessage =
+            "Erreur serveur. Le service de messagerie est temporairement indisponible.";
         }
 
         if (err.response.data?.message) {
@@ -1261,6 +1358,8 @@ export default function MessagerieUtilisateur() {
         return faUserShield;
       case "vendeur":
         return faStore;
+      case "utilisateur":
+        return faUser;
       default:
         return faUser;
     }
@@ -1273,6 +1372,8 @@ export default function MessagerieUtilisateur() {
         return "primary";
       case "vendeur":
         return "warning";
+      case "utilisateur":
+        return "info";
       default:
         return "secondary";
     }
@@ -1285,6 +1386,8 @@ export default function MessagerieUtilisateur() {
         return "Support";
       case "vendeur":
         return "Vendeur";
+      case "utilisateur":
+        return "Utilisateur";
       default:
         return "Contact";
     }
@@ -1323,8 +1426,9 @@ export default function MessagerieUtilisateur() {
     if (activeTab === "contacts") {
       fetchAgents();
       fetchVendeurs();
+      fetchUtilisateurs();
     }
-  }, [activeTab, fetchAgents, fetchVendeurs]);
+  }, [activeTab, fetchAgents, fetchVendeurs, fetchUtilisateurs]);
 
   return (
     <>
@@ -1343,7 +1447,8 @@ export default function MessagerieUtilisateur() {
               Messagerie Utilisateur
             </h1>
             <p className="text-muted mb-0" style={{ fontSize: "0.9rem" }}>
-              Gérez vos messages et communiquez avec le support et les vendeurs
+              Gérez vos messages et communiquez avec le support, les vendeurs et
+              autres utilisateurs
             </p>
           </div>
           <div className="d-flex gap-3">
@@ -1360,6 +1465,7 @@ export default function MessagerieUtilisateur() {
               onClick={() => {
                 fetchAgents();
                 fetchVendeurs();
+                fetchUtilisateurs();
                 fetchMessagesRecus();
                 fetchMessagesEnvoyes();
               }}
@@ -1379,9 +1485,11 @@ export default function MessagerieUtilisateur() {
               value={stats.totalContacts}
               icon={faUsers}
               color="primary"
-              subtitle="Support et vendeurs"
+              subtitle="Support, vendeurs, utilisateurs"
               trend="up"
-              isLoading={loading.agents || loading.vendeurs}
+              isLoading={
+                loading.agents || loading.vendeurs || loading.utilisateurs
+              }
             />
           </div>
           <div className="col-xl-3 col-lg-6">
@@ -1501,7 +1609,8 @@ export default function MessagerieUtilisateur() {
                             className="text-muted mb-0 mt-1"
                             style={{ fontSize: "0.8rem" }}
                           >
-                            Contactez le support ou les vendeurs
+                            Contactez le support, les vendeurs ou d'autres
+                            utilisateurs
                           </p>
                         </div>
                         <div className="d-flex align-items-center gap-3">
@@ -1558,6 +1667,7 @@ export default function MessagerieUtilisateur() {
                               <option value="all">Tous les contacts</option>
                               <option value="agent">Support</option>
                               <option value="vendeur">Vendeurs</option>
+                              <option value="utilisateur">Utilisateurs</option>
                             </select>
                           </div>
                         </div>
@@ -2045,6 +2155,7 @@ export default function MessagerieUtilisateur() {
                             <option value="ALERT">Alerte</option>
                             <option value="INFO">Information</option>
                             <option value="QUESTION">Question</option>
+                            <option value="SUPPORT">Support</option>
                           </select>
                         </div>
 

@@ -179,6 +179,12 @@ export default function DashboardHeaderVendeur({
     }
   };
 
+  // Gestion des clics sur les menus
+  const handleHomeClick = () => {
+    setShowUserMenu(false);
+    router.push("/");
+  };
+
   const handleProfileClick = () => {
     setShowUserMenu(false);
     router.push("/dashboard-vendeur/profile");
@@ -191,12 +197,17 @@ export default function DashboardHeaderVendeur({
 
   const handleAnnoncesClick = () => {
     setShowUserMenu(false);
-    router.push("/dashboard-vendeur/mes-annonces");
+    router.push("/dashboard-vendeur/annonces/liste-annonces");
   };
 
   const handleMessagesClick = () => {
     setShowUserMenu(false);
     router.push("/dashboard-vendeur/messages");
+  };
+
+  const handleFavorisClick = () => {
+    setShowUserMenu(false);
+    router.push("/dashboard-vendeur/favoris");
   };
 
   // Utilitaires
@@ -737,6 +748,23 @@ export default function DashboardHeaderVendeur({
                     )}
 
                     <div className="py-2">
+                      {/* Accueil - EN PREMIÈRE POSITION */}
+                      <button
+                        onClick={handleHomeClick}
+                        onKeyDown={(e) => handleKeyDown(e, handleHomeClick)}
+                        className="btn btn-link text-dark text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
+                        role="menuitem"
+                        style={{ borderBottom: "1px solid #f0f0f0" }}
+                      >
+                        <i
+                          className="fa-solid fa-home text-primary"
+                          style={{ width: "20px" }}
+                          aria-hidden="true"
+                        ></i>
+                        <span className="fw-medium">Accueil</span>
+                      </button>
+
+                      {/* Mon profil */}
                       <button
                         onClick={handleProfileClick}
                         onKeyDown={(e) => handleKeyDown(e, handleProfileClick)}
@@ -751,6 +779,22 @@ export default function DashboardHeaderVendeur({
                         <span>Mon profil</span>
                       </button>
 
+                      {/* Mes annonces */}
+                      <button
+                        onClick={handleAnnoncesClick}
+                        onKeyDown={(e) => handleKeyDown(e, handleAnnoncesClick)}
+                        className="btn btn-link text-dark text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
+                        role="menuitem"
+                      >
+                        <i
+                          className="fa-solid fa-list text-muted"
+                          style={{ width: "20px" }}
+                          aria-hidden="true"
+                        ></i>
+                        <span>Mes annonces</span>
+                      </button>
+
+                      {/* Messages */}
                       <button
                         onClick={handleMessagesClick}
                         onKeyDown={(e) => handleKeyDown(e, handleMessagesClick)}
@@ -763,8 +807,32 @@ export default function DashboardHeaderVendeur({
                           aria-hidden="true"
                         ></i>
                         <span>Messages</span>
+                        <span className="ms-auto">
+                          <span
+                            className="badge bg-primary rounded-pill"
+                            aria-label="Nouveaux messages"
+                          >
+                            3
+                          </span>
+                        </span>
                       </button>
 
+                      {/* Favoris */}
+                      <button
+                        onClick={handleFavorisClick}
+                        onKeyDown={(e) => handleKeyDown(e, handleFavorisClick)}
+                        className="btn btn-link text-dark text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
+                        role="menuitem"
+                      >
+                        <i
+                          className="fa-solid fa-heart text-muted"
+                          style={{ width: "20px" }}
+                          aria-hidden="true"
+                        ></i>
+                        <span>Favoris</span>
+                      </button>
+
+                      {/* Paramètres */}
                       <button
                         onClick={handleSettingsClick}
                         onKeyDown={(e) => handleKeyDown(e, handleSettingsClick)}
@@ -781,6 +849,7 @@ export default function DashboardHeaderVendeur({
 
                       <div className="border-top my-2" role="separator"></div>
 
+                      {/* Déconnexion */}
                       <button
                         onClick={handleLogout}
                         onKeyDown={(e) => handleKeyDown(e, handleLogout)}

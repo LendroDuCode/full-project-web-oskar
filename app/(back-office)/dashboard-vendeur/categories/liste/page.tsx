@@ -806,8 +806,7 @@ export default function CategoriesPage() {
   // Export PDF
   const handleExport = async () => {
     try {
-      const response = await api.get(API_ENDPOINTS.CATEGORIES.EXPORT_PDF, {
-      });
+      const response = await api.get(API_ENDPOINTS.CATEGORIES.EXPORT_PDF, {});
       const url = window.URL.createObjectURL(response);
       const link = document.createElement("a");
       link.href = url;
@@ -1104,14 +1103,6 @@ export default function CategoriesPage() {
                 >
                   <FontAwesomeIcon icon={faDownload} />
                   Exporter PDF
-                </button>
-
-                <button
-                  onClick={() => setShowCreateModal(true)}
-                  className="btn btn-success d-flex align-items-center gap-2"
-                >
-                  <FontAwesomeIcon icon={faPlus} />
-                  Nouvelle Catégorie
                 </button>
               </div>
             </div>

@@ -1,22 +1,20 @@
-// app/shared/components/layout/Header.tsx
 "use client";
 
 import Link from "next/link";
-import { FC, useState, useRef, useEffect } from "react";
+import { FC, useState, useRef, useEffect, useCallback } from "react";
 import colors from "../../constants/colors";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/app/(front-office)/auth/AuthContext";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import PublishAdModal from "@/app/(front-office)/publication-annonce/page";
-
-// Importez votre ApiClient depuis le bon chemin
-// Assurez-vous que ce chemin est correct
-import { api } from "@/lib/api-client"; // OU depuis "@/app/lib/api-client" selon votre structure
+import { api } from "@/lib/api-client";
 
 interface NavLink {
   name: string;
   href: string;
   exact?: boolean;
+  hasChildren?: boolean;
+  children?: { name: string; href: string }[];
 }
 
 interface Category {
@@ -26,98 +24,267 @@ interface Category {
   type: string;
   description?: string;
   image?: string;
+  enfants?: Category[];
+  path?: string | null;
+  is_deleted?: boolean;
+  deleted_at?: string | null;
+  id?: number;
 }
+
+interface UserProfile {
+  uuid: string;
+  email: string;
+  nom?: string;
+  prenoms?: string;
+  firstName?: string;
+  lastName?: string;
+  avatar?: string;
+  type: "admin" | "agent" | "vendeur" | "utilisateur";
+  role?: string;
+  isSuperAdmin?: boolean;
+  nom_complet?: string;
+  est_bloque?: boolean;
+  civilite?: {
+    libelle?: string;
+  };
+}
+
+// Catégories par défaut en cas d'erreur API
+const defaultCategories: Category[] = [
+  {
+    uuid: "dons-echanges-uuid",
+    libelle: "Don & Échange",
+    slug: "dons-echanges",
+    type: "main",
+    description: "Dons et échanges entre particuliers",
+    enfants: [],
+  },
+  {
+    uuid: "vetements-chaussures-uuid",
+    libelle: "Vêtements & Chaussures",
+    slug: "vetements-chaussures",
+    type: "main",
+    description: "Vêtements et chaussures",
+    enfants: [],
+  },
+  {
+    uuid: "electronique-uuid",
+    libelle: "Électronique",
+    slug: "electronique",
+    type: "main",
+    description: "Appareils électroniques et accessoires",
+    enfants: [],
+  },
+  {
+    uuid: "education-culture-uuid",
+    libelle: "Éducation & Culture",
+    slug: "education-culture",
+    type: "main",
+    description: "Livres, fournitures scolaires, culture",
+    enfants: [],
+  },
+  {
+    uuid: "services-proximite-uuid",
+    libelle: "Services de proximité",
+    slug: "services-proximite",
+    type: "main",
+    description: "Services locaux",
+    enfants: [],
+  },
+  {
+    uuid: "maison-jardin-uuid",
+    libelle: "Maison & Jardin",
+    slug: "maison-jardin",
+    type: "main",
+    description: "Articles pour la maison et le jardin",
+    enfants: [],
+  },
+  {
+    uuid: "vehicules-uuid",
+    libelle: "Véhicules",
+    slug: "vehicules",
+    type: "main",
+    description: "Voitures, motos, vélos",
+    enfants: [],
+  },
+  {
+    uuid: "emploi-services-uuid",
+    libelle: "Emploi & Services",
+    slug: "emploi-services",
+    type: "main",
+    description: "Offres d'emploi et services professionnels",
+    enfants: [],
+  },
+];
 
 const Header: FC = () => {
   const pathname = usePathname();
   const [hoveredButton, setHoveredButton] = useState<string | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [cartItemsCount] = useState(3);
+  const [categoriesDropdownOpen, setCategoriesDropdownOpen] = useState<
+    string | null
+  >(null);
+  const [unreadMessagesCount] = useState(2);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [showPublishModal, setShowPublishModal] = useState(false);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(false);
+  const [forceUpdate, setForceUpdate] = useState(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const categoriesDropdownRef = useRef<{
+    [key: string]: HTMLDivElement | null;
+  }>({});
 
-  const { isLoggedIn, user, logout, openLoginModal } = useAuth();
+  const { isLoggedIn, user, logout, openLoginModal, closeModals } = useAuth();
 
-  // Récupérer les catégories depuis l'API - CORRIGÉ
+  const headerKey = `header-${isLoggedIn ? "logged-in" : "logged-out"}-${user?.type || "none"}-${user?.uuid?.substring(0, 8) || "none"}-${forceUpdate}`;
+
+  // Récupérer les catégories dynamiquement depuis l'API
   useEffect(() => {
     const fetchCategories = async () => {
       try {
         setLoadingCategories(true);
+        console.log("🟡 Header - Fetching categories from API...");
 
-        // Utilisez votre ApiClient au lieu de axios directement
         const response = await api.get(API_ENDPOINTS.CATEGORIES.LIST);
+        console.log("🟢 Header - Categories API raw response:", response);
 
-        // Filtrer les catégories actives
+        // ÉTAPE 1: Filtrer uniquement les catégories actives et non supprimées
         const activeCategories = response.filter(
-          (category: any) =>
+          (category: Category) =>
             !category.is_deleted && category.deleted_at === null,
         );
 
-        // Dédupliquer par libellé
-        const uniqueCategories = activeCategories.reduce(
-          (acc: Category[], category: any) => {
-            const exists = acc.find(
-              (cat: Category) => cat.libelle === category.libelle,
-            );
-            if (!exists) {
-              acc.push({
-                uuid: category.uuid,
-                libelle: category.libelle,
-                slug: category.slug,
-                type: category.type,
-                description: category.description,
-                image: category.image,
-              });
-            }
-            return acc;
-          },
-          [] as Category[],
+        console.log("🟢 Header - Active categories:", activeCategories.length);
+
+        // ÉTAPE 2: Identifier les catégories principales (sans parent ou path vide/null)
+        const mainCategories = activeCategories.filter(
+          (category: Category) =>
+            !category.path || category.path === null || category.path === "",
         );
 
-        setCategories(uniqueCategories);
+        console.log(
+          "🟢 Header - Main categories found:",
+          mainCategories.map((c: Category) => ({
+            libelle: c.libelle,
+            id: c.id,
+            hasEnfants: c.enfants?.length || 0,
+            enfants: c.enfants?.map((e: Category) => e.libelle) || [],
+          })),
+        );
+
+        // ÉTAPE 3: Éliminer les doublons basés sur le libellé (garder la plus récente par ID)
+        const uniqueCategoriesMap = new Map<string, Category>();
+
+        mainCategories.forEach((category: Category) => {
+          const existing = uniqueCategoriesMap.get(category.libelle);
+
+          if (!existing) {
+            uniqueCategoriesMap.set(category.libelle, category);
+          } else {
+            const existingId = existing.id || 0;
+            const currentId = category.id || 0;
+
+            // Garder la catégorie avec l'ID le plus élevé (la plus récente)
+            if (currentId > existingId) {
+              uniqueCategoriesMap.set(category.libelle, category);
+            }
+          }
+        });
+
+        const uniqueMainCategories = Array.from(uniqueCategoriesMap.values());
+        console.log(
+          "🟢 Header - Unique main categories after deduplication:",
+          uniqueMainCategories.map((c: Category) => ({
+            libelle: c.libelle,
+            id: c.id,
+            enfantsCount: c.enfants?.length || 0,
+            enfants: c.enfants?.map((e: Category) => e.libelle) || [],
+          })),
+        );
+
+        // ÉTAPE 4: Pour chaque catégorie principale, traiter les enfants
+        const processedCategories = uniqueMainCategories.map(
+          (category: Category) => {
+            // Utiliser les enfants déjà présents dans le tableau `enfants`
+            const enfants = category.enfants || [];
+
+            // Filtrer uniquement les enfants actifs et non supprimés
+            const activeEnfants = enfants.filter(
+              (enfant: Category) =>
+                !enfant.is_deleted && enfant.deleted_at === null,
+            );
+
+            console.log(
+              `🟢 Header - Category "${category.libelle}" has ${activeEnfants.length} active enfants:`,
+              activeEnfants.map((e: Category) => ({
+                libelle: e.libelle,
+                slug: e.slug,
+              })),
+            );
+
+            // Éliminer les doublons dans les enfants basés sur le libellé
+            const uniqueChildrenMap = new Map<string, Category>();
+            activeEnfants.forEach((enfant: Category) => {
+              if (!uniqueChildrenMap.has(enfant.libelle)) {
+                uniqueChildrenMap.set(enfant.libelle, enfant);
+              } else {
+                // Si doublon, garder l'enfant avec l'ID le plus élevé
+                const existing = uniqueChildrenMap.get(enfant.libelle)!;
+                if ((enfant.id || 0) > (existing.id || 0)) {
+                  uniqueChildrenMap.set(enfant.libelle, enfant);
+                }
+              }
+            });
+
+            const uniqueChildren = Array.from(uniqueChildrenMap.values());
+
+            return {
+              uuid: category.uuid,
+              libelle: category.libelle,
+              slug: category.slug,
+              type: category.type,
+              description: category.description,
+              image: category.image,
+              enfants: uniqueChildren.map((enfant: Category) => ({
+                uuid: enfant.uuid,
+                libelle: enfant.libelle,
+                slug: enfant.slug,
+                type: enfant.type,
+                description: enfant.description,
+                image: enfant.image,
+                id: enfant.id,
+              })),
+            };
+          },
+        );
+
+        // ÉTAPE 5: Trier par libellé pour une navigation cohérente
+        const sortedCategories = processedCategories.sort(
+          (a: Category, b: Category) => a.libelle.localeCompare(b.libelle),
+        );
+
+        console.log(
+          "🟢 Header - Final categories to display:",
+          sortedCategories.map((c: Category) => ({
+            libelle: c.libelle,
+            slug: c.slug,
+            enfants:
+              c.enfants?.map((e: Category) => ({
+                libelle: e.libelle,
+                slug: e.slug,
+              })) || [],
+            enfantsCount: c.enfants?.length || 0,
+          })),
+        );
+
+        setCategories(sortedCategories);
       } catch (error: any) {
-        console.error("Erreur lors du chargement des catégories:", error);
-
-        // Log détaillé pour le débogage
-        console.log("🌐 Détails de la requête API:");
-        console.log("- Endpoint:", API_ENDPOINTS.CATEGORIES.LIST);
-        console.log("- Mode:", process.env.NODE_ENV);
-        console.log("- USE_PROXY:", process.env.NEXT_PUBLIC_USE_PROXY);
-        console.log("- API_URL:", process.env.NEXT_PUBLIC_API_URL);
-        console.log("- Erreur complète:", error.message || error);
-
-        // En cas d'erreur, définir des catégories par défaut
-        const defaultCategories: Category[] = [
-          {
-            uuid: "1",
-            libelle: "Vêtements & Chaussures",
-            slug: "vetements-chaussures",
-            type: "produit",
-          },
-          {
-            uuid: "2",
-            libelle: "Éducation & Culture",
-            slug: "education-culture",
-            type: "produit",
-          },
-          {
-            uuid: "3",
-            libelle: "Électronique",
-            slug: "electronique",
-            type: "produit",
-          },
-          {
-            uuid: "4",
-            libelle: "Services de proximité",
-            slug: "services-proximite",
-            type: "service",
-          },
-          { uuid: "5", libelle: "Autre", slug: "autre", type: "autre" },
-        ];
+        console.error("🔴 Header - Error loading categories:", error);
+        // En cas d'erreur, utiliser des catégories par défaut
         setCategories(defaultCategories);
       } finally {
         setLoadingCategories(false);
@@ -127,8 +294,157 @@ const Header: FC = () => {
     fetchCategories();
   }, []);
 
-  // Vérifier si nous sommes sur un dashboard
-  const isDashboardPage = pathname.startsWith("/dashboard-");
+  // ÉCOUTER LES CHANGEMENTS DU CONTEXTE D'AUTHENTIFICATION
+  useEffect(() => {
+    console.log("🔵 Header - Auth context updated:", {
+      isLoggedIn,
+      user: user ? `${user.type}:${user.email}` : null,
+    });
+
+    if (isLoggedIn && user) {
+      console.log("🟢 Header - User is logged in, setting context profile");
+
+      const immediateProfile: UserProfile = {
+        uuid: user.uuid || "",
+        email: user.email || "",
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
+        type: user.type as any,
+        nom_complet: user.nom_complet || "",
+        avatar: user.avatar,
+        role: user.role,
+        est_bloque: user.est_bloque,
+        nom: user.nom,
+        prenoms: user.prenoms,
+      };
+
+      console.log("🟢 Header - Setting immediate profile:", immediateProfile);
+      setUserProfile(immediateProfile);
+
+      const fetchFullProfile = async () => {
+        try {
+          setLoadingProfile(true);
+          console.log("🟡 Header - Fetching full profile from API...");
+
+          let endpoint = "";
+          switch (user.type) {
+            case "admin":
+              endpoint = API_ENDPOINTS.AUTH.ADMIN.PROFILE;
+              break;
+            case "agent":
+              endpoint = API_ENDPOINTS.AUTH.AGENT.PROFILE;
+              break;
+            case "vendeur":
+              endpoint = API_ENDPOINTS.AUTH.VENDEUR.PROFILE;
+              break;
+            case "utilisateur":
+              endpoint = API_ENDPOINTS.AUTH.UTILISATEUR.PROFILE;
+              break;
+          }
+
+          if (endpoint) {
+            const response = await api.get(endpoint);
+            console.log("🟢 Header - Full profile API response:", response);
+
+            let fullProfile: UserProfile;
+
+            switch (user.type) {
+              case "admin":
+                fullProfile = {
+                  uuid: response.data?.uuid || user.uuid || "",
+                  email: response.data?.email || user.email || "",
+                  nom: response.data?.nom || user.nom || "",
+                  avatar: response.data?.avatar || user.avatar,
+                  type: "admin",
+                  role: response.data?.role || user.role || "admin",
+                  isSuperAdmin: response.data?.isSuperAdmin || false,
+                  nom_complet:
+                    response.data?.nom_complet || user.nom_complet || "",
+                };
+                break;
+
+              case "agent":
+                fullProfile = {
+                  uuid: response.data?.uuid || user.uuid || "",
+                  email: response.data?.email || user.email || "",
+                  nom: response.data?.nom || user.nom || "",
+                  prenoms: response.data?.prenoms || user.prenoms || "",
+                  avatar: response.data?.avatar || user.avatar,
+                  type: "agent",
+                  est_bloque: response.data?.est_bloque || false,
+                };
+                break;
+
+              case "vendeur":
+                fullProfile = {
+                  uuid: response.data?.uuid || user.uuid || "",
+                  email: response.data?.email || user.email || "",
+                  nom: response.data?.nom || user.nom || "",
+                  prenoms: response.data?.prenoms || user.prenoms || "",
+                  avatar: response.data?.avatar || user.avatar,
+                  type: "vendeur",
+                  est_bloque: response.data?.est_bloque || false,
+                  civilite: response.data?.civilité || user.civilite,
+                };
+                break;
+
+              case "utilisateur":
+                fullProfile = {
+                  uuid: response.data?.uuid || user.uuid || "",
+                  email: response.data?.email || user.email || "",
+                  nom: response.data?.nom || user.nom || "",
+                  prenoms: response.data?.prenoms || user.prenoms || "",
+                  avatar: response.data?.avatar || user.avatar,
+                  type: "utilisateur",
+                  est_bloque: response.data?.est_bloque || false,
+                  civilite: response.data?.civilite || user.civilite,
+                };
+                break;
+
+              default:
+                fullProfile = immediateProfile;
+            }
+
+            console.log("🟢 Header - Setting full profile data:", fullProfile);
+            setUserProfile(fullProfile);
+          }
+        } catch (error) {
+          console.error(
+            "🔴 Header - Error fetching full profile, keeping context data",
+            error,
+          );
+        } finally {
+          setLoadingProfile(false);
+        }
+      };
+
+      fetchFullProfile();
+    } else {
+      console.log("🔴 Header - No user in context, clearing profile");
+      setUserProfile(null);
+      setLoadingProfile(false);
+    }
+  }, [isLoggedIn, user]);
+
+  // ÉCOUTER LES ÉVÉNEMENTS PERSONNALISÉS POUR FORCER LES MISE À JOUR
+  useEffect(() => {
+    const handleForceUpdate = () => {
+      console.log("🔄 Header - Force update triggered");
+      setForceUpdate((prev) => prev + 1);
+    };
+
+    window.addEventListener(
+      "auth-state-changed",
+      handleForceUpdate as EventListener,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "auth-state-changed",
+        handleForceUpdate as EventListener,
+      );
+    };
+  }, []);
 
   // Fermer les menus quand on clique ailleurs
   useEffect(() => {
@@ -146,6 +462,14 @@ const Header: FC = () => {
         !(event.target as HTMLElement).closest(".mobile-menu-toggle")
       ) {
         setMobileMenuOpen(false);
+      }
+
+      const clickedInsideCategories = Object.values(
+        categoriesDropdownRef.current,
+      ).some((ref) => ref && ref.contains(event.target as Node));
+
+      if (!clickedInsideCategories) {
+        setCategoriesDropdownOpen(null);
       }
     };
 
@@ -169,56 +493,88 @@ const Header: FC = () => {
   }, [mobileMenuOpen]);
 
   // Si nous sommes sur un dashboard, ne pas afficher le header normal
+  const isDashboardPage = pathname.startsWith("/dashboard-");
   if (isDashboardPage) {
     return null;
   }
 
-  // Générer les liens de navigation à partir des catégories
+  // Générer les liens de navigation dynamiquement depuis les catégories
   const generateNavLinks = (): NavLink[] => {
-    // Commencer avec les liens fixes
     const links: NavLink[] = [
       { name: "Accueil", href: "/", exact: true },
-      { name: "Don & Échange", href: "/dons-echanges" },
+      // NOTE: On a retiré le lien statique "Don & Échange" pour utiliser la version dynamique
     ];
 
-    // Ajouter les catégories dynamiques si elles sont chargées
     if (!loadingCategories && categories.length > 0) {
-      categories.forEach((category) => {
-        // Mapper les libellés vers vos routes existantes
-        const routeMap: Record<string, string> = {
-          "Vêtements & Chaussures": "/vetements-chaussures",
-          "Éducation & Culture": "/education-culture",
-          Électronique: "/electroniques",
-          "Services de proximité": "/services-proximite",
-          Autre: "/autres",
-        };
+      categories.forEach((category: Category) => {
+        // Vérifier si cette catégorie n'est pas déjà dans les liens
+        // On compare par libellé ET par slug pour éviter tout doublon
+        const isDuplicate = links.some(
+          (link) =>
+            link.name === category.libelle ||
+            link.href === `/categories/${category.slug}`,
+        );
 
-        const href = routeMap[category.libelle] || "/";
-        if (href !== "/") {
-          links.push({
+        if (!isDuplicate) {
+          // Créer le lien principal de la catégorie
+          const mainLink: NavLink = {
             name: category.libelle,
-            href: href,
+            href: `/categories/${category.slug}`,
             exact: false,
-          });
-        }
-      });
-    } else {
-      // Pendant le chargement ou en cas d'erreur, utiliser les routes par défaut
-      const defaultLinks = [
-        { name: "Vêtements & Chaussures", href: "/vetements-chaussures" },
-        { name: "Éducation & Culture", href: "/education-culture" },
-        { name: "Électronique", href: "/electroniques" },
-        { name: "Services de proximité", href: "/services-proximite" },
-        { name: "Autre", href: "/autres" },
-      ];
+            hasChildren: category.enfants && category.enfants.length > 0,
+          };
 
-      defaultLinks.forEach((link) => {
-        if (!links.some((l) => l.href === link.href)) {
-          links.push(link);
+          // Ajouter les sous-catégories si elles existent
+          if (category.enfants && category.enfants.length > 0) {
+            // Éliminer les doublons dans les sous-catégories
+            const uniqueChildren = category.enfants.reduce(
+              (acc: any[], child: Category) => {
+                const isChildDuplicate = acc.some(
+                  (sub) => sub.name === child.libelle,
+                );
+                if (!isChildDuplicate) {
+                  acc.push(child);
+                }
+                return acc;
+              },
+              [],
+            );
+
+            mainLink.children = uniqueChildren.map((child: Category) => ({
+              name: child.libelle,
+              href: `/categories/${category.slug}/${child.slug}`,
+            }));
+
+            console.log(
+              `✅ Header - Added category "${category.libelle}" with ${mainLink.children?.length || 0} children:`,
+              mainLink.children?.map((c) => c.name),
+            );
+          } else {
+            console.log(
+              `✅ Header - Added category "${category.libelle}" without children`,
+            );
+          }
+
+          links.push(mainLink);
+        } else {
+          console.warn(
+            `⚠️ Header - Duplicate category skipped: "${category.libelle}" (slug: ${category.slug})`,
+          );
         }
       });
+    } else if (!loadingCategories) {
+      console.log("⚠️ Header - No categories loaded from API");
     }
 
+    console.log(
+      "✅ Header - Final generated nav links:",
+      links.map((l) => ({
+        name: l.name,
+        hasChildren: l.hasChildren,
+        childrenCount: l.children?.length || 0,
+        children: l.children?.map((c) => c.name) || [],
+      })),
+    );
     return links;
   };
 
@@ -238,32 +594,49 @@ const Header: FC = () => {
     return colors.oskar.grey;
   };
 
+  // Fonction pour gérer la connexion
+  const handleLoginClick = useCallback(() => {
+    closeModals();
+    setTimeout(() => {
+      openLoginModal();
+    }, 100);
+  }, [closeModals, openLoginModal]);
+
   // Fonction pour ouvrir le modal de publication
-  const handlePublishClick = () => {
+  const handlePublishClick = useCallback(() => {
     if (!isLoggedIn) {
-      setShowPublishModal(true);
+      handleLoginClick();
       return;
     }
     setShowPublishModal(true);
-  };
+  }, [isLoggedIn, handleLoginClick]);
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
+    console.log("🔴 Header - Logging out...");
+
+    const logoutEvent = new CustomEvent("header-logout");
+    window.dispatchEvent(logoutEvent);
+
     logout();
     setDropdownOpen(false);
     setMobileMenuOpen(false);
-  };
+    setUserProfile(null);
+
+    setForceUpdate((prev) => prev + 1);
+  }, [logout]);
 
   // Fonction pour fermer le modal de publication
-  const handleClosePublishModal = () => {
+  const handleClosePublishModal = useCallback(() => {
     setShowPublishModal(false);
-  };
+  }, []);
 
   // Fonction pour obtenir les initiales de l'utilisateur
-  const getUserInitials = () => {
-    if (!user) return "U";
+  const getUserInitials = useCallback(() => {
+    const profile = user || userProfile;
+    if (!profile) return "U";
 
-    const firstName = user.firstName || "";
-    const lastName = user.lastName || "";
+    const firstName = profile.firstName || profile.prenoms || "";
+    const lastName = profile.lastName || profile.nom || "";
 
     if (firstName && lastName) {
       return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
@@ -271,18 +644,164 @@ const Header: FC = () => {
       return firstName.charAt(0).toUpperCase();
     } else if (lastName) {
       return lastName.charAt(0).toUpperCase();
-    } else if (user.email) {
-      return user.email.charAt(0).toUpperCase();
+    } else if (profile.email) {
+      return profile.email.charAt(0).toUpperCase();
+    } else if (profile.nom_complet) {
+      return profile.nom_complet.charAt(0).toUpperCase();
     }
 
     return "U";
-  };
+  }, [user, userProfile]);
+
+  // Fonction pour obtenir le nom complet de l'utilisateur
+  const getUserFullName = useCallback(() => {
+    const profile = user || userProfile;
+    if (!profile) return "Utilisateur";
+
+    if (profile.nom_complet) {
+      return profile.nom_complet;
+    }
+
+    const firstName = profile.firstName || profile.prenoms || "";
+    const lastName = profile.lastName || profile.nom || "";
+
+    if (firstName && lastName) {
+      return `${firstName} ${lastName}`;
+    } else if (firstName) {
+      return firstName;
+    } else if (lastName) {
+      return lastName;
+    } else if (profile.email) {
+      return profile.email.split("@")[0];
+    }
+
+    return "Utilisateur";
+  }, [user, userProfile]);
+
+  // Fonction pour obtenir le dashboard selon le type d'utilisateur
+  const getUserDashboard = useCallback(() => {
+    const userType = user?.type || userProfile?.type;
+    if (!userType) return "/dashboard";
+
+    switch (userType) {
+      case "admin":
+        return "/dashboard-admin";
+      case "agent":
+        return "/dashboard-agent";
+      case "vendeur":
+        return "/dashboard-vendeur";
+      case "utilisateur":
+        return "/dashboard-utilisateur";
+      default:
+        return "/dashboard";
+    }
+  }, [user, userProfile]);
+
+  // Fonction pour obtenir l'URL du profil selon le type d'utilisateur
+  const getUserProfileUrl = useCallback(() => {
+    const userType = user?.type || userProfile?.type;
+    if (!userType) return "/mon-compte";
+
+    switch (userType) {
+      case "admin":
+        return "/dashboard-admin/profile";
+      case "agent":
+        return "/dashboard-agent/profile";
+      case "vendeur":
+        return "/dashboard-vendeur/profile";
+      case "utilisateur":
+        return "/dashboard-utilisateur/profile";
+      default:
+        return "/mon-compte";
+    }
+  }, [user, userProfile]);
+
+  // Fonction pour obtenir l'URL des annonces selon le type d'utilisateur
+  const getUserAnnoncesUrl = useCallback(() => {
+    const userType = user?.type || userProfile?.type;
+    if (!userType) return "/mes-annonces";
+
+    switch (userType) {
+      case "vendeur":
+        return "/dashboard-vendeur/annonces/liste-annonces";
+      case "utilisateur":
+        return "/dashboard-utilisateur/annonces/liste-annonces";
+      default:
+        return "/mes-annonces";
+    }
+  }, [user, userProfile]);
+
+  // Fonction pour obtenir l'URL des messages selon le type d'utilisateur
+  const getUserMessagesUrl = useCallback(() => {
+    const userType = user?.type || userProfile?.type;
+    if (!userType) return "/messages";
+
+    switch (userType) {
+      case "admin":
+        return "/dashboard-admin/messages";
+      case "agent":
+        return "/dashboard-agent/messages";
+      case "vendeur":
+        return "/dashboard-vendeur/messages";
+      case "utilisateur":
+        return "/dashboard-utilisateur/messages";
+      default:
+        return "/messages";
+    }
+  }, [user, userProfile]);
+
+  // Fonction pour vérifier si l'utilisateur est un vendeur ou utilisateur
+  const isVendeurOrUtilisateur = useCallback(() => {
+    const userType = user?.type || userProfile?.type;
+    return userType === "vendeur" || userType === "utilisateur";
+  }, [user, userProfile]);
+
+  // Obtenir l'avatar à afficher
+  const getAvatarToDisplay = useCallback(() => {
+    return user?.avatar || userProfile?.avatar;
+  }, [user, userProfile]);
+
+  // Obtenir l'email à afficher
+  const getEmailToDisplay = useCallback(() => {
+    return user?.email || userProfile?.email;
+  }, [user, userProfile]);
+
+  // Obtenir le type d'utilisateur à afficher
+  const getUserTypeToDisplay = useCallback(() => {
+    return user?.type || userProfile?.type;
+  }, [user, userProfile]);
+
+  // Obtenir le rôle à afficher
+  const getRoleToDisplay = useCallback(() => {
+    return user?.role || userProfile?.role;
+  }, [user, userProfile]);
+
+  // Gérer l'ouverture/fermeture des sous-menus de catégories
+  const toggleCategoryDropdown = useCallback((categorySlug: string) => {
+    setCategoriesDropdownOpen((prev) =>
+      prev === categorySlug ? null : categorySlug,
+    );
+  }, []);
+
+  console.log("🔄 Header - Rendering with state:", {
+    isLoggedIn,
+    userType: user?.type,
+    hasUserProfile: !!userProfile,
+    categoriesCount: categories.length,
+    navLinksCount: navLinks.length,
+    navLinksWithChildren: navLinks
+      .filter((l) => l.hasChildren)
+      .map((l) => l.name),
+    forceUpdate,
+    headerKey,
+  });
 
   return (
     <>
       <header
         className="bg-white shadow-sm sticky-top"
         style={{ zIndex: 1000 }}
+        key={headerKey}
       >
         <div className="container">
           <div className="d-flex align-items-center justify-content-between py-2 py-md-3">
@@ -297,9 +816,9 @@ const Header: FC = () => {
                 type="button"
                 style={{
                   color: colors.oskar.grey,
-                  fontSize: "1.25rem",
-                  width: "40px",
-                  height: "40px",
+                  fontSize: "clamp(1.1rem, 3.5vw, 1.25rem)",
+                  width: "clamp(36px, 9vw, 40px)",
+                  height: "clamp(36px, 9vw, 40px)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -320,8 +839,8 @@ const Header: FC = () => {
                 <div
                   className="rounded d-flex align-items-center justify-content-center me-2"
                   style={{
-                    width: "clamp(36px, 8vw, 40px)",
-                    height: "clamp(36px, 8vw, 40px)",
+                    width: "clamp(32px, 8vw, 40px)",
+                    height: "clamp(32px, 8vw, 40px)",
                     backgroundColor: colors.oskar.green,
                     transition: "background-color 0.3s",
                   }}
@@ -335,7 +854,7 @@ const Header: FC = () => {
                 >
                   <span
                     className="text-white fw-bold"
-                    style={{ fontSize: "clamp(1rem, 4vw, 1.25rem)" }}
+                    style={{ fontSize: "clamp(0.9rem, 3.5vw, 1.25rem)" }}
                   >
                     O
                   </span>
@@ -344,64 +863,174 @@ const Header: FC = () => {
                   className="fw-bold d-none d-sm-block"
                   style={{
                     color: colors.oskar.black,
-                    fontSize: "clamp(1.25rem, 5vw, 2rem)",
+                    fontSize: "clamp(1.1rem, 4.5vw, 2rem)",
                   }}
                 >
                   OSKAR
                 </span>
               </Link>
 
-              {/* Navigation Desktop */}
-              <nav className="d-none d-lg-flex align-items-center ms-4 ms-xl-5">
-                {navLinks.map((link, index) => (
-                  <Link
-                    key={`${link.name}-${index}`}
-                    href={link.href}
-                    className="text-decoration-none mx-2 mx-xl-3 position-relative"
+              {/* Navigation Desktop avec catégories dynamiques */}
+              {loadingCategories ? (
+                <div className="d-none d-lg-flex align-items-center ms-4 ms-xl-5">
+                  <div
+                    className="skeleton-loader"
                     style={{
-                      transition: "color 0.3s",
-                      color: getLinkColor(link),
-                      fontWeight: isLinkActive(link) ? "600" : "400",
-                      fontSize: "0.9rem",
-                      whiteSpace: "nowrap",
+                      width: "80px",
+                      height: "20px",
+                      backgroundColor: "#f0f0f0",
+                      borderRadius: "4px",
+                      marginRight: "24px",
                     }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.color = colors.oskar.green;
+                  ></div>
+                  <div
+                    className="skeleton-loader"
+                    style={{
+                      width: "100px",
+                      height: "20px",
+                      backgroundColor: "#f0f0f0",
+                      borderRadius: "4px",
+                      marginRight: "24px",
                     }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.color = getLinkColor(link);
+                  ></div>
+                  <div
+                    className="skeleton-loader"
+                    style={{
+                      width: "70px",
+                      height: "20px",
+                      backgroundColor: "#f0f0f0",
+                      borderRadius: "4px",
                     }}
-                  >
-                    {link.name}
-                    {isLinkActive(link) && (
-                      <div
+                  ></div>
+                </div>
+              ) : (
+                <nav className="d-none d-lg-flex align-items-center ms-4 ms-xl-5 position-relative">
+                  {navLinks.map((link, index) => (
+                    <div
+                      key={`${link.name}-${index}`}
+                      className="position-relative me-2 me-xl-3"
+                      ref={(el) => {
+                        if (link.hasChildren && link.name) {
+                          categoriesDropdownRef.current[link.name] = el;
+                        }
+                      }}
+                    >
+                      <Link
+                        href={link.href}
+                        className="text-decoration-none position-relative d-flex align-items-center"
                         style={{
-                          position: "absolute",
-                          bottom: "-6px",
-                          left: "0",
-                          width: "100%",
-                          height: "2px",
-                          backgroundColor: colors.oskar.green,
-                          borderRadius: "2px",
+                          transition: "color 0.3s",
+                          color: getLinkColor(link),
+                          fontWeight: isLinkActive(link) ? "600" : "400",
+                          fontSize: "0.9rem",
+                          whiteSpace: "nowrap",
+                          padding: "0.5rem 0",
                         }}
-                      />
-                    )}
-                  </Link>
-                ))}
-              </nav>
+                        onMouseEnter={() => {
+                          if (link.hasChildren) {
+                            setCategoriesDropdownOpen(link.name);
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (
+                            link.hasChildren &&
+                            !categoriesDropdownRef.current[link.name]?.contains(
+                              e.relatedTarget as Node,
+                            )
+                          ) {
+                            setCategoriesDropdownOpen(null);
+                          }
+                        }}
+                      >
+                        {link.name}
+                        {link.hasChildren && (
+                          <i
+                            className="fa-solid fa-chevron-down ms-1"
+                            style={{ fontSize: "0.7rem" }}
+                          ></i>
+                        )}
+                        {isLinkActive(link) && !link.hasChildren && (
+                          <div
+                            style={{
+                              position: "absolute",
+                              bottom: "-6px",
+                              left: "0",
+                              width: "100%",
+                              height: "2px",
+                              backgroundColor: colors.oskar.green,
+                              borderRadius: "2px",
+                            }}
+                          />
+                        )}
+                      </Link>
+
+                      {/* Sous-menu déroulant pour les catégories avec enfants */}
+                      {link.hasChildren &&
+                        link.children &&
+                        categoriesDropdownOpen === link.name && (
+                          <div
+                            className="dropdown-menu shadow border-0 show position-absolute"
+                            style={{
+                              minWidth: "200px",
+                              marginTop: "0",
+                              top: "100%",
+                              left: "0",
+                              zIndex: 1001,
+                              borderRadius: "8px",
+                              padding: "0.5rem 0",
+                            }}
+                            onMouseEnter={() =>
+                              setCategoriesDropdownOpen(link.name)
+                            }
+                            onMouseLeave={() => setCategoriesDropdownOpen(null)}
+                          >
+                            {link.children.map((child, childIndex) => (
+                              <Link
+                                key={`${child.name}-${childIndex}`}
+                                href={child.href}
+                                className="dropdown-item py-2 px-3"
+                                style={{
+                                  fontSize: "0.875rem",
+                                  color: colors.oskar.grey,
+                                  transition: "all 0.2s",
+                                }}
+                                onClick={() => setCategoriesDropdownOpen(null)}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.color =
+                                    colors.oskar.green;
+                                  e.currentTarget.style.backgroundColor =
+                                    "#f8f9fa";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.color =
+                                    colors.oskar.grey;
+                                  e.currentTarget.style.backgroundColor =
+                                    "transparent";
+                                }}
+                              >
+                                {child.name}
+                              </Link>
+                            ))}
+                          </div>
+                        )}
+                    </div>
+                  ))}
+                </nav>
+              )}
             </div>
 
             {/* Actions Desktop */}
             <div className="d-none d-lg-flex align-items-center">
-              {/* Icône Panier */}
-              <Link href="/panier">
+              {/* Icône Messagerie */}
+              <Link href={isLoggedIn ? getUserMessagesUrl() : "#"}>
                 <button
                   className="btn btn-link border-0 position-relative me-3"
                   style={{
                     transition: "color 0.3s",
                     fontSize: "1.1rem",
                     color:
-                      pathname === "/panier"
+                      pathname.includes("/messages") ||
+                      pathname.includes("/messagerie")
                         ? colors.oskar.green
                         : colors.oskar.grey,
                     width: "44px",
@@ -415,15 +1044,22 @@ const Header: FC = () => {
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.color =
-                      pathname === "/panier"
+                      pathname.includes("/messages") ||
+                      pathname.includes("/messagerie")
                         ? colors.oskar.green
                         : colors.oskar.grey;
                   }}
-                  aria-label="Panier"
+                  aria-label="Messagerie"
                   type="button"
+                  onClick={(e) => {
+                    if (!isLoggedIn) {
+                      e.preventDefault();
+                      handleLoginClick();
+                    }
+                  }}
                 >
-                  <i className="fa-solid fa-shopping-cart"></i>
-                  {cartItemsCount > 0 && (
+                  <i className="fa-solid fa-envelope"></i>
+                  {unreadMessagesCount > 0 && (
                     <span
                       className="position-absolute top-0 start-100 translate-middle badge rounded-pill"
                       style={{
@@ -440,13 +1076,13 @@ const Header: FC = () => {
                         transform: "translate(-30%, -25%)",
                       }}
                     >
-                      {cartItemsCount > 9 ? "9+" : cartItemsCount}
+                      {unreadMessagesCount > 9 ? "9+" : unreadMessagesCount}
                     </span>
                   )}
                 </button>
               </Link>
 
-              {/* Icône Contact */}
+              {/* Icône Téléphone/Contact */}
               <Link href="/contact">
                 <button
                   className="btn btn-link border-0 me-3"
@@ -513,7 +1149,7 @@ const Header: FC = () => {
               </Link>
 
               {/* Compte utilisateur */}
-              {isLoggedIn && user ? (
+              {isLoggedIn ? (
                 <div
                   className="dropdown"
                   ref={dropdownRef}
@@ -537,100 +1173,240 @@ const Header: FC = () => {
                     aria-expanded={dropdownOpen}
                     aria-haspopup="true"
                   >
-                    <div
-                      className="rounded-circle d-flex align-items-center justify-content-center"
-                      style={{
-                        width: "40px",
-                        height: "40px",
-                        backgroundColor: colors.oskar.green,
-                        color: "white",
-                        fontSize: "0.9rem",
-                        fontWeight: "bold",
-                      }}
-                    >
-                      {getUserInitials()}
-                    </div>
+                    {loadingProfile ? (
+                      <div
+                        className="rounded-circle d-flex align-items-center justify-content-center"
+                        style={{
+                          width: "40px",
+                          height: "40px",
+                          backgroundColor: "#f3f4f6",
+                        }}
+                      >
+                        <div
+                          className="spinner-border spinner-border-sm text-success"
+                          role="status"
+                        >
+                          <span className="visually-hidden">Chargement...</span>
+                        </div>
+                      </div>
+                    ) : getAvatarToDisplay() ? (
+                      <div
+                        className="rounded-circle overflow-hidden"
+                        style={{
+                          width: "40px",
+                          height: "40px",
+                          border: `2px solid ${colors.oskar.green}`,
+                        }}
+                      >
+                        <img
+                          src={getAvatarToDisplay()}
+                          alt={getUserFullName()}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                          }}
+                          onError={(e) => {
+                            e.currentTarget.style.display = "none";
+                            const parent = e.currentTarget.parentElement;
+                            if (parent) {
+                              parent.innerHTML = `
+                                <div class="d-flex align-items-center justify-content-center w-100 h-100" style="background-color: ${colors.oskar.green}; color: white; font-size: 0.9rem; font-weight: bold;">
+                                  ${getUserInitials()}
+                                </div>
+                              `;
+                            }
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div
+                        className="rounded-circle d-flex align-items-center justify-content-center"
+                        style={{
+                          width: "40px",
+                          height: "40px",
+                          backgroundColor: colors.oskar.green,
+                          color: "white",
+                          fontSize: "0.9rem",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        {getUserInitials()}
+                      </div>
+                    )}
                   </button>
 
                   {dropdownOpen && (
                     <div
                       className="dropdown-menu dropdown-menu-end shadow border-0 show"
                       style={{
-                        minWidth: "240px",
+                        minWidth: "300px",
+                        maxWidth: "350px",
                         marginTop: "0.5rem",
                       }}
                     >
                       <div className="p-3 border-bottom">
                         <div className="d-flex align-items-center">
-                          <div
-                            className="rounded-circle d-flex align-items-center justify-content-center me-3"
-                            style={{
-                              width: "48px",
-                              height: "48px",
-                              backgroundColor: colors.oskar.green,
-                              color: "white",
-                              fontSize: "1rem",
-                              fontWeight: "bold",
-                            }}
-                          >
-                            {getUserInitials()}
-                          </div>
-                          <div>
-                            <h6
-                              className="fw-bold mb-0"
-                              style={{ fontSize: "0.95rem" }}
+                          {getAvatarToDisplay() ? (
+                            <div
+                              className="rounded-circle overflow-hidden me-3 flex-shrink-0"
+                              style={{
+                                width: "48px",
+                                height: "48px",
+                                border: `2px solid ${colors.oskar.green}`,
+                              }}
                             >
-                              {user.firstName} {user.lastName}
+                              <img
+                                src={getAvatarToDisplay()}
+                                alt={getUserFullName()}
+                                style={{
+                                  width: "100%",
+                                  height: "100%",
+                                  objectFit: "cover",
+                                }}
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none";
+                                  const parent = e.currentTarget.parentElement;
+                                  if (parent) {
+                                    parent.innerHTML = `
+                                      <div class="d-flex align-items-center justify-content-center w-100 h-100" style="background-color: ${colors.oskar.green}; color: white; font-size: 1rem; font-weight: bold;">
+                                        ${getUserInitials()}
+                                      </div>
+                                    `;
+                                  }
+                                }}
+                              />
+                            </div>
+                          ) : (
+                            <div
+                              className="rounded-circle d-flex align-items-center justify-content-center me-3 flex-shrink-0"
+                              style={{
+                                width: "48px",
+                                height: "48px",
+                                backgroundColor: colors.oskar.green,
+                                color: "white",
+                                fontSize: "1rem",
+                                fontWeight: "bold",
+                              }}
+                            >
+                              {getUserInitials()}
+                            </div>
+                          )}
+                          <div className="flex-grow-1 min-w-0">
+                            <h6
+                              className="fw-bold mb-0 text-truncate"
+                              style={{ fontSize: "0.95rem" }}
+                              title={getUserFullName()}
+                            >
+                              {getUserFullName()}
                             </h6>
-                            {user.email && (
+                            {getEmailToDisplay() && (
                               <small
-                                className="text-muted"
+                                className="text-muted d-block text-truncate"
                                 style={{ fontSize: "0.8rem" }}
+                                title={getEmailToDisplay()}
                               >
-                                {user.email}
+                                {getEmailToDisplay()}
                               </small>
                             )}
+                            <small
+                              className="text-muted d-block"
+                              style={{ fontSize: "0.75rem" }}
+                            >
+                              {getUserTypeToDisplay() === "admin" &&
+                                "Administrateur"}
+                              {getUserTypeToDisplay() === "agent" && "Agent"}
+                              {getUserTypeToDisplay() === "vendeur" &&
+                                "Vendeur"}
+                              {getUserTypeToDisplay() === "utilisateur" &&
+                                "Utilisateur"}
+                              {getRoleToDisplay() && ` • ${getRoleToDisplay()}`}
+                            </small>
                           </div>
                         </div>
                       </div>
 
                       <div className="p-2">
                         <Link
-                          href="/mon-compte"
-                          className="dropdown-item d-flex align-items-center py-2"
+                          href={getUserDashboard()}
+                          className="dropdown-item d-flex align-items-center py-2 px-3"
                           onClick={() => setDropdownOpen(false)}
                           style={{ fontSize: "0.9rem" }}
                         >
-                          <i className="fa-solid fa-user me-3 text-muted"></i>
-                          <span>Mon compte</span>
+                          <i
+                            className="fa-solid fa-chart-line me-3 text-muted flex-shrink-0"
+                            style={{ width: "20px" }}
+                          ></i>
+                          <span className="flex-grow-1">Dashboard</span>
                         </Link>
+
                         <Link
-                          href="/mes-annonces"
-                          className="dropdown-item d-flex align-items-center py-2"
+                          href={getUserProfileUrl()}
+                          className="dropdown-item d-flex align-items-center py-2 px-3"
                           onClick={() => setDropdownOpen(false)}
                           style={{ fontSize: "0.9rem" }}
                         >
-                          <i className="fa-solid fa-newspaper me-3 text-muted"></i>
-                          <span>Mes annonces</span>
+                          <i
+                            className="fa-solid fa-user me-3 text-muted flex-shrink-0"
+                            style={{ width: "20px" }}
+                          ></i>
+                          <span className="flex-grow-1">Mon profil</span>
                         </Link>
+
+                        {isVendeurOrUtilisateur() && (
+                          <Link
+                            href={getUserAnnoncesUrl()}
+                            className="dropdown-item d-flex align-items-center py-2 px-3"
+                            onClick={() => setDropdownOpen(false)}
+                            style={{ fontSize: "0.9rem" }}
+                          >
+                            <i
+                              className="fa-solid fa-newspaper me-3 text-muted flex-shrink-0"
+                              style={{ width: "20px" }}
+                            ></i>
+                            <span className="flex-grow-1">Mes annonces</span>
+                          </Link>
+                        )}
+
                         <Link
-                          href="/messages"
-                          className="dropdown-item d-flex align-items-center py-2"
+                          href={getUserMessagesUrl()}
+                          className="dropdown-item d-flex align-items-center py-2 px-3"
                           onClick={() => setDropdownOpen(false)}
                           style={{ fontSize: "0.9rem" }}
                         >
-                          <i className="fa-solid fa-envelope me-3 text-muted"></i>
-                          <span>Messages</span>
+                          <i
+                            className="fa-solid fa-envelope me-3 text-muted flex-shrink-0"
+                            style={{ width: "20px" }}
+                          ></i>
+                          <span className="flex-grow-1">Messages</span>
+                          {unreadMessagesCount > 0 && (
+                            <span
+                              className="badge bg-danger ms-auto flex-shrink-0"
+                              style={{
+                                fontSize: "0.7rem",
+                                padding: "0.2rem 0.4rem",
+                                minWidth: "1.5rem",
+                              }}
+                            >
+                              {unreadMessagesCount > 9
+                                ? "9+"
+                                : unreadMessagesCount}
+                            </span>
+                          )}
                         </Link>
+
                         <div className="dropdown-divider my-2"></div>
                         <button
-                          className="dropdown-item d-flex align-items-center py-2 text-danger"
+                          className="dropdown-item d-flex align-items-center py-2 px-3 text-danger"
                           onClick={handleLogout}
                           type="button"
                           style={{ fontSize: "0.9rem" }}
                         >
-                          <i className="fa-solid fa-right-from-bracket me-3"></i>
-                          <span>Déconnexion</span>
+                          <i
+                            className="fa-solid fa-right-from-bracket me-3 flex-shrink-0"
+                            style={{ width: "20px" }}
+                          ></i>
+                          <span className="flex-grow-1">Déconnexion</span>
                         </button>
                       </div>
                     </div>
@@ -650,7 +1426,7 @@ const Header: FC = () => {
                     justifyContent: "center",
                   }}
                   aria-label="Se connecter"
-                  onClick={openLoginModal}
+                  onClick={handleLoginClick}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.color = colors.oskar.green;
                   }}
@@ -693,7 +1469,49 @@ const Header: FC = () => {
 
             {/* Actions Mobile */}
             <div className="d-flex d-lg-none align-items-center">
-              <Link href="/panier">
+              {/* Icône Messagerie Mobile */}
+              <Link href={isLoggedIn ? getUserMessagesUrl() : "#"}>
+                <button
+                  className="btn btn-link border-0 me-2 position-relative"
+                  style={{
+                    color: colors.oskar.grey,
+                    fontSize: "1.1rem",
+                    width: "44px",
+                    height: "44px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                  aria-label="Messagerie"
+                  type="button"
+                  onClick={(e) => {
+                    if (!isLoggedIn) {
+                      e.preventDefault();
+                      handleLoginClick();
+                    }
+                  }}
+                >
+                  <i className="fa-solid fa-envelope"></i>
+                  {unreadMessagesCount > 0 && (
+                    <span
+                      className="position-absolute top-0 start-100 translate-middle badge rounded-pill"
+                      style={{
+                        backgroundColor: colors.oskar.orange || "#ff6b35",
+                        color: "white",
+                        fontSize: "0.5rem",
+                        minWidth: "14px",
+                        height: "14px",
+                        transform: "translate(-30%, -25%)",
+                      }}
+                    >
+                      {unreadMessagesCount > 9 ? "9+" : unreadMessagesCount}
+                    </span>
+                  )}
+                </button>
+              </Link>
+
+              {/* Icône Favoris Mobile */}
+              <Link href="/liste-favoris">
                 <button
                   className="btn btn-link border-0 me-2"
                   style={{
@@ -705,30 +1523,36 @@ const Header: FC = () => {
                     alignItems: "center",
                     justifyContent: "center",
                   }}
-                  aria-label="Panier"
+                  aria-label="Favoris"
                   type="button"
                 >
-                  <i className="fa-solid fa-shopping-cart"></i>
-                  {cartItemsCount > 0 && (
-                    <span
-                      className="position-absolute top-0 start-100 translate-middle badge rounded-pill"
-                      style={{
-                        backgroundColor: colors.oskar.orange || "#ff6b35",
-                        color: "white",
-                        fontSize: "0.55rem",
-                        minWidth: "16px",
-                        height: "16px",
-                        transform: "translate(-30%, -25%)",
-                      }}
-                    >
-                      {cartItemsCount > 9 ? "9+" : cartItemsCount}
-                    </span>
-                  )}
+                  <i className="fa-solid fa-heart"></i>
                 </button>
               </Link>
 
+              {/* Icône Téléphone/Contact Mobile */}
+              <Link href="/contact">
+                <button
+                  className="btn btn-link border-0 me-2"
+                  style={{
+                    color: colors.oskar.grey,
+                    fontSize: "1.1rem",
+                    width: "44px",
+                    height: "44px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                  aria-label="Contact"
+                  type="button"
+                >
+                  <i className="fa-solid fa-phone"></i>
+                </button>
+              </Link>
+
+              {/* Bouton Publier Mobile */}
               <button
-                className="btn ms-2"
+                className="btn ms-1"
                 style={{
                   backgroundColor: colors.oskar.green,
                   color: "white",
@@ -737,45 +1561,53 @@ const Header: FC = () => {
                   fontSize: "0.8rem",
                   border: "none",
                   minWidth: "auto",
+                  whiteSpace: "nowrap",
                 }}
                 onClick={handlePublishClick}
                 aria-label="Publier"
                 type="button"
               >
                 <i className="fa-solid fa-plus"></i>
+                <span className="ms-1 d-none d-sm-inline">Publier</span>
               </button>
             </div>
           </div>
 
           {/* Navigation Mobile */}
-          <div className="d-lg-none border-top">
-            <div className="scrollable-nav py-2">
-              <div
-                className="d-flex overflow-auto"
-                style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-              >
-                {navLinks.map((link, index) => (
-                  <Link
-                    key={`${link.name}-${index}`}
-                    href={link.href}
-                    className={`text-decoration-none px-3 py-1 ${isLinkActive(link) ? "fw-semibold" : ""}`}
-                    style={{
-                      color: isLinkActive(link)
-                        ? colors.oskar.green
-                        : colors.oskar.grey,
-                      whiteSpace: "nowrap",
-                      borderBottom: isLinkActive(link)
-                        ? `2px solid ${colors.oskar.green}`
-                        : "2px solid transparent",
-                      fontSize: "0.85rem",
-                    }}
-                  >
-                    {link.name}
-                  </Link>
-                ))}
+          {!loadingCategories && (
+            <div className="d-lg-none border-top">
+              <div className="scrollable-nav py-2">
+                <div
+                  className="d-flex overflow-auto hide-scrollbar"
+                  style={{
+                    scrollbarWidth: "none",
+                    msOverflowStyle: "none",
+                  }}
+                >
+                  {navLinks.map((link, index) => (
+                    <Link
+                      key={`${link.name}-${index}-mobile`}
+                      href={link.href}
+                      className={`text-decoration-none px-3 py-1 ${isLinkActive(link) ? "fw-semibold" : ""}`}
+                      style={{
+                        color: isLinkActive(link)
+                          ? colors.oskar.green
+                          : colors.oskar.grey,
+                        whiteSpace: "nowrap",
+                        borderBottom: isLinkActive(link)
+                          ? `2px solid ${colors.oskar.green}`
+                          : "2px solid transparent",
+                        fontSize: "0.85rem",
+                        padding: "0.25rem 0.75rem",
+                      }}
+                    >
+                      {link.name}
+                    </Link>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </header>
 
@@ -831,25 +1663,124 @@ const Header: FC = () => {
 
             <div className="p-2">
               {navLinks.map((link, index) => (
-                <Link
-                  key={`${link.name}-${index}`}
-                  href={link.href}
-                  className={`d-flex align-items-center py-3 px-3 text-decoration-none`}
-                  onClick={() => setMobileMenuOpen(false)}
-                  style={{
-                    color: isLinkActive(link)
-                      ? colors.oskar.green
-                      : colors.oskar.grey,
-                    borderLeft: isLinkActive(link)
-                      ? `4px solid ${colors.oskar.green}`
-                      : "4px solid transparent",
-                  }}
-                >
-                  <span className={isLinkActive(link) ? "fw-semibold" : ""}>
-                    {link.name}
-                  </span>
-                </Link>
+                <div key={`${link.name}-${index}-mobile-menu`}>
+                  <Link
+                    href={link.href}
+                    className={`d-flex align-items-center justify-content-between py-3 px-3 text-decoration-none`}
+                    onClick={() => setMobileMenuOpen(false)}
+                    style={{
+                      color: isLinkActive(link)
+                        ? colors.oskar.green
+                        : colors.oskar.grey,
+                      borderLeft: isLinkActive(link)
+                        ? `4px solid ${colors.oskar.green}`
+                        : "4px solid transparent",
+                    }}
+                  >
+                    <span className={isLinkActive(link) ? "fw-semibold" : ""}>
+                      {link.name}
+                    </span>
+                    {link.hasChildren && (
+                      <i className="fa-solid fa-chevron-down text-muted"></i>
+                    )}
+                  </Link>
+
+                  {/* Sous-catégories dans le menu mobile */}
+                  {link.hasChildren && link.children && (
+                    <div className="ps-4">
+                      {link.children.map((child, childIndex) => (
+                        <Link
+                          key={`${child.name}-${childIndex}`}
+                          href={child.href}
+                          className="d-block py-2 px-3 text-decoration-none"
+                          onClick={() => setMobileMenuOpen(false)}
+                          style={{
+                            color: colors.oskar.grey,
+                            fontSize: "0.9rem",
+                          }}
+                        >
+                          <i className="fa-solid fa-angle-right me-2"></i>
+                          {child.name}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ))}
+
+              {/* Section utilisateur connecté dans le menu mobile */}
+              {isLoggedIn && (
+                <div className="mt-4 border-top pt-3">
+                  <div className="px-3 mb-2">
+                    <small className="text-muted">Mon compte</small>
+                  </div>
+
+                  <Link
+                    href={getUserDashboard()}
+                    className="d-flex align-items-center py-3 px-3 text-decoration-none"
+                    onClick={() => setMobileMenuOpen(false)}
+                    style={{ color: colors.oskar.grey }}
+                  >
+                    <i className="fa-solid fa-chart-line me-3"></i>
+                    <span>Dashboard</span>
+                  </Link>
+
+                  <Link
+                    href={getUserProfileUrl()}
+                    className="d-flex align-items-center py-3 px-3 text-decoration-none"
+                    onClick={() => setMobileMenuOpen(false)}
+                    style={{ color: colors.oskar.grey }}
+                  >
+                    <i className="fa-solid fa-user me-3"></i>
+                    <span>Mon profil</span>
+                  </Link>
+
+                  {isVendeurOrUtilisateur() && (
+                    <Link
+                      href={getUserAnnoncesUrl()}
+                      className="d-flex align-items-center py-3 px-3 text-decoration-none"
+                      onClick={() => setMobileMenuOpen(false)}
+                      style={{ color: colors.oskar.grey }}
+                    >
+                      <i className="fa-solid fa-newspaper me-3"></i>
+                      <span>Mes annonces</span>
+                    </Link>
+                  )}
+
+                  <Link
+                    href={getUserMessagesUrl()}
+                    className="d-flex align-items-center py-3 px-3 text-decoration-none position-relative"
+                    onClick={() => setMobileMenuOpen(false)}
+                    style={{ color: colors.oskar.grey }}
+                  >
+                    <i className="fa-solid fa-envelope me-3"></i>
+                    <span>Messages</span>
+                    {unreadMessagesCount > 0 && (
+                      <span
+                        className="position-absolute end-3 badge bg-danger"
+                        style={{
+                          fontSize: "0.7rem",
+                          padding: "0.2rem 0.4rem",
+                        }}
+                      >
+                        {unreadMessagesCount}
+                      </span>
+                    )}
+                  </Link>
+
+                  <button
+                    className="d-flex align-items-center py-3 px-3 w-100 text-start border-0 bg-transparent text-danger"
+                    onClick={() => {
+                      handleLogout();
+                      setMobileMenuOpen(false);
+                    }}
+                    type="button"
+                  >
+                    <i className="fa-solid fa-right-from-bracket me-3"></i>
+                    <span>Déconnexion</span>
+                  </button>
+                </div>
+              )}
 
               {/* Bouton Publier dans le menu mobile */}
               <div className="p-3 mt-3">
@@ -884,9 +1815,57 @@ const Header: FC = () => {
         isLoggedIn={isLoggedIn}
         onLoginRequired={() => {
           handleClosePublishModal();
-          openLoginModal();
+          handleLoginClick();
         }}
       />
+
+      <style jsx global>{`
+        .hide-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+
+        .dropdown-menu {
+          max-height: calc(100vh - 100px);
+          overflow-y: auto;
+        }
+
+        .dropdown-item {
+          min-height: 44px;
+          display: flex;
+          align-items: center;
+        }
+
+        .dropdown-menu {
+          animation: fadeIn 0.2s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .skeleton-loader {
+          animation: skeleton-loading 1.5s ease-in-out infinite;
+        }
+
+        @keyframes skeleton-loading {
+          0% {
+            opacity: 0.6;
+          }
+          50% {
+            opacity: 1;
+          }
+          100% {
+            opacity: 0.6;
+          }
+        }
+      `}</style>
     </>
   );
 };

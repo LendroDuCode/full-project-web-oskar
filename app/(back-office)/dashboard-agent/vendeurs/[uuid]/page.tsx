@@ -404,11 +404,11 @@ export default function DetailVendeurPage() {
   // Obtenir le chemin de retour approprié
   const getBackPath = () => {
     if (vendeur?.is_deleted) {
-      return "/dashboard-admin/vendeurs/liste-vendeurs-supprimes";
+      return "/dashboard-agent/vendeurs/liste-vendeurs-supprimes";
     } else if (vendeur?.est_bloque) {
-      return "/dashboard-admin/vendeurs/liste-vendeurs-bloques";
+      return "/dashboard-agent/vendeurs/liste-vendeurs-bloques";
     }
-    return "/dashboard-admin/vendeurs/liste-vendeurs";
+    return "/dashboard-agent/vendeurs/liste-vendeurs";
   };
 
   // Afficher le chargement
@@ -472,7 +472,7 @@ export default function DetailVendeurPage() {
 
   return (
     <>
-      {/* Modal de modification 
+      {/* Modal de modification
        <EditVendeurModal
         isOpen={showEditModal}
         vendeur={vendeur}
@@ -484,7 +484,6 @@ export default function DetailVendeurPage() {
         }}
       />
       */}
-     
 
       {/* Messages de succès */}
       {successMessage && (

@@ -50,12 +50,15 @@ interface Vendeur {
   nom: string;
   prenoms: string;
   email: string;
+  code_vendeur: string;
   telephone: string;
   civilite_uuid?: string;
+
   civilite?: {
     libelle: string;
   };
   role?: {
+    uuid: string;
     name: string;
   };
   est_verifie: boolean;
@@ -904,8 +907,10 @@ export default function ListeVendeursActifsPage() {
   // Fonction pour exporter les données
   const handleExport = async () => {
     try {
-      const response = await api.get(API_ENDPOINTS.ADMIN.VENDEURS.EXPORT_PDF, {
-      });
+      const response = await api.get(
+        API_ENDPOINTS.ADMIN.VENDEURS.EXPORT_PDF,
+        {},
+      );
 
       const url = window.URL.createObjectURL(response);
       const link = document.createElement("a");
@@ -1010,9 +1015,8 @@ export default function ListeVendeursActifsPage() {
         onSuccess={handleVendeurCreated}
       />
 
-      {/* Modal de modification de vendeur 
-      
-       <ModifierVendeurModal
+      {/* Modal de modification de vendeur */}
+      <ModifierVendeurModal
         isOpen={showEditModal}
         vendeur={selectedVendeurForEdit}
         onClose={() => {
@@ -1028,8 +1032,6 @@ export default function ListeVendeursActifsPage() {
           setTimeout(() => setSuccessMessage(null), 3000);
         }}
       />
-      */}
-     
 
       {/* Modal de suppression simple */}
       <DeleteModal

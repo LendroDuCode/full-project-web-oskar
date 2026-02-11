@@ -9,6 +9,33 @@ import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { API_CONFIG } from "@/config/env";
 
 // Types basés sur votre API
+interface Createur {
+  uuid: string;
+  nom: string;
+  prenoms: string;
+  email: string;
+  telephone: string;
+  avatar: string | null;
+}
+
+interface Categorie {
+  is_deleted: boolean;
+  deleted_at: string | null;
+  id: number;
+  uuid: string;
+  type: string;
+  libelle: string;
+  description: string;
+  slug: string;
+  statut: string | null;
+  image_key: string;
+  image: string;
+  path: string | null;
+  depth: number | null;
+  createdAt: string | null;
+  updatedAt: string;
+}
+
 interface DonAPI {
   is_deleted: boolean;
   deleted_at: string | null;
@@ -32,13 +59,25 @@ interface DonAPI {
   vendeur_uuid: string | null;
   utilisateur_uuid: string | null;
   admin_uuid: string | null;
-  createdAt: string;
+  createdAt: string | null;
   updatedAt: string;
   note_moyenne: number;
   nombre_avis: number;
-  nombre_favoris: number;
-  est_favoris: boolean;
+  etoiles_pleines: number;
+  demi_etoile: number;
+  etoiles_vides: number;
   repartition_notes: any | null;
+  is_favoris: boolean;
+  createur: Createur;
+  createurType: "utilisateur" | "vendeur";
+  categorie: Categorie;
+  numero: string;
+  categorie_uuid: string;
+  publieLe: string | null;
+  est_bloque: boolean | null;
+  est_public: number;
+  agentUuid: string | null;
+  adminUuid: string | null;
 }
 
 interface DonSimilaireAPI {
@@ -63,12 +102,14 @@ interface DonSimilaireAPI {
   estPublie: boolean;
   vendeur_uuid: string | null;
   utilisateur_uuid: string | null;
-  createdAt: string;
+  createdAt: string | null;
   updatedAt: string;
   note_moyenne: number;
   nombre_avis: number;
-  nombre_favoris: number;
-  est_favoris: boolean;
+  etoiles_pleines: number;
+  demi_etoile: number;
+  etoiles_vides: number;
+  is_favoris: boolean;
 }
 
 interface DonResponse {
@@ -96,12 +137,15 @@ interface Don {
   estPublie: boolean;
   vendeur_uuid: string | null;
   utilisateur_uuid: string | null;
-  createdAt: string;
+  createdAt: string | null;
   updatedAt: string;
   note_moyenne: number;
   nombre_avis: number;
-  nombre_favoris: number;
-  est_favoris: boolean;
+  is_favoris: boolean;
+  createur: Createur;
+  createurType: "utilisateur" | "vendeur";
+  categorie: Categorie;
+  numero: string;
 }
 
 interface DonSimilaire {
@@ -187,15 +231,17 @@ interface NoteStats {
 }
 
 interface DonateurInfo {
+  uuid: string;
   nom: string;
   prenoms: string;
-  email: string | null;
-  telephone: string | null;
+  email: string;
+  telephone: string;
   avatar: string | null;
-  facebook_url: string | null;
-  whatsapp_url: string | null;
-  twitter_url: string | null;
-  instagram_url: string | null;
+  facebook_url?: string | null;
+  whatsapp_url?: string | null;
+  twitter_url?: string | null;
+  instagram_url?: string | null;
+  userType: "vendeur" | "utilisateur";
 }
 
 export default function DonDetailPage() {
@@ -219,6 +265,7 @@ export default function DonDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [favori, setFavori] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userType, setUserType] = useState<string>("utilisateur");
   const [showMoreComments, setShowMoreComments] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
   const [commentairesFetched, setCommentairesFetched] = useState(false);
@@ -230,18 +277,72 @@ export default function DonDetailPage() {
   const [submittingReview, setSubmittingReview] = useState(false);
   const [contactVisible, setContactVisible] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [newMessage, setNewMessage] = useState({
+    sujet: "",
+    contenu: "",
+    type: "INFO", // CORRECTION : Ajout du champ type
+  });
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [messageError, setMessageError] = useState<string | null>(null);
+  const [messageSuccess, setMessageSuccess] = useState<string | null>(null);
 
-  // Vérifier l'authentification
+  // Vérifier l'authentification et le type d'utilisateur
   useEffect(() => {
     const checkAuth = () => {
       const token = api.getToken();
       setIsAuthenticated(!!token);
+
+      // Récupérer le type d'utilisateur depuis le cookie
+      const userCookie = document.cookie
+        .split("; ")
+        .find((row) => row.startsWith("oskar_user="));
+
+      if (userCookie) {
+        try {
+          const userData = JSON.parse(
+            decodeURIComponent(userCookie.split("=")[1]),
+          );
+          setUserType(userData.type || "utilisateur");
+        } catch (e) {
+          console.warn("Impossible de parser le cookie utilisateur", e);
+          setUserType("utilisateur");
+        }
+      }
     };
 
     checkAuth();
     window.addEventListener("storage", checkAuth);
     return () => window.removeEventListener("storage", checkAuth);
   }, []);
+
+  // CORRECTION : Fonction pour rediriger vers la page de connexion appropriée
+  const redirectToLogin = () => {
+    // Déterminer le type d'utilisateur
+    const userCookie = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("oskar_user="));
+
+    let currentUserType = "utilisateur";
+
+    if (userCookie) {
+      try {
+        const userData = JSON.parse(
+          decodeURIComponent(userCookie.split("=")[1]),
+        );
+        currentUserType = userData.type || "utilisateur";
+      } catch (e) {
+        console.warn("Impossible de parser le cookie utilisateur", e);
+      }
+    }
+
+    // Construire l'URL de redirection en fonction du type d'utilisateur
+    // CORRECTION : Utiliser la structure correcte de votre app
+    // Selon votre structure de dossiers, les pages de login sont dans /auth/[type]/login
+    const redirectPath = `/auth/${currentUserType}/login?redirect=/dons/${uuid}`;
+    console.log("Redirecting to:", redirectPath);
+    router.push(redirectPath);
+  };
 
   // URL d'avatar par défaut
   const getDefaultAvatarUrl = (): string => {
@@ -303,11 +404,6 @@ export default function DonDetailPage() {
 
   // Transformer les données API
   const transformDonData = (apiDon: DonAPI): Don => {
-    const safeNoteMoyenne =
-      apiDon.note_moyenne !== null && !isNaN(apiDon.note_moyenne)
-        ? apiDon.note_moyenne
-        : 0;
-
     return {
       uuid: apiDon.uuid,
       nom: apiDon.nom,
@@ -329,10 +425,13 @@ export default function DonDetailPage() {
       utilisateur_uuid: apiDon.utilisateur_uuid,
       createdAt: apiDon.createdAt,
       updatedAt: apiDon.updatedAt,
-      note_moyenne: safeNoteMoyenne,
+      note_moyenne: apiDon.note_moyenne || 0,
       nombre_avis: apiDon.nombre_avis || 0,
-      nombre_favoris: apiDon.nombre_favoris || 0,
-      est_favoris: apiDon.est_favoris || false,
+      is_favoris: apiDon.is_favoris || false,
+      createur: apiDon.createur,
+      createurType: apiDon.createurType,
+      categorie: apiDon.categorie,
+      numero: apiDon.numero,
     };
   };
 
@@ -433,91 +532,114 @@ export default function DonDetailPage() {
     [don, commentairesFetched],
   );
 
-  // Charger les infos du donateur
-  const fetchDonateurInfo = useCallback(
-    async (utilisateurUuid: string | null, vendeurUuid: string | null) => {
-      if (!utilisateurUuid && !vendeurUuid) return;
+  // Charger les infos complètes du donateur
+  const fetchDonateurInfo = useCallback(async (createur: Createur) => {
+    if (!createur) return;
 
+    try {
+      let donateurData: DonateurInfo | null = null;
+
+      // CORRECTION : Vérifier d'abord si c'est un vendeur en fonction du createurType
+      let userType: "utilisateur" | "vendeur" = "utilisateur";
+
+      // Essayer d'utiliser l'endpoint utilisateur d'abord
       try {
-        let donateurData: DonateurInfo | null = null;
+        const userResponse = await api.get(
+          API_ENDPOINTS.AUTH.UTILISATEUR.DETAIL(createur.uuid),
+        );
 
-        if (utilisateurUuid) {
-          // Charger les infos utilisateur
-          const userResponse = await api.get(
-            API_ENDPOINTS.AUTH.UTILISATEUR.DETAIL(utilisateurUuid),
-          );
-          if (userResponse) {
-            donateurData = {
-              nom: userResponse.nom || "",
-              prenoms: userResponse.prenoms || "",
-              email: userResponse.email || null,
-              telephone: userResponse.telephone || null,
-              avatar: userResponse.avatar
-                ? normalizeImageUrl(userResponse.avatar)
+        if (userResponse) {
+          donateurData = {
+            uuid: createur.uuid,
+            nom: userResponse.nom || createur.nom,
+            prenoms: userResponse.prenoms || createur.prenoms,
+            email: userResponse.email || createur.email,
+            telephone: userResponse.telephone || createur.telephone,
+            avatar: userResponse.avatar
+              ? normalizeImageUrl(userResponse.avatar)
+              : createur.avatar
+                ? normalizeImageUrl(createur.avatar)
                 : null,
-              facebook_url: userResponse.facebook_url || null,
-              whatsapp_url: userResponse.whatsapp_url || null,
-              twitter_url: userResponse.twitter_url || null,
-              instagram_url: userResponse.instagram_url || null,
-            };
-          }
-        } else if (vendeurUuid) {
-          // Charger les infos vendeur
+            facebook_url: userResponse.facebook_url || null,
+            whatsapp_url: userResponse.whatsapp_url || null,
+            twitter_url: userResponse.twitter_url || null,
+            instagram_url: userResponse.instagram_url || null,
+            userType: "utilisateur",
+          };
+        }
+      } catch (userErr) {
+        console.log("Ce n'est pas un utilisateur, essayons vendeur...");
+
+        // Essayer l'endpoint vendeur
+        try {
           const vendeurResponse = await api.get(
-            API_ENDPOINTS.AUTH.VENDEUR.DETAIL(vendeurUuid),
+            API_ENDPOINTS.AUTH.VENDEUR.DETAIL(createur.uuid),
           );
+
           if (vendeurResponse) {
+            userType = "vendeur";
             donateurData = {
-              nom: vendeurResponse.nom || "",
-              prenoms: vendeurResponse.prenoms || "",
-              email: vendeurResponse.email || null,
-              telephone: vendeurResponse.telephone || null,
+              uuid: createur.uuid,
+              nom: vendeurResponse.nom || createur.nom,
+              prenoms: vendeurResponse.prenoms || createur.prenoms,
+              email: vendeurResponse.email || createur.email,
+              telephone: vendeurResponse.telephone || createur.telephone,
               avatar: vendeurResponse.avatar
                 ? normalizeImageUrl(vendeurResponse.avatar)
-                : null,
+                : createur.avatar
+                  ? normalizeImageUrl(createur.avatar)
+                  : null,
               facebook_url: vendeurResponse.facebook_url || null,
               whatsapp_url: vendeurResponse.whatsapp_url || null,
               twitter_url: vendeurResponse.twitter_url || null,
               instagram_url: vendeurResponse.instagram_url || null,
+              userType: "vendeur",
             };
           }
+        } catch (vendeurErr) {
+          console.warn(
+            "Erreur chargement info vendeur, utilisation des données de base:",
+            vendeurErr,
+          );
         }
+      }
 
-        if (!donateurData) {
-          // Données par défaut
-          donateurData = {
-            nom: don?.nom_donataire?.split(" ")[0] || "Donateur",
-            prenoms:
-              don?.nom_donataire?.split(" ").slice(1).join(" ") || "OSKAR",
-            email: null,
-            telephone: "+225 XX XX XX XX",
-            avatar: null,
-            facebook_url: null,
-            whatsapp_url: null,
-            twitter_url: null,
-            instagram_url: null,
-          };
-        }
-
-        setDonateur(donateurData);
-      } catch (err) {
-        console.warn("Erreur chargement info donateur:", err);
-        // Données par défaut
-        setDonateur({
-          nom: don?.nom_donataire?.split(" ")[0] || "Donateur",
-          prenoms: don?.nom_donataire?.split(" ").slice(1).join(" ") || "OSKAR",
-          email: null,
-          telephone: "+225 XX XX XX XX",
-          avatar: null,
+      // Si pas de réponse API, utiliser les données de base du createur
+      if (!donateurData) {
+        donateurData = {
+          uuid: createur.uuid,
+          nom: createur.nom,
+          prenoms: createur.prenoms,
+          email: createur.email,
+          telephone: createur.telephone,
+          avatar: createur.avatar ? normalizeImageUrl(createur.avatar) : null,
           facebook_url: null,
           whatsapp_url: null,
           twitter_url: null,
           instagram_url: null,
-        });
+          userType: userType,
+        };
       }
-    },
-    [don],
-  );
+
+      setDonateur(donateurData);
+    } catch (err) {
+      console.warn("Erreur chargement info donateur:", err);
+      // Utiliser les données de base du createur en cas d'erreur
+      setDonateur({
+        uuid: createur.uuid,
+        nom: createur.nom,
+        prenoms: createur.prenoms,
+        email: createur.email,
+        telephone: createur.telephone,
+        avatar: createur.avatar ? normalizeImageUrl(createur.avatar) : null,
+        facebook_url: null,
+        whatsapp_url: null,
+        twitter_url: null,
+        instagram_url: null,
+        userType: "utilisateur",
+      });
+    }
+  }, []);
 
   // Charger les données du don
   const fetchDonDetails = useCallback(async () => {
@@ -542,7 +664,7 @@ export default function DonDetailPage() {
 
       setDon(donData);
       setDonsSimilaires(similairesData);
-      setFavori(response.don.est_favoris || false);
+      setFavori(response.don.is_favoris || false);
 
       // Préparer les images
       const imageUrls: string[] = [];
@@ -563,8 +685,21 @@ export default function DonDetailPage() {
 
       setImages(imageUrls);
 
-      // Charger les infos du donateur
-      await fetchDonateurInfo(donData.utilisateur_uuid, donData.vendeur_uuid);
+      // Charger les infos complètes du donateur
+      if (response.don.createur) {
+        await fetchDonateurInfo(response.don.createur);
+      } else {
+        // Données par défaut si pas de createur
+        setDonateur({
+          uuid: "",
+          nom: "Donateur",
+          prenoms: "OSKAR",
+          email: "",
+          telephone: "",
+          avatar: null,
+          userType: "utilisateur",
+        });
+      }
 
       // Charger les commentaires
       fetchCommentaires(donData.uuid);
@@ -744,16 +879,15 @@ export default function DonDetailPage() {
   const handleAddToFavorites = async () => {
     if (!don) return;
 
-    const token = api.getToken();
-    if (!token) {
-      router.push(`/auth/login?redirect=/dons/${don.uuid}`);
+    if (!isAuthenticated) {
+      redirectToLogin();
       return;
     }
 
     try {
       if (favori) {
-        // API pour retirer des favoris (à adapter selon votre API)
-        await api.delete(`/dons/${don.uuid}/favoris`);
+        // API pour retirer des favoris
+        await api.delete(API_ENDPOINTS.FAVORIS.REMOVE(don.uuid));
         setFavori(false);
         alert("Don retiré des favoris");
       } else {
@@ -765,7 +899,7 @@ export default function DonDetailPage() {
       console.error("Erreur mise à jour favoris:", err);
       if (err.response?.status === 401) {
         alert("Votre session a expiré. Veuillez vous reconnecter.");
-        router.push(`/auth/login?redirect=/dons/${don.uuid}`);
+        redirectToLogin();
       } else {
         alert("Une erreur est survenue. Veuillez réessayer.");
       }
@@ -773,9 +907,8 @@ export default function DonDetailPage() {
   };
 
   const handleContactDonateur = () => {
-    const token = api.getToken();
-    if (!token) {
-      router.push(`/auth/login?redirect=/dons/${don?.uuid}`);
+    if (!isAuthenticated) {
+      redirectToLogin();
       return;
     }
 
@@ -785,9 +918,8 @@ export default function DonDetailPage() {
   const handleSubmitReview = async () => {
     if (!don) return;
 
-    const token = api.getToken();
-    if (!token) {
-      router.push(`/auth/login?redirect=/dons/${don.uuid}`);
+    if (!isAuthenticated) {
+      redirectToLogin();
       return;
     }
 
@@ -825,7 +957,7 @@ export default function DonDetailPage() {
       console.error("Erreur ajout avis:", err);
       if (err.response?.status === 401) {
         alert("Votre session a expiré. Veuillez vous reconnecter.");
-        router.push(`/auth/login?redirect=/dons/${don.uuid}`);
+        redirectToLogin();
       } else {
         alert(
           "Une erreur est survenue lors de l'ajout de votre avis. Veuillez réessayer.",
@@ -862,25 +994,183 @@ export default function DonDetailPage() {
     setShowShareMenu(false);
   };
 
-  const handleShareToDonateur = (platform: string) => {
-    if (!donateur) return;
+  // Ouvrir WhatsApp avec le numéro du donateur
+  const openWhatsApp = (phoneNumber: string | null) => {
+    if (!phoneNumber) {
+      alert("Le donateur n'a pas fourni de numéro WhatsApp.");
+      return;
+    }
+
+    // Nettoyer le numéro (supprimer les caractères non numériques)
+    const cleanPhone = phoneNumber.replace(/\D/g, "");
 
     const message = `Bonjour, je suis intéressé(e) par votre don "${don?.nom}" sur OSKAR. Pourrions-nous discuter ?`;
 
-    const urls: { [key: string]: string | null } = {
-      facebook: donateur.facebook_url,
-      whatsapp: donateur.whatsapp_url
-        ? `https://wa.me/${donateur.whatsapp_url.replace(/\D/g, "")}?text=${encodeURIComponent(message)}`
-        : null,
-      twitter: donateur.twitter_url,
-      instagram: donateur.instagram_url,
-    };
+    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
 
-    const url = urls[platform];
-    if (url) {
-      window.open(url, "_blank", "noopener,noreferrer");
-    } else {
-      alert(`Le donateur n'a pas fourni de lien ${platform}.`);
+  // Ouvrir Facebook avec le profil du donateur
+  const openFacebook = (facebookUrl: string | null) => {
+    if (!facebookUrl) {
+      alert("Le donateur n'a pas fourni de lien Facebook.");
+      return;
+    }
+
+    window.open(facebookUrl, "_blank", "noopener,noreferrer");
+  };
+
+  // Ouvrir la messagerie intégrée
+  const openMessageModal = () => {
+    if (!isAuthenticated) {
+      redirectToLogin();
+      return;
+    }
+
+    if (!donateur) {
+      alert("Impossible de contacter le donateur.");
+      return;
+    }
+
+    setNewMessage({
+      sujet: `Question concernant votre don : ${don?.nom}`,
+      contenu: `Bonjour ${donateur?.prenoms || ""} ${donateur?.nom || ""},\n\nJe suis intéressé(e) par votre don "${don?.nom}" sur OSKAR.\n\nCordialement,\n[Votre nom]`,
+      type: "INFO",
+    });
+    setShowMessageModal(true);
+    setMessageError(null);
+    setMessageSuccess(null);
+  };
+
+  // CORRECTION : Fonction robuste pour envoyer un message via la messagerie intégrée
+  const handleSendMessage = async () => {
+    if (!donateur || !don) {
+      setMessageError("Informations du donateur manquantes.");
+      return;
+    }
+
+    if (!newMessage.sujet.trim() || !newMessage.contenu.trim()) {
+      setMessageError("Veuillez remplir le sujet et le contenu du message.");
+      return;
+    }
+
+    setSendingMessage(true);
+    setMessageError(null);
+    setMessageSuccess(null);
+
+    try {
+      console.log("🔄 Envoi du message à:", donateur.email);
+      console.log("📝 Contenu du message:", {
+        sujet: newMessage.sujet,
+        contenu: newMessage.contenu.substring(0, 100) + "...",
+        type: newMessage.type,
+      });
+
+      // CORRECTION : Données complètes avec le champ type
+      const messageData = {
+        destinataireEmail: donateur.email,
+        sujet: newMessage.sujet,
+        contenu: newMessage.contenu,
+        type: newMessage.type, // CORRECTION : Ajout du champ type
+      };
+
+      console.log("📤 Données envoyées à l'API:", messageData);
+
+      // CORRECTION : Appel API corrigé avec gestion d'erreur améliorée
+      // Utiliser l'endpoint approprié selon le type d'utilisateur
+      let messageEndpoint = API_ENDPOINTS.MESSAGERIE.SEND;
+
+      // Vérifier si l'utilisateur est authentifié
+      const token = api.getToken();
+      if (!token) {
+        setMessageError("Vous devez être connecté pour envoyer un message.");
+        redirectToLogin();
+        return;
+      }
+
+      console.log("📤 Endpoint utilisé:", messageEndpoint);
+
+      const response = await api.post(messageEndpoint, messageData, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      console.log("✅ Réponse de l'API:", response);
+
+      if (response) {
+        setMessageSuccess("Votre message a été envoyé avec succès !");
+
+        // Réinitialiser le formulaire
+        setNewMessage({
+          sujet: "",
+          contenu: "",
+          type: "INFO",
+        });
+
+        // Fermer le modal après 2 secondes
+        setTimeout(() => {
+          setShowMessageModal(false);
+
+          // Rediriger vers la messagerie après un court délai
+          setTimeout(() => {
+            // Rediriger vers le tableau de bord approprié selon le type d'utilisateur
+            let dashboardPath = "/dashboard-utilisateur/messages";
+
+            if (userType === "agent") {
+              dashboardPath = "/dashboard-agent/messages";
+            } else if (userType === "vendeur") {
+              dashboardPath = "/dashboard-vendeur/messages";
+            } else if (userType === "admin") {
+              dashboardPath = "/dashboard-admin/messages";
+            }
+
+            router.push(dashboardPath);
+          }, 500);
+        }, 2000);
+      } else {
+        setMessageError("Réponse inattendue de l'API.");
+      }
+    } catch (err: any) {
+      console.error("❌ Erreur envoi message:", err);
+
+      let errorMessage = "Une erreur est survenue lors de l'envoi du message.";
+
+      if (err.response) {
+        console.error("📥 Détails de l'erreur:", {
+          status: err.response.status,
+          data: err.response.data,
+        });
+
+        if (err.response.status === 401) {
+          errorMessage = "Votre session a expiré. Veuillez vous reconnecter.";
+          redirectToLogin();
+        } else if (err.response.status === 400) {
+          errorMessage =
+            "Données invalides. Vérifiez les informations saisies.";
+          if (err.response.data?.errors) {
+            errorMessage +=
+              " Détails: " + JSON.stringify(err.response.data.errors);
+          }
+        } else if (err.response.status === 404) {
+          errorMessage = "Destinataire non trouvé.";
+        } else if (err.response.status === 500) {
+          errorMessage = "Erreur serveur. Veuillez réessayer plus tard.";
+        }
+
+        if (err.response.data?.message) {
+          errorMessage = err.response.data.message;
+        } else if (err.response.data?.error) {
+          errorMessage = err.response.data.error;
+        }
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
+      setMessageError(errorMessage);
+    } finally {
+      setSendingMessage(false);
     }
   };
 
@@ -896,6 +1186,20 @@ export default function DonDetailPage() {
         console.error("Erreur copie lien:", err);
         alert("Impossible de copier le lien.");
       });
+  };
+
+  // Formater le numéro de téléphone pour l'affichage
+  const formatPhoneNumber = (phone: string) => {
+    if (!phone) return "";
+    // Format: +225 XX XX XX XX
+    const cleaned = phone.replace(/\D/g, "");
+    if (cleaned.startsWith("225")) {
+      const rest = cleaned.slice(3);
+      if (rest.length === 8) {
+        return `+225 ${rest.match(/.{2}/g)?.join(" ") || rest}`;
+      }
+    }
+    return phone;
   };
 
   if (loading) {
@@ -984,6 +1288,15 @@ export default function DonDetailPage() {
                   Dons
                 </Link>
               </li>
+              <li className="breadcrumb-item">
+                <Link
+                  href={`/dons?categorie=${don.categorie.slug}`}
+                  className="text-decoration-none text-muted"
+                >
+                  <i className="fas fa-tag me-1"></i>
+                  {don.categorie.libelle}
+                </Link>
+              </li>
               <li
                 className="breadcrumb-item active text-truncate"
                 style={{ maxWidth: "200px" }}
@@ -1004,6 +1317,12 @@ export default function DonDetailPage() {
                 <i className="fas fa-gift me-1"></i>
                 Don
               </span>
+              {don.prix === null && (
+                <span className="badge bg-success px-3 py-2">
+                  <i className="fas fa-hand-holding-heart me-1"></i>
+                  Gratuit
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -1026,7 +1345,7 @@ export default function DonDetailPage() {
                       <img
                         src={imagePrincipale}
                         alt={don.nom}
-                        className="img-fluid h-100 w-100 object-fit-cover"
+                        className="img-fluid h-100 w-100 object-fit-cover rounded-start"
                         onError={(e) => {
                           e.currentTarget.src = getDefaultDonImage();
                         }}
@@ -1036,10 +1355,16 @@ export default function DonDetailPage() {
                           <i className="fas fa-gift me-1"></i>
                           Don
                         </span>
+                        {don.prix === null && (
+                          <span className="badge bg-success text-white px-3 py-2 ms-2">
+                            <i className="fas fa-hand-holding-heart me-1"></i>
+                            Gratuit
+                          </span>
+                        )}
                       </div>
                       <button
                         onClick={handleAddToFavorites}
-                        className={`position-absolute top-0 end-0 m-3 btn ${favori ? "btn-danger" : "btn-light"} rounded-circle`}
+                        className={`position-absolute top-0 end-0 m-3 btn ${favori ? "btn-danger" : "btn-light"} rounded-circle shadow-sm`}
                         style={{ width: "50px", height: "50px" }}
                         title={
                           favori ? "Retirer des favoris" : "Ajouter aux favoris"
@@ -1052,6 +1377,14 @@ export default function DonDetailPage() {
                   <div className="col-md-5">
                     <div className="p-4 h-100 d-flex flex-column">
                       <h1 className="h3 fw-bold mb-3">{don.nom}</h1>
+
+                      {/* Catégorie */}
+                      <div className="mb-3">
+                        <span className="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25">
+                          <i className="fas fa-tag me-1"></i>
+                          {don.categorie.libelle}
+                        </span>
+                      </div>
 
                       {/* Note et avis */}
                       <div className="mb-4">
@@ -1067,7 +1400,9 @@ export default function DonDetailPage() {
                         <div className="d-flex align-items-center">
                           <i className="fas fa-heart text-danger me-2"></i>
                           <span className="text-muted">
-                            {don.nombre_favoris} favoris
+                            {don.is_favoris
+                              ? "Dans vos favoris"
+                              : "Ajouter aux favoris"}
                           </span>
                         </div>
                       </div>
@@ -1077,9 +1412,9 @@ export default function DonDetailPage() {
                         <h2 className="text-success fw-bold mb-2">
                           {formatPrice(don.prix)}
                         </h2>
-                        <span className="badge bg-success">
+                        <span className="badge bg-success bg-opacity-10 text-success border border-success">
                           <i className="fas fa-hand-holding-heart me-1"></i>
-                          Don
+                          Don {don.type_don}
                         </span>
                       </div>
 
@@ -1113,6 +1448,12 @@ export default function DonDetailPage() {
                           </small>
                           <strong>{don.lieu_retrait}</strong>
                         </div>
+                        <div className="mb-3">
+                          <small className="text-muted d-block">
+                            Numéro de référence
+                          </small>
+                          <strong className="text-primary">{don.numero}</strong>
+                        </div>
                       </div>
 
                       {/* Boutons d'action */}
@@ -1140,9 +1481,7 @@ export default function DonDetailPage() {
                               className="btn btn-outline-info flex-fill"
                               onClick={() => {
                                 if (!isAuthenticated) {
-                                  router.push(
-                                    `/auth/login?redirect=/dons/${don.uuid}`,
-                                  );
+                                  redirectToLogin();
                                   return;
                                 }
                                 setShowAddReview(true);
@@ -1178,55 +1517,8 @@ export default function DonDetailPage() {
                   </div>
 
                   <div className="row g-3">
-                    <div className="col-6">
-                      <h6 className="text-muted mb-2">
-                        Partager sur les réseaux
-                      </h6>
-                      <div className="d-flex flex-wrap gap-2">
-                        <button
-                          className="btn btn-outline-primary btn-sm"
-                          onClick={() => handleShare("facebook")}
-                        >
-                          <i className="fab fa-facebook-f me-1"></i>
-                          Facebook
-                        </button>
-                        <button
-                          className="btn btn-outline-info btn-sm"
-                          onClick={() => handleShare("twitter")}
-                        >
-                          <i className="fab fa-twitter me-1"></i>
-                          Twitter
-                        </button>
-                        <button
-                          className="btn btn-outline-success btn-sm"
-                          onClick={() => handleShare("whatsapp")}
-                        >
-                          <i className="fab fa-whatsapp me-1"></i>
-                          WhatsApp
-                        </button>
-                      </div>
-                    </div>
-                    <div className="col-6">
-                      <h6 className="text-muted mb-2">Contacter le donateur</h6>
-                      <div className="d-flex flex-wrap gap-2">
-                        <button
-                          className="btn btn-outline-primary btn-sm"
-                          onClick={() => handleShareToDonateur("facebook")}
-                        >
-                          <i className="fab fa-facebook-f me-1"></i>
-                          Facebook
-                        </button>
-                        <button
-                          className="btn btn-outline-success btn-sm"
-                          onClick={() => handleShareToDonateur("whatsapp")}
-                        >
-                          <i className="fab fa-whatsapp me-1"></i>
-                          WhatsApp
-                        </button>
-                      </div>
-                    </div>
                     <div className="col-12">
-                      <div className="input-group">
+                      <div className="input-group mb-3">
                         <input
                           type="text"
                           className="form-control"
@@ -1238,7 +1530,39 @@ export default function DonDetailPage() {
                           onClick={handleCopyLink}
                         >
                           <i className="fas fa-copy me-1"></i>
-                          Copier
+                          Copier le lien
+                        </button>
+                      </div>
+                    </div>
+                    <div className="col-12">
+                      <div className="d-flex flex-wrap gap-2">
+                        <button
+                          className="btn btn-outline-primary d-flex align-items-center gap-2"
+                          onClick={() => handleShare("facebook")}
+                        >
+                          <i className="fab fa-facebook-f"></i>
+                          Facebook
+                        </button>
+                        <button
+                          className="btn btn-outline-info d-flex align-items-center gap-2"
+                          onClick={() => handleShare("twitter")}
+                        >
+                          <i className="fab fa-twitter"></i>
+                          Twitter
+                        </button>
+                        <button
+                          className="btn btn-outline-success d-flex align-items-center gap-2"
+                          onClick={() => handleShare("whatsapp")}
+                        >
+                          <i className="fab fa-whatsapp"></i>
+                          WhatsApp
+                        </button>
+                        <button
+                          className="btn btn-outline-primary d-flex align-items-center gap-2"
+                          onClick={() => handleShare("linkedin")}
+                        >
+                          <i className="fab fa-linkedin"></i>
+                          LinkedIn
                         </button>
                       </div>
                     </div>
@@ -1317,6 +1641,10 @@ export default function DonDetailPage() {
                         <span className="ms-2">{don.quantite} unité(s)</span>
                       </li>
                       <li className="mb-3">
+                        <strong className="text-muted">Catégorie:</strong>
+                        <span className="ms-2">{don.categorie.libelle}</span>
+                      </li>
+                      <li className="mb-3">
                         <strong className="text-muted">Note moyenne:</strong>
                         <span className="ms-2">
                           {safeToFixed(don.note_moyenne)}
@@ -1346,9 +1674,15 @@ export default function DonDetailPage() {
                         <span className="ms-2">{don.lieu_retrait}</span>
                       </li>
                       <li className="mb-3">
-                        <strong className="text-muted">Publié le:</strong>
-                        <span className="ms-2">
-                          {formatDate(don.createdAt)}
+                        <strong className="text-muted">Numéro:</strong>
+                        <span className="ms-2 text-primary">{don.numero}</span>
+                      </li>
+                      <li className="mb-3">
+                        <strong className="text-muted">Statut:</strong>
+                        <span
+                          className={`ms-2 badge bg-${getStatusColor(don.statut)}`}
+                        >
+                          {getStatusLabel(don.statut)}
                         </span>
                       </li>
                     </ul>
@@ -1375,61 +1709,63 @@ export default function DonDetailPage() {
                 ) : (
                   <>
                     {/* Statistiques des notes */}
-                    <div className="bg-light rounded p-4 mb-4">
-                      <div className="row align-items-center">
-                        <div className="col-md-4 text-center">
-                          <div className="display-4 fw-bold text-primary mb-2">
-                            {safeToFixed(noteStats.moyenne)}
+                    {don.nombre_avis > 0 && (
+                      <div className="bg-light rounded p-4 mb-4">
+                        <div className="row align-items-center">
+                          <div className="col-md-4 text-center">
+                            <div className="display-4 fw-bold text-primary mb-2">
+                              {safeToFixed(noteStats.moyenne)}
+                            </div>
+                            <div className="mb-2">
+                              {renderStars(noteStats.moyenne)}
+                            </div>
+                            <p className="text-muted mb-0">
+                              Basé sur {noteStats.total} avis
+                            </p>
                           </div>
-                          <div className="mb-2">
-                            {renderStars(noteStats.moyenne)}
-                          </div>
-                          <p className="text-muted mb-0">
-                            Basé sur {noteStats.total} avis
-                          </p>
-                        </div>
-                        <div className="col-md-8">
-                          {[5, 4, 3, 2, 1].map((rating) => {
-                            const count = noteStats[
-                              rating as keyof typeof noteStats
-                            ] as number;
-                            const percentage =
-                              noteStats.total > 0
-                                ? Math.round((count / noteStats.total) * 100)
-                                : 0;
+                          <div className="col-md-8">
+                            {[5, 4, 3, 2, 1].map((rating) => {
+                              const count = noteStats[
+                                rating as keyof typeof noteStats
+                              ] as number;
+                              const percentage =
+                                noteStats.total > 0
+                                  ? Math.round((count / noteStats.total) * 100)
+                                  : 0;
 
-                            return (
-                              <div
-                                key={rating}
-                                className="d-flex align-items-center mb-2"
-                              >
-                                <span
-                                  className="text-muted me-2"
-                                  style={{ width: "70px" }}
-                                >
-                                  {rating} étoiles
-                                </span>
+                              return (
                                 <div
-                                  className="progress flex-grow-1 me-2"
-                                  style={{ height: "10px" }}
+                                  key={rating}
+                                  className="d-flex align-items-center mb-2"
                                 >
+                                  <span
+                                    className="text-muted me-2"
+                                    style={{ width: "70px" }}
+                                  >
+                                    {rating} étoiles
+                                  </span>
                                   <div
-                                    className="progress-bar bg-warning"
-                                    style={{ width: `${percentage}%` }}
-                                  ></div>
+                                    className="progress flex-grow-1 me-2"
+                                    style={{ height: "10px" }}
+                                  >
+                                    <div
+                                      className="progress-bar bg-warning"
+                                      style={{ width: `${percentage}%` }}
+                                    ></div>
+                                  </div>
+                                  <span
+                                    className="text-muted"
+                                    style={{ width: "40px" }}
+                                  >
+                                    {count}
+                                  </span>
                                 </div>
-                                <span
-                                  className="text-muted"
-                                  style={{ width: "40px" }}
-                                >
-                                  {count}
-                                </span>
-                              </div>
-                            );
-                          })}
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* Formulaire d'ajout d'avis */}
                     {showAddReview ? (
@@ -1507,9 +1843,7 @@ export default function DonDetailPage() {
                           className="btn btn-primary"
                           onClick={() => {
                             if (!isAuthenticated) {
-                              router.push(
-                                `/auth/login?redirect=/dons/${don.uuid}`,
-                              );
+                              redirectToLogin();
                               return;
                             }
                             setShowAddReview(true);
@@ -1703,8 +2037,8 @@ export default function DonDetailPage() {
                   <div className="text-center mb-4">
                     {donateur.avatar ? (
                       <div
-                        className="rounded-circle d-inline-flex align-items-center justify-content-center mb-3 overflow-hidden"
-                        style={{ width: "80px", height: "80px" }}
+                        className="rounded-circle d-inline-flex align-items-center justify-content-center mb-3 overflow-hidden border border-3 border-primary"
+                        style={{ width: "100px", height: "100px" }}
                       >
                         <img
                           src={donateur.avatar}
@@ -1717,93 +2051,124 @@ export default function DonDetailPage() {
                       </div>
                     ) : (
                       <div
-                        className="bg-light rounded-circle d-inline-flex align-items-center justify-content-center mb-3"
-                        style={{ width: "80px", height: "80px" }}
+                        className="bg-light rounded-circle d-inline-flex align-items-center justify-content-center mb-3 border border-3 border-primary"
+                        style={{ width: "100px", height: "100px" }}
                       >
-                        <i className="fas fa-user fa-2x text-muted"></i>
+                        <i className="fas fa-user fa-3x text-muted"></i>
                       </div>
                     )}
                     <h5 className="fw-bold mb-2">
                       {donateur.prenoms} {donateur.nom}
                     </h5>
-                    <span className="badge bg-success mb-3">
-                      <i className="fas fa-certificate me-1"></i>
-                      Donateur vérifié
-                    </span>
-                  </div>
-
-                  {/* Réseaux sociaux du donateur */}
-                  {(donateur.facebook_url ||
-                    donateur.whatsapp_url ||
-                    donateur.twitter_url) && (
-                    <div className="mb-4">
-                      <h6 className="fw-bold mb-3">Contacter le donateur</h6>
-                      <div className="d-flex gap-2 justify-content-center">
-                        {donateur.facebook_url && (
-                          <button
-                            className="btn btn-outline-primary btn-sm"
-                            onClick={() => handleShareToDonateur("facebook")}
-                            title="Contacter sur Facebook"
-                          >
-                            <i className="fab fa-facebook-f"></i>
-                          </button>
-                        )}
-                        {donateur.whatsapp_url && (
-                          <button
-                            className="btn btn-outline-success btn-sm"
-                            onClick={() => handleShareToDonateur("whatsapp")}
-                            title="Contacter sur WhatsApp"
-                          >
-                            <i className="fab fa-whatsapp"></i>
-                          </button>
-                        )}
-                        {donateur.twitter_url && (
-                          <button
-                            className="btn btn-outline-info btn-sm"
-                            onClick={() => handleShareToDonateur("twitter")}
-                            title="Contacter sur Twitter"
-                          >
-                            <i className="fab fa-twitter"></i>
-                          </button>
-                        )}
-                      </div>
+                    <div className="d-flex justify-content-center gap-2 mb-3">
+                      <span className="badge bg-success">
+                        <i className="fas fa-certificate me-1"></i>
+                        Donateur vérifié
+                      </span>
+                      <span className="badge bg-info">
+                        <i className="fas fa-user me-1"></i>
+                        {donateur.userType === "utilisateur"
+                          ? "Utilisateur"
+                          : "Vendeur"}
+                      </span>
                     </div>
-                  )}
+                  </div>
 
                   {/* Informations contact */}
                   <div className="border-top pt-4">
                     {contactVisible ? (
-                      <div className="alert alert-success">
-                        <div className="d-flex justify-content-between align-items-start mb-2">
-                          <h6 className="mb-0">
-                            <i className="fas fa-phone me-2"></i>
-                            Contact disponible
-                          </h6>
+                      <div className="space-y-4">
+                        {/* Boutons de contact direct */}
+                        <div className="d-grid gap-3">
+                          {/* WhatsApp */}
+                          {donateur.telephone && (
+                            <button
+                              className="btn btn-success d-flex align-items-center justify-content-center gap-3 py-3"
+                              onClick={() => openWhatsApp(donateur.telephone)}
+                            >
+                              <i className="fab fa-whatsapp fa-2x"></i>
+                              <div className="text-start">
+                                <div className="fw-bold">WhatsApp</div>
+                                <small className="opacity-75">
+                                  {formatPhoneNumber(donateur.telephone)}
+                                </small>
+                              </div>
+                            </button>
+                          )}
+
+                          {/* Facebook */}
+                          {donateur.facebook_url ? (
+                            <button
+                              className="btn btn-primary d-flex align-items-center justify-content-center gap-3 py-3"
+                              onClick={() =>
+                                openFacebook(donateur.facebook_url || null)
+                              }
+                            >
+                              <i className="fab fa-facebook-f fa-2x"></i>
+                              <div className="text-start">
+                                <div className="fw-bold">Facebook</div>
+                                <small className="opacity-75">
+                                  Profil Facebook
+                                </small>
+                              </div>
+                            </button>
+                          ) : (
+                            <div className="alert alert-info py-2">
+                              <i className="fas fa-info-circle me-2"></i>
+                              Le donateur n'a pas fourni de lien Facebook
+                            </div>
+                          )}
+
+                          {/* Messagerie intégrée */}
                           <button
-                            className="btn btn-sm btn-outline-secondary"
-                            onClick={() => setContactVisible(false)}
+                            className="btn btn-info d-flex align-items-center justify-content-center gap-3 py-3"
+                            onClick={openMessageModal}
                           >
-                            <i className="fas fa-eye-slash"></i>
+                            <i className="fas fa-envelope fa-2x"></i>
+                            <div className="text-start">
+                              <div className="fw-bold">Messagerie OSKAR</div>
+                              <small className="opacity-75">
+                                Message sécurisé
+                              </small>
+                            </div>
                           </button>
+
+                          {/* Email */}
+                          {donateur.email && (
+                            <div className="alert alert-light border">
+                              <div className="d-flex align-items-center">
+                                <i className="fas fa-envelope text-primary fa-lg me-3"></i>
+                                <div className="flex-grow-1">
+                                  <div className="fw-bold mb-1">Email</div>
+                                  <div className="text-break">
+                                    {donateur.email}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        <p className="mb-2 fw-bold">
-                          Téléphone:{" "}
-                          <span className="text-success">
-                            {donateur.telephone}
-                          </span>
-                        </p>
-                        {donateur.email && (
-                          <p className="mb-2 fw-bold">
-                            Email:{" "}
-                            <span className="text-success">
-                              {donateur.email}
-                            </span>
-                          </p>
-                        )}
-                        <small className="text-muted d-block">
-                          <i className="fas fa-info-circle me-1"></i>
-                          Contactez le donateur pour organiser le retrait
-                        </small>
+
+                        {/* Informations de sécurité */}
+                        <div className="alert alert-warning mt-3">
+                          <h6 className="fw-bold">
+                            <i className="fas fa-shield-alt me-2"></i>
+                            Conseils de sécurité
+                          </h6>
+                          <ul className="mb-0 small">
+                            <li>Rencontrez-vous dans un lieu public</li>
+                            <li>Vérifiez l'article avant acceptation</li>
+                            <li>Ne partagez pas d'informations personnelles</li>
+                          </ul>
+                        </div>
+
+                        <button
+                          className="btn btn-outline-secondary w-100"
+                          onClick={() => setContactVisible(false)}
+                        >
+                          <i className="fas fa-eye-slash me-2"></i>
+                          Masquer les contacts
+                        </button>
                       </div>
                     ) : (
                       <button
@@ -1811,7 +2176,7 @@ export default function DonDetailPage() {
                         onClick={handleContactDonateur}
                       >
                         <i className="fas fa-eye me-2"></i>
-                        Voir le contact
+                        Voir les options de contact
                       </button>
                     )}
                   </div>
@@ -1870,6 +2235,18 @@ export default function DonDetailPage() {
                       </span>
                     </div>
                   </div>
+                  <div className="list-group-item border-0 px-0 py-2">
+                    <div className="d-flex justify-content-between">
+                      <span className="text-muted">Numéro</span>
+                      <span className="fw-bold text-primary">{don.numero}</span>
+                    </div>
+                  </div>
+                  <div className="list-group-item border-0 px-0 py-2">
+                    <div className="d-flex justify-content-between">
+                      <span className="text-muted">Catégorie</span>
+                      <span className="fw-bold">{don.categorie.libelle}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1899,6 +2276,12 @@ export default function DonDetailPage() {
                     Accès PMR
                   </li>
                 </ul>
+                <div className="mt-3">
+                  <small className="text-muted">
+                    <i className="fas fa-map-marker-alt me-1"></i>
+                    {don.lieu_retrait}
+                  </small>
+                </div>
               </div>
             </div>
 
@@ -1911,7 +2294,7 @@ export default function DonDetailPage() {
                   </div>
                   <h5 className="fw-bold mb-0">Conseils de Sécurité</h5>
                 </div>
-                <ul className="list-unstyled mb-0">
+                <ul className="list-unstyled mb-0 small">
                   <li className="mb-2">
                     <i className="fas fa-check text-success me-2"></i>
                     Rencontre dans un lieu public
@@ -1937,68 +2320,251 @@ export default function DonDetailPage() {
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Dons récemment consultés */}
-        {donsSimilaires.length > 0 && (
-          <div className="mt-5">
-            <div className="d-flex justify-content-between align-items-center mb-4">
-              <h3 className="h4 fw-bold">
-                <i className="fas fa-history me-2 text-primary"></i>
-                Dons similaires
-              </h3>
-              <Link href="/dons" className="btn btn-outline-primary btn-sm">
-                Voir tout
-              </Link>
-            </div>
-
-            <div className="row g-4">
-              {donsSimilaires.map((donSim) => (
-                <div key={donSim.uuid} className="col-md-3">
-                  <div className="card border h-100">
-                    <div
-                      className="position-relative"
-                      style={{ height: "150px" }}
-                    >
-                      <img
-                        src={donSim.image}
-                        alt={donSim.nom}
-                        className="img-fluid h-100 w-100 object-fit-cover"
-                        onError={(e) => {
-                          e.currentTarget.src = getDefaultDonImage();
-                        }}
-                      />
-                    </div>
-                    <div className="card-body">
-                      <h6 className="card-title fw-bold">{donSim.nom}</h6>
-                      <div className="d-flex justify-content-between align-items-center mb-3">
-                        <small className="text-muted">{donSim.type_don}</small>
-                        <small className="text-muted">
-                          {donSim.quantite} unité(s)
-                        </small>
+      {/* Modal de messagerie intégrée - CORRIGÉ */}
+      {showMessageModal && donateur && (
+        <div
+          className="modal fade show d-block"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1050 }}
+          tabIndex={-1}
+          role="dialog"
+        >
+          <div
+            className="modal-dialog modal-lg modal-dialog-centered"
+            role="document"
+          >
+            <div className="modal-content border-0 shadow-lg">
+              <div className="modal-header bg-primary text-white">
+                <h5 className="modal-title">
+                  <i className="fas fa-envelope me-2"></i>
+                  Envoyer un message à {donateur.prenoms} {donateur.nom}
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={() => {
+                    setShowMessageModal(false);
+                    setMessageError(null);
+                    setMessageSuccess(null);
+                  }}
+                  disabled={sendingMessage}
+                ></button>
+              </div>
+              <div className="modal-body">
+                {messageError && (
+                  <div
+                    className="alert alert-danger alert-dismissible fade show mb-4"
+                    role="alert"
+                  >
+                    <div className="d-flex align-items-center">
+                      <i className="fas fa-exclamation-circle me-2"></i>
+                      <div>
+                        <strong>Erreur</strong>
+                        <p className="mb-0">{messageError}</p>
                       </div>
-                      <div className="d-flex justify-content-between align-items-center">
-                        <small className="text-muted">
-                          <span
-                            className={`badge bg-${getStatusColor(donSim.statut)}`}
-                          >
-                            {getStatusLabel(donSim.statut)}
-                          </span>
-                        </small>
-                        <Link
-                          href={`/dons/${donSim.uuid}`}
-                          className="btn btn-outline-primary btn-sm"
-                        >
-                          Voir
-                        </Link>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-close"
+                      onClick={() => setMessageError(null)}
+                    ></button>
+                  </div>
+                )}
+
+                {messageSuccess && (
+                  <div
+                    className="alert alert-success alert-dismissible fade show mb-4"
+                    role="alert"
+                  >
+                    <div className="d-flex align-items-center">
+                      <i className="fas fa-check-circle me-2"></i>
+                      <div>
+                        <strong>Succès !</strong>
+                        <p className="mb-0">{messageSuccess}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="mb-4">
+                  <div className="alert alert-info">
+                    <div className="d-flex">
+                      <i className="fas fa-info-circle me-2 mt-1"></i>
+                      <div>
+                        <strong>Messagerie sécurisée OSKAR</strong>
+                        <p className="mb-0">
+                          Ce message sera envoyé via la plateforme. Vous pourrez
+                          suivre la conversation dans votre tableau de bord.
+                        </p>
                       </div>
                     </div>
                   </div>
                 </div>
-              ))}
+
+                <div className="mb-3">
+                  <label className="form-label fw-bold">
+                    Sujet <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={newMessage.sujet}
+                    onChange={(e) =>
+                      setNewMessage({ ...newMessage, sujet: e.target.value })
+                    }
+                    placeholder="Sujet du message"
+                    disabled={sendingMessage}
+                  />
+                </div>
+
+                {/* CORRECTION : Ajout du champ type dans le formulaire */}
+                <div className="mb-3">
+                  <label className="form-label fw-bold">
+                    Type de message <span className="text-danger">*</span>
+                  </label>
+                  <select
+                    className="form-select"
+                    value={newMessage.type}
+                    onChange={(e) =>
+                      setNewMessage({ ...newMessage, type: e.target.value })
+                    }
+                    disabled={sendingMessage}
+                  >
+                    <option value="INFO">Information</option>
+                    <option value="QUESTION">Question</option>
+                    <option value="DEMANDE">Demande</option>
+                    <option value="SUPPORT">Support</option>
+                    <option value="ALERT">Alerte</option>
+                  </select>
+                  <small className="text-muted">
+                    Sélectionnez le type de message le plus approprié.
+                  </small>
+                </div>
+
+                <div className="mb-4">
+                  <label className="form-label fw-bold">
+                    Message <span className="text-danger">*</span>
+                  </label>
+                  <textarea
+                    className="form-control"
+                    rows={8}
+                    value={newMessage.contenu}
+                    onChange={(e) =>
+                      setNewMessage({ ...newMessage, contenu: e.target.value })
+                    }
+                    placeholder={`Bonjour ${donateur.prenoms},\n\nJe suis intéressé(e) par votre don "${don?.nom}"...`}
+                    disabled={sendingMessage}
+                  />
+                  <small className="text-muted">
+                    Soyez clair et poli dans votre message.
+                  </small>
+                </div>
+
+                {!messageSuccess && (
+                  <div className="alert alert-warning">
+                    <h6 className="fw-bold">
+                      <i className="fas fa-shield-alt me-2"></i>
+                      Conseils de sécurité
+                    </h6>
+                    <ul className="mb-0">
+                      <li>
+                        Ne partagez jamais vos informations personnelles
+                        sensibles
+                      </li>
+                      <li>
+                        Organisez les rencontres dans des lieux publics et de
+                        jour
+                      </li>
+                      <li>
+                        Méfiez-vous des demandes de paiement en dehors de la
+                        plateforme
+                      </li>
+                      <li>Signalez tout comportement suspect au support</li>
+                    </ul>
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                {!messageSuccess ? (
+                  <>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => {
+                        setShowMessageModal(false);
+                        setMessageError(null);
+                        setMessageSuccess(null);
+                      }}
+                      disabled={sendingMessage}
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={handleSendMessage}
+                      disabled={
+                        sendingMessage ||
+                        !newMessage.sujet.trim() ||
+                        !newMessage.contenu.trim() ||
+                        !newMessage.type
+                      }
+                    >
+                      {sendingMessage ? (
+                        <>
+                          <span
+                            className="spinner-border spinner-border-sm me-2"
+                            role="status"
+                          ></span>
+                          Envoi en cours...
+                        </>
+                      ) : (
+                        <>
+                          <i className="fas fa-paper-plane me-2"></i>
+                          Envoyer le message
+                        </>
+                      )}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-success w-100"
+                    onClick={() => {
+                      setShowMessageModal(false);
+                      // Rediriger vers le tableau de bord approprié
+                      let dashboardPath = "/dashboard-utilisateur/messages";
+
+                      if (userType === "agent") {
+                        dashboardPath = "/dashboard-agent/messages";
+                      } else if (userType === "vendeur") {
+                        dashboardPath = "/dashboard-vendeur/messages";
+                      } else if (userType === "admin") {
+                        dashboardPath = "/dashboard-admin/messages";
+                      }
+
+                      router.push(dashboardPath);
+                    }}
+                  >
+                    <i className="fas fa-check me-2"></i>
+                    Voir mes messages
+                  </button>
+                )}
+              </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Backdrop pour le modal */}
+      {showMessageModal && (
+        <div
+          className="modal-backdrop fade show"
+          style={{ zIndex: 1040 }}
+          onClick={() => !sendingMessage && setShowMessageModal(false)}
+        ></div>
+      )}
 
       <style jsx>{`
         .object-fit-cover {
@@ -2023,6 +2589,25 @@ export default function DonDetailPage() {
         .btn-outline-purple:hover {
           background-color: #9c27b0;
           color: white;
+        }
+        .modal-backdrop {
+          background-color: rgba(0, 0, 0, 0.5);
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+        }
+        .rounded-start {
+          border-top-left-radius: 0.375rem !important;
+          border-bottom-left-radius: 0.375rem !important;
+        }
+        @media (max-width: 768px) {
+          .rounded-start {
+            border-top-left-radius: 0.375rem !important;
+            border-top-right-radius: 0.375rem !important;
+            border-bottom-left-radius: 0 !important;
+          }
         }
       `}</style>
     </div>

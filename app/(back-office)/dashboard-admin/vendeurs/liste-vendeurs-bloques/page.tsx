@@ -44,19 +44,23 @@ interface Vendeur {
   uuid: string;
   nom: string;
   prenoms: string;
+  is_admin: boolean;
   email: string;
   telephone: string;
   civilite_uuid?: string;
+  code_vendeur: string;
+  role_uuid?: string; // ← AJOUTEZ CE CHAMP
   civilite?: {
     libelle: string;
+    uuid?: string;
   };
   role?: {
     name: string;
+    uuid?: string;
   };
-  est_verifie: boolean;
-  est_bloque: boolean;
-  is_deleted: boolean;
-  is_admin?: boolean;
+  est_verifie?: boolean;
+  est_bloque?: boolean;
+  is_deleted?: boolean;
   type?: string;
   created_at?: string;
   updated_at?: string;
@@ -71,8 +75,8 @@ const StatusBadge = ({
   est_verifie,
   is_deleted,
 }: {
-  est_bloque: boolean;
-  est_verifie: boolean;
+  est_bloque: boolean | undefined;
+  est_verifie: boolean | undefined;
   is_deleted?: boolean;
 }) => {
   if (is_deleted) {
@@ -1091,7 +1095,6 @@ export default function ListeVendeursBloquesPage() {
     pagination.page * pagination.limit,
   );
 
-
   // Fallback CSV export
   const handleCSVExport = () => {
     if (filteredVendeurs.length === 0) return;
@@ -1157,8 +1160,8 @@ export default function ListeVendeursBloquesPage() {
 
   return (
     <>
-      {/* Modal de modification de vendeur
-           <EditVendeurModal
+      {/* Modal de modification de vendeur*/}
+      <EditVendeurModal
         isOpen={showEditModal}
         vendeur={selectedVendeurForEdit}
         onClose={() => {
@@ -1171,8 +1174,6 @@ export default function ListeVendeursBloquesPage() {
           setTimeout(() => setSuccessMessage(null), 3000);
         }}
       />
-      */}
- 
 
       {/* Modal de déblocage simple */}
       <UnblockModal
@@ -1260,7 +1261,7 @@ export default function ListeVendeursBloquesPage() {
                 </Link>
 
                 <button
-                 // onClick={handleExport}
+                  // onClick={handleExport}
                   className="btn btn-outline-danger d-flex align-items-center gap-2"
                   disabled={vendeurs.length === 0 || loading}
                 >

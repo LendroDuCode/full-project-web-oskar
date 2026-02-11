@@ -15,6 +15,15 @@ import {
   faFlag,
   faInfoCircle,
   faStar,
+  faLanguage,
+  faSortNumericDown,
+  faRefresh,
+  faEye,
+  faShield,
+  faToggleOn,
+  faToggleOff,
+  faCrown,
+  faCopy,
 } from "@fortawesome/free-solid-svg-icons";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
@@ -23,15 +32,17 @@ import colors from "@/app/shared/constants/colors";
 // Types
 interface FormData {
   libelle: string;
-  description?: string;
-  statut: string;
-  defaut: boolean;
+  code: string;
+  description: string;
+  statut: "actif" | "inactif";
+  is_default: boolean;
+  ordre: number;
 }
 
 interface CreateStatutMatrimonialModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess?: () => void;
+  onSuccess?: (message: string) => void;
 }
 
 export default function CreateStatutMatrimonialModal({
@@ -42,9 +53,11 @@ export default function CreateStatutMatrimonialModal({
   // États du formulaire
   const [formData, setFormData] = useState<FormData>({
     libelle: "",
+    code: "",
     description: "",
     statut: "actif",
-    defaut: false,
+    is_default: false,
+    ordre: 0,
   });
 
   // États de chargement et erreurs
@@ -54,8 +67,9 @@ export default function CreateStatutMatrimonialModal({
   const [validationErrors, setValidationErrors] = useState<
     Record<string, string>
   >({});
+  const [generatedSlug, setGeneratedSlug] = useState<string>("");
 
-  // Styles personnalisés
+  // Styles personnalisés avec les couleurs Oskar
   const styles = {
     modalHeader: {
       background: `linear-gradient(135deg, ${colors.oskar.purple} 0%, ${colors.oskar.purpleHover} 100%)`,
@@ -64,6 +78,16 @@ export default function CreateStatutMatrimonialModal({
     sectionHeader: {
       background: colors.oskar.lightGrey,
       borderLeft: `4px solid ${colors.oskar.purple}`,
+    },
+    successBadge: {
+      background: `${colors.oskar.green}15`,
+      color: colors.oskar.green,
+      border: `1px solid ${colors.oskar.green}30`,
+    },
+    warningBadge: {
+      background: `${colors.oskar.orange}15`,
+      color: colors.oskar.orange,
+      border: `1px solid ${colors.oskar.orange}30`,
     },
     primaryButton: {
       background: colors.oskar.purple,
@@ -85,29 +109,47 @@ export default function CreateStatutMatrimonialModal({
     },
   };
 
-  // Réinitialiser le formulaire quand la modal s'ouvre
+  // Réinitialiser le formulaire quand la modal s'ouvre/ferme
   useEffect(() => {
-    if (!isOpen) return;
-
-    setFormData({
-      libelle: "",
-      description: "",
-      statut: "actif",
-      defaut: false,
-    });
-    setError(null);
-    setSuccessMessage(null);
-    setValidationErrors({});
+    if (!isOpen) {
+      setFormData({
+        libelle: "",
+        code: "",
+        description: "",
+        statut: "actif",
+        is_default: false,
+        ordre: 0,
+      });
+      setGeneratedSlug("");
+      setError(null);
+      setSuccessMessage(null);
+      setValidationErrors({});
+    }
   }, [isOpen]);
 
   // Validation du formulaire
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
 
+    // Validation des champs obligatoires
     if (!formData.libelle.trim()) {
       errors.libelle = "Le libellé est obligatoire";
-    } else if (formData.libelle.length < 2) {
+    } else if (formData.libelle.trim().length < 2) {
       errors.libelle = "Le libellé doit contenir au moins 2 caractères";
+    }
+
+    if (!formData.code.trim()) {
+      errors.code = "Le code est obligatoire";
+    } else if (formData.code.trim().length < 2) {
+      errors.code = "Le code doit contenir au moins 2 caractères";
+    }
+
+    if (formData.description && formData.description.length > 500) {
+      errors.description = "La description ne peut pas dépasser 500 caractères";
+    }
+
+    if (formData.ordre < 0) {
+      errors.ordre = "L'ordre ne peut pas être négatif";
     }
 
     setValidationErrors(errors);
@@ -120,10 +162,9 @@ export default function CreateStatutMatrimonialModal({
       .toLowerCase()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9]/g, "-")
       .replace(/-+/g, "-")
-      .trim();
+      .replace(/^-|-$/g, "");
   };
 
   // Gestion des changements de formulaire
@@ -140,11 +181,30 @@ export default function CreateStatutMatrimonialModal({
         type === "checkbox" ? (e.target as HTMLInputElement).checked : value,
     }));
 
-    // Si c'est le libellé qui change, générer automatiquement le slug
+    // Si c'est le libellé qui change, générer automatiquement le slug et le code
     if (name === "libelle" && value.trim().length > 0) {
-      const generatedSlug = generateSlug(value);
-      // On pourrait afficher le slug généré dans un champ dédié
-      console.log("Slug généré:", generatedSlug);
+      const slug = generateSlug(value);
+      setGeneratedSlug(slug);
+
+      // Générer automatiquement le code en majuscules
+      const code = value
+        .toUpperCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^A-Z0-9]/g, "_");
+
+      setFormData((prev) => ({
+        ...prev,
+        code: code.substring(0, 20), // Limiter à 20 caractères
+      }));
+    }
+
+    // Si c'est le code qui change, le mettre en majuscules
+    if (name === "code") {
+      setFormData((prev) => ({
+        ...prev,
+        code: value.toUpperCase(),
+      }));
     }
 
     // Effacer l'erreur de validation pour ce champ
@@ -171,39 +231,60 @@ export default function CreateStatutMatrimonialModal({
       setError(null);
       setSuccessMessage(null);
 
+      // Générer le slug final
+      const slug = generateSlug(formData.libelle);
+
       // Préparer les données pour l'API
       const statutData = {
         libelle: formData.libelle.trim(),
-        description: formData.description?.trim() || null,
+        code: formData.code.trim(),
+        slug: slug,
+        description: formData.description.trim() || null,
         statut: formData.statut,
-        defaut: formData.defaut,
+        is_default: formData.is_default,
+        ordre: formData.ordre || 0,
       };
 
       // Appel à l'API
-      await api.post(API_ENDPOINTS.STATUTS_MATRIMONIAUX.CREATE, statutData);
+      const response = await api.post(
+        API_ENDPOINTS.STATUTS_MATRIMONIAUX.CREATE,
+        statutData,
+      );
 
-      setSuccessMessage("Statut matrimonial créé avec succès !");
+      if (response && response.uuid) {
+        setSuccessMessage("Statut matrimonial créé avec succès !");
 
-      // Réinitialiser le formulaire
-      setFormData({
-        libelle: "",
-        description: "",
-        statut: "actif",
-        defaut: false,
-      });
+        // Réinitialiser le formulaire
+        setFormData({
+          libelle: "",
+          code: "",
+          description: "",
+          statut: "actif",
+          is_default: false,
+          ordre: 0,
+        });
+        setGeneratedSlug("");
 
-      // Appeler le callback de succès
-      if (onSuccess) {
-        setTimeout(() => {
-          onSuccess();
-          onClose();
-        }, 1500);
+        // Appeler le callback de succès
+        if (onSuccess) {
+          setTimeout(() => {
+            onSuccess("Statut matrimonial créé avec succès");
+            onClose();
+          }, 1500);
+        } else {
+          setTimeout(() => {
+            onClose();
+          }, 2000);
+        }
       } else {
-        setTimeout(() => {
-          onClose();
-        }, 2000);
+        throw new Error("Erreur lors de la création");
       }
     } catch (err: any) {
+      console.error(
+        "❌ Erreur lors de la création du statut matrimonial:",
+        err,
+      );
+
       let errorMessage = "Erreur lors de la création du statut matrimonial";
 
       if (err.response?.data?.message) {
@@ -230,10 +311,13 @@ export default function CreateStatutMatrimonialModal({
   const handleReset = () => {
     setFormData({
       libelle: "",
+      code: "",
       description: "",
       statut: "actif",
-      defaut: false,
+      is_default: false,
+      ordre: 0,
     });
+    setGeneratedSlug("");
     setError(null);
     setSuccessMessage(null);
     setValidationErrors({});
@@ -243,7 +327,7 @@ export default function CreateStatutMatrimonialModal({
   const handleClose = () => {
     if (loading) return;
 
-    if (formData.libelle || formData.description) {
+    if (formData.libelle || formData.code || formData.description) {
       if (
         !confirm(
           "Vous avez des modifications non sauvegardées. Voulez-vous vraiment annuler ?",
@@ -254,6 +338,14 @@ export default function CreateStatutMatrimonialModal({
     }
 
     onClose();
+  };
+
+  // Copier le slug dans le presse-papier
+  const copySlugToClipboard = () => {
+    if (generatedSlug) {
+      navigator.clipboard.writeText(generatedSlug);
+      alert("Slug copié dans le presse-papier !");
+    }
   };
 
   // Si la modal n'est pas ouverte, ne rien afficher
@@ -267,31 +359,24 @@ export default function CreateStatutMatrimonialModal({
         backgroundColor: "rgba(0,0,0,0.5)",
         backdropFilter: "blur(2px)",
       }}
-      role="dialog"
-      aria-labelledby="createStatutMatrimonialModalLabel"
-      aria-modal="true"
     >
       <div className="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
         <div className="modal-content border-0 shadow-lg">
           {/* En-tête de la modal */}
           <div
             className="modal-header text-white border-0 rounded-top-3"
-            style={styles.modalHeader}
+            style={{ background: colors.oskar.green }}
           >
             <div className="d-flex align-items-center">
               <div className="bg-white bg-opacity-20 rounded-circle p-2 me-3">
                 <FontAwesomeIcon icon={faHeart} className="fs-5" />
               </div>
               <div>
-                <h5
-                  className="modal-title mb-0 fw-bold"
-                  id="createStatutMatrimonialModalLabel"
-                >
+                <h5 className="modal-title mb-0 fw-bold">
                   Créer un Nouveau Statut Matrimonial
                 </h5>
                 <p className="mb-0 opacity-75 fs-14">
-                  Remplissez les informations pour ajouter un nouveau statut
-                  matrimonial
+                  Définissez un nouveau statut matrimonial
                 </p>
               </div>
             </div>
@@ -318,7 +403,7 @@ export default function CreateStatutMatrimonialModal({
                   <div className="flex-shrink-0">
                     <div
                       className="rounded-circle p-2"
-                      style={{ backgroundColor: `${colors.oskar.orange}20` }}
+                      style={{ backgroundColor: `${colors.oskar.green}20` }}
                     >
                       <FontAwesomeIcon
                         icon={faExclamationTriangle}
@@ -334,7 +419,7 @@ export default function CreateStatutMatrimonialModal({
                     type="button"
                     className="btn-close"
                     onClick={() => setError(null)}
-                    aria-label="Fermer l'alerte"
+                    aria-label="Close"
                   ></button>
                 </div>
               </div>
@@ -366,15 +451,16 @@ export default function CreateStatutMatrimonialModal({
                     type="button"
                     className="btn-close"
                     onClick={() => setSuccessMessage(null)}
-                    aria-label="Fermer l'alerte"
+                    aria-label="Close"
                   ></button>
                 </div>
               </div>
             )}
 
             <form onSubmit={handleSubmit}>
+              {/* Section 1: Informations de base */}
               <div
-                className="card border-0 shadow-sm"
+                className="card border-0 shadow-sm mb-4"
                 style={{ borderRadius: "12px" }}
               >
                 <div
@@ -384,19 +470,19 @@ export default function CreateStatutMatrimonialModal({
                   <div className="d-flex align-items-center">
                     <div
                       className="rounded-circle p-2 me-3"
-                      style={{ backgroundColor: `${colors.oskar.purple}15` }}
+                      style={{ backgroundColor: `${colors.oskar.green}15` }}
                     >
                       <FontAwesomeIcon
                         icon={faHeart}
-                        style={{ color: colors.oskar.purple }}
+                        style={{ color: colors.oskar.green }}
                       />
                     </div>
                     <div>
                       <h6
                         className="mb-0 fw-bold"
-                        style={{ color: colors.oskar.purple }}
+                        style={{ color: colors.oskar.green }}
                       >
-                        Informations du Statut Matrimonial
+                        Informations du Statut
                       </h6>
                       <small className="text-muted">
                         Les champs marqués d'un * sont obligatoires
@@ -407,18 +493,17 @@ export default function CreateStatutMatrimonialModal({
                 <div className="card-body p-4">
                   <div className="row g-3">
                     {/* Libellé */}
-                    <div className="col-md-8">
+                    <div className="col-md-6">
                       <label
                         htmlFor="libelle"
                         className="form-label fw-semibold"
                       >
-                        <FontAwesomeIcon icon={faTag} className="me-2" />
                         Libellé <span className="text-danger">*</span>
                       </label>
                       <div className="input-group">
                         <span className="input-group-text bg-light border-end-0">
                           <FontAwesomeIcon
-                            icon={faTag}
+                            icon={faHeart}
                             className="text-muted"
                           />
                         </span>
@@ -427,22 +512,14 @@ export default function CreateStatutMatrimonialModal({
                           id="libelle"
                           name="libelle"
                           className={`form-control border-start-0 ps-0 ${validationErrors.libelle ? "is-invalid" : ""}`}
-                          placeholder="Ex: Célibataire, Marié, Divorcé..."
+                          placeholder="Ex: Marié(e), Célibataire, Divorcé(e)..."
                           value={formData.libelle}
                           onChange={handleChange}
                           disabled={loading}
-                          aria-describedby={
-                            validationErrors.libelle
-                              ? "libelle-error"
-                              : undefined
-                          }
                         />
                       </div>
                       {validationErrors.libelle && (
-                        <div
-                          id="libelle-error"
-                          className="invalid-feedback d-block"
-                        >
+                        <div className="invalid-feedback d-block">
                           {validationErrors.libelle}
                         </div>
                       )}
@@ -451,99 +528,242 @@ export default function CreateStatutMatrimonialModal({
                       </small>
                     </div>
 
-                    {/* Statut */}
-                    <div className="col-md-4">
-                      <label
-                        htmlFor="statut"
-                        className="form-label fw-semibold"
-                      >
-                        <FontAwesomeIcon icon={faFlag} className="me-2" />
-                        Statut <span className="text-danger">*</span>
+                    {/* Code */}
+                    <div className="col-md-6">
+                      <label htmlFor="code" className="form-label fw-semibold">
+                        Code <span className="text-danger">*</span>
                       </label>
                       <div className="input-group">
                         <span className="input-group-text bg-light border-end-0">
                           <FontAwesomeIcon
-                            icon={faFlag}
+                            icon={faCode}
                             className="text-muted"
                           />
                         </span>
-                        <select
-                          id="statut"
-                          name="statut"
-                          className={`form-select border-start-0 ps-0 ${validationErrors.statut ? "is-invalid" : ""}`}
-                          value={formData.statut}
+                        <input
+                          type="text"
+                          id="code"
+                          name="code"
+                          className={`form-control border-start-0 ps-0 ${validationErrors.code ? "is-invalid" : ""}`}
+                          placeholder="Ex: MARIE, CELIBATAIRE, DIVORCE"
+                          value={formData.code}
                           onChange={handleChange}
                           disabled={loading}
-                          style={{ borderRadius: "0 8px 8px 0" }}
-                          aria-describedby={
-                            validationErrors.statut ? "statut-error" : undefined
+                        />
+                      </div>
+                      {validationErrors.code && (
+                        <div className="invalid-feedback d-block">
+                          {validationErrors.code}
+                        </div>
+                      )}
+                      <small className="text-muted">
+                        Code unique en majuscules
+                      </small>
+                    </div>
+                  </div>
+
+                  <div className="row g-3 mt-3">
+                    {/* Slug généré */}
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold">
+                        Slug généré
+                      </label>
+                      <div className="input-group">
+                        <span className="input-group-text bg-light border-end-0">
+                          <FontAwesomeIcon
+                            icon={faLanguage}
+                            className="text-muted"
+                          />
+                        </span>
+                        <input
+                          type="text"
+                          className="form-control border-start-0 ps-0 bg-light"
+                          value={generatedSlug}
+                          readOnly
+                          placeholder="Le slug sera généré automatiquement"
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-outline-secondary"
+                          onClick={copySlugToClipboard}
+                          disabled={!generatedSlug || loading}
+                        >
+                          <FontAwesomeIcon icon={faCopy} />
+                        </button>
+                      </div>
+                      <small className="text-muted">
+                        Généré automatiquement à partir du libellé
+                      </small>
+                    </div>
+
+                    {/* Ordre */}
+                    <div className="col-md-6">
+                      <label htmlFor="ordre" className="form-label fw-semibold">
+                        Ordre d'affichage
+                      </label>
+                      <div className="input-group">
+                        <span className="input-group-text bg-light border-end-0">
+                          <FontAwesomeIcon
+                            icon={faSortNumericDown}
+                            className="text-muted"
+                          />
+                        </span>
+                        <input
+                          type="number"
+                          id="ordre"
+                          name="ordre"
+                          className={`form-control border-start-0 ps-0 ${validationErrors.ordre ? "is-invalid" : ""}`}
+                          placeholder="0"
+                          value={formData.ordre}
+                          onChange={handleChange}
+                          min="0"
+                          disabled={loading}
+                        />
+                      </div>
+                      {validationErrors.ordre && (
+                        <div className="invalid-feedback d-block">
+                          {validationErrors.ordre}
+                        </div>
+                      )}
+                      <small className="text-muted">
+                        Ordre dans les listes déroulantes
+                      </small>
+                    </div>
+                  </div>
+
+                  <div className="row g-3 mt-3">
+                    {/* Description */}
+                    <div className="col-12">
+                      <label
+                        htmlFor="description"
+                        className="form-label fw-semibold"
+                      >
+                        Description
+                      </label>
+                      <textarea
+                        id="description"
+                        name="description"
+                        className={`form-control ${validationErrors.description ? "is-invalid" : ""}`}
+                        placeholder="Description du statut matrimonial (optionnel)"
+                        value={formData.description}
+                        onChange={handleChange}
+                        disabled={loading}
+                        rows={3}
+                        style={{ borderRadius: "8px" }}
+                      />
+                      <div className="d-flex justify-content-between mt-1">
+                        <small className="text-muted">
+                          Optionnel - Maximum 500 caractères
+                        </small>
+                        <small
+                          className={
+                            formData.description.length > 500
+                              ? "text-danger"
+                              : "text-muted"
                           }
                         >
-                          <option value="actif">Actif</option>
-                          <option value="inactif">Inactif</option>
-                        </select>
+                          {formData.description.length}/500
+                        </small>
                       </div>
-                      {validationErrors.statut && (
-                        <div
-                          id="statut-error"
-                          className="invalid-feedback d-block"
-                        >
-                          {validationErrors.statut}
+                      {validationErrors.description && (
+                        <div className="invalid-feedback d-block">
+                          {validationErrors.description}
                         </div>
                       )}
                     </div>
                   </div>
 
                   <div className="row g-3 mt-3">
-                    {/* Description */}
-                    <div className="col-md-12">
-                      <label
-                        htmlFor="description"
-                        className="form-label fw-semibold"
-                      >
-                        <FontAwesomeIcon icon={faInfoCircle} className="me-2" />
-                        Description
+                    {/* Statut */}
+                    <div className="col-md-6">
+                      <label className="form-label fw-semibold d-block">
+                        Statut
                       </label>
-                      <textarea
-                        id="description"
-                        name="description"
-                        className="form-control"
-                        rows={3}
-                        placeholder="Description du statut matrimonial (facultatif)"
-                        value={formData.description}
-                        onChange={handleChange}
-                        disabled={loading}
-                      />
-                      <small className="text-muted">
-                        Description optionnelle du statut
-                      </small>
-                    </div>
-                  </div>
-
-                  <div className="row g-3 mt-3">
-                    {/* Défaut */}
-                    <div className="col-md-12">
-                      <div className="form-check">
-                        <input
-                          type="checkbox"
-                          id="defaut"
-                          name="defaut"
-                          className="form-check-input"
-                          checked={formData.defaut}
-                          onChange={handleChange}
+                      <div className="btn-group w-100" role="group">
+                        <button
+                          type="button"
+                          className={`btn ${formData.statut === "actif" ? "btn-success" : "btn-outline-success"}`}
+                          onClick={() =>
+                            setFormData({ ...formData, statut: "actif" })
+                          }
                           disabled={loading}
-                        />
-                        <label
-                          htmlFor="defaut"
-                          className="form-check-label fw-semibold"
                         >
-                          <FontAwesomeIcon icon={faStar} className="me-2" />
-                          Définir comme statut par défaut
-                        </label>
-                        <small className="text-muted d-block mt-1">
-                          Ce statut sera utilisé par défaut pour les nouveaux
-                          utilisateurs
-                        </small>
+                          <FontAwesomeIcon
+                            icon={
+                              formData.statut === "actif"
+                                ? faToggleOn
+                                : faToggleOff
+                            }
+                            className="me-2"
+                          />
+                          Actif
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn ${formData.statut === "inactif" ? "btn-danger" : "btn-outline-danger"}`}
+                          onClick={() =>
+                            setFormData({ ...formData, statut: "inactif" })
+                          }
+                          disabled={loading}
+                        >
+                          <FontAwesomeIcon
+                            icon={
+                              formData.statut === "inactif"
+                                ? faToggleOn
+                                : faToggleOff
+                            }
+                            className="me-2"
+                          />
+                          Inactif
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Statut par défaut */}
+                    <div className="col-md-6">
+                      <div
+                        className="d-flex align-items-center justify-content-between p-3 rounded"
+                        style={{
+                          backgroundColor: `${colors.oskar.green}50`,
+                          marginTop: "28px",
+                        }}
+                      >
+                        <div className="d-flex align-items-center">
+                          <div
+                            className="rounded-circle p-2 me-3"
+                            style={{
+                              backgroundColor: `${colors.oskar.green}15`,
+                            }}
+                          >
+                            <FontAwesomeIcon
+                              icon={faCrown}
+                              style={{ color: colors.oskar.green }}
+                            />
+                          </div>
+                          <div>
+                            <label
+                              htmlFor="is_default"
+                              className="form-check-label fw-semibold"
+                            >
+                              Statut par défaut
+                            </label>
+                            <p className="mb-0 text-muted fs-12">
+                              Attribué automatiquement aux nouveaux utilisateurs
+                            </p>
+                          </div>
+                        </div>
+                        <div className="form-check form-switch">
+                          <input
+                            type="checkbox"
+                            id="is_default"
+                            name="is_default"
+                            className="form-check-input"
+                            style={{ width: "3em", height: "1.5em" }}
+                            checked={formData.is_default}
+                            onChange={handleChange}
+                            disabled={loading}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -560,7 +780,11 @@ export default function CreateStatutMatrimonialModal({
                 className="btn d-flex align-items-center gap-2"
                 onClick={handleReset}
                 disabled={loading}
-                style={styles.secondaryButton}
+                style={{
+                  background: colors.oskar.lightGrey,
+                  color: colors.oskar.purple,
+                  border: `1px solid ${colors.oskar.purple}`,
+                }}
                 onMouseEnter={(e) => {
                   Object.assign(
                     e.currentTarget.style,
@@ -571,7 +795,7 @@ export default function CreateStatutMatrimonialModal({
                   Object.assign(e.currentTarget.style, styles.secondaryButton);
                 }}
               >
-                <FontAwesomeIcon icon={faTimes} />
+                <FontAwesomeIcon icon={faRefresh} />
                 Réinitialiser
               </button>
 
@@ -604,7 +828,7 @@ export default function CreateStatutMatrimonialModal({
                   className="btn text-white d-flex align-items-center gap-2"
                   onClick={handleSubmit}
                   disabled={loading}
-                  style={styles.primaryButton}
+                  style={{ background: colors.oskar.green }}
                   onMouseEnter={(e) => {
                     Object.assign(
                       e.currentTarget.style,
@@ -658,6 +882,11 @@ export default function CreateStatutMatrimonialModal({
           box-shadow: 0 0 0 0.25rem ${colors.oskar.purple}25;
         }
 
+        .form-check-input:checked {
+          background-color: ${colors.oskar.purple};
+          border-color: ${colors.oskar.purple};
+        }
+
         .btn {
           border-radius: 8px !important;
           transition: all 0.3s ease;
@@ -666,6 +895,15 @@ export default function CreateStatutMatrimonialModal({
 
         .input-group-text {
           border-radius: 8px 0 0 8px !important;
+        }
+
+        .badge {
+          border-radius: 20px !important;
+          font-weight: 500;
+        }
+
+        .fs-12 {
+          font-size: 12px !important;
         }
 
         .fs-14 {
