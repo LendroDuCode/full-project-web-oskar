@@ -1,3 +1,4 @@
+// app/(front-office)/auth/LoginModal.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -21,6 +22,7 @@ import colors from "../../../shared/constants/colors";
 import { useRouter } from "next/navigation";
 import "./LoginModal.css";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
+import { LoadingSpinner } from "@/app/shared/components/ui/LoadingSpinner";
 
 interface LoginModalProps {
   visible: boolean;
@@ -187,7 +189,6 @@ const LoginModal: React.FC<LoginModalProps> = ({
   };
 
   const saveUserData = (userType: string, userData: any, tempToken: string) => {
-    // Sauvegarder dans localStorage
     const userToStore = {
       ...userData,
       type: userType,
@@ -198,10 +199,8 @@ const LoginModal: React.FC<LoginModalProps> = ({
     localStorage.setItem("oskar_token", tempToken || "");
     localStorage.setItem("oskar_user_type", userType);
 
-    // Sauvegarder dans les cookies
     saveAuthToCookies(userToStore, tempToken || "");
 
-    // Se souvenir de moi
     if (loginData.rememberMe) {
       localStorage.setItem("oskar_remember_email", loginData.email);
     } else {
@@ -235,7 +234,6 @@ const LoginModal: React.FC<LoginModalProps> = ({
     setLoginSuccess(false);
 
     try {
-      // Définir les types d'utilisateurs à essayer dans l'ordre (du plus spécifique au plus général)
       const userTypes = [
         {
           type: "admin",
@@ -284,11 +282,18 @@ const LoginModal: React.FC<LoginModalProps> = ({
           const data = await response.json();
 
           if (response.ok) {
-            // Connexion réussie
+            // ✅ CONNEXION RÉUSSIE
             const normalizedData = normalizeUserData(data);
             normalizedData.user.type = userType.type;
 
-            // Appeler le callback de succès
+            // 1. Sauvegarder les données
+            saveUserData(
+              userType.type,
+              normalizedData.user,
+              normalizedData.temp_token || normalizedData.tempToken || "",
+            );
+
+            // 2. Appeler le callback de succès
             onLoginSuccess({
               uuid: normalizedData.user.uuid,
               email: normalizedData.user.email,
@@ -301,24 +306,36 @@ const LoginModal: React.FC<LoginModalProps> = ({
               temp_token: normalizedData.temp_token || normalizedData.tempToken,
             });
 
-            // Sauvegarder les données utilisateur
-            saveUserData(
-              userType.type,
-              normalizedData.user,
-              normalizedData.temp_token || normalizedData.tempToken || "",
-            );
+            // 3. Dispatcher TOUS les événements pour forcer le rechargement
+            const events = [
+              new CustomEvent("auth-state-changed", {
+                detail: { isLoggedIn: true, user: normalizedData.user },
+              }),
+              new CustomEvent("user-login-success", {
+                detail: { user: normalizedData.user },
+              }),
+              new CustomEvent("force-header-update"),
+            ];
 
-            // Afficher le message de succès
-            const successMessage = `Connexion réussie en tant que ${userType.type} ! Redirection dans 2 secondes...`;
-            setSuccess(successMessage);
+            events.forEach((event) => window.dispatchEvent(event));
+
+            // 4. Afficher le message de succès
+            setSuccess(
+              `Connexion réussie en tant que ${userType.type} ! Redirection...`,
+            );
             setLoginSuccess(true);
 
-            // Réinitialiser le formulaire
+            // 5. Réinitialiser le formulaire
             resetForm();
+
+            // 6. Attendre 1.5 secondes puis RECHARGER LA PAGE
+            setTimeout(() => {
+              onHide(); // Fermer le modal
+              window.location.reload(); // RECHARGEMENT COMPLET
+            }, 1500);
 
             return;
           } else {
-            // Sauvegarder l'erreur pour l'afficher à la fin si tout échoue
             lastError = data.message || `Erreur ${response.status}`;
             console.log(`Échec ${userType.type}: ${lastError}`);
           }
@@ -328,7 +345,6 @@ const LoginModal: React.FC<LoginModalProps> = ({
         }
       }
 
-      // Si toutes les tentatives échouent
       if (
         lastError &&
         (lastError.includes("converti") || lastError.includes("vendeur"))
@@ -362,14 +378,12 @@ const LoginModal: React.FC<LoginModalProps> = ({
         break;
     }
 
-    // Pour la connexion sociale, on redirige vers l'endpoint OAuth
     window.location.href = endpoint;
   };
 
   const handleForgotPassword = () => {
-    // Déterminer le type d'utilisateur en essayant de deviner d'après l'email
     const emailLower = loginData.email?.toLowerCase() || "";
-    let endpoint = API_ENDPOINTS.AUTH.UTILISATEUR.FORGOT_PASSWORD; // Par défaut
+    let endpoint = API_ENDPOINTS.AUTH.UTILISATEUR.FORGOT_PASSWORD;
 
     if (
       emailLower.includes("admin@sonec") ||
@@ -380,7 +394,7 @@ const LoginModal: React.FC<LoginModalProps> = ({
       emailLower.includes("@agent.com") ||
       emailLower.includes("agent")
     ) {
-      endpoint = API_ENDPOINTS.AUTH.AGENT.LOGIN; // Note: Vérifiez si cet endpoint existe
+      endpoint = API_ENDPOINTS.AUTH.AGENT.LOGIN;
     } else if (
       emailLower.includes("@sonecafrica.com") ||
       emailLower.includes("vendeur")
@@ -388,10 +402,6 @@ const LoginModal: React.FC<LoginModalProps> = ({
       endpoint = API_ENDPOINTS.AUTH.VENDEUR.FORGOT_PASSWORD;
     }
 
-    // Ici, vous pouvez ouvrir un modal de mot de passe oublié
-    // ou rediriger vers une page dédiée
-    console.log(`Redirection vers: ${endpoint} pour réinitialisation`);
-    // Pour l'instant, juste un alert
     alert(`Fonctionnalité de réinitialisation sera implémentée prochainement`);
   };
 
@@ -401,12 +411,10 @@ const LoginModal: React.FC<LoginModalProps> = ({
     }
   };
 
-  // === RETOUR CONDITIONNEL ===
   if (!visible || !isMounted) {
     return null;
   }
 
-  // === RENDU DU MODAL ===
   return (
     <>
       {/* Overlay */}
@@ -439,7 +447,7 @@ const LoginModal: React.FC<LoginModalProps> = ({
           style={{ maxWidth: "900px" }}
         >
           <div className="modal-content rounded-3 shadow-lg border-0 overflow-hidden">
-            {/* Close Button - Une seule icône X */}
+            {/* Close Button */}
             <button
               type="button"
               className="btn-close position-absolute"
@@ -641,7 +649,6 @@ const LoginModal: React.FC<LoginModalProps> = ({
                         backgroundColor: "#d1fae5",
                         borderColor: "#10b981",
                         color: "#065f46",
-                        animation: loginSuccess ? "pulse 1s infinite" : "none",
                       }}
                     >
                       <div className="d-flex align-items-center">
@@ -821,27 +828,6 @@ const LoginModal: React.FC<LoginModalProps> = ({
                         </label>
                       </div>
 
-                      {/* Indicateur de rôle détecté */}
-                      {loginData.email && (
-                        <div
-                          className="alert alert-info alert-dismissible fade show mb-4"
-                          role="alert"
-                        >
-                          <small>
-                            <i className="fa-solid fa-info-circle me-2"></i>
-                            Le système détectera automatiquement votre type de
-                            compte
-                            <br />
-                            <span
-                              className="text-muted"
-                              style={{ fontSize: "0.75rem" }}
-                            >
-                              (Admin, Agent, Vendeur ou Utilisateur)
-                            </span>
-                          </small>
-                        </div>
-                      )}
-
                       {/* Bouton de connexion */}
                       <button
                         type="submit"
@@ -858,11 +844,8 @@ const LoginModal: React.FC<LoginModalProps> = ({
                       >
                         {loading ? (
                           <>
-                            <span
-                              className="spinner-border spinner-border-sm me-2"
-                              role="status"
-                            ></span>
-                            Connexion en cours...
+                            <LoadingSpinner size="sm" color="white" />
+                            <span className="ms-2">Connexion en cours...</span>
                           </>
                         ) : (
                           <>
@@ -893,7 +876,7 @@ const LoginModal: React.FC<LoginModalProps> = ({
                     </form>
                   )}
 
-                  {/* Sécurité - Toujours visible */}
+                  {/* Sécurité */}
                   {!loginSuccess && (
                     <div className="mt-4 pt-3 border-top">
                       <div className="d-flex align-items-center gap-2">
@@ -917,22 +900,9 @@ const LoginModal: React.FC<LoginModalProps> = ({
       </div>
 
       <style jsx>{`
-        @keyframes pulse {
-          0% {
-            opacity: 1;
-          }
-          50% {
-            opacity: 0.7;
-          }
-          100% {
-            opacity: 1;
-          }
-        }
-
         .progress-bar {
           animation: shrink 2s linear forwards;
         }
-
         @keyframes shrink {
           from {
             width: 100%;

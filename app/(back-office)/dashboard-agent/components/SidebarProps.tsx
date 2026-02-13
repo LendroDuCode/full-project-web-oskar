@@ -158,11 +158,13 @@ export default function SidebarModPanel({
           icon: "fa-list text-info",
         },
         // AJOUT DE LA SOUS-CATÉGORIE FAVORIS
+        /*
         {
           label: "Favoris par catégorie",
           href: "/dashboard-agent/categories/sous-categories",
           icon: "fa-layer-group text-info",
         },
+        */
       ],
     },
     {

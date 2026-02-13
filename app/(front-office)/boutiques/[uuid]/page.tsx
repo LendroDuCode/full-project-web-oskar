@@ -1,14 +1,14 @@
-// components/BoutiquePremium.tsx
+// app/(front-office)/boutiques/[uuid]/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faStore,
   faCalendar,
   faBox,
   faStar,
-  faUsers,
   faShoppingBag,
   faInfoCircle,
   faTags,
@@ -18,7 +18,6 @@ import {
   faLock,
   faRefresh,
   faExclamationTriangle,
-  faSpinner,
   faHeart,
   faShare,
   faShoppingCart,
@@ -26,28 +25,20 @@ import {
   faChartLine,
   faMoneyBillWave,
   faThumbsUp,
-  faComment,
   faMapMarkerAlt,
   faPhone,
   faEnvelope,
-  faGlobe,
   faCreditCard,
   faTruck,
   faShieldAlt,
   faSync,
-  faCrown,
-  faGem,
   faAward,
-  faFire,
-  faBolt,
   faRocket,
-  faMagic,
   faLeaf,
-  faSeedling,
-  faTree,
   faRecycle,
   faGem as faDiamond,
 } from "@fortawesome/free-solid-svg-icons";
+import { LoadingSpinner } from "@/app/shared/components/ui/LoadingSpinner";
 
 // Types basés sur votre réponse API
 interface TypeBoutique {
@@ -59,6 +50,13 @@ interface TypeBoutique {
   peut_vendre_biens: boolean;
   image: string;
   statut: string;
+}
+
+interface Categorie {
+  uuid: string;
+  libelle: string;
+  type: string;
+  image: string;
 }
 
 interface Produit {
@@ -76,12 +74,7 @@ interface Produit {
   nombre_avis: number;
   estPublie: boolean;
   estBloque: boolean;
-  categorie: {
-    uuid: string;
-    libelle: string;
-    type: string;
-    image: string;
-  };
+  categorie: Categorie | null;
 }
 
 interface Boutique {
@@ -102,7 +95,8 @@ interface Boutique {
   conditions_utilisation?: string;
 }
 
-const BoutiquePremium = () => {
+export default function BoutiquePremium() {
+  const router = useRouter();
   const [boutique, setBoutique] = useState<Boutique | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -149,7 +143,6 @@ const BoutiquePremium = () => {
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 50);
 
-      // Animation d'apparition
       const scrollPosition = window.scrollY + window.innerHeight;
       const elementPosition =
         document.getElementById("stats-cards")?.offsetTop || 0;
@@ -160,7 +153,6 @@ const BoutiquePremium = () => {
 
     window.addEventListener("scroll", handleScroll);
 
-    // Trigger initial visibility
     setTimeout(() => {
       setIsVisible(true);
     }, 300);
@@ -198,6 +190,11 @@ const BoutiquePremium = () => {
     }
   };
 
+  // ✅ Fonction pour rediriger vers la page détail produit
+  const handleViewProduct = (produitUuid: string) => {
+    router.push(`/produits/${produitUuid}`);
+  };
+
   // Fonction pour formater la date
   const formatDate = (dateString: string) => {
     try {
@@ -227,6 +224,14 @@ const BoutiquePremium = () => {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(numericPrice);
+  };
+
+  // ✅ Fonction pour obtenir la catégorie de manière sécurisée
+  const getCategorieLibelle = (produit: Produit): string => {
+    if (produit.categorie && produit.categorie.libelle) {
+      return produit.categorie.libelle;
+    }
+    return "Non catégorisé";
   };
 
   // Calcul des statistiques
@@ -314,21 +319,11 @@ const BoutiquePremium = () => {
   if (loading) {
     return (
       <div className="min-vh-100 d-flex align-items-center justify-content-center bg-gradient-eco">
-        <div className="text-center">
-          <div
-            className="spinner-border text-white mb-4 animate-spin"
-            style={{ width: "4rem", height: "4rem", borderWidth: "0.3rem" }}
-            role="status"
-          >
-            <span className="visually-hidden">Chargement...</span>
-          </div>
-          <h2 className="text-white mt-4 fw-light animate-fade-in">
-            Chargement de la boutique...
-          </h2>
-          <p className="text-white-50 animate-fade-in-delay">
-            Préparation de votre expérience shopping
-          </p>
-        </div>
+        <LoadingSpinner
+          size="lg"
+          text="Chargement de la boutique..."
+          fullPage
+        />
       </div>
     );
   }
@@ -381,40 +376,10 @@ const BoutiquePremium = () => {
 
   return (
     <>
-      {/* Navigation */}
-      <nav
-        className={`navbar navbar-expand-lg navbar-light bg-white shadow-sm fixed-top transition-all ${isScrolled ? "py-2" : "py-3"} animate-slide-down`}
-        style={{ transition: "all 0.3s ease" }}
-      >
-        <div className="container">
-          <a className="navbar-brand fw-bold text-success" href="#">
-            <FontAwesomeIcon icon={faLeaf} className="me-2" />
-            <span className="gradient-text">Marketplace</span>
-          </a>
-
-          <div className="d-flex align-items-center">
-            <button
-              className="btn btn-outline-success me-3 hover-rotate"
-              onClick={handleRefresh}
-              disabled={refreshing}
-            >
-              <FontAwesomeIcon icon={faRefresh} spin={refreshing} />
-            </button>
-            <button
-              className="btn btn-success hover-scale"
-              onClick={shareBoutique}
-            >
-              <FontAwesomeIcon icon={faShare} className="me-2" />
-              Partager
-            </button>
-          </div>
-        </div>
-      </nav>
-
       {/* Hero Section */}
       <div
         className="position-relative overflow-hidden eco-hero animate-fade-in"
-        style={{ height: "500px", marginTop: "76px" }}
+        style={{ height: "500px" }}
       >
         {/* Animated background elements */}
         <div className="floating-leaves">
@@ -776,7 +741,7 @@ const BoutiquePremium = () => {
                 <div
                   className={`tab-content ${activeTab === "produits" ? "animate-fade-in" : "d-none"}`}
                 >
-                  {/* Produits Tab */}
+                  {/* Produits Tab - AVEC REDIRECTION */}
                   {activeTab === "produits" && (
                     <div>
                       <div className="d-flex justify-content-between align-items-center mb-4">
@@ -869,7 +834,7 @@ const BoutiquePremium = () => {
                                 <div className="card-body">
                                   <div className="mb-3">
                                     <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">
-                                      {produit.categorie.libelle}
+                                      {getCategorieLibelle(produit)}
                                     </span>
                                   </div>
 
@@ -919,15 +884,15 @@ const BoutiquePremium = () => {
                                     </div>
 
                                     <div className="d-flex gap-2">
+                                      {/* ✅ BOUTON VOIR - REDIRECTION VERS PAGE PRODUIT */}
                                       <button
                                         className="btn btn-outline-success btn-sm hover-scale"
                                         onClick={() =>
-                                          alert(
-                                            `Voir détails: ${produit.libelle}`,
-                                          )
+                                          handleViewProduct(produit.uuid)
                                         }
                                       >
                                         <FontAwesomeIcon icon={faEye} />
+                                        <span className="ms-1">Voir</span>
                                       </button>
                                       <button
                                         className="btn btn-success btn-sm hover-scale"
@@ -1126,109 +1091,6 @@ const BoutiquePremium = () => {
         </div>
       </div>
 
-      {/* Footer */}
-      <footer className="bg-dark text-white py-5 mt-5">
-        <div className="container">
-          <div className="row">
-            <div className="col-lg-4 mb-4">
-              <h5 className="fw-bold mb-4">
-                <FontAwesomeIcon icon={faLeaf} className="text-success me-2" />
-                {boutique.nom}
-              </h5>
-              <p className="text-white-50">
-                Boutique éco-responsable offrant les meilleurs produits depuis{" "}
-                {new Date(boutique.created_at).getFullYear()}.
-              </p>
-            </div>
-            <div className="col-lg-2 col-md-4 mb-4">
-              <h6 className="fw-bold mb-4">Navigation</h6>
-              <ul className="list-unstyled">
-                <li>
-                  <a
-                    href="#"
-                    className="text-white-50 text-decoration-none hover-success"
-                  >
-                    Produits
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="#"
-                    className="text-white-50 text-decoration-none hover-success"
-                  >
-                    Catégories
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="#"
-                    className="text-white-50 text-decoration-none hover-success"
-                  >
-                    Promotions
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href="#"
-                    className="text-white-50 text-decoration-none hover-success"
-                  >
-                    Nouveautés
-                  </a>
-                </li>
-              </ul>
-            </div>
-            <div className="col-lg-3 col-md-4 mb-4">
-              <h6 className="fw-bold mb-4">Contact</h6>
-              <ul className="list-unstyled">
-                <li className="mb-2">
-                  <FontAwesomeIcon
-                    icon={faMapMarkerAlt}
-                    className="text-success me-2"
-                  />
-                  <span className="text-white-50">Localisation</span>
-                </li>
-                <li className="mb-2">
-                  <FontAwesomeIcon
-                    icon={faPhone}
-                    className="text-success me-2"
-                  />
-                  <span className="text-white-50">Contact</span>
-                </li>
-                <li className="mb-2">
-                  <FontAwesomeIcon
-                    icon={faEnvelope}
-                    className="text-success me-2"
-                  />
-                  <span className="text-white-50">Email</span>
-                </li>
-              </ul>
-            </div>
-            <div className="col-lg-3 col-md-4 mb-4">
-              <h6 className="fw-bold mb-4">Sécurité</h6>
-              <div className="d-flex gap-3">
-                <FontAwesomeIcon
-                  icon={faShieldAlt}
-                  className="text-success fs-4 eco-pulse"
-                />
-                <FontAwesomeIcon
-                  icon={faCreditCard}
-                  className="text-success fs-4"
-                />
-                <FontAwesomeIcon icon={faLock} className="text-success fs-4" />
-              </div>
-            </div>
-          </div>
-          <hr className="bg-white-20 my-4" />
-          <div className="text-center text-white-50">
-            <p className="mb-0">
-              &copy; {new Date().getFullYear()} {boutique.nom}. Tous droits
-              réservés.
-            </p>
-          </div>
-        </div>
-      </footer>
-
-      {/* Styles */}
       <style jsx>{`
         .bg-gradient-eco {
           background: linear-gradient(135deg, #10b981 0%, #059669 100%);
@@ -1657,6 +1519,4 @@ const BoutiquePremium = () => {
       `}</style>
     </>
   );
-};
-
-export default BoutiquePremium;
+}

@@ -1,8 +1,10 @@
 // src/pages/Home.tsx
+"use client";
+
 import React from "react";
+import { SearchProvider } from "./contexts/SearchContext";
 import HeroSearch from "./components/HeroSearch";
 import Breadcrumb from "./components/Breadcrumb";
-import FilterStatsBar from "./components/FilterStatsBar";
 import MainContent from "./components/MainContent";
 import QuickStats from "./components/QuickStats";
 import CategoriesShowcase from "./components/CategoriesShowcase";
@@ -14,20 +16,20 @@ import HeroCarousel from "./components/HeroCarousel";
 
 const Home: React.FC = () => {
   return (
-    <div className="bg-oskar-light-grey min-h-screen">
-      {/* Tu peux ajouter d'autres sections au-dessus ou en dessous */}
-      <HeroSearch />
-      <HeroCarousel />
-      <Breadcrumb />
-      <MainContent />
-      <QuickStats />
-      <CategoriesShowcase />
-      <WhyOskar />
-      <CTABanner />
-      <Testimonials />
-      <AppDownload />
-      {/* Exemple de zone de contenu supplémentaire */}
-    </div>
+    <SearchProvider>
+      <div className="bg-oskar-light-grey min-h-screen">
+        <HeroSearch />
+        <HeroCarousel />
+        <Breadcrumb />
+        <MainContent />
+        <QuickStats />
+        <CategoriesShowcase />
+        <WhyOskar />
+        <CTABanner />
+        <Testimonials />
+        <AppDownload />
+      </div>
+    </SearchProvider>
   );
 };
 

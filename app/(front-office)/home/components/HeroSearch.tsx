@@ -1,9 +1,12 @@
-// HeroSearch.tsx - VERSION RESPONSIVE COMPLÈTE (MODE CLAIR)
+// app/(front-office)/home/components/HeroSearch.tsx
 "use client";
 
 import { useState, useEffect, useRef } from "react";
 import colors from "../../../shared/constants/colors";
 import { useRouter } from "next/navigation";
+import { useSearch } from "../contexts/SearchContext";
+import { api } from "@/lib/api-client";
+import { API_ENDPOINTS } from "@/config/api-endpoints";
 
 interface HeroSearchProps {
   initialQuery?: string;
@@ -12,31 +15,78 @@ interface HeroSearchProps {
   compactMode?: boolean;
 }
 
+interface Category {
+  uuid: string;
+  libelle: string;
+  slug: string;
+  type: string;
+  description?: string;
+  image?: string;
+  enfants?: Category[];
+  path?: string | null;
+  is_deleted?: boolean;
+  deleted_at?: string | null;
+  id?: number;
+}
+
+interface SubCategory {
+  uuid: string;
+  libelle: string;
+  slug: string;
+  type: string;
+  description?: string;
+  image?: string;
+  path?: string | null;
+  depth?: number;
+  parent?: Category;
+  counts?: {
+    produits: number;
+    dons: number;
+    echanges: number;
+    annonces: number;
+    total: number;
+  };
+}
+
+interface CategoryWithSubs {
+  category: Category;
+  subCategories: SubCategory[];
+}
+
 const HeroSearch: React.FC<HeroSearchProps> = ({
   initialQuery = "",
   onSearch,
   showPopularSearches = true,
   compactMode = false,
 }) => {
-  const [searchQuery, setSearchQuery] = useState(initialQuery);
-  const [activeTag, setActiveTag] = useState<string | null>(null);
+  const router = useRouter();
+
+  const {
+    searchQuery,
+    setSearchQuery,
+    selectedCategory,
+    setSelectedCategory,
+    selectedSousCategorie,
+    setSelectedSousCategorie,
+    selectedSousCategorieLibelle,
+    setSelectedSousCategorieLibelle,
+    selectedLocation,
+    setSelectedLocation,
+    maxPrice,
+    setMaxPrice,
+    activeTag,
+    setActiveTag,
+  } = useSearch();
+
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [categoriesWithSubs, setCategoriesWithSubs] = useState<
+    CategoryWithSubs[]
+  >([]);
+  const [loadingSubs, setLoadingSubs] = useState(true);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const router = useRouter();
-
-  const popularTags = [
-    { name: "Téléphones", icon: "fa-mobile-alt", category: "electronique" },
-    { name: "Ordinateurs", icon: "fa-laptop", category: "electronique" },
-    { name: "Meubles", icon: "fa-couch", category: "maison" },
-    { name: "Vêtements", icon: "fa-tshirt", category: "mode" },
-    { name: "Livres", icon: "fa-book", category: "education" },
-    { name: "Véhicules", icon: "fa-car", category: "vehicules" },
-    { name: "Immobilier", icon: "fa-home", category: "immobilier" },
-    { name: "Services", icon: "fa-tools", category: "services" },
-  ];
 
   const suggestedSearches = [
     "iPhone 13 pro max",
@@ -46,6 +96,103 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
     "Roman policier",
     "Climatiseur portable",
   ];
+
+  const categories = [
+    { value: "", label: "Toutes les catégories" },
+    { value: "electronique", label: "Électronique" },
+    { value: "mode", label: "Mode" },
+    { value: "maison", label: "Maison" },
+    { value: "vehicules", label: "Véhicules" },
+    { value: "education", label: "Éducation" },
+    { value: "services", label: "Services" },
+  ];
+
+  const locations = [
+    { value: "", label: "Toutes les villes" },
+    { value: "abidjan", label: "Abidjan" },
+    { value: "bouake", label: "Bouaké" },
+    { value: "daloa", label: "Daloa" },
+    { value: "yamassoukro", label: "Yamoussoukro" },
+  ];
+
+  const priceRanges = [
+    { value: "", label: "Prix max" },
+    { value: "10000", label: "10 000 FCFA" },
+    { value: "25000", label: "25 000 FCFA" },
+    { value: "50000", label: "50 000 FCFA" },
+    { value: "100000", label: "100 000 FCFA" },
+    { value: "200000", label: "200 000 FCFA" },
+  ];
+
+  // ============================================
+  // CHARGEMENT DES SOUS-CATÉGORIES DYNAMIQUES
+  // ============================================
+  useEffect(() => {
+    const fetchAllSubCategories = async () => {
+      try {
+        setLoadingSubs(true);
+        console.log("🟡 HeroSearch - Chargement des sous-catégories...");
+
+        const categoriesResponse = await api.get(API_ENDPOINTS.CATEGORIES.LIST);
+        const activeCategories = categoriesResponse.filter(
+          (c: Category) => !c.is_deleted && c.deleted_at === null,
+        );
+
+        const mainCategories = activeCategories
+          .filter((c: Category) => !c.path || c.path === null || c.path === "")
+          .slice(0, 4);
+
+        const categoriesData: CategoryWithSubs[] = [];
+
+        for (const category of mainCategories) {
+          try {
+            const endpoint = API_ENDPOINTS.CATEGORIES.LISTE_SOUS_CATEGORIE(
+              category.uuid,
+            );
+            console.log(`🟡 Fetching subcategories for: ${category.libelle}`);
+
+            const response = await api.get(endpoint);
+
+            let subCategories: SubCategory[] = [];
+
+            if (response.success && Array.isArray(response.data)) {
+              subCategories = response.data;
+            } else if (Array.isArray(response)) {
+              subCategories = response;
+            }
+
+            categoriesData.push({
+              category,
+              subCategories: subCategories.slice(0, 2),
+            });
+
+            console.log(
+              `✅ ${category.libelle}: ${subCategories.length} sous-catégories`,
+            );
+          } catch (error) {
+            console.error(
+              `🔴 Error fetching subcategories for ${category.libelle}:`,
+              error,
+            );
+            categoriesData.push({
+              category,
+              subCategories: [],
+            });
+          }
+        }
+
+        setCategoriesWithSubs(categoriesData);
+      } catch (error) {
+        console.error("🔴 HeroSearch - Error loading data:", error);
+      } finally {
+        setLoadingSubs(false);
+      }
+    };
+
+    if (showPopularSearches) {
+      fetchAllSubCategories();
+    }
+  }, [showPopularSearches]);
 
   // Détection responsive
   useEffect(() => {
@@ -61,6 +208,13 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
     return () => window.removeEventListener("resize", checkScreenSize);
   }, []);
 
+  // Initialiser la recherche si initialQuery est fourni
+  useEffect(() => {
+    if (initialQuery) {
+      setSearchQuery(initialQuery);
+    }
+  }, [initialQuery, setSearchQuery]);
+
   // Focus sur l'input au chargement sur desktop
   useEffect(() => {
     if (!isMobile && searchInputRef.current) {
@@ -72,34 +226,53 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
 
   const handleSearch = () => {
     const query = searchQuery.trim();
-    if (!query) return;
 
     if (onSearch) {
       onSearch(query);
     } else {
-      // Navigation par défaut
-      router.push(`/recherche?q=${encodeURIComponent(query)}`);
+      const params = new URLSearchParams();
+      if (query) params.append("q", query);
+      if (selectedCategory) params.append("categorie", selectedCategory);
+      if (selectedSousCategorie)
+        params.append("sous_categorie", selectedSousCategorie);
+      if (selectedLocation) params.append("localisation", selectedLocation);
+      if (maxPrice) params.append("prix_max", maxPrice);
+
+      router.push(`/recherche?${params.toString()}`);
     }
 
     setShowSuggestions(false);
-
-    // Log analytics (optionnel)
-    console.log("Recherche effectuée:", query);
+    console.log("Recherche effectuée:", {
+      query,
+      selectedCategory,
+      selectedSousCategorie,
+      selectedLocation,
+      maxPrice,
+    });
   };
 
-  const handleTagClick = (tag: string) => {
-    setSearchQuery(tag);
-    setActiveTag(tag);
+  const handleSubCategoryClick = (
+    subCategory: SubCategory,
+    categoryName: string,
+  ) => {
+    setSearchQuery(subCategory.libelle);
+    setSelectedSousCategorie(subCategory.uuid);
+    setSelectedSousCategorieLibelle(subCategory.libelle);
+    setActiveTag(subCategory.libelle);
 
-    // Recherche immédiate
-    if (onSearch) {
-      onSearch(tag);
-    } else {
-      router.push(
-        `/recherche?q=${encodeURIComponent(tag)}&categorie=populaire`,
-      );
+    let categoryValue = "";
+    if (categoryName.includes("Électronique")) categoryValue = "electronique";
+    else if (categoryName.includes("Vêtements")) categoryValue = "mode";
+    else if (categoryName.includes("Éducation")) categoryValue = "education";
+    else if (categoryName.includes("Services")) categoryValue = "services";
+    else if (categoryName.includes("Maison")) categoryValue = "maison";
+    else if (categoryName.includes("Véhicules")) categoryValue = "vehicules";
+
+    if (categoryValue) {
+      setSelectedCategory(categoryValue);
     }
 
+    handleSearch();
     setShowSuggestions(false);
   };
 
@@ -111,6 +284,7 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
 
   const handleSuggestionClick = (suggestion: string) => {
     setSearchQuery(suggestion);
+    setActiveTag(suggestion);
     setInputFocused(false);
     handleSearch();
   };
@@ -121,6 +295,16 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
     searchInputRef.current?.focus();
   };
 
+  const clearAllFilters = () => {
+    setSearchQuery("");
+    setSelectedCategory("");
+    setSelectedSousCategorie("");
+    setSelectedSousCategorieLibelle("");
+    setSelectedLocation("");
+    setMaxPrice("");
+    setActiveTag(null);
+  };
+
   const getPlaceholder = () => {
     if (isMobile) {
       return "Rechercher articles, services...";
@@ -129,6 +313,48 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
       return "Rechercher des articles, services ou catégories...";
     }
     return "Rechercher des articles, services, catégories ou localisations...";
+  };
+
+  const hasActiveFilters = !!(
+    searchQuery ||
+    selectedCategory ||
+    selectedSousCategorie ||
+    selectedLocation ||
+    maxPrice
+  );
+
+  const getCategoryIcon = (categoryType: string): string => {
+    switch (categoryType) {
+      case "Électronique":
+        return "fa-laptop";
+      case "Vêtements & Chaussures":
+        return "fa-tshirt";
+      case "Don & Échange":
+        return "fa-gift";
+      case "Éducation & Culture":
+        return "fa-book";
+      case "Services de proximité":
+        return "fa-hand-holding-heart";
+      default:
+        return "fa-tag";
+    }
+  };
+
+  const getCategoryColor = (categoryType: string): string => {
+    switch (categoryType) {
+      case "Électronique":
+        return "#2196F3";
+      case "Vêtements & Chaussures":
+        return colors.oskar.green;
+      case "Don & Échange":
+        return "#FF9800";
+      case "Éducation & Culture":
+        return "#9C27B0";
+      case "Services de proximité":
+        return "#FF5722";
+      default:
+        return colors.oskar.grey;
+    }
   };
 
   return (
@@ -147,7 +373,7 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
             maxWidth: compactMode ? "100%" : "clamp(100%, 90vw, 900px)",
           }}
         >
-          {/* Titre - Conditionnel selon le mode */}
+          {/* Titre */}
           {!compactMode && (
             <h1
               className="text-center mb-4 fw-bold"
@@ -204,8 +430,8 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
                 className="form-control border-2 w-100"
                 style={{
                   padding: isMobile
-                    ? "0.875rem 3.5rem 0.875rem 1rem"
-                    : "clamp(0.875rem, 2vw, 1rem) 4rem clamp(0.875rem, 2vw, 1rem) 1.25rem",
+                    ? "0.875rem 3.5rem 0.875rem 1.25rem"
+                    : "clamp(0.875rem, 2vw, 1rem) 8rem clamp(0.875rem, 2vw, 1rem) 1.5rem",
                   borderRadius: "clamp(10px, 2vw, 12px)",
                   borderColor: inputFocused
                     ? colors.oskar.green
@@ -237,6 +463,8 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
                   minWidth: isMobile ? "auto" : "120px",
                   marginRight: "0.5rem",
                   boxShadow: "0 4px 12px rgba(76, 175, 80, 0.25)",
+                  right: isMobile ? "0" : "0",
+                  zIndex: 5,
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.backgroundColor = colors.oskar.green;
@@ -278,22 +506,23 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
               {searchQuery && (
                 <button
                   onClick={clearSearch}
-                  className="btn btn-link position-absolute top-50 end-100 translate-middle-y me-3"
+                  className="btn position-absolute top-50 translate-middle-y d-flex align-items-center justify-content-center"
                   style={{
                     color: colors.oskar.grey,
                     fontSize: "0.875rem",
                     padding: "0.25rem",
-                    minWidth: "32px",
-                    minHeight: "32px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
+                    right: isMobile ? "70px" : "140px",
+                    width: "32px",
+                    height: "32px",
                     backgroundColor: "transparent",
+                    transform: "translateY(-50%)",
+                    border: "none",
+                    zIndex: 10,
                   }}
                   aria-label="Effacer la recherche"
                   type="button"
                 >
-                  <i className="fa-solid fa-times"></i>
+                  <i className="fa-solid fa-times-circle"></i>
                 </button>
               )}
             </div>
@@ -349,7 +578,616 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
             )}
           </div>
 
-          {/* Tags de recherche rapide */}
+          {/* FILTRES AVANCÉS - DESKTOP */}
+          {!compactMode && !isMobile && (
+            <div className="mt-3 mb-4">
+              <div className="d-flex flex-wrap justify-content-center align-items-stretch gap-3">
+                {/* CATÉGORIE - CORRIGÉ */}
+                <div
+                  className="position-relative"
+                  style={{ minWidth: "220px", flex: "0 1 auto" }}
+                >
+                  <div className="position-relative">
+                    <select
+                      className="form-select"
+                      style={{
+                        width: "100%",
+                        padding: "0.75rem 2.5rem 0.75rem 2.5rem",
+                        borderColor: selectedCategory
+                          ? colors.oskar.green
+                          : colors.oskar.lightGrey,
+                        fontSize: "0.95rem",
+                        backgroundColor: "white",
+                        color: selectedCategory
+                          ? colors.oskar.black
+                          : "#6c757d",
+                        appearance: "none",
+                        cursor: "pointer",
+                        borderWidth: "1.5px",
+                        transition: "all 0.2s",
+                        borderRadius: "10px",
+                        fontWeight: selectedCategory ? "500" : "400",
+                        height: "54px",
+                        lineHeight: "1.5",
+                      }}
+                      value={selectedCategory}
+                      onChange={(e) => {
+                        setSelectedCategory(e.target.value);
+                        setSelectedSousCategorie("");
+                        setSelectedSousCategorieLibelle("");
+                      }}
+                    >
+                      {categories.map((cat) => (
+                        <option key={cat.value} value={cat.value}>
+                          {cat.label}
+                        </option>
+                      ))}
+                    </select>
+
+                    {/* Icône gauche - Catégorie */}
+                    <div
+                      className="position-absolute top-50 start-0 translate-middle-y"
+                      style={{
+                        color: selectedCategory
+                          ? colors.oskar.green
+                          : colors.oskar.grey,
+                        left: "15px",
+                        pointerEvents: "none",
+                        zIndex: 2,
+                      }}
+                    >
+                      <i className="fa-solid fa-tag"></i>
+                    </div>
+
+                    {/* Icône droite - Flèche */}
+                    <div
+                      className="position-absolute top-50 end-0 translate-middle-y pe-3"
+                      style={{
+                        color: colors.oskar.green,
+                        pointerEvents: "none",
+                        zIndex: 2,
+                        right: "10px",
+                      }}
+                    >
+                      <i className="fa-solid fa-chevron-down"></i>
+                    </div>
+
+                    {/* Texte sélectionné pour l'affichage (optionnel) */}
+                    {selectedCategory && (
+                      <div
+                        className="position-absolute top-50 start-0 translate-middle-y"
+                        style={{
+                          left: "45px",
+                          pointerEvents: "none",
+                          zIndex: 2,
+                          color: colors.oskar.black,
+                          fontSize: "0.95rem",
+                          fontWeight: "500",
+                          maxWidth: "120px",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {categories.find((c) => c.value === selectedCategory)
+                          ?.label || ""}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Label flottant - CORRIGÉ */}
+                  <span
+                    className="position-absolute px-2"
+                    style={{
+                      top: "-10px",
+                      left: "15px",
+                      fontSize: "0.7rem",
+                      color: selectedCategory
+                        ? colors.oskar.green
+                        : colors.oskar.grey,
+                      backgroundColor: "white",
+                      padding: "0 6px",
+                      fontWeight: 600,
+                      letterSpacing: "0.3px",
+                      zIndex: 3,
+                      lineHeight: "1",
+                    }}
+                  >
+                    CATÉGORIE
+                  </span>
+                </div>
+
+                {/* LOCALISATION - CORRIGÉ */}
+                <div
+                  className="position-relative"
+                  style={{ minWidth: "220px", flex: "0 1 auto" }}
+                >
+                  <div className="position-relative">
+                    <select
+                      className="form-select"
+                      style={{
+                        width: "100%",
+                        padding: "0.75rem 2.5rem 0.75rem 2.5rem",
+                        borderColor: selectedLocation
+                          ? colors.oskar.green
+                          : colors.oskar.lightGrey,
+                        fontSize: "0.95rem",
+                        backgroundColor: "white",
+                        color: selectedLocation
+                          ? colors.oskar.black
+                          : "#6c757d",
+                        appearance: "none",
+                        cursor: "pointer",
+                        borderWidth: "1.5px",
+                        transition: "all 0.2s",
+                        borderRadius: "10px",
+                        fontWeight: selectedLocation ? "500" : "400",
+                        height: "54px",
+                        lineHeight: "1.5",
+                      }}
+                      value={selectedLocation}
+                      onChange={(e) => setSelectedLocation(e.target.value)}
+                    >
+                      {locations.map((loc) => (
+                        <option key={loc.value} value={loc.value}>
+                          {loc.label}
+                        </option>
+                      ))}
+                    </select>
+
+                    {/* Icône gauche - Localisation */}
+                    <div
+                      className="position-absolute top-50 start-0 translate-middle-y"
+                      style={{
+                        color: selectedLocation
+                          ? colors.oskar.green
+                          : colors.oskar.grey,
+                        left: "15px",
+                        pointerEvents: "none",
+                        zIndex: 2,
+                      }}
+                    >
+                      <i className="fa-solid fa-location-dot"></i>
+                    </div>
+
+                    {/* Icône droite - Flèche */}
+                    <div
+                      className="position-absolute top-50 end-0 translate-middle-y pe-3"
+                      style={{
+                        color: colors.oskar.green,
+                        pointerEvents: "none",
+                        zIndex: 2,
+                        right: "10px",
+                      }}
+                    >
+                      <i className="fa-solid fa-chevron-down"></i>
+                    </div>
+
+                    {/* Texte sélectionné */}
+                    {selectedLocation && (
+                      <div
+                        className="position-absolute top-50 start-0 translate-middle-y"
+                        style={{
+                          left: "45px",
+                          pointerEvents: "none",
+                          zIndex: 2,
+                          color: colors.oskar.black,
+                          fontSize: "0.95rem",
+                          fontWeight: "500",
+                          maxWidth: "120px",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {locations.find((l) => l.value === selectedLocation)
+                          ?.label || ""}
+                      </div>
+                    )}
+                  </div>
+
+                  <span
+                    className="position-absolute px-2"
+                    style={{
+                      top: "-10px",
+                      left: "15px",
+                      fontSize: "0.7rem",
+                      color: selectedLocation
+                        ? colors.oskar.green
+                        : colors.oskar.grey,
+                      backgroundColor: "white",
+                      padding: "0 6px",
+                      fontWeight: 600,
+                      letterSpacing: "0.3px",
+                      zIndex: 3,
+                      lineHeight: "1",
+                    }}
+                  >
+                    LOCALISATION
+                  </span>
+                </div>
+
+                {/* PRIX MAX - CORRIGÉ */}
+                <div
+                  className="position-relative"
+                  style={{ minWidth: "220px", flex: "0 1 auto" }}
+                >
+                  <div className="position-relative">
+                    <select
+                      className="form-select"
+                      style={{
+                        width: "100%",
+                        padding: "0.75rem 2.5rem 0.75rem 2.5rem",
+                        borderColor: maxPrice
+                          ? colors.oskar.green
+                          : colors.oskar.lightGrey,
+                        fontSize: "0.95rem",
+                        backgroundColor: "white",
+                        color: maxPrice ? colors.oskar.black : "#6c757d",
+                        appearance: "none",
+                        cursor: "pointer",
+                        borderWidth: "1.5px",
+                        transition: "all 0.2s",
+                        borderRadius: "10px",
+                        fontWeight: maxPrice ? "500" : "400",
+                        height: "54px",
+                        lineHeight: "1.5",
+                      }}
+                      value={maxPrice}
+                      onChange={(e) => setMaxPrice(e.target.value)}
+                    >
+                      {priceRanges.map((price) => (
+                        <option key={price.value} value={price.value}>
+                          {price.label}
+                        </option>
+                      ))}
+                    </select>
+
+                    {/* Icône gauche - Prix */}
+                    <div
+                      className="position-absolute top-50 start-0 translate-middle-y"
+                      style={{
+                        color: maxPrice
+                          ? colors.oskar.green
+                          : colors.oskar.grey,
+                        left: "15px",
+                        pointerEvents: "none",
+                        zIndex: 2,
+                      }}
+                    >
+                      <i className="fa-solid fa-coins"></i>
+                    </div>
+
+                    {/* Icône droite - Flèche */}
+                    <div
+                      className="position-absolute top-50 end-0 translate-middle-y pe-3"
+                      style={{
+                        color: colors.oskar.green,
+                        pointerEvents: "none",
+                        zIndex: 2,
+                        right: "10px",
+                      }}
+                    >
+                      <i className="fa-solid fa-chevron-down"></i>
+                    </div>
+
+                    {/* Texte sélectionné */}
+                    {maxPrice && (
+                      <div
+                        className="position-absolute top-50 start-0 translate-middle-y"
+                        style={{
+                          left: "45px",
+                          pointerEvents: "none",
+                          zIndex: 2,
+                          color: colors.oskar.black,
+                          fontSize: "0.95rem",
+                          fontWeight: "500",
+                          maxWidth: "120px",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {priceRanges.find((p) => p.value === maxPrice)?.label ||
+                          ""}
+                      </div>
+                    )}
+                  </div>
+
+                  <span
+                    className="position-absolute px-2"
+                    style={{
+                      top: "-10px",
+                      left: "15px",
+                      fontSize: "0.7rem",
+                      color: maxPrice ? colors.oskar.green : colors.oskar.grey,
+                      backgroundColor: "white",
+                      padding: "0 6px",
+                      fontWeight: 600,
+                      letterSpacing: "0.3px",
+                      zIndex: 3,
+                      lineHeight: "1",
+                    }}
+                  >
+                    BUDGET MAX
+                  </span>
+                </div>
+
+                {/* BOUTON EFFACER */}
+                {hasActiveFilters && (
+                  <div className="d-flex align-items-center">
+                    <button
+                      onClick={clearAllFilters}
+                      className="btn d-flex align-items-center justify-content-center gap-2"
+                      style={{
+                        fontSize: "0.95rem",
+                        padding: "0.75rem 1.5rem",
+                        borderColor: colors.oskar.lightGrey,
+                        color: colors.oskar.grey,
+                        backgroundColor: "white",
+                        whiteSpace: "nowrap",
+                        borderRadius: "10px",
+                        borderWidth: "1.5px",
+                        transition: "all 0.2s",
+                        height: "54px",
+                        fontWeight: "500",
+                        boxShadow: "0 2px 6px rgba(0,0,0,0.03)",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor =
+                          colors.oskar.lightGrey + "40";
+                        e.currentTarget.style.borderColor = colors.oskar.grey;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = "white";
+                        e.currentTarget.style.borderColor =
+                          colors.oskar.lightGrey;
+                      }}
+                    >
+                      <i
+                        className="fa-solid fa-rotate-left"
+                        style={{ color: colors.oskar.green }}
+                      ></i>
+                      <span>Effacer</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* FILTRES RAPIDES - MOBILE - CORRIGÉ */}
+          {!compactMode && isMobile && (
+            <div className="mb-4">
+              <div
+                className="d-flex gap-2 overflow-auto pb-2"
+                style={{ scrollbarWidth: "none" }}
+              >
+                {/* Catégorie - Mobile */}
+                <div
+                  className="position-relative flex-shrink-0"
+                  style={{ minWidth: "160px" }}
+                >
+                  <div className="position-relative">
+                    <select
+                      className="form-select"
+                      style={{
+                        width: "100%",
+                        padding: "0.7rem 2.2rem 0.7rem 2.2rem",
+                        borderColor: selectedCategory
+                          ? colors.oskar.green
+                          : colors.oskar.lightGrey,
+                        fontSize: "0.85rem",
+                        backgroundColor: "white",
+                        color: selectedCategory
+                          ? colors.oskar.black
+                          : "#6c757d",
+                        appearance: "none",
+                        cursor: "pointer",
+                        borderWidth: "1.5px",
+                        height: "48px",
+                        borderRadius: "10px",
+                        fontWeight: selectedCategory ? "500" : "400",
+                      }}
+                      value={selectedCategory}
+                      onChange={(e) => {
+                        setSelectedCategory(e.target.value);
+                        setSelectedSousCategorie("");
+                        setSelectedSousCategorieLibelle("");
+                      }}
+                    >
+                      {categories.map((cat) => (
+                        <option key={cat.value} value={cat.value}>
+                          {cat.label}
+                        </option>
+                      ))}
+                    </select>
+
+                    {/* Icône gauche */}
+                    <div
+                      className="position-absolute top-50 start-0 translate-middle-y"
+                      style={{
+                        color: selectedCategory
+                          ? colors.oskar.green
+                          : colors.oskar.grey,
+                        left: "12px",
+                        pointerEvents: "none",
+                        zIndex: 2,
+                      }}
+                    >
+                      <i className="fa-solid fa-tag"></i>
+                    </div>
+
+                    {/* Icône droite */}
+                    <div
+                      className="position-absolute top-50 end-0 translate-middle-y"
+                      style={{
+                        color: colors.oskar.green,
+                        pointerEvents: "none",
+                        zIndex: 2,
+                        right: "12px",
+                      }}
+                    >
+                      <i className="fa-solid fa-chevron-down"></i>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Localisation - Mobile */}
+                <div
+                  className="position-relative flex-shrink-0"
+                  style={{ minWidth: "160px" }}
+                >
+                  <div className="position-relative">
+                    <select
+                      className="form-select"
+                      style={{
+                        width: "100%",
+                        padding: "0.7rem 2.2rem 0.7rem 2.2rem",
+                        borderColor: selectedLocation
+                          ? colors.oskar.green
+                          : colors.oskar.lightGrey,
+                        fontSize: "0.85rem",
+                        backgroundColor: "white",
+                        color: selectedLocation
+                          ? colors.oskar.black
+                          : "#6c757d",
+                        appearance: "none",
+                        cursor: "pointer",
+                        borderWidth: "1.5px",
+                        height: "48px",
+                        borderRadius: "10px",
+                        fontWeight: selectedLocation ? "500" : "400",
+                      }}
+                      value={selectedLocation}
+                      onChange={(e) => setSelectedLocation(e.target.value)}
+                    >
+                      {locations.map((loc) => (
+                        <option key={loc.value} value={loc.value}>
+                          {loc.label}
+                        </option>
+                      ))}
+                    </select>
+
+                    <div
+                      className="position-absolute top-50 start-0 translate-middle-y"
+                      style={{
+                        color: selectedLocation
+                          ? colors.oskar.green
+                          : colors.oskar.grey,
+                        left: "12px",
+                        pointerEvents: "none",
+                        zIndex: 2,
+                      }}
+                    >
+                      <i className="fa-solid fa-location-dot"></i>
+                    </div>
+
+                    <div
+                      className="position-absolute top-50 end-0 translate-middle-y"
+                      style={{
+                        color: colors.oskar.green,
+                        pointerEvents: "none",
+                        zIndex: 2,
+                        right: "12px",
+                      }}
+                    >
+                      <i className="fa-solid fa-chevron-down"></i>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Prix max - Mobile */}
+                <div
+                  className="position-relative flex-shrink-0"
+                  style={{ minWidth: "160px" }}
+                >
+                  <div className="position-relative">
+                    <select
+                      className="form-select"
+                      style={{
+                        width: "100%",
+                        padding: "0.7rem 2.2rem 0.7rem 2.2rem",
+                        borderColor: maxPrice
+                          ? colors.oskar.green
+                          : colors.oskar.lightGrey,
+                        fontSize: "0.85rem",
+                        backgroundColor: "white",
+                        color: maxPrice ? colors.oskar.black : "#6c757d",
+                        appearance: "none",
+                        cursor: "pointer",
+                        borderWidth: "1.5px",
+                        height: "48px",
+                        borderRadius: "10px",
+                        fontWeight: maxPrice ? "500" : "400",
+                      }}
+                      value={maxPrice}
+                      onChange={(e) => setMaxPrice(e.target.value)}
+                    >
+                      {priceRanges.map((price) => (
+                        <option key={price.value} value={price.value}>
+                          {price.label}
+                        </option>
+                      ))}
+                    </select>
+
+                    <div
+                      className="position-absolute top-50 start-0 translate-middle-y"
+                      style={{
+                        color: maxPrice
+                          ? colors.oskar.green
+                          : colors.oskar.grey,
+                        left: "12px",
+                        pointerEvents: "none",
+                        zIndex: 2,
+                      }}
+                    >
+                      <i className="fa-solid fa-coins"></i>
+                    </div>
+
+                    <div
+                      className="position-absolute top-50 end-0 translate-middle-y"
+                      style={{
+                        color: colors.oskar.green,
+                        pointerEvents: "none",
+                        zIndex: 2,
+                        right: "12px",
+                      }}
+                    >
+                      <i className="fa-solid fa-chevron-down"></i>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bouton Effacer - Mobile */}
+                {hasActiveFilters && (
+                  <button
+                    onClick={clearAllFilters}
+                    className="btn flex-shrink-0 d-flex align-items-center justify-content-center gap-2"
+                    style={{
+                      fontSize: "0.85rem",
+                      padding: "0.7rem 1.2rem",
+                      borderColor: colors.oskar.lightGrey,
+                      color: colors.oskar.grey,
+                      backgroundColor: "white",
+                      whiteSpace: "nowrap",
+                      borderWidth: "1.5px",
+                      height: "48px",
+                      borderRadius: "10px",
+                    }}
+                  >
+                    <i
+                      className="fa-solid fa-rotate-left"
+                      style={{ color: colors.oskar.green }}
+                    ></i>
+                    <span>Effacer</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* SOUS-CATÉGORIES DYNAMIQUES */}
           {showPopularSearches && (
             <div className="mt-4 mt-md-5">
               <h3
@@ -357,155 +1195,269 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
                 style={{
                   color: colors.oskar.grey,
                   fontSize: isMobile ? "0.9375rem" : "1rem",
-                  fontWeight: 500,
+                  fontWeight: 600,
                   marginBottom: isMobile ? "1rem" : "1.5rem",
+                  letterSpacing: "0.5px",
+                  textTransform: "uppercase",
                 }}
               >
-                Recherches populaires
+                <i
+                  className="fa-solid fa-tags me-2"
+                  style={{ color: colors.oskar.green }}
+                ></i>
+                Sous-catégories populaires
               </h3>
-              <div
-                className="d-flex flex-wrap justify-content-center"
-                style={{
-                  gap: isMobile ? "0.5rem" : "0.75rem",
-                  rowGap: isMobile ? "0.75rem" : "1rem",
-                }}
-              >
-                {popularTags.map((tag) => (
-                  <button
-                    key={tag.name}
-                    onClick={() => handleTagClick(tag.name)}
-                    className="btn rounded-pill d-flex align-items-center"
-                    style={{
-                      backgroundColor:
-                        activeTag === tag.name
-                          ? colors.oskar.green
-                          : colors.oskar.lightGrey,
-                      color:
-                        activeTag === tag.name ? "white" : colors.oskar.grey,
-                      fontSize: isMobile ? "0.8125rem" : "0.875rem",
-                      padding: isMobile ? "0.5rem 0.875rem" : "0.625rem 1rem",
-                      transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                      border: "none",
-                      gap: "0.5rem",
-                      whiteSpace: "nowrap",
-                      boxShadow:
-                        activeTag === tag.name
-                          ? "0 4px 12px rgba(76, 175, 80, 0.25)"
-                          : "none",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (activeTag !== tag.name) {
-                        e.currentTarget.style.backgroundColor =
-                          colors.oskar.green + "20";
-                        e.currentTarget.style.color = colors.oskar.green;
-                        e.currentTarget.style.transform = "translateY(-2px)";
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (activeTag !== tag.name) {
-                        e.currentTarget.style.backgroundColor =
-                          colors.oskar.lightGrey;
-                        e.currentTarget.style.color = colors.oskar.grey;
-                        e.currentTarget.style.transform = "translateY(0)";
-                      }
-                    }}
-                    aria-label={`Rechercher ${tag.name}`}
-                    type="button"
-                  >
-                    <i
-                      className={`fa-solid ${tag.icon}`}
-                      style={{ fontSize: "0.875rem" }}
-                    ></i>
-                    {tag.name}
-                  </button>
-                ))}
-              </div>
 
-              {/* Aide sur mobile */}
-              {isMobile && (
-                <div className="text-center mt-3">
-                  <small
-                    className="text-muted"
-                    style={{ fontSize: "0.75rem", opacity: 0.7 }}
+              {loadingSubs ? (
+                <div className="d-flex justify-content-center align-items-center gap-2">
+                  <div
+                    className="spinner-border spinner-border-sm"
+                    style={{ color: colors.oskar.green }}
+                    role="status"
                   >
-                    <i className="fa-solid fa-info-circle me-1"></i>
-                    Balayez horizontalement pour voir plus de catégories
-                  </small>
+                    <span className="visually-hidden">Chargement...</span>
+                  </div>
+                  <span className="text-muted small">
+                    Chargement des sous-catégories...
+                  </span>
+                </div>
+              ) : (
+                <div className="row g-4">
+                  {categoriesWithSubs.map((item) => (
+                    <div key={item.category.uuid} className="col-md-3 col-6">
+                      <div className="text-center mb-2">
+                        <span
+                          className="badge px-3 py-2"
+                          style={{
+                            backgroundColor: `${getCategoryColor(
+                              item.category.type,
+                            )}15`,
+                            color: getCategoryColor(item.category.type),
+                            fontSize: "0.8rem",
+                            fontWeight: 600,
+                            borderRadius: "20px",
+                            display: "inline-block",
+                            maxWidth: "100%",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            border: `1px solid ${getCategoryColor(item.category.type)}30`,
+                          }}
+                        >
+                          <i
+                            className={`fas ${getCategoryIcon(item.category.type)} me-1`}
+                          ></i>
+                          {item.category.libelle}
+                        </span>
+                      </div>
+                      <div
+                        className="d-flex flex-wrap justify-content-center"
+                        style={{ gap: "0.5rem" }}
+                      >
+                        {item.subCategories.length > 0 ? (
+                          item.subCategories.map((sub) => (
+                            <button
+                              key={sub.uuid}
+                              onClick={() =>
+                                handleSubCategoryClick(
+                                  sub,
+                                  item.category.libelle,
+                                )
+                              }
+                              className="btn rounded-pill d-flex align-items-center"
+                              style={{
+                                backgroundColor:
+                                  selectedSousCategorie === sub.uuid
+                                    ? getCategoryColor(item.category.type)
+                                    : "white",
+                                color:
+                                  selectedSousCategorie === sub.uuid
+                                    ? "white"
+                                    : colors.oskar.grey,
+                                fontSize: isMobile ? "0.75rem" : "0.8125rem",
+                                padding: isMobile
+                                  ? "0.4rem 0.75rem"
+                                  : "0.5rem 0.875rem",
+                                transition:
+                                  "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                                border:
+                                  selectedSousCategorie === sub.uuid
+                                    ? "none"
+                                    : `1px solid ${colors.oskar.lightGrey}`,
+                                gap: "0.35rem",
+                                whiteSpace: "nowrap",
+                                boxShadow:
+                                  selectedSousCategorie === sub.uuid
+                                    ? `0 4px 12px ${getCategoryColor(item.category.type)}40`
+                                    : "0 2px 4px rgba(0,0,0,0.02)",
+                                fontWeight:
+                                  selectedSousCategorie === sub.uuid
+                                    ? "600"
+                                    : "400",
+                              }}
+                              onMouseEnter={(e) => {
+                                if (selectedSousCategorie !== sub.uuid) {
+                                  e.currentTarget.style.backgroundColor =
+                                    getCategoryColor(item.category.type) + "10";
+                                  e.currentTarget.style.color =
+                                    getCategoryColor(item.category.type);
+                                  e.currentTarget.style.borderColor =
+                                    getCategoryColor(item.category.type);
+                                  e.currentTarget.style.transform =
+                                    "translateY(-2px)";
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (selectedSousCategorie !== sub.uuid) {
+                                  e.currentTarget.style.backgroundColor =
+                                    "white";
+                                  e.currentTarget.style.color =
+                                    colors.oskar.grey;
+                                  e.currentTarget.style.borderColor =
+                                    colors.oskar.lightGrey;
+                                  e.currentTarget.style.transform =
+                                    "translateY(0)";
+                                }
+                              }}
+                              aria-label={`Rechercher ${sub.libelle}`}
+                              type="button"
+                            >
+                              <i
+                                className="fa-solid fa-tag"
+                                style={{ fontSize: "0.7rem" }}
+                              ></i>
+                              {sub.libelle}
+                              {sub.counts && sub.counts.total > 0 && (
+                                <span
+                                  className="badge ms-1"
+                                  style={{
+                                    backgroundColor:
+                                      selectedSousCategorie === sub.uuid
+                                        ? "rgba(255,255,255,0.3)"
+                                        : getCategoryColor(item.category.type) +
+                                          "20",
+                                    color:
+                                      selectedSousCategorie === sub.uuid
+                                        ? "white"
+                                        : getCategoryColor(item.category.type),
+                                    fontSize: "0.6rem",
+                                    padding: "0.2rem 0.4rem",
+                                    borderRadius: "10px",
+                                    fontWeight: "600",
+                                  }}
+                                >
+                                  {sub.counts.total}
+                                </span>
+                              )}
+                            </button>
+                          ))
+                        ) : (
+                          <span className="text-muted small">
+                            Aucune sous-catégorie
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* RÉSUMÉ DES FILTRES ACTIFS */}
+          {hasActiveFilters && (
+            <div className="mt-4 text-center">
+              <div
+                className="d-inline-flex align-items-center gap-2 px-3 py-2 rounded-pill"
+                style={{
+                  backgroundColor: colors.oskar.lightGrey + "30",
+                  border: `1px solid ${colors.oskar.lightGrey}`,
+                  backdropFilter: "blur(4px)",
+                }}
+              >
+                <i
+                  className="fa-solid fa-filter-circle-dollar"
+                  style={{ color: colors.oskar.green, fontSize: "0.85rem" }}
+                ></i>
+                <span
+                  className="small"
+                  style={{ color: colors.oskar.grey, fontWeight: "500" }}
+                >
+                  Filtres actifs:
+                </span>
+                <div className="d-flex flex-wrap gap-1">
+                  {searchQuery && (
+                    <span className="badge bg-white text-dark px-2 py-1 rounded-pill border">
+                      <i
+                        className="fa-solid fa-magnifying-glass me-1"
+                        style={{ fontSize: "0.7rem" }}
+                      ></i>
+                      {searchQuery.length > 15
+                        ? searchQuery.substring(0, 15) + "..."
+                        : searchQuery}
+                    </span>
+                  )}
+                  {selectedCategory && (
+                    <span className="badge bg-white text-dark px-2 py-1 rounded-pill border">
+                      <i
+                        className="fa-solid fa-tag me-1"
+                        style={{
+                          fontSize: "0.7rem",
+                          color: colors.oskar.green,
+                        }}
+                      ></i>
+                      {
+                        categories.find((c) => c.value === selectedCategory)
+                          ?.label
+                      }
+                    </span>
+                  )}
+                  {selectedSousCategorieLibelle && (
+                    <span className="badge bg-white text-dark px-2 py-1 rounded-pill border">
+                      <i
+                        className="fa-solid fa-tags me-1"
+                        style={{ fontSize: "0.7rem", color: "#9C27B0" }}
+                      ></i>
+                      {selectedSousCategorieLibelle}
+                    </span>
+                  )}
+                  {selectedLocation && (
+                    <span className="badge bg-white text-dark px-2 py-1 rounded-pill border">
+                      <i
+                        className="fa-solid fa-location-dot me-1"
+                        style={{ fontSize: "0.7rem", color: "#2196F3" }}
+                      ></i>
+                      {
+                        locations.find((l) => l.value === selectedLocation)
+                          ?.label
+                      }
+                    </span>
+                  )}
+                  {maxPrice && (
+                    <span className="badge bg-white text-dark px-2 py-1 rounded-pill border">
+                      <i
+                        className="fa-solid fa-coins me-1"
+                        style={{ fontSize: "0.7rem", color: "#FF9800" }}
+                      ></i>
+                      Max {priceRanges.find((p) => p.value === maxPrice)?.label}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={clearAllFilters}
+                  className="btn btn-link p-0 ms-1"
+                  style={{ color: colors.oskar.grey }}
+                  aria-label="Effacer tous les filtres"
+                >
+                  <i className="fa-solid fa-xmark"></i>
+                </button>
+              </div>
             </div>
           )}
         </div>
       </div>
 
-      {/* Filtres avancés (optionnel sur desktop) */}
-      {!compactMode && !isMobile && (
-        <div className="container-fluid px-3 px-sm-4 px-lg-5 mt-4">
-          <div className="row g-3 justify-content-center">
-            <div className="col-auto">
-              <select
-                className="form-select"
-                style={{
-                  minWidth: "140px",
-                  borderColor: colors.oskar.lightGrey,
-                  fontSize: "0.875rem",
-                  padding: "0.5rem 1rem",
-                  backgroundColor: "white",
-                  color: colors.oskar.black,
-                }}
-                defaultValue=""
-              >
-                <option value="">Catégorie</option>
-                <option value="electronique">Électronique</option>
-                <option value="mode">Mode</option>
-                <option value="maison">Maison</option>
-                <option value="vehicules">Véhicules</option>
-              </select>
-            </div>
-            <div className="col-auto">
-              <select
-                className="form-select"
-                style={{
-                  minWidth: "140px",
-                  borderColor: colors.oskar.lightGrey,
-                  fontSize: "0.875rem",
-                  padding: "0.5rem 1rem",
-                  backgroundColor: "white",
-                  color: colors.oskar.black,
-                }}
-                defaultValue=""
-              >
-                <option value="">Localisation</option>
-                <option value="paris">Paris</option>
-                <option value="lyon">Lyon</option>
-                <option value="marseille">Marseille</option>
-              </select>
-            </div>
-            <div className="col-auto">
-              <select
-                className="form-select"
-                style={{
-                  minWidth: "140px",
-                  borderColor: colors.oskar.lightGrey,
-                  fontSize: "0.875rem",
-                  padding: "0.5rem 1rem",
-                  backgroundColor: "white",
-                  color: colors.oskar.black,
-                }}
-                defaultValue=""
-              >
-                <option value="">Prix max</option>
-                <option value="50">50€</option>
-                <option value="100">100€</option>
-                <option value="200">200€</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      )}
-
       <style jsx global>{`
-        /* Animations */
         @keyframes slideDown {
           from {
             opacity: 0;
@@ -517,17 +1469,6 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
           }
         }
 
-        @keyframes pulse {
-          0%,
-          100% {
-            transform: scale(1);
-          }
-          50% {
-            transform: scale(1.05);
-          }
-        }
-
-        /* Styles généraux - MODE CLAIR UNIQUEMENT */
         #hero-search {
           background-color: white !important;
         }
@@ -544,155 +1485,115 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
           box-shadow: 0 0 0 0.25rem rgba(76, 175, 80, 0.25) !important;
         }
 
-        #hero-search .position-absolute.bg-white {
-          background-color: white !important;
-          border-color: ${colors.oskar.lightGrey} !important;
+        /* Styles pour les selects - CORRIGÉ */
+        #hero-search select {
+          -webkit-appearance: none;
+          -moz-appearance: none;
+          appearance: none;
+          cursor: pointer;
+          background-image: none !important;
+          padding-right: 2.5rem !important;
         }
 
-        #hero-search .btn.rounded-pill {
-          background-color: ${colors.oskar.lightGrey} !important;
-          color: ${colors.oskar.grey} !important;
-        }
-
-        #hero-search .btn.rounded-pill:hover {
-          background-color: rgba(76, 175, 80, 0.1) !important;
-          color: ${colors.oskar.green} !important;
-        }
-
-        #hero-search .btn.rounded-pill.active {
-          background-color: ${colors.oskar.green} !important;
-          color: white !important;
-        }
-
-        #hero-search .text-muted {
-          color: #6c757d !important;
-        }
-
-        #hero-search h1 {
-          color: ${colors.oskar.black} !important;
-        }
-
-        #hero-search .btn[aria-label="Effacer la recherche"] {
-          background-color: transparent !important;
-        }
-
-        #hero-search .form-select {
-          background-color: white !important;
-          color: ${colors.oskar.black} !important;
-          border-color: ${colors.oskar.lightGrey} !important;
-        }
-
-        #hero-search .form-select:focus {
+        #hero-search select:hover {
           border-color: ${colors.oskar.green} !important;
+          background-color: #f8f9fa;
         }
 
-        /* Scrollbar personnalisée pour les suggestions */
-        #hero-search .position-absolute::-webkit-scrollbar {
-          width: 6px;
+        #hero-search select:focus {
+          border-color: ${colors.oskar.green} !important;
+          box-shadow: 0 0 0 0.25rem rgba(76, 175, 80, 0.15) !important;
+          outline: none;
         }
 
-        #hero-search .position-absolute::-webkit-scrollbar-track {
-          background: #f1f1f1;
-          border-radius: 0 0 12px 12px;
+        /* Style pour l'option par défaut */
+        #hero-search select option[value=""] {
+          color: #6c757d;
         }
 
-        #hero-search .position-absolute::-webkit-scrollbar-thumb {
-          background: ${colors.oskar.lightGrey};
-          border-radius: 3px;
+        #hero-search select option {
+          color: ${colors.oskar.black};
+          padding: 10px;
         }
 
-        #hero-search .position-absolute::-webkit-scrollbar-thumb:hover {
-          background: ${colors.oskar.grey};
+        /* Icônes */
+        #hero-search .fa-chevron-down {
+          font-size: 0.8rem;
+          opacity: 0.9;
         }
 
-        /* Améliorations pour le touch sur mobile */
+        #hero-search .fa-tag,
+        #hero-search .fa-location-dot,
+        #hero-search .fa-coins {
+          font-size: 0.95rem;
+        }
+
+        /* Labels flottants - CORRIGÉ */
+        #hero-search .position-relative span.position-absolute {
+          background-color: white;
+          padding: 0 6px;
+          line-height: 1;
+          white-space: nowrap;
+        }
+
+        /* Badges de filtres actifs */
+        #hero-search .badge.bg-white {
+          background-color: white !important;
+          border-color: ${colors.oskar.lightGrey} !important;
+          color: ${colors.oskar.black} !important;
+          font-weight: 500;
+          font-size: 0.75rem;
+        }
+
+        /* Scroll horizontal pour mobile */
+        #hero-search .overflow-auto {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+          padding-bottom: 8px;
+        }
+
+        #hero-search .overflow-auto::-webkit-scrollbar {
+          display: none;
+        }
+
+        /* Améliorations pour mobile */
         @media (max-width: 768px) {
           #hero-search button,
-          #hero-search .btn {
-            min-height: 44px;
-            min-width: 44px;
+          #hero-search .btn,
+          #hero-search .form-select {
+            min-height: 48px;
             touch-action: manipulation;
           }
 
           #hero-search .form-control {
-            font-size: 16px !important; /* Empêche le zoom sur iOS */
+            font-size: 16px !important;
           }
 
-          /* Scroll horizontal pour les tags sur mobile */
-          #hero-search .d-flex.flex-wrap {
-            overflow-x: auto;
-            flex-wrap: nowrap !important;
-            justify-content: flex-start !important;
-            padding-bottom: 0.5rem;
-            scrollbar-width: none;
-          }
-
-          #hero-search .d-flex.flex-wrap::-webkit-scrollbar {
-            display: none;
-          }
-
-          #hero-search .d-flex.flex-wrap .btn {
-            flex-shrink: 0;
+          #hero-search .d-flex.gap-2 {
+            gap: 0.75rem !important;
           }
         }
 
-        /* Support pour les très petits écrans */
-        @media (max-width: 360px) {
-          #hero-search h1 {
-            font-size: 1.5rem !important;
+        /* Ajustements desktop */
+        @media (min-width: 769px) {
+          #hero-search .d-flex.gap-3 {
+            gap: 1.25rem !important;
           }
 
-          #hero-search .form-control {
-            padding-right: 3rem !important;
-            font-size: 0.9375rem !important;
+          #hero-search .position-relative {
+            transition: all 0.2s;
           }
 
-          #hero-search .btn[aria-label="Lancer la recherche"] {
-            padding: 0.375rem 0.75rem !important;
+          #hero-search .position-relative:hover {
+            transform: translateY(-1px);
           }
-        }
-
-        /* Support pour les écrans larges */
-        @media (min-width: 1400px) {
-          #hero-search .container-fluid {
-            max-width: 1320px;
-            margin: 0 auto;
-          }
-        }
-
-        @media (min-width: 1600px) {
-          #hero-search .container-fluid {
-            max-width: 1520px;
-          }
-        }
-
-        /* Animation pour le bouton de recherche */
-        #hero-search .btn[aria-label="Lancer la recherche"]:hover i {
-          animation: pulse 0.5s ease;
-        }
-
-        /* Transition fluide pour tous les éléments */
-        #hero-search * {
-          transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
-        }
-
-        /* Amélioration de l'accessibilité */
-        #hero-search button:focus-visible {
-          outline: 2px solid ${colors.oskar.green} !important;
-          outline-offset: 2px !important;
-        }
-
-        /* Optimisation des performances */
-        #hero-search {
-          will-change: transform, opacity;
-          contain: layout style paint;
         }
       `}</style>
     </section>
   );
 };
 
-// Version compacte pour l'intégration dans d'autres composants
+// Version compacte
 export const CompactSearch: React.FC<Partial<HeroSearchProps>> = (props) => (
   <HeroSearch compactMode={true} showPopularSearches={false} {...props} />
 );

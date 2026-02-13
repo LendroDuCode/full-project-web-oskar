@@ -1,7 +1,15 @@
 // app/(back-office)/dashboard-utilisateur/messages/page.tsx
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+  Suspense,
+} from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faEnvelope,
@@ -71,12 +79,16 @@ import {
   faPercent,
   faGift,
 } from "@fortawesome/free-solid-svg-icons";
+import { faGoogle, faFacebook } from "@fortawesome/free-brands-svg-icons";
 
 // Import des services et hooks
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { api } from "@/lib/api-client";
+import { LoadingSpinner } from "@/app/shared/components/ui/LoadingSpinner";
 
-// Types pour les utilisateurs
+// ============================================
+// TYPES
+// ============================================
 interface UtilisateurBase {
   uuid: string;
   nom: string;
@@ -100,16 +112,12 @@ interface UtilisateurBase {
   code?: string;
   avatar?: string;
   statut?: string;
-}
-
-interface Agent extends UtilisateurBase {}
-interface Vendeur extends UtilisateurBase {
+  userType?: "admin" | "agent" | "vendeur" | "utilisateur";
   boutique?: {
     nom: string;
     uuid: string;
   };
 }
-interface Utilisateur extends UtilisateurBase {}
 
 interface Message {
   uuid: string;
@@ -117,7 +125,9 @@ interface Message {
   contenu: string;
   expediteurNom: string;
   expediteurEmail: string;
+  expediteurUuid?: string;
   destinataireEmail: string;
+  destinataireUuid?: string;
   type: string;
   estEnvoye: boolean;
   envoyeLe: string;
@@ -126,7 +136,6 @@ interface Message {
   dateCreation?: string;
 }
 
-// Type pour la réponse de l'API des messages reçus
 interface MessageReceived {
   uuid: string;
   message: Message;
@@ -136,399 +145,52 @@ interface MessageReceived {
   dateReception: string;
 }
 
-// Type pour les contacts combinés
-interface ContactWithType extends UtilisateurBase {
-  userType: "agent" | "vendeur" | "utilisateur";
-  boutique?: {
-    nom: string;
-    uuid: string;
-  };
+interface ContactConversation extends UtilisateurBase {
+  userType: "admin" | "agent" | "vendeur" | "utilisateur";
+  lastMessageDate?: string;
+  lastMessage?: string;
+  unreadCount?: number;
+  totalMessages?: number;
 }
 
-// Composant de badge de statut amélioré
-const StatusBadge = ({
-  est_bloque,
-  est_verifie,
-  is_deleted,
-}: {
-  est_bloque: boolean;
-  est_verifie: boolean;
-  is_deleted?: boolean;
-}) => {
-  if (is_deleted) {
-    return (
-      <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
-        <FontAwesomeIcon icon={faTrash} className="fs-12" />
-        <span className="fw-medium">Supprimé</span>
-      </span>
-    );
-  }
-
-  if (est_bloque) {
-    return (
-      <span className="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
-        <FontAwesomeIcon icon={faBan} className="fs-12" />
-        <span className="fw-medium">Bloqué</span>
-      </span>
-    );
-  }
-
-  if (!est_verifie) {
-    return (
-      <span className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
-        <FontAwesomeIcon icon={faUserSlash} className="fs-12" />
-        <span className="fw-medium">Non vérifié</span>
-      </span>
-    );
-  }
-
-  return (
-    <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
-      <FontAwesomeIcon icon={faUserCheck} className="fs-12" />
-      <span className="fw-medium">Actif</span>
-    </span>
-  );
-};
-
-// Composant pour afficher un message dans la liste
-const MessageItem = ({
-  message,
-  isSelected,
-  onSelect,
-  showSeparator = false,
-}: {
-  message: Message;
-  isSelected: boolean;
-  onSelect: (message: Message) => void;
-  showSeparator?: boolean;
-}) => {
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) {
-        return "Date inconnue";
-      }
-
-      const now = new Date();
-      const diffMs = now.getTime() - date.getTime();
-      const diffMins = Math.floor(diffMs / 60000);
-      const diffHours = Math.floor(diffMs / 3600000);
-      const diffDays = Math.floor(diffMs / 86400000);
-
-      if (diffMins < 1) {
-        return "à l'instant";
-      } else if (diffMins < 60) {
-        return `il y a ${diffMins} min`;
-      } else if (diffHours < 24) {
-        return `il y a ${diffHours} h`;
-      } else if (diffDays < 7) {
-        return `il y a ${diffDays} j`;
-      } else {
-        return date.toLocaleDateString("fr-FR", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-        });
-      }
-    } catch (error) {
-      return "Date inconnue";
-    }
-  };
-
-  const getTypeColor = () => {
-    const type = message.type.toUpperCase();
-    switch (type) {
-      case "ALERT":
-        return "danger";
-      case "WARNING":
-        return "warning";
-      case "INFO":
-        return "info";
-      case "NOTIFICATION":
-        return "primary";
-      case "PROMOTION":
-        return "success";
-      default:
-        return "secondary";
-    }
-  };
-
-  const getTypeIcon = () => {
-    const type = message.type.toUpperCase();
-    switch (type) {
-      case "ALERT":
-        return faBell;
-      case "WARNING":
-        return faExclamationCircle;
-      case "INFO":
-        return faInfoCircle;
-      case "NOTIFICATION":
-        return faEnvelopeCircleCheck;
-      case "PROMOTION":
-        return faGift;
-      default:
-        return faEnvelope;
-    }
-  };
-
-  return (
-    <>
-      {showSeparator && (
-        <div className="separator d-flex align-items-center my-3">
-          <hr className="flex-grow-1" />
-          <span className="px-3 text-muted fs-12 fw-medium">
-            <FontAwesomeIcon icon={faCalendarDays} className="me-2" />
-            Messages plus anciens
-          </span>
-          <hr className="flex-grow-1" />
-        </div>
-      )}
-
-      <div
-        className={`list-group-item list-group-item-action border-0 py-3 px-3 ${isSelected ? "bg-primary bg-opacity-10 selected-message" : "hover-bg-light"} ${!message.estLu ? "unread-message" : ""}`}
-        onClick={() => onSelect(message)}
-        style={{
-          cursor: "pointer",
-          borderLeft: isSelected
-            ? "4px solid var(--bs-primary)"
-            : !message.estLu
-              ? "4px solid var(--bs-warning)"
-              : "4px solid transparent",
-          transition: "all 0.2s ease",
-          borderRadius: "8px",
-          marginBottom: "4px",
-        }}
-      >
-        <div className="d-flex justify-content-between align-items-start mb-2">
-          <div className="d-flex align-items-center gap-3">
-            <div
-              className={`bg-${getTypeColor()} bg-opacity-10 text-${getTypeColor()} rounded-circle d-flex align-items-center justify-content-center`}
-              style={{ width: "40px", height: "40px" }}
-            >
-              <FontAwesomeIcon
-                icon={getTypeIcon()}
-                className={`fs-5 ${message.estLu ? "opacity-75" : ""}`}
-              />
-            </div>
-            <div className="d-flex flex-column">
-              <div className="d-flex align-items-center gap-2 mb-1">
-                <h6
-                  className="mb-0 fw-bold text-dark"
-                  style={{ fontSize: "0.9rem" }}
-                >
-                  {message.expediteurNom}
-                </h6>
-                {!message.estLu && (
-                  <span className="badge bg-warning bg-opacity-25 text-warning px-2 py-1">
-                    <FontAwesomeIcon icon={faCircle} className="fs-10 me-1" />
-                    Non lu
-                  </span>
-                )}
-                {message.type.toUpperCase() === "PROMOTION" && (
-                  <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1">
-                    <FontAwesomeIcon icon={faPercent} className="fs-10 me-1" />
-                    Promotion
-                  </span>
-                )}
-              </div>
-              <div className="d-flex align-items-center gap-2 flex-wrap">
-                <small className="text-muted" style={{ fontSize: "0.75rem" }}>
-                  <FontAwesomeIcon icon={faUser} className="me-1 fs-11" />
-                  {message.expediteurEmail}
-                </small>
-                <span className="text-muted" style={{ fontSize: "0.75rem" }}>
-                  •
-                </span>
-                <small className="text-muted" style={{ fontSize: "0.75rem" }}>
-                  À: {message.destinataireEmail}
-                </small>
-              </div>
-            </div>
-          </div>
-          <div className="d-flex flex-column align-items-end gap-2">
-            <div className="d-flex align-items-center gap-2">
-              <small className="text-muted" style={{ fontSize: "0.75rem" }}>
-                <FontAwesomeIcon icon={faClock} className="me-1" />
-                {formatDate(message.envoyeLe)}
-              </small>
-              <span
-                className={`badge bg-${getTypeColor()} bg-opacity-10 text-${getTypeColor()} border border-${getTypeColor()} border-opacity-25 px-2 py-1 fw-medium`}
-                style={{ fontSize: "0.65rem" }}
-              >
-                {message.type.toUpperCase() === "PROMOTION"
-                  ? "PROMOTION"
-                  : message.type.toUpperCase()}
-              </span>
-            </div>
-            {message.estEnvoye && (
-              <small
-                className="text-success fw-medium"
-                style={{ fontSize: "0.75rem" }}
-              >
-                <FontAwesomeIcon icon={faCheckCircle} className="me-1" />
-                Envoyé
-              </small>
-            )}
-          </div>
-        </div>
-
-        <h6 className="fw-bold mb-2 text-dark" style={{ fontSize: "0.9rem" }}>
-          {message.sujet}
-        </h6>
-
-        <p
-          className="mb-0 text-muted fs-14 line-clamp-2"
-          style={{
-            fontSize: "0.8rem",
-            maxWidth: "600px",
-            lineHeight: "1.4",
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
-            display: "-webkit-box",
-          }}
-        >
-          {message.contenu}
-        </p>
-
-        <div className="d-flex justify-content-between align-items-center mt-3">
-          <div className="d-flex gap-2">
-            <button
-              className="btn btn-sm btn-outline-primary d-flex align-items-center gap-1"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelect(message);
-              }}
-              style={{ fontSize: "0.8rem" }}
-            >
-              <FontAwesomeIcon icon={faEye} style={{ fontSize: "0.8rem" }} />
-              <span style={{ fontSize: "0.8rem" }}>Voir</span>
-            </button>
-            <button
-              className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
-              onClick={(e) => {
-                e.stopPropagation();
-                // Gérer la réponse plus tard
-              }}
-              style={{ fontSize: "0.8rem" }}
-            >
-              <FontAwesomeIcon icon={faReply} style={{ fontSize: "0.8rem" }} />
-              <span style={{ fontSize: "0.8rem" }}>Répondre</span>
-            </button>
-          </div>
-          {message.estEnvoye && !message.estLu && (
-            <span
-              className="badge bg-light text-dark border border-secondary-subtle px-2 py-1"
-              style={{ fontSize: "0.75rem" }}
-            >
-              <FontAwesomeIcon
-                icon={faClock}
-                className="me-1"
-                style={{ fontSize: "0.7rem" }}
-              />
-              En attente de lecture
-            </span>
-          )}
-        </div>
-      </div>
-    </>
-  );
-};
-
-// Composant de statistiques amélioré
-const StatsCard = ({
-  title,
-  value,
-  icon,
-  color,
-  subtitle,
-  trend,
-  isLoading,
-}: {
-  title: string;
-  value: number;
-  icon: any;
-  color: string;
-  subtitle?: string;
-  trend?: "up" | "down" | "neutral";
-  isLoading?: boolean;
-}) => {
-  const getTrendIcon = () => {
-    switch (trend) {
-      case "up":
-        return (
-          <FontAwesomeIcon icon={faChevronUp} className="text-success fs-12" />
-        );
-      case "down":
-        return (
-          <FontAwesomeIcon icon={faChevronDown} className="text-danger fs-12" />
-        );
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <div className="card border-0 shadow-sm h-100 stats-card">
-      <div className="card-body p-3">
-        <div className="d-flex align-items-center">
-          <div
-            className={`bg-${color} bg-opacity-10 text-${color} rounded-3 p-2 me-3`}
-            style={{ borderRadius: "12px" }}
-          >
-            <FontAwesomeIcon icon={icon} className="fs-2" />
-          </div>
-          <div className="flex-grow-1">
-            <div className="d-flex align-items-center gap-2 mb-1">
-              <h3 className="mb-0 fw-bold" style={{ fontSize: "1.25rem" }}>
-                {isLoading ? (
-                  <span
-                    className="spinner-border spinner-border-sm me-2"
-                    role="status"
-                  >
-                    <span className="visually-hidden">Chargement...</span>
-                  </span>
-                ) : (
-                  value.toLocaleString()
-                )}
-              </h3>
-              {trend && getTrendIcon()}
-            </div>
-            <p
-              className="text-muted mb-1 fw-medium"
-              style={{ fontSize: "0.8rem" }}
-            >
-              {title}
-            </p>
-            {subtitle && (
-              <small
-                className="text-muted d-flex align-items-center gap-1"
-                style={{ fontSize: "0.7rem" }}
-              >
-                <FontAwesomeIcon icon={faInfoCircle} className="fs-11" />
-                {subtitle}
-              </small>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
+// ============================================
+// COMPOSANT PRINCIPAL AVEC SUSPENSE
+// ============================================
 export default function MessagerieUtilisateur() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-vh-100 d-flex align-items-center justify-content-center">
+          <LoadingSpinner
+            size="lg"
+            text="Chargement de votre messagerie..."
+            fullPage
+          />
+        </div>
+      }
+    >
+      <MessagesContent />
+    </Suspense>
+  );
+}
+
+// ============================================
+// COMPOSANT CONTENU DE LA MESSAGERIE
+// ============================================
+function MessagesContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
   // États pour les données
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [vendeurs, setVendeurs] = useState<Vendeur[]>([]);
-  const [utilisateurs, setUtilisateurs] = useState<Utilisateur[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [contacts, setContacts] = useState<ContactConversation[]>([]);
+  const [messagesRecus, setMessagesRecus] = useState<Message[]>([]);
   const [messagesEnvoyes, setMessagesEnvoyes] = useState<Message[]>([]);
+  const [userProfile, setUserProfile] = useState<UtilisateurBase | null>(null);
 
   // États pour le chargement
   const [loading, setLoading] = useState({
-    agents: false,
-    vendeurs: false,
-    utilisateurs: false,
+    initial: true,
+    contacts: false,
     messages: false,
     envoi: false,
     profile: false,
@@ -536,6 +198,8 @@ export default function MessagerieUtilisateur() {
 
   // États pour les erreurs
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
   // États pour les filtres
   const [searchTerm, setSearchTerm] = useState("");
@@ -543,22 +207,29 @@ export default function MessagerieUtilisateur() {
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
 
   // États pour la sélection
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+  const [selectedContact, setSelectedContact] =
+    useState<ContactConversation | null>(null);
 
-  // États pour les messages de succès/erreur
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [infoMessage, setInfoMessage] = useState<string | null>(null);
-
-  // État pour le formulaire d'envoi de message
+  // État pour le formulaire d'envoi
   const [newMessage, setNewMessage] = useState({
     destinataireEmail: "",
+    destinataireUuid: "",
     sujet: "",
     contenu: "",
     type: "NOTIFICATION",
     expediteurNom: "",
     expediteurEmail: "",
+    expediteurUuid: "",
   });
+
+  // ✅ État pour stocker le message original en réponse
+  const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
+
+  // Onglet actif
+  const [activeTab, setActiveTab] = useState<"contacts" | "received" | "sent">(
+    "contacts",
+  );
 
   // Statistiques
   const [stats, setStats] = useState({
@@ -568,295 +239,195 @@ export default function MessagerieUtilisateur() {
     sentMessages: 0,
   });
 
-  // Onglet actif
-  const [activeTab, setActiveTab] = useState<"contacts" | "received" | "sent">(
-    "contacts",
-  );
+  // REF pour éviter les boucles infinies
+  const isInitialLoad = useRef(true);
+  const isFetchingContacts = useRef(false);
+  const prevMessagesRecusLength = useRef(0);
+  const prevMessagesEnvoyesLength = useRef(0);
 
-  // Profil de l'utilisateur connecté
-  const [userProfile, setUserProfile] = useState<Utilisateur | null>(null);
+  // ============================================
+  // GESTION DES PARAMÈTRES D'URL
+  // ============================================
+  const handleUrlParams = useCallback(() => {
+    const destinataireUuid = searchParams.get("destinataireUuid");
+    const destinataireEmail = searchParams.get("destinataireEmail");
+    const destinataireNom = searchParams.get("destinataireNom");
+    const sujet = searchParams.get("sujet");
+    const produitUuid = searchParams.get("produitUuid");
+    const donUuid = searchParams.get("donUuid");
+    const echangeUuid = searchParams.get("echangeUuid");
 
-  // Charger le profil de l'utilisateur connecté
+    if (destinataireEmail && userProfile) {
+      console.log("📨 Paramètres URL reçus:", {
+        destinataireUuid,
+        destinataireEmail,
+        destinataireNom,
+        sujet,
+        produitUuid,
+        donUuid,
+        echangeUuid,
+      });
+
+      // Créer un contact temporaire
+      const contact: ContactConversation = {
+        uuid: destinataireUuid || `contact-${Date.now()}`,
+        email: destinataireEmail,
+        nom: destinataireNom?.split(" ").pop() || "",
+        prenoms:
+          destinataireNom?.split(" ").slice(0, -1).join(" ") ||
+          destinataireNom ||
+          "Contact",
+        telephone: "",
+        userType: detectUserTypeFromEmail(destinataireEmail),
+        est_verifie: true,
+        est_bloque: false,
+        is_deleted: false,
+      };
+
+      // Mettre à jour le formulaire
+      setNewMessage((prev) => ({
+        ...prev,
+        destinataireEmail: destinataireEmail,
+        destinataireUuid: destinataireUuid || "",
+        sujet: sujet || `Question concernant votre annonce`,
+        contenu: "",
+        type: "QUESTION",
+      }));
+
+      setSelectedContact(contact);
+      setActiveTab("contacts");
+
+      // Nettoyer l'URL
+      const url = new URL(window.location.href);
+      url.search = "";
+      router.replace(url.pathname, { scroll: false });
+    }
+  }, [searchParams, userProfile, router]);
+
+  // ============================================
+  // FONCTIONS UTILITAIRES
+  // ============================================
+  const detectUserTypeFromEmail = (
+    email: string,
+  ): "admin" | "agent" | "vendeur" | "utilisateur" => {
+    const emailLower = email.toLowerCase();
+    if (emailLower.includes("admin") || emailLower.includes("@sonec.com"))
+      return "admin";
+    if (emailLower.includes("agent") || emailLower.includes("@agent.com"))
+      return "agent";
+    if (
+      emailLower.includes("vendeur") ||
+      emailLower.includes("@sonecafrica.com")
+    )
+      return "vendeur";
+    if (emailLower.includes("boutique") || emailLower.includes("shop"))
+      return "vendeur";
+    return "utilisateur";
+  };
+
+  const getUserTypeIcon = (userType: string) => {
+    switch (userType) {
+      case "admin":
+        return faUserShield;
+      case "agent":
+        return faUserShield;
+      case "vendeur":
+        return faStore;
+      default:
+        return faUser;
+    }
+  };
+
+  const getUserTypeColor = (userType: string) => {
+    switch (userType) {
+      case "admin":
+        return "danger";
+      case "agent":
+        return "primary";
+      case "vendeur":
+        return "warning";
+      default:
+        return "info";
+    }
+  };
+
+  const getUserTypeLabel = (userType: string) => {
+    switch (userType) {
+      case "admin":
+        return "Admin";
+      case "agent":
+        return "Support";
+      case "vendeur":
+        return "Vendeur";
+      default:
+        return "Utilisateur";
+    }
+  };
+
+  const formatLastMessageDate = (dateString?: string) => {
+    if (!dateString) return "Jamais";
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffDays = Math.floor(diffMs / 86400000);
+
+      if (diffDays === 0)
+        return `Aujourd'hui à ${date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`;
+      if (diffDays === 1) return "Hier";
+      if (diffDays < 7) return `Il y a ${diffDays} jours`;
+      return date.toLocaleDateString("fr-FR");
+    } catch {
+      return "Date inconnue";
+    }
+  };
+
+  // ============================================
+  // CHARGEMENT DU PROFIL
+  // ============================================
   const fetchUserProfile = useCallback(async () => {
     setLoading((prev) => ({ ...prev, profile: true }));
     try {
-      console.log("🔍 Chargement du profil utilisateur...");
-      const response = await api.get<{
-        data?: Utilisateur;
-        message?: string;
-        status?: string;
-      }>(API_ENDPOINTS.AUTH.UTILISATEUR.PROFILE);
-
-      console.log("✅ Réponse du profil utilisateur:", response);
-
-      if (response && response.data) {
+      const response = await api.get<{ data?: UtilisateurBase }>(
+        API_ENDPOINTS.AUTH.UTILISATEUR.PROFILE,
+      );
+      if (response?.data) {
         const profile = response.data;
         setUserProfile(profile);
         setNewMessage((prev) => ({
           ...prev,
-          expediteurEmail: profile.email || "utilisateur@sonec.com",
+          expediteurEmail: profile.email || "",
           expediteurNom:
             `${profile.prenoms || ""} ${profile.nom || ""}`.trim() ||
             "Utilisateur SONEC",
-        }));
-      } else {
-        setNewMessage((prev) => ({
-          ...prev,
-          expediteurEmail: "utilisateur@sonec.com",
-          expediteurNom: "Utilisateur SONEC",
+          expediteurUuid: profile.uuid || "",
         }));
       }
-    } catch (err: any) {
-      console.error("❌ Erreur lors du chargement du profil utilisateur:", err);
-      setNewMessage((prev) => ({
-        ...prev,
-        expediteurEmail: "utilisateur@sonec.com",
-        expediteurNom: "Utilisateur SONEC",
-      }));
+    } catch (err) {
+      console.error("❌ Erreur chargement profil:", err);
     } finally {
       setLoading((prev) => ({ ...prev, profile: false }));
     }
   }, []);
 
-  // Charger les agents (pour contacter le support)
-  const fetchAgents = useCallback(async () => {
-    setLoading((prev) => ({ ...prev, agents: true }));
-    try {
-      console.log("🔄 Chargement des agents...");
-      const response = await api.get<{
-        data?: Agent[];
-        count?: number;
-        status?: string;
-      }>(API_ENDPOINTS.ADMIN.AGENTS.LIST);
-
-      if (response && response.data) {
-        setAgents(response.data);
-      } else {
-        // Données de démonstration pour les agents
-        const demoAgents: Agent[] = [
-          {
-            uuid: "agent-1",
-            nom: "Support",
-            prenoms: "Client",
-            email: "support@sonec.com",
-            telephone: "+2250700000000",
-            est_verifie: true,
-            est_bloque: false,
-            is_deleted: false,
-            created_at: new Date().toISOString(),
-            statut: "actif",
-          },
-          {
-            uuid: "agent-2",
-            nom: "Assistance",
-            prenoms: "Technique",
-            email: "assistance@sonec.com",
-            telephone: "+2250700000001",
-            est_verifie: true,
-            est_bloque: false,
-            is_deleted: false,
-            created_at: new Date().toISOString(),
-            statut: "actif",
-          },
-        ];
-        setAgents(demoAgents);
-      }
-    } catch (err: any) {
-      console.error("❌ Erreur lors du chargement des agents:", err);
-      // Données de démonstration en cas d'erreur
-      const demoAgents: Agent[] = [
-        {
-          uuid: "agent-1",
-          nom: "Support",
-          prenoms: "Client",
-          email: "support@sonec.com",
-          telephone: "+2250700000000",
-          est_verifie: true,
-          est_bloque: false,
-          is_deleted: false,
-          created_at: new Date().toISOString(),
-          statut: "actif",
-        },
-      ];
-      setAgents(demoAgents);
-    } finally {
-      setLoading((prev) => ({ ...prev, agents: false }));
-    }
-  }, []);
-
-  // Charger les vendeurs (pour contacter les boutiques)
-  const fetchVendeurs = useCallback(async () => {
-    setLoading((prev) => ({ ...prev, vendeurs: true }));
-    try {
-      console.log("🔄 Chargement des vendeurs...");
-      const response = await api.get<{
-        data?: Vendeur[];
-        count?: number;
-        status?: string;
-      }>(API_ENDPOINTS.ADMIN.VENDEURS.LIST);
-
-      if (response && response.data) {
-        setVendeurs(response.data);
-      } else {
-        // Données de démonstration pour les vendeurs
-        const demoVendeurs: Vendeur[] = [
-          {
-            uuid: "vendeur-1",
-            nom: "Boutique",
-            prenoms: "Electronique",
-            email: "electronique@sonec.com",
-            telephone: "+2250700000002",
-            est_verifie: true,
-            est_bloque: false,
-            is_deleted: false,
-            boutique: {
-              nom: "ElectroShop",
-              uuid: "boutique-1",
-            },
-            created_at: new Date().toISOString(),
-            statut: "actif",
-          },
-          {
-            uuid: "vendeur-2",
-            nom: "Boutique",
-            prenoms: "Mode",
-            email: "mode@sonec.com",
-            telephone: "+2250700000003",
-            est_verifie: true,
-            est_bloque: false,
-            is_deleted: false,
-            boutique: {
-              nom: "Fashion Store",
-              uuid: "boutique-2",
-            },
-            created_at: new Date().toISOString(),
-            statut: "actif",
-          },
-        ];
-        setVendeurs(demoVendeurs);
-      }
-    } catch (err: any) {
-      console.error("❌ Erreur lors du chargement des vendeurs:", err);
-      // Données de démonstration en cas d'erreur
-      const demoVendeurs: Vendeur[] = [
-        {
-          uuid: "vendeur-1",
-          nom: "Boutique",
-          prenoms: "Exemple",
-          email: "boutique@sonec.com",
-          telephone: "+2250700000002",
-          est_verifie: true,
-          est_bloque: false,
-          is_deleted: false,
-          boutique: {
-            nom: "Ma Boutique",
-            uuid: "boutique-1",
-          },
-          created_at: new Date().toISOString(),
-          statut: "actif",
-        },
-      ];
-      setVendeurs(demoVendeurs);
-    } finally {
-      setLoading((prev) => ({ ...prev, vendeurs: false }));
-    }
-  }, []);
-
-  // Charger les autres utilisateurs (pour contacter d'autres utilisateurs)
-  const fetchUtilisateurs = useCallback(async () => {
-    setLoading((prev) => ({ ...prev, utilisateurs: true }));
-    try {
-      console.log("🔄 Chargement des autres utilisateurs...");
-      const response = await api.get<{
-        data?: Utilisateur[];
-        count?: number;
-        status?: string;
-      }>(API_ENDPOINTS.ADMIN.USERS.LIST);
-
-      if (response && response.data) {
-        // Filtrer l'utilisateur connecté
-        const filteredUsers = response.data.filter(
-          (user) => user.uuid !== userProfile?.uuid,
-        );
-        setUtilisateurs(filteredUsers);
-      } else {
-        // Données de démonstration pour les utilisateurs
-        const demoUtilisateurs: Utilisateur[] = [
-          {
-            uuid: "utilisateur-1",
-            nom: "Dupont",
-            prenoms: "Jean",
-            email: "jean.dupont@example.com",
-            telephone: "+2250700000004",
-            est_verifie: true,
-            est_bloque: false,
-            is_deleted: false,
-            created_at: new Date().toISOString(),
-            statut: "actif",
-          },
-          {
-            uuid: "utilisateur-2",
-            nom: "Martin",
-            prenoms: "Marie",
-            email: "marie.martin@example.com",
-            telephone: "+2250700000005",
-            est_verifie: true,
-            est_bloque: false,
-            is_deleted: false,
-            created_at: new Date().toISOString(),
-            statut: "actif",
-          },
-        ];
-        setUtilisateurs(demoUtilisateurs);
-      }
-    } catch (err: any) {
-      console.error("❌ Erreur lors du chargement des utilisateurs:", err);
-      // Données de démonstration en cas d'erreur
-      const demoUtilisateurs: Utilisateur[] = [
-        {
-          uuid: "utilisateur-1",
-          nom: "Exemple",
-          prenoms: "Utilisateur",
-          email: "autre.utilisateur@example.com",
-          telephone: "+2250700000004",
-          est_verifie: true,
-          est_bloque: false,
-          is_deleted: false,
-          created_at: new Date().toISOString(),
-          statut: "actif",
-        },
-      ];
-      setUtilisateurs(demoUtilisateurs);
-    } finally {
-      setLoading((prev) => ({ ...prev, utilisateurs: false }));
-    }
-  }, [userProfile?.uuid]);
-
-  // Charger les messages reçus
+  // ============================================
+  // CHARGEMENT DES MESSAGES REÇUS
+  // ============================================
   const fetchMessagesRecus = useCallback(async () => {
     setLoading((prev) => ({ ...prev, messages: true }));
     try {
-      console.log("🔄 Chargement des messages reçus pour utilisateur...");
       const response = await api.get<MessageReceived[]>(
         API_ENDPOINTS.MESSAGERIE.RECEIVED,
       );
 
-      console.log("📨 Réponse brute des messages reçus:", response);
-
-      if (!response || (Array.isArray(response) && response.length === 0)) {
-        console.warn("⚠️ Aucun message reçu trouvé");
-        setMessages([]);
+      if (!response || !Array.isArray(response) || response.length === 0) {
+        setMessagesRecus([]);
         return;
       }
 
-      // Transformer les données
-      const transformedMessages = (Array.isArray(response) ? response : [])
+      const transformedMessages = response
         .map((item: any) => {
-          if (!item) return null;
-
-          const hasMessageWrapper = item.message !== undefined;
-          const messageData = hasMessageWrapper ? item.message : item;
-
+          const messageData = item.message || item;
           return {
             uuid: messageData.uuid || item.uuid || `msg-${Date.now()}`,
             sujet: messageData.sujet || "Sans sujet",
@@ -864,204 +435,246 @@ export default function MessagerieUtilisateur() {
             expediteurNom: messageData.expediteurNom || "Expéditeur inconnu",
             expediteurEmail:
               messageData.expediteurEmail || "inconnu@exemple.com",
+            expediteurUuid: messageData.expediteurUuid,
             destinataireEmail:
-              messageData.destinataireEmail ||
-              userProfile?.email ||
-              "utilisateur@sonec.com",
+              messageData.destinataireEmail || userProfile?.email,
+            destinataireUuid: messageData.destinataireUuid || userProfile?.uuid,
             type: (messageData.type || "notification").toUpperCase(),
-            estEnvoye:
-              messageData.estEnvoye !== undefined
-                ? messageData.estEnvoye
-                : true,
+            estEnvoye: false,
             envoyeLe:
               messageData.envoyeLe ||
               item.dateReception ||
               new Date().toISOString(),
-            estLu: hasMessageWrapper
-              ? item.estLu || false
-              : messageData.estLu || false,
-            dateLecture: hasMessageWrapper
-              ? item.dateLecture
-              : messageData.dateLecture,
-            dateCreation: messageData.dateCreation || item.dateReception,
+            estLu: item.estLu || messageData.estLu || false,
+            dateLecture: item.dateLecture || messageData.dateLecture,
           } as Message;
         })
         .filter((item): item is Message => item !== null);
 
-      console.log("📨 Messages transformés:", transformedMessages);
-      setMessages(transformedMessages);
-    } catch (err: any) {
-      console.error("❌ Erreur lors du chargement des messages:", err);
-      setError("Erreur lors du chargement des messages");
-
-      // Données de démonstration adaptées aux utilisateurs
-      const demoMessages: Message[] = [
-        {
-          uuid: "msg-1",
-          sujet: "Bienvenue sur SONEC !",
-          contenu:
-            "Bienvenue cher utilisateur ! Nous sommes ravis de vous compter parmi nous. Découvrez nos fonctionnalités et profitez de nos services.",
-          expediteurNom: "Équipe SONEC",
-          expediteurEmail: "welcome@sonec.com",
-          destinataireEmail: userProfile?.email || "utilisateur@sonec.com",
-          type: "NOTIFICATION",
-          estEnvoye: true,
-          envoyeLe: new Date().toISOString(),
-          estLu: false,
-          dateLecture: null,
-        },
-        {
-          uuid: "msg-2",
-          sujet: "Promotion spéciale -20%",
-          contenu:
-            "Profitez de -20% sur tous les produits électroniques cette semaine ! Ne manquez pas cette offre exclusive.",
-          expediteurNom: "ElectroShop",
-          expediteurEmail: "promotions@electroshop.com",
-          destinataireEmail: userProfile?.email || "utilisateur@sonec.com",
-          type: "PROMOTION",
-          estEnvoye: true,
-          envoyeLe: new Date(Date.now() - 3600000).toISOString(),
-          estLu: true,
-          dateLecture: new Date(Date.now() - 3500000).toISOString(),
-        },
-        {
-          uuid: "msg-3",
-          sujet: "Votre commande a été expédiée",
-          contenu:
-            "Votre commande #ORD-12345 a été expédiée. Vous pouvez suivre votre colis avec le numéro de suivi TRK-789456.",
-          expediteurNom: "Fashion Store",
-          expediteurEmail: "shipping@fashionstore.com",
-          destinataireEmail: userProfile?.email || "utilisateur@sonec.com",
-          type: "INFO",
-          estEnvoye: true,
-          envoyeLe: new Date(Date.now() - 86400000).toISOString(),
-          estLu: true,
-          dateLecture: new Date(Date.now() - 86300000).toISOString(),
-        },
-      ];
-      setMessages(demoMessages);
+      setMessagesRecus(transformedMessages);
+    } catch (err) {
+      console.error("❌ Erreur chargement messages reçus:", err);
     } finally {
       setLoading((prev) => ({ ...prev, messages: false }));
     }
   }, [userProfile]);
 
-  // Charger les messages envoyés
+  // ============================================
+  // CHARGEMENT DES MESSAGES ENVOYÉS - CORRIGÉ
+  // ============================================
   const fetchMessagesEnvoyes = useCallback(async () => {
     setLoading((prev) => ({ ...prev, messages: true }));
     try {
-      console.log("🔄 Chargement des messages envoyés...");
       const response = await api.get<any[]>(API_ENDPOINTS.MESSAGERIE.SENT);
 
-      console.log("📤 Réponse brute des messages envoyés:", response);
-
-      if (!response || (Array.isArray(response) && response.length === 0)) {
-        console.warn("⚠️ Aucun message envoyé trouvé");
+      if (!response || !Array.isArray(response) || response.length === 0) {
         setMessagesEnvoyes([]);
         return;
       }
 
-      const formattedMessages = (Array.isArray(response) ? response : [])
+      const formattedMessages = response
         .map((msg: any) => {
           if (!msg) return null;
 
-          return {
+          // ✅ Créer l'objet avec les propriétés obligatoires
+          const formattedMsg: Message = {
             uuid: msg.uuid || `sent-${Date.now()}`,
             sujet: msg.sujet || "Sans sujet",
             contenu: msg.contenu || "",
             expediteurNom:
               msg.expediteurNom || userProfile?.nom || "Utilisateur SONEC",
-            expediteurEmail:
-              msg.expediteurEmail ||
-              userProfile?.email ||
-              "utilisateur@sonec.com",
+            expediteurEmail: msg.expediteurEmail || userProfile?.email || "",
             destinataireEmail: msg.destinataireEmail || "",
             type: (msg.type || "notification").toUpperCase(),
-            estEnvoye: msg.estEnvoye !== undefined ? msg.estEnvoye : true,
+            estEnvoye: true,
             envoyeLe: msg.envoyeLe || new Date().toISOString(),
             estLu: msg.estLu || false,
             dateLecture: msg.dateLecture || null,
-            dateCreation: msg.dateCreation,
-          } as Message;
+          };
+
+          // ✅ Ajouter les propriétés optionnelles seulement si elles existent
+          if (msg.expediteurUuid || userProfile?.uuid) {
+            formattedMsg.expediteurUuid =
+              msg.expediteurUuid || userProfile?.uuid;
+          }
+          if (msg.destinataireUuid) {
+            formattedMsg.destinataireUuid = msg.destinataireUuid;
+          }
+
+          return formattedMsg;
         })
         .filter((msg): msg is Message => msg !== null);
 
-      console.log("📤 Messages envoyés transformés:", formattedMessages);
       setMessagesEnvoyes(formattedMessages);
-    } catch (err: any) {
-      console.error("❌ Erreur lors du chargement des messages envoyés:", err);
-      setError("Erreur lors du chargement des messages envoyés");
-
-      // Données de démonstration pour les utilisateurs
-      const demoSentMessages: Message[] = [
-        {
-          uuid: "sent-1",
-          sujet: "Question sur mon produit",
-          contenu:
-            "Bonjour, j'ai une question concernant le produit que j'ai acheté. Pouvez-vous m'aider ?",
-          expediteurNom: userProfile
-            ? `${userProfile.prenoms} ${userProfile.nom}`
-            : "Utilisateur SONEC",
-          expediteurEmail: userProfile?.email || "utilisateur@sonec.com",
-          destinataireEmail: "support@sonec.com",
-          type: "INFO",
-          estEnvoye: true,
-          envoyeLe: new Date(Date.now() - 7200000).toISOString(),
-          estLu: true,
-          dateLecture: new Date(Date.now() - 7000000).toISOString(),
-        },
-        {
-          uuid: "sent-2",
-          sujet: "Demande d'assistance technique",
-          contenu:
-            "J'ai un problème avec mon compte. Pouvez-vous me contacter pour résoudre ce problème ?",
-          expediteurNom: userProfile
-            ? `${userProfile.prenoms} ${userProfile.nom}`
-            : "Utilisateur SONEC",
-          expediteurEmail: userProfile?.email || "utilisateur@sonec.com",
-          destinataireEmail: "assistance@sonec.com",
-          type: "ALERT",
-          estEnvoye: true,
-          envoyeLe: new Date(Date.now() - 43200000).toISOString(),
-          estLu: false,
-          dateLecture: null,
-        },
-      ];
-      setMessagesEnvoyes(demoSentMessages);
+    } catch (err) {
+      console.error("❌ Erreur chargement messages envoyés:", err);
     } finally {
       setLoading((prev) => ({ ...prev, messages: false }));
     }
   }, [userProfile]);
 
-  // Recharger les messages périodiquement
+  // ============================================
+  // CONSTRUCTION DES CONTACTS
+  // ============================================
+  const buildContactsFromMessages = useCallback(() => {
+    if (!userProfile) return;
+
+    if (isFetchingContacts.current) return;
+    isFetchingContacts.current = true;
+
+    try {
+      console.log("👥 Construction des contacts depuis les messages...");
+
+      const contactsMap = new Map<string, ContactConversation>();
+
+      messagesRecus.forEach((msg) => {
+        if (msg.expediteurEmail && msg.expediteurEmail !== userProfile.email) {
+          const key = msg.expediteurEmail;
+          if (!contactsMap.has(key)) {
+            contactsMap.set(key, {
+              uuid: msg.expediteurUuid || `contact-${Date.now()}-${key}`,
+              email: msg.expediteurEmail,
+              nom: msg.expediteurNom.split(" ").pop() || "",
+              prenoms:
+                msg.expediteurNom.split(" ").slice(0, -1).join(" ") ||
+                msg.expediteurNom,
+              telephone: "",
+              userType: detectUserTypeFromEmail(msg.expediteurEmail),
+              est_verifie: true,
+              est_bloque: false,
+              is_deleted: false,
+              lastMessageDate: msg.envoyeLe,
+              lastMessage: msg.contenu,
+              unreadCount: !msg.estLu ? 1 : 0,
+              totalMessages: 1,
+            });
+          } else {
+            const contact = contactsMap.get(key)!;
+            contact.totalMessages = (contact.totalMessages || 0) + 1;
+            if (!msg.estLu) {
+              contact.unreadCount = (contact.unreadCount || 0) + 1;
+            }
+            if (
+              new Date(msg.envoyeLe) > new Date(contact.lastMessageDate || "")
+            ) {
+              contact.lastMessageDate = msg.envoyeLe;
+              contact.lastMessage = msg.contenu;
+            }
+          }
+        }
+      });
+
+      messagesEnvoyes.forEach((msg) => {
+        if (
+          msg.destinataireEmail &&
+          msg.destinataireEmail !== userProfile.email
+        ) {
+          const key = msg.destinataireEmail;
+          if (!contactsMap.has(key)) {
+            contactsMap.set(key, {
+              uuid: msg.destinataireUuid || `contact-${Date.now()}-${key}`,
+              email: msg.destinataireEmail,
+              nom: "",
+              prenoms: msg.destinataireEmail.split("@")[0] || "Contact",
+              telephone: "",
+              userType: detectUserTypeFromEmail(msg.destinataireEmail),
+              est_verifie: true,
+              est_bloque: false,
+              is_deleted: false,
+              lastMessageDate: msg.envoyeLe,
+              lastMessage: msg.contenu,
+              unreadCount: 0,
+              totalMessages: 1,
+            });
+          } else {
+            const contact = contactsMap.get(key)!;
+            contact.totalMessages = (contact.totalMessages || 0) + 1;
+            if (
+              new Date(msg.envoyeLe) > new Date(contact.lastMessageDate || "")
+            ) {
+              contact.lastMessageDate = msg.envoyeLe;
+              contact.lastMessage = msg.contenu;
+            }
+          }
+        }
+      });
+
+      const contactsArray = Array.from(contactsMap.values()).sort((a, b) => {
+        const dateA = a.lastMessageDate
+          ? new Date(a.lastMessageDate).getTime()
+          : 0;
+        const dateB = b.lastMessageDate
+          ? new Date(b.lastMessageDate).getTime()
+          : 0;
+        return dateB - dateA;
+      });
+
+      console.log(`✅ ${contactsArray.length} contacts trouvés`);
+      setContacts(contactsArray);
+    } catch (err) {
+      console.error("❌ Erreur construction contacts:", err);
+    } finally {
+      isFetchingContacts.current = false;
+    }
+  }, [userProfile, messagesRecus, messagesEnvoyes]);
+
+  // ============================================
+  // CHARGEMENT INITIAL
+  // ============================================
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (activeTab === "received") {
-        fetchMessagesRecus();
-      } else if (activeTab === "sent") {
-        fetchMessagesEnvoyes();
+    const loadInitialData = async () => {
+      setLoading((prev) => ({ ...prev, initial: true }));
+      try {
+        await fetchUserProfile();
+        await fetchMessagesRecus();
+        await fetchMessagesEnvoyes();
+        isInitialLoad.current = false;
+      } catch (err) {
+        console.error("❌ Erreur chargement initial:", err);
+      } finally {
+        setLoading((prev) => ({ ...prev, initial: false }));
       }
-    }, 30000);
+    };
 
-    return () => clearInterval(interval);
-  }, [activeTab, fetchMessagesRecus, fetchMessagesEnvoyes]);
+    loadInitialData();
+  }, [fetchUserProfile, fetchMessagesRecus, fetchMessagesEnvoyes]);
 
-  // Charger toutes les données au montage
+  // ============================================
+  // CONSTRUCTION DES CONTACTS APRÈS CHARGEMENT
+  // ============================================
   useEffect(() => {
-    console.log("🚀 Chargement des données pour utilisateur...");
-    fetchUserProfile().then(() => {
-      fetchAgents();
-      fetchVendeurs();
-      fetchUtilisateurs();
-      fetchMessagesRecus();
-      fetchMessagesEnvoyes();
-    });
-  }, []);
+    if (isInitialLoad.current) return;
+    if (!userProfile) return;
 
-  // Mettre à jour les statistiques
+    const messagesRecusChanged =
+      prevMessagesRecusLength.current !== messagesRecus.length;
+    const messagesEnvoyesChanged =
+      prevMessagesEnvoyesLength.current !== messagesEnvoyes.length;
+
+    if (messagesRecusChanged || messagesEnvoyesChanged) {
+      buildContactsFromMessages();
+
+      prevMessagesRecusLength.current = messagesRecus.length;
+      prevMessagesEnvoyesLength.current = messagesEnvoyes.length;
+    }
+  }, [userProfile, messagesRecus, messagesEnvoyes, buildContactsFromMessages]);
+
+  // ============================================
+  // GESTION DES PARAMÈTRES URL APRÈS CHARGEMENT
+  // ============================================
   useEffect(() => {
-    const totalContacts = agents.length + vendeurs.length + utilisateurs.length;
-    const totalMessages = messages.length + messagesEnvoyes.length;
-    const unreadMessages = messages.filter((m) => !m.estLu).length;
+    if (userProfile && !loading.initial) {
+      handleUrlParams();
+    }
+  }, [userProfile, loading.initial, handleUrlParams]);
+
+  // ============================================
+  // STATISTIQUES
+  // ============================================
+  useEffect(() => {
+    const totalContacts = contacts.length;
+    const totalMessages = messagesRecus.length + messagesEnvoyes.length;
+    const unreadMessages = messagesRecus.filter((m) => !m.estLu).length;
 
     setStats({
       totalContacts,
@@ -1069,137 +682,48 @@ export default function MessagerieUtilisateur() {
       unreadMessages,
       sentMessages: messagesEnvoyes.length,
     });
-  }, [agents, vendeurs, utilisateurs, messages, messagesEnvoyes]);
+  }, [contacts, messagesRecus, messagesEnvoyes]);
 
-  // Combiner tous les contacts
-  const allContacts = useMemo(() => {
-    const contacts: ContactWithType[] = [];
-
-    if (selectedType === "all" || selectedType === "agent") {
-      contacts.push(
-        ...agents.map((agent) => ({
-          ...agent,
-          userType: "agent" as const,
-          boutique: undefined,
-        })),
-      );
-    }
-
-    if (selectedType === "all" || selectedType === "vendeur") {
-      contacts.push(
-        ...vendeurs.map((vendeur) => ({
-          ...vendeur,
-          userType: "vendeur" as const,
-          boutique: vendeur.boutique,
-        })),
-      );
-    }
-
-    if (selectedType === "all" || selectedType === "utilisateur") {
-      contacts.push(
-        ...utilisateurs.map((utilisateur) => ({
-          ...utilisateur,
-          userType: "utilisateur" as const,
-          boutique: undefined,
-        })),
-      );
-    }
-
-    console.log("👥 Tous les contacts combinés:", contacts.length);
-    return contacts;
-  }, [agents, vendeurs, utilisateurs, selectedType]);
-
-  // Filtrer les contacts
+  // ============================================
+  // FILTRAGE DES CONTACTS
+  // ============================================
   const filteredContacts = useMemo(() => {
-    let result = allContacts.filter((v) => !v.is_deleted);
+    let result = contacts.filter((c) => !c.is_deleted);
 
-    // Filtrer par recherche
     if (searchTerm.trim()) {
       const searchLower = searchTerm.toLowerCase();
-      result = result.filter((v) => {
-        // Vérifier les champs de base
-        const basicMatch =
-          v.nom?.toLowerCase().includes(searchLower) ||
-          v.prenoms?.toLowerCase().includes(searchLower) ||
-          v.email?.toLowerCase().includes(searchLower) ||
-          v.telephone?.includes(searchTerm);
-
-        // Vérifier le nom de la boutique seulement pour les vendeurs
-        const boutiqueMatch =
-          v.userType === "vendeur" &&
-          v.boutique?.nom?.toLowerCase().includes(searchLower);
-
-        return basicMatch || boutiqueMatch;
-      });
+      result = result.filter(
+        (c) =>
+          c.nom?.toLowerCase().includes(searchLower) ||
+          c.prenoms?.toLowerCase().includes(searchLower) ||
+          c.email?.toLowerCase().includes(searchLower) ||
+          c.boutique?.nom?.toLowerCase().includes(searchLower),
+      );
     }
 
-    // Filtrer par statut
+    if (selectedType !== "all") {
+      result = result.filter((c) => c.userType === selectedType);
+    }
+
     if (selectedStatus !== "all") {
       if (selectedStatus === "active") {
-        result = result.filter((v) => !v.est_bloque && v.est_verifie);
+        result = result.filter((c) => !c.est_bloque && c.est_verifie);
       } else if (selectedStatus === "blocked") {
-        result = result.filter((v) => v.est_bloque);
+        result = result.filter((c) => c.est_bloque);
       } else if (selectedStatus === "unverified") {
-        result = result.filter((v) => !v.est_verifie);
+        result = result.filter((c) => !c.est_verifie);
       }
     }
 
-    console.log("🔍 Contacts filtrés:", result.length);
     return result;
-  }, [allContacts, searchTerm, selectedStatus]);
+  }, [contacts, searchTerm, selectedType, selectedStatus]);
 
-  // Gestion de la sélection multiple
-  const handleSelectContact = (contactId: string) => {
-    setSelectedUsers((prev) => {
-      if (prev.includes(contactId)) {
-        return prev.filter((id) => id !== contactId);
-      } else {
-        return [...prev, contactId];
-      }
-    });
-  };
-
-  const handleSelectAll = () => {
-    if (selectedUsers.length === filteredContacts.length) {
-      setSelectedUsers([]);
-    } else {
-      const allContactIds = filteredContacts.map((contact) => contact.uuid);
-      setSelectedUsers(allContactIds);
-    }
-  };
-
-  // Sélectionner un contact pour envoyer un message
-  const selectContactForMessage = (
-    email: string,
-    nom?: string,
-    prenoms?: string,
-    userType?: string,
-    boutiqueNom?: string,
-  ) => {
-    let sujet = "Message de l'utilisateur";
-
-    if (boutiqueNom) {
-      sujet = `Question concernant ${boutiqueNom}`;
-    } else if (nom || prenoms) {
-      sujet = `Message pour ${nom || ""} ${prenoms || ""}`.trim();
-    } else if (userType === "agent") {
-      sujet = "Demande de support";
-    } else if (userType === "utilisateur") {
-      sujet = "Message entre utilisateurs";
-    }
-
-    setNewMessage((prev) => ({
-      ...prev,
-      destinataireEmail: email,
-      sujet: sujet || "Message important",
-    }));
-  };
-
-  // Fonction corrigée pour l'envoi de message avec validation
+  // ============================================
+  // ✅ ACTIONS - AVEC MESSAGE ORIGINAL EN LECTURE SEULE
+  // ============================================
   const handleSendMessage = async () => {
-    // Validation
     if (!newMessage.destinataireEmail.trim()) {
-      setInfoMessage("Veuillez saisir une adresse email valide");
+      setInfoMessage("Veuillez saisir une adresse email");
       setTimeout(() => setInfoMessage(null), 3000);
       return;
     }
@@ -1227,208 +751,139 @@ export default function MessagerieUtilisateur() {
         type: newMessage.type.toLowerCase(),
       };
 
-      console.log("📤 Envoi du message avec les données:", messageData);
-      console.log("📤 URL d'envoi:", API_ENDPOINTS.MESSAGERIE.PUBLIC_SEND);
+      await api.post<any>(API_ENDPOINTS.MESSAGERIE.PUBLIC_SEND, messageData);
 
-      // Utiliser l'endpoint public pour l'envoi de message
-      // Correction: Supprimer l'option requiresAuth si elle n'est pas supportée
-      const response = await api.post<any>(
-        API_ENDPOINTS.MESSAGERIE.PUBLIC_SEND,
-        messageData,
-      );
+      const sentMessage: Message = {
+        uuid: `temp-${Date.now()}`,
+        sujet: messageData.sujet,
+        contenu: messageData.contenu,
+        expediteurNom: newMessage.expediteurNom,
+        expediteurEmail: newMessage.expediteurEmail,
+        expediteurUuid: newMessage.expediteurUuid,
+        destinataireEmail: messageData.destinataireEmail,
+        destinataireUuid: newMessage.destinataireUuid,
+        type: newMessage.type.toUpperCase(),
+        estEnvoye: true,
+        envoyeLe: new Date().toISOString(),
+        estLu: false,
+        dateLecture: null,
+      };
 
-      console.log("✅ Réponse de l'API:", response);
+      setMessagesEnvoyes((prev) => [sentMessage, ...prev]);
+      setSuccessMessage("Message envoyé avec succès !");
 
-      if (response) {
-        // Créer un message local pour l'affichage immédiat
-        const sentMessage: Message = {
-          uuid: `temp-${Date.now()}`,
-          sujet: messageData.sujet,
-          contenu: messageData.contenu,
-          expediteurNom: newMessage.expediteurNom,
-          expediteurEmail: newMessage.expediteurEmail,
-          destinataireEmail: messageData.destinataireEmail,
-          type: newMessage.type.toUpperCase(),
-          estEnvoye: true,
-          envoyeLe: new Date().toISOString(),
-          estLu: false,
-          dateLecture: null,
-        };
+      // ✅ Réinitialiser le message original
+      setReplyToMessage(null);
 
-        setMessagesEnvoyes((prev) => [sentMessage, ...prev]);
+      setNewMessage({
+        destinataireEmail: "",
+        destinataireUuid: "",
+        sujet: "",
+        contenu: "",
+        type: "NOTIFICATION",
+        expediteurNom: newMessage.expediteurNom,
+        expediteurEmail: newMessage.expediteurEmail,
+        expediteurUuid: newMessage.expediteurUuid,
+      });
 
-        setSuccessMessage("Message envoyé avec succès !");
-
-        // Réinitialiser le formulaire
-        setNewMessage({
-          destinataireEmail: "",
-          sujet: "",
-          contenu: "",
-          type: "NOTIFICATION",
-          expediteurNom: newMessage.expediteurNom,
-          expediteurEmail: newMessage.expediteurEmail,
-        });
-
-        // Basculer sur l'onglet des messages envoyés
-        setActiveTab("sent");
-
-        // Recharger les messages envoyés après un court délai
-        setTimeout(() => {
-          fetchMessagesEnvoyes();
-        }, 1000);
-      }
+      setSelectedContact(null);
+      setActiveTab("sent");
     } catch (err: any) {
-      console.error("❌ Erreur lors de l'envoi du message:", err);
-
-      let errorMessage = "Erreur lors de l'envoi du message";
-
-      if (err.response) {
-        console.error("📥 Détails de l'erreur:", {
-          status: err.response.status,
-          data: err.response.data,
-        });
-
-        if (err.response.status === 400) {
-          errorMessage =
-            "Données invalides. Vérifiez les informations saisies.";
-        } else if (err.response.status === 404) {
-          errorMessage = "Destinataire non trouvé. Vérifiez l'adresse email.";
-        } else if (err.response.status === 403) {
-          errorMessage = "Vous n'êtes pas autorisé à envoyer ce message.";
-        } else if (err.response.status === 500) {
-          errorMessage =
-            "Erreur serveur. Le service de messagerie est temporairement indisponible.";
-        }
-
-        if (err.response.data?.message) {
-          errorMessage = err.response.data.message;
-        } else if (err.response.data?.error) {
-          errorMessage = err.response.data.error;
-        }
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-
-      setError(errorMessage);
-      setInfoMessage(`Échec de l'envoi: ${errorMessage}`);
+      console.error("❌ Erreur envoi message:", err);
+      setError(err.message || "Erreur lors de l'envoi du message");
     } finally {
       setLoading((prev) => ({ ...prev, envoi: false }));
       setTimeout(() => {
         setSuccessMessage(null);
         setError(null);
-        setInfoMessage(null);
       }, 5000);
     }
   };
 
-  // Marquer un message comme lu
   const handleMarkAsRead = async (messageId: string) => {
-    try {
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.uuid === messageId ? { ...msg, estLu: true } : msg,
-        ),
-      );
-
-      if (selectedMessage?.uuid === messageId) {
-        setSelectedMessage((prev) => (prev ? { ...prev, estLu: true } : null));
-      }
-    } catch (err) {
-      console.error("Error marking message as read:", err);
+    setMessagesRecus((prev) =>
+      prev.map((msg) =>
+        msg.uuid === messageId ? { ...msg, estLu: true } : msg,
+      ),
+    );
+    if (selectedMessage?.uuid === messageId) {
+      setSelectedMessage((prev) => (prev ? { ...prev, estLu: true } : null));
     }
   };
 
-  // Répondre à un message
+  // ✅ CORRECTION: Répondre avec message original en lecture seule
   const handleReply = (message: Message) => {
+    // Stocker le message original
+    setReplyToMessage(message);
+
+    // Mettre à jour le formulaire
     setNewMessage({
+      ...newMessage,
       destinataireEmail: message.expediteurEmail,
+      destinataireUuid: message.expediteurUuid || "",
       sujet: `RE: ${message.sujet}`,
-      contenu: `\n\n--- Message original ---\n${message.contenu}`,
+      contenu: "", // Le contenu est vide, le message original sera affiché séparément
       type: message.type,
-      expediteurNom: newMessage.expediteurNom,
-      expediteurEmail: newMessage.expediteurEmail,
     });
+
+    const contact = contacts.find((c) => c.email === message.expediteurEmail);
+    if (contact) setSelectedContact(contact);
     setActiveTab("contacts");
   };
 
-  // Obtenir l'icône pour le type d'utilisateur
-  const getUserTypeIcon = (userType: string) => {
-    switch (userType) {
-      case "agent":
-        return faUserShield;
-      case "vendeur":
-        return faStore;
-      case "utilisateur":
-        return faUser;
-      default:
-        return faUser;
-    }
-  };
-
-  // Obtenir la couleur pour le type d'utilisateur
-  const getUserTypeColor = (userType: string) => {
-    switch (userType) {
-      case "agent":
-        return "primary";
-      case "vendeur":
-        return "warning";
-      case "utilisateur":
-        return "info";
-      default:
-        return "secondary";
-    }
-  };
-
-  // Obtenir le label pour le type d'utilisateur
-  const getUserTypeLabel = (userType: string) => {
-    switch (userType) {
-      case "agent":
-        return "Support";
-      case "vendeur":
-        return "Vendeur";
-      case "utilisateur":
-        return "Utilisateur";
-      default:
-        return "Contact";
-    }
-  };
-
-  // Grouper les messages par date pour les séparateurs
-  const groupedMessages = useMemo(() => {
-    return messages.map((message, index) => {
-      const showSeparator = index > 0 && index % 3 === 0;
-      return {
-        message,
-        showSeparator,
-      };
+  // ✅ Fonction pour annuler la réponse
+  const handleCancelReply = () => {
+    setReplyToMessage(null);
+    setNewMessage({
+      ...newMessage,
+      sujet: "",
+      contenu: "",
     });
-  }, [messages]);
-
-  // Format date pour affichage
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return "Date inconnue";
-      return date.toLocaleDateString("fr-FR", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    } catch {
-      return "Date inconnue";
-    }
   };
 
-  // Charger les données quand l'onglet change
-  useEffect(() => {
-    if (activeTab === "contacts") {
-      fetchAgents();
-      fetchVendeurs();
-      fetchUtilisateurs();
-    }
-  }, [activeTab, fetchAgents, fetchVendeurs, fetchUtilisateurs]);
+  const selectContactForMessage = (contact: ContactConversation) => {
+    // ✅ Annuler toute réponse en cours
+    setReplyToMessage(null);
+
+    setSelectedContact(contact);
+    setNewMessage((prev) => ({
+      ...prev,
+      destinataireEmail: contact.email,
+      destinataireUuid: contact.uuid,
+      sujet: `Message pour ${contact.prenoms} ${contact.nom}`.trim(),
+      contenu: "",
+    }));
+  };
+
+  const handleRefresh = () => {
+    fetchMessagesRecus();
+    fetchMessagesEnvoyes();
+  };
+
+  // ============================================
+  // GROUPEMENT DES MESSAGES
+  // ============================================
+  const groupedMessages = useMemo(() => {
+    return messagesRecus.map((message, index) => ({
+      message,
+      showSeparator: index > 0 && index % 3 === 0,
+    }));
+  }, [messagesRecus]);
+
+  // ============================================
+  // RENDU
+  // ============================================
+  if (loading.initial) {
+    return (
+      <div className="min-vh-100 d-flex align-items-center justify-content-center">
+        <LoadingSpinner
+          size="lg"
+          text="Chargement de votre messagerie..."
+          fullPage
+        />
+      </div>
+    );
+  }
 
   return (
     <>
@@ -1447,14 +902,18 @@ export default function MessagerieUtilisateur() {
               Messagerie Utilisateur
             </h1>
             <p className="text-muted mb-0" style={{ fontSize: "0.9rem" }}>
-              Gérez vos messages et communiquez avec le support, les vendeurs et
-              autres utilisateurs
+              {contacts.length > 0
+                ? `${contacts.length} contact${contacts.length > 1 ? "s" : ""} avec qui vous avez échangé`
+                : "Commencez une conversation avec un contact"}
             </p>
           </div>
           <div className="d-flex gap-3">
             <button
               className="btn btn-outline-primary d-flex align-items-center gap-2"
-              onClick={() => setActiveTab("contacts")}
+              onClick={() => {
+                setReplyToMessage(null);
+                setActiveTab("contacts");
+              }}
               style={{ fontSize: "0.85rem" }}
             >
               <FontAwesomeIcon icon={faUserPen} />
@@ -1462,13 +921,7 @@ export default function MessagerieUtilisateur() {
             </button>
             <button
               className="btn btn-primary d-flex align-items-center gap-2"
-              onClick={() => {
-                fetchAgents();
-                fetchVendeurs();
-                fetchUtilisateurs();
-                fetchMessagesRecus();
-                fetchMessagesEnvoyes();
-              }}
+              onClick={handleRefresh}
               style={{ fontSize: "0.85rem" }}
             >
               <FontAwesomeIcon icon={faHistory} />
@@ -1481,21 +934,19 @@ export default function MessagerieUtilisateur() {
         <div className="row g-3 mb-4">
           <div className="col-xl-3 col-lg-6">
             <StatsCard
-              title="Contacts Totaux"
+              title="Contacts"
               value={stats.totalContacts}
               icon={faUsers}
               color="primary"
-              subtitle="Support, vendeurs, utilisateurs"
+              subtitle="Avec qui vous avez échangé"
               trend="up"
-              isLoading={
-                loading.agents || loading.vendeurs || loading.utilisateurs
-              }
+              isLoading={loading.contacts}
             />
           </div>
           <div className="col-xl-3 col-lg-6">
             <StatsCard
               title="Messages Reçus"
-              value={stats.totalMessages}
+              value={messagesRecus.length}
               icon={faInbox}
               color="info"
               subtitle={`${stats.unreadMessages} non lus`}
@@ -1517,8 +968,9 @@ export default function MessagerieUtilisateur() {
             <StatsCard
               title="Promotions"
               value={
-                messages.filter((m) => m.type.toUpperCase() === "PROMOTION")
-                  .length
+                messagesRecus.filter(
+                  (m) => m.type.toUpperCase() === "PROMOTION",
+                ).length
               }
               icon={faGift}
               color="warning"
@@ -1528,7 +980,7 @@ export default function MessagerieUtilisateur() {
           </div>
         </div>
 
-        {/* Onglets principaux améliorés */}
+        {/* Onglets principaux */}
         <div className="card border-0 shadow-lg mb-4 overflow-hidden">
           <div className="card-header bg-white border-0 py-3 px-3">
             <ul
@@ -1539,19 +991,33 @@ export default function MessagerieUtilisateur() {
               <li className="nav-item flex-grow-1" role="presentation">
                 <button
                   className={`nav-link w-100 ${activeTab === "contacts" ? "active" : ""} d-flex align-items-center justify-content-center gap-2 py-2`}
-                  onClick={() => setActiveTab("contacts")}
+                  onClick={() => {
+                    setReplyToMessage(null);
+                    setActiveTab("contacts");
+                  }}
                   style={{ fontSize: "0.85rem" }}
                 >
                   <div className="d-flex flex-column align-items-center">
                     <FontAwesomeIcon icon={faUsers} className="fs-5 mb-1" />
-                    <span className="fw-semibold">Contacts</span>
+                    <span className="fw-semibold">Mes contacts</span>
+                    {contacts.length > 0 && (
+                      <span
+                        className="badge bg-primary mt-1"
+                        style={{ fontSize: "0.65rem" }}
+                      >
+                        {contacts.length}
+                      </span>
+                    )}
                   </div>
                 </button>
               </li>
               <li className="nav-item flex-grow-1" role="presentation">
                 <button
                   className={`nav-link w-100 ${activeTab === "received" ? "active" : ""} d-flex align-items-center justify-content-center gap-2 py-2`}
-                  onClick={() => setActiveTab("received")}
+                  onClick={() => {
+                    setReplyToMessage(null);
+                    setActiveTab("received");
+                  }}
                   style={{ fontSize: "0.85rem" }}
                 >
                   <div className="d-flex flex-column align-items-center position-relative">
@@ -1571,7 +1037,10 @@ export default function MessagerieUtilisateur() {
               <li className="nav-item flex-grow-1" role="presentation">
                 <button
                   className={`nav-link w-100 ${activeTab === "sent" ? "active" : ""} d-flex align-items-center justify-content-center gap-2 py-2`}
-                  onClick={() => setActiveTab("sent")}
+                  onClick={() => {
+                    setReplyToMessage(null);
+                    setActiveTab("sent");
+                  }}
                   style={{ fontSize: "0.85rem" }}
                 >
                   <div className="d-flex flex-column align-items-center">
@@ -1587,7 +1056,9 @@ export default function MessagerieUtilisateur() {
           </div>
 
           <div className="card-body p-3">
-            {/* Onglet: Contacts */}
+            {/* ======================================== */}
+            {/* ONGLET: MES CONTACTS */}
+            {/* ======================================== */}
             {activeTab === "contacts" && (
               <div className="row g-3">
                 <div className="col-lg-8">
@@ -1665,6 +1136,7 @@ export default function MessagerieUtilisateur() {
                               style={{ fontSize: "0.85rem" }}
                             >
                               <option value="all">Tous les contacts</option>
+                              <option value="admin">Admin</option>
                               <option value="agent">Support</option>
                               <option value="vendeur">Vendeurs</option>
                               <option value="utilisateur">Utilisateurs</option>
@@ -1713,24 +1185,6 @@ export default function MessagerieUtilisateur() {
                             <tr>
                               <th
                                 className="py-2 px-3"
-                                style={{ width: "50px", fontSize: "0.8rem" }}
-                              >
-                                <div className="form-check">
-                                  <input
-                                    type="checkbox"
-                                    className="form-check-input"
-                                    checked={
-                                      selectedUsers.length ===
-                                        filteredContacts.length &&
-                                      filteredContacts.length > 0
-                                    }
-                                    onChange={handleSelectAll}
-                                    disabled={filteredContacts.length === 0}
-                                  />
-                                </div>
-                              </th>
-                              <th
-                                className="py-2 px-3"
                                 style={{ width: "60px", fontSize: "0.8rem" }}
                               >
                                 <span className="text-muted fw-medium">#</span>
@@ -1757,6 +1211,14 @@ export default function MessagerieUtilisateur() {
                               >
                                 <span className="text-muted fw-medium">
                                   Statut
+                                </span>
+                              </th>
+                              <th
+                                className="py-2 px-3"
+                                style={{ width: "150px", fontSize: "0.8rem" }}
+                              >
+                                <span className="text-muted fw-medium">
+                                  Dernier message
                                 </span>
                               </th>
                               <th
@@ -1788,8 +1250,9 @@ export default function MessagerieUtilisateur() {
                                       className="mb-0"
                                       style={{ fontSize: "0.8rem" }}
                                     >
-                                      Ajustez vos filtres ou vérifiez vos
-                                      permissions
+                                      {contacts.length === 0
+                                        ? "Vous n'avez pas encore échangé de messages"
+                                        : "Aucun contact ne correspond à vos filtres"}
                                     </p>
                                   </div>
                                 </td>
@@ -1800,20 +1263,6 @@ export default function MessagerieUtilisateur() {
                                   key={`${contact.userType}-${contact.uuid}`}
                                   className="align-middle"
                                 >
-                                  <td className="py-2 px-3">
-                                    <div className="form-check">
-                                      <input
-                                        type="checkbox"
-                                        className="form-check-input"
-                                        checked={selectedUsers.includes(
-                                          contact.uuid,
-                                        )}
-                                        onChange={() =>
-                                          handleSelectContact(contact.uuid)
-                                        }
-                                      />
-                                    </div>
-                                  </td>
                                   <td className="py-2 px-3">
                                     <span
                                       className="text-muted fw-semibold"
@@ -1857,7 +1306,7 @@ export default function MessagerieUtilisateur() {
                                               maxWidth: "200px",
                                             }}
                                           >
-                                            {contact.nom} {contact.prenoms}
+                                            {contact.prenoms} {contact.nom}
                                           </small>
                                           {contact.telephone && (
                                             <>
@@ -1908,6 +1357,11 @@ export default function MessagerieUtilisateur() {
                                                 </small>
                                               </>
                                             )}
+                                          {contact.unreadCount ? (
+                                            <span className="badge bg-danger ms-1">
+                                              {contact.unreadCount}
+                                            </span>
+                                          ) : null}
                                         </div>
                                       </div>
                                     </div>
@@ -1927,20 +1381,36 @@ export default function MessagerieUtilisateur() {
                                       is_deleted={contact.is_deleted}
                                     />
                                   </td>
+                                  <td className="py-2 px-3">
+                                    <div className="d-flex flex-column">
+                                      <small
+                                        className="text-muted"
+                                        style={{ fontSize: "0.7rem" }}
+                                      >
+                                        {formatLastMessageDate(
+                                          contact.lastMessageDate,
+                                        )}
+                                      </small>
+                                      {contact.lastMessage && (
+                                        <small
+                                          className="text-truncate"
+                                          style={{
+                                            fontSize: "0.75rem",
+                                            maxWidth: "150px",
+                                          }}
+                                        >
+                                          {contact.lastMessage.substring(0, 30)}
+                                          ...
+                                        </small>
+                                      )}
+                                    </div>
+                                  </td>
                                   <td className="py-2 px-3 text-center">
                                     <button
-                                      className="btn btn-sm btn-primary d-flex align-items-center justify-content-center gap-1 px-2 py-1"
+                                      className="btn btn-sm btn-primary d-flex align-items-center justify-content-center gap-1 px-2 py-1 mx-auto"
                                       title="Envoyer un message"
                                       onClick={() =>
-                                        selectContactForMessage(
-                                          contact.email,
-                                          contact.nom,
-                                          contact.prenoms,
-                                          contact.userType,
-                                          contact.userType === "vendeur"
-                                            ? contact.boutique?.nom
-                                            : undefined,
-                                        )
+                                        selectContactForMessage(contact)
                                       }
                                       style={{ fontSize: "0.75rem" }}
                                     >
@@ -1981,13 +1451,19 @@ export default function MessagerieUtilisateur() {
                             className="mb-0 fw-bold text-dark"
                             style={{ fontSize: "0.95rem" }}
                           >
-                            Nouveau message
+                            {selectedContact
+                              ? replyToMessage
+                                ? `Réponse à ${selectedContact.prenoms}`
+                                : `Message à ${selectedContact.prenoms}`
+                              : "Nouveau message"}
                           </h5>
                           <p
                             className="text-muted mb-0"
                             style={{ fontSize: "0.8rem" }}
                           >
-                            Rédigez et envoyez un message
+                            {selectedContact
+                              ? selectedContact.email
+                              : "Rédigez et envoyez un message"}
                           </p>
                         </div>
                       </div>
@@ -2059,6 +1535,88 @@ export default function MessagerieUtilisateur() {
                         </div>
                       )}
 
+                      {/* ✅ AFFICHAGE DU MESSAGE ORIGINAL EN LECTURE SEULE */}
+                      {replyToMessage && (
+                        <div className="mb-4">
+                          <div className="d-flex align-items-center mb-2">
+                            <FontAwesomeIcon
+                              icon={faReply}
+                              className="text-primary me-2"
+                            />
+                            <span
+                              className="fw-semibold text-dark"
+                              style={{ fontSize: "0.85rem" }}
+                            >
+                              Vous répondez à :
+                            </span>
+                          </div>
+                          <div
+                            className="bg-light border rounded p-3"
+                            style={{
+                              backgroundColor: "#f8f9fa",
+                              borderColor: "#dee2e6",
+                              fontSize: "0.85rem",
+                              maxHeight: "200px",
+                              overflowY: "auto",
+                            }}
+                          >
+                            <div className="d-flex justify-content-between align-items-start mb-2">
+                              <div>
+                                <span className="fw-bold text-dark">
+                                  {replyToMessage.expediteurNom}
+                                </span>
+                                <span className="text-muted ms-2">
+                                  &lt;{replyToMessage.expediteurEmail}&gt;
+                                </span>
+                              </div>
+                              <small className="text-muted">
+                                {new Date(
+                                  replyToMessage.envoyeLe,
+                                ).toLocaleDateString("fr-FR", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </small>
+                            </div>
+                            <div className="mt-2">
+                              <div className="fw-semibold mb-1 text-dark">
+                                {replyToMessage.sujet}
+                              </div>
+                              <div
+                                className="text-muted"
+                                style={{
+                                  whiteSpace: "pre-wrap",
+                                  wordBreak: "break-word",
+                                  backgroundColor: "#f1f3f5",
+                                  padding: "0.75rem",
+                                  borderRadius: "0.375rem",
+                                  borderLeft: "3px solid #0d6efd",
+                                }}
+                              >
+                                {replyToMessage.contenu}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="d-flex justify-content-end mt-2">
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-secondary"
+                              onClick={handleCancelReply}
+                              style={{ fontSize: "0.75rem" }}
+                            >
+                              <FontAwesomeIcon
+                                icon={faTimes}
+                                className="me-1"
+                              />
+                              Annuler la réponse
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
                       <form
                         onSubmit={(e) => {
                           e.preventDefault();
@@ -2082,13 +1640,14 @@ export default function MessagerieUtilisateur() {
                             placeholder="contact@exemple.com"
                             value={newMessage.destinataireEmail}
                             onChange={(e) =>
-                              setNewMessage((prev) => ({
-                                ...prev,
+                              setNewMessage({
+                                ...newMessage,
                                 destinataireEmail: e.target.value,
-                              }))
+                              })
                             }
                             required
                             style={{ fontSize: "0.85rem" }}
+                            readOnly={!!replyToMessage}
                           />
                           <small
                             className="text-muted d-block mt-1"
@@ -2098,7 +1657,7 @@ export default function MessagerieUtilisateur() {
                               icon={faInfoCircle}
                               className="me-1"
                             />
-                            Sélectionnez un contact dans le tableau
+                            Sélectionnez un contact dans la liste
                           </small>
                         </div>
 
@@ -2119,10 +1678,10 @@ export default function MessagerieUtilisateur() {
                             placeholder="Sujet du message"
                             value={newMessage.sujet}
                             onChange={(e) =>
-                              setNewMessage((prev) => ({
-                                ...prev,
+                              setNewMessage({
+                                ...newMessage,
                                 sujet: e.target.value,
-                              }))
+                              })
                             }
                             required
                             style={{ fontSize: "0.85rem" }}
@@ -2144,10 +1703,10 @@ export default function MessagerieUtilisateur() {
                             className="form-select form-select-sm border-2 py-2"
                             value={newMessage.type}
                             onChange={(e) =>
-                              setNewMessage((prev) => ({
-                                ...prev,
+                              setNewMessage({
+                                ...newMessage,
                                 type: e.target.value,
-                              }))
+                              })
                             }
                             style={{ fontSize: "0.85rem" }}
                           >
@@ -2172,14 +1731,14 @@ export default function MessagerieUtilisateur() {
                           </label>
                           <textarea
                             className="form-control border-2 py-2"
-                            rows={6}
+                            rows={replyToMessage ? 4 : 6}
                             placeholder="Écrivez votre message ici..."
                             value={newMessage.contenu}
                             onChange={(e) =>
-                              setNewMessage((prev) => ({
-                                ...prev,
+                              setNewMessage({
+                                ...newMessage,
                                 contenu: e.target.value,
-                              }))
+                              })
                             }
                             required
                             style={{ fontSize: "0.85rem" }}
@@ -2195,7 +1754,10 @@ export default function MessagerieUtilisateur() {
                           >
                             {loading.envoi ? (
                               <>
-                                <span className="spinner-border spinner-border-sm"></span>
+                                <span
+                                  className="spinner-border spinner-border-sm me-2"
+                                  role="status"
+                                ></span>
                                 <span>Envoi en cours...</span>
                               </>
                             ) : (
@@ -2204,7 +1766,11 @@ export default function MessagerieUtilisateur() {
                                   icon={faPaperPlane}
                                   className="fs-5"
                                 />
-                                <span>Envoyer le message</span>
+                                <span>
+                                  {replyToMessage
+                                    ? "Répondre"
+                                    : "Envoyer le message"}
+                                </span>
                               </>
                             )}
                           </button>
@@ -2216,7 +1782,7 @@ export default function MessagerieUtilisateur() {
               </div>
             )}
 
-            {/* Onglet: Messages reçus */}
+            {/* ONGLET MESSAGES REÇUS */}
             {activeTab === "received" && (
               <div className="row g-3">
                 <div className="col-lg-8">
@@ -2248,7 +1814,7 @@ export default function MessagerieUtilisateur() {
                             className="badge bg-primary bg-opacity-10 text-primary px-3 py-2"
                             style={{ fontSize: "0.8rem" }}
                           >
-                            {messages.length} message(s)
+                            {messagesRecus.length} message(s)
                           </span>
                           <button
                             className="btn btn-outline-primary d-flex align-items-center gap-2"
@@ -2266,7 +1832,7 @@ export default function MessagerieUtilisateur() {
                         className="list-group list-group-flush px-3 py-2"
                         style={{ maxHeight: "500px", overflowY: "auto" }}
                       >
-                        {messages.length === 0 ? (
+                        {messagesRecus.length === 0 ? (
                           <div className="text-center py-4">
                             <div className="text-muted py-3">
                               <FontAwesomeIcon
@@ -2288,24 +1854,21 @@ export default function MessagerieUtilisateur() {
                             </div>
                           </div>
                         ) : (
-                          groupedMessages.map(
-                            ({ message, showSeparator }, index) => (
-                              <MessageItem
-                                key={message.uuid}
-                                message={message}
-                                isSelected={
-                                  selectedMessage?.uuid === message.uuid
-                                }
-                                onSelect={(msg) => {
-                                  setSelectedMessage(msg);
-                                  if (!msg.estLu) {
-                                    handleMarkAsRead(msg.uuid);
-                                  }
-                                }}
-                                showSeparator={showSeparator}
-                              />
-                            ),
-                          )
+                          groupedMessages.map(({ message, showSeparator }) => (
+                            <MessageItem
+                              key={message.uuid}
+                              message={message}
+                              isSelected={
+                                selectedMessage?.uuid === message.uuid
+                              }
+                              onSelect={(msg) => {
+                                setSelectedMessage(msg);
+                                if (!msg.estLu) handleMarkAsRead(msg.uuid);
+                              }}
+                              onReply={() => handleReply(message)}
+                              showSeparator={showSeparator}
+                            />
+                          ))
                         )}
                       </div>
                     </div>
@@ -2429,7 +1992,10 @@ export default function MessagerieUtilisateur() {
                           <div className="d-grid gap-2">
                             <button
                               className="btn btn-primary d-flex align-items-center justify-content-center gap-3 py-2 fw-bold"
-                              onClick={() => handleReply(selectedMessage)}
+                              onClick={() => {
+                                handleReply(selectedMessage);
+                                setSelectedMessage(null);
+                              }}
                               style={{ fontSize: "0.85rem" }}
                             >
                               <FontAwesomeIcon
@@ -2473,7 +2039,7 @@ export default function MessagerieUtilisateur() {
               </div>
             )}
 
-            {/* Onglet: Messages envoyés */}
+            {/* ONGLET MESSAGES ENVOYÉS */}
             {activeTab === "sent" && (
               <div className="row">
                 <div className="col-12">
@@ -2541,25 +2107,25 @@ export default function MessagerieUtilisateur() {
                               </th>
                               <th
                                 className="py-2 px-3"
-                                style={{ fontSize: "0.8rem" }}
+                                style={{ width: "120px", fontSize: "0.8rem" }}
                               >
                                 Type
                               </th>
                               <th
                                 className="py-2 px-3"
-                                style={{ fontSize: "0.8rem" }}
+                                style={{ width: "180px", fontSize: "0.8rem" }}
                               >
                                 Date d'envoi
                               </th>
                               <th
                                 className="py-2 px-3"
-                                style={{ fontSize: "0.8rem" }}
+                                style={{ width: "100px", fontSize: "0.8rem" }}
                               >
                                 Statut
                               </th>
                               <th
                                 className="py-2 px-3 text-center"
-                                style={{ fontSize: "0.8rem" }}
+                                style={{ width: "100px", fontSize: "0.8rem" }}
                               >
                                 Actions
                               </th>
@@ -2585,7 +2151,7 @@ export default function MessagerieUtilisateur() {
                                       style={{ fontSize: "0.8rem" }}
                                     >
                                       Envoyez votre premier message depuis
-                                      l'onglet "Contacts"
+                                      l'onglet "Mes contacts"
                                     </p>
                                   </div>
                                 </td>
@@ -2633,8 +2199,21 @@ export default function MessagerieUtilisateur() {
                                         className="fw-medium"
                                         style={{ fontSize: "0.85rem" }}
                                       >
-                                        {formatDate(message.envoyeLe)}
+                                        {new Date(
+                                          message.envoyeLe,
+                                        ).toLocaleDateString("fr-FR")}
                                       </span>
+                                      <small
+                                        className="text-muted"
+                                        style={{ fontSize: "0.7rem" }}
+                                      >
+                                        {new Date(
+                                          message.envoyeLe,
+                                        ).toLocaleTimeString("fr-FR", {
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                        })}
+                                      </small>
                                     </div>
                                   </td>
                                   <td className="py-2 px-3">
@@ -2668,16 +2247,16 @@ export default function MessagerieUtilisateur() {
                                     <button
                                       className="btn btn-sm btn-outline-primary d-flex align-items-center gap-2 px-2 py-1"
                                       onClick={() => {
+                                        setReplyToMessage(null);
                                         setNewMessage({
+                                          ...newMessage,
                                           destinataireEmail:
                                             message.destinataireEmail,
+                                          destinataireUuid:
+                                            message.destinataireUuid || "",
                                           sujet: `RE: ${message.sujet}`,
                                           contenu: "",
                                           type: message.type,
-                                          expediteurNom:
-                                            newMessage.expediteurNom,
-                                          expediteurEmail:
-                                            newMessage.expediteurEmail,
                                         });
                                         setActiveTab("contacts");
                                       }}
@@ -2896,39 +2475,25 @@ export default function MessagerieUtilisateur() {
         }
 
         /* Scrollbar personnalisée */
-        .table-responsive::-webkit-scrollbar {
+        .table-responsive::-webkit-scrollbar,
+        .list-group-flush::-webkit-scrollbar {
           width: 6px;
           height: 6px;
         }
 
-        .table-responsive::-webkit-scrollbar-track {
-          background: #f1f1f1;
-          border-radius: 10px;
-        }
-
-        .table-responsive::-webkit-scrollbar-thumb {
-          background: #c1c1c1;
-          border-radius: 10px;
-        }
-
-        .table-responsive::-webkit-scrollbar-thumb:hover {
-          background: #a8a8a8;
-        }
-
-        .list-group-flush::-webkit-scrollbar {
-          width: 6px;
-        }
-
+        .table-responsive::-webkit-scrollbar-track,
         .list-group-flush::-webkit-scrollbar-track {
           background: #f1f1f1;
           border-radius: 10px;
         }
 
+        .table-responsive::-webkit-scrollbar-thumb,
         .list-group-flush::-webkit-scrollbar-thumb {
           background: #c1c1c1;
           border-radius: 10px;
         }
 
+        .table-responsive::-webkit-scrollbar-thumb:hover,
         .list-group-flush::-webkit-scrollbar-thumb:hover {
           background: #a8a8a8;
         }
@@ -2936,3 +2501,376 @@ export default function MessagerieUtilisateur() {
     </>
   );
 }
+
+// ============================================
+// COMPOSANTS UTILITAIRES
+// ============================================
+const StatusBadge = ({
+  est_bloque,
+  est_verifie,
+  is_deleted,
+}: {
+  est_bloque: boolean;
+  est_verifie: boolean;
+  is_deleted?: boolean;
+}) => {
+  if (is_deleted) {
+    return (
+      <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
+        <FontAwesomeIcon icon={faTrash} className="fs-12" />
+        <span className="fw-medium">Supprimé</span>
+      </span>
+    );
+  }
+
+  if (est_bloque) {
+    return (
+      <span className="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
+        <FontAwesomeIcon icon={faBan} className="fs-12" />
+        <span className="fw-medium">Bloqué</span>
+      </span>
+    );
+  }
+
+  if (!est_verifie) {
+    return (
+      <span className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
+        <FontAwesomeIcon icon={faUserSlash} className="fs-12" />
+        <span className="fw-medium">Non vérifié</span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
+      <FontAwesomeIcon icon={faUserCheck} className="fs-12" />
+      <span className="fw-medium">Actif</span>
+    </span>
+  );
+};
+
+const StatsCard = ({
+  title,
+  value,
+  icon,
+  color,
+  subtitle,
+  trend,
+  isLoading,
+}: {
+  title: string;
+  value: number;
+  icon: any;
+  color: string;
+  subtitle?: string;
+  trend?: "up" | "down" | "neutral";
+  isLoading?: boolean;
+}) => {
+  const getTrendIcon = () => {
+    switch (trend) {
+      case "up":
+        return (
+          <FontAwesomeIcon icon={faChevronUp} className="text-success fs-12" />
+        );
+      case "down":
+        return (
+          <FontAwesomeIcon icon={faChevronDown} className="text-danger fs-12" />
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="card border-0 shadow-sm h-100 stats-card">
+      <div className="card-body p-3">
+        <div className="d-flex align-items-center">
+          <div
+            className={`bg-${color} bg-opacity-10 text-${color} rounded-3 p-2 me-3`}
+            style={{ borderRadius: "12px" }}
+          >
+            <FontAwesomeIcon icon={icon} className="fs-2" />
+          </div>
+          <div className="flex-grow-1">
+            <div className="d-flex align-items-center gap-2 mb-1">
+              <h3 className="mb-0 fw-bold" style={{ fontSize: "1.25rem" }}>
+                {isLoading ? (
+                  <span
+                    className="spinner-border spinner-border-sm me-2"
+                    role="status"
+                  >
+                    <span className="visually-hidden">Chargement...</span>
+                  </span>
+                ) : (
+                  value.toLocaleString()
+                )}
+              </h3>
+              {trend && getTrendIcon()}
+            </div>
+            <p
+              className="text-muted mb-1 fw-medium"
+              style={{ fontSize: "0.8rem" }}
+            >
+              {title}
+            </p>
+            {subtitle && (
+              <small
+                className="text-muted d-flex align-items-center gap-1"
+                style={{ fontSize: "0.7rem" }}
+              >
+                <FontAwesomeIcon icon={faInfoCircle} className="fs-11" />
+                {subtitle}
+              </small>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const MessageItem = ({
+  message,
+  isSelected,
+  onSelect,
+  onReply,
+  showSeparator = false,
+}: {
+  message: Message;
+  isSelected: boolean;
+  onSelect: (message: Message) => void;
+  onReply?: (message: Message) => void;
+  showSeparator?: boolean;
+}) => {
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return "Date inconnue";
+      }
+
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+
+      if (diffMins < 1) {
+        return "à l'instant";
+      } else if (diffMins < 60) {
+        return `il y a ${diffMins} min`;
+      } else if (diffHours < 24) {
+        return `il y a ${diffHours} h`;
+      } else if (diffDays < 7) {
+        return `il y a ${diffDays} j`;
+      } else {
+        return date.toLocaleDateString("fr-FR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        });
+      }
+    } catch (error) {
+      return "Date inconnue";
+    }
+  };
+
+  const getTypeColor = () => {
+    const type = message.type.toUpperCase();
+    switch (type) {
+      case "ALERT":
+        return "danger";
+      case "WARNING":
+        return "warning";
+      case "INFO":
+        return "info";
+      case "NOTIFICATION":
+        return "primary";
+      case "PROMOTION":
+        return "success";
+      default:
+        return "secondary";
+    }
+  };
+
+  const getTypeIcon = () => {
+    const type = message.type.toUpperCase();
+    switch (type) {
+      case "ALERT":
+        return faBell;
+      case "WARNING":
+        return faExclamationCircle;
+      case "INFO":
+        return faInfoCircle;
+      case "NOTIFICATION":
+        return faEnvelopeCircleCheck;
+      case "PROMOTION":
+        return faGift;
+      default:
+        return faEnvelope;
+    }
+  };
+
+  return (
+    <>
+      {showSeparator && (
+        <div className="separator d-flex align-items-center my-3">
+          <hr className="flex-grow-1" />
+          <span className="px-3 text-muted fs-12 fw-medium">
+            <FontAwesomeIcon icon={faCalendarDays} className="me-2" />
+            Messages plus anciens
+          </span>
+          <hr className="flex-grow-1" />
+        </div>
+      )}
+
+      <div
+        className={`list-group-item list-group-item-action border-0 py-3 px-3 ${isSelected ? "bg-primary bg-opacity-10 selected-message" : "hover-bg-light"} ${!message.estLu ? "unread-message" : ""}`}
+        onClick={() => onSelect(message)}
+        style={{
+          cursor: "pointer",
+          borderLeft: isSelected
+            ? "4px solid var(--bs-primary)"
+            : !message.estLu
+              ? "4px solid var(--bs-warning)"
+              : "4px solid transparent",
+          transition: "all 0.2s ease",
+          borderRadius: "8px",
+          marginBottom: "4px",
+        }}
+      >
+        <div className="d-flex justify-content-between align-items-start mb-2">
+          <div className="d-flex align-items-center gap-3">
+            <div
+              className={`bg-${getTypeColor()} bg-opacity-10 text-${getTypeColor()} rounded-circle d-flex align-items-center justify-content-center`}
+              style={{ width: "40px", height: "40px" }}
+            >
+              <FontAwesomeIcon
+                icon={getTypeIcon()}
+                className={`fs-5 ${message.estLu ? "opacity-75" : ""}`}
+              />
+            </div>
+            <div className="d-flex flex-column">
+              <div className="d-flex align-items-center gap-2 mb-1">
+                <h6
+                  className="mb-0 fw-bold text-dark"
+                  style={{ fontSize: "0.9rem" }}
+                >
+                  {message.expediteurNom}
+                </h6>
+                {!message.estLu && (
+                  <span className="badge bg-warning bg-opacity-25 text-warning px-2 py-1">
+                    <FontAwesomeIcon icon={faCircle} className="fs-10 me-1" />
+                    Non lu
+                  </span>
+                )}
+                {message.type.toUpperCase() === "PROMOTION" && (
+                  <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2 py-1">
+                    <FontAwesomeIcon icon={faPercent} className="fs-10 me-1" />
+                    Promotion
+                  </span>
+                )}
+              </div>
+              <div className="d-flex align-items-center gap-2 flex-wrap">
+                <small className="text-muted" style={{ fontSize: "0.75rem" }}>
+                  <FontAwesomeIcon icon={faUser} className="me-1 fs-11" />
+                  {message.expediteurEmail}
+                </small>
+                <span className="text-muted" style={{ fontSize: "0.75rem" }}>
+                  •
+                </span>
+                <small className="text-muted" style={{ fontSize: "0.75rem" }}>
+                  À: {message.destinataireEmail}
+                </small>
+              </div>
+            </div>
+          </div>
+          <div className="d-flex flex-column align-items-end gap-2">
+            <div className="d-flex align-items-center gap-2">
+              <small className="text-muted" style={{ fontSize: "0.75rem" }}>
+                <FontAwesomeIcon icon={faClock} className="me-1" />
+                {formatDate(message.envoyeLe)}
+              </small>
+              <span
+                className={`badge bg-${getTypeColor()} bg-opacity-10 text-${getTypeColor()} border border-${getTypeColor()} border-opacity-25 px-2 py-1 fw-medium`}
+                style={{ fontSize: "0.65rem" }}
+              >
+                {message.type.toUpperCase() === "PROMOTION"
+                  ? "PROMOTION"
+                  : message.type.toUpperCase()}
+              </span>
+            </div>
+            {message.estEnvoye && (
+              <small
+                className="text-success fw-medium"
+                style={{ fontSize: "0.75rem" }}
+              >
+                <FontAwesomeIcon icon={faCheckCircle} className="me-1" />
+                Envoyé
+              </small>
+            )}
+          </div>
+        </div>
+
+        <h6 className="fw-bold mb-2 text-dark" style={{ fontSize: "0.9rem" }}>
+          {message.sujet}
+        </h6>
+
+        <p
+          className="mb-0 text-muted fs-14 line-clamp-2"
+          style={{
+            fontSize: "0.8rem",
+            maxWidth: "600px",
+            lineHeight: "1.4",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+            display: "-webkit-box",
+          }}
+        >
+          {message.contenu}
+        </p>
+
+        <div className="d-flex justify-content-between align-items-center mt-3">
+          <div className="d-flex gap-2">
+            <button
+              className="btn btn-sm btn-outline-primary d-flex align-items-center gap-1"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelect(message);
+              }}
+              style={{ fontSize: "0.8rem" }}
+            >
+              <FontAwesomeIcon icon={faEye} style={{ fontSize: "0.8rem" }} />
+              <span style={{ fontSize: "0.8rem" }}>Voir</span>
+            </button>
+            <button
+              className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onReply) onReply(message);
+              }}
+              style={{ fontSize: "0.8rem" }}
+            >
+              <FontAwesomeIcon icon={faReply} style={{ fontSize: "0.8rem" }} />
+              <span style={{ fontSize: "0.8rem" }}>Répondre</span>
+            </button>
+          </div>
+          {message.estEnvoye && !message.estLu && (
+            <span
+              className="badge bg-light text-dark border border-secondary-subtle px-2 py-1"
+              style={{ fontSize: "0.75rem" }}
+            >
+              <FontAwesomeIcon
+                icon={faClock}
+                className="me-1"
+                style={{ fontSize: "0.7rem" }}
+              />
+              En attente de lecture
+            </span>
+          )}
+        </div>
+      </div>
+    </>
+  );
+};

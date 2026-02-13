@@ -1,9 +1,11 @@
+// app/(front-office)/home/components/ListingsGrid.tsx
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import colors from "../../../shared/constants/colors";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
+import { useSearch } from "../contexts/SearchContext";
 
 interface ListingItem {
   uuid: string;
@@ -18,26 +20,35 @@ interface ListingItem {
   disponible?: boolean;
   statut?: string;
   numero?: string;
+  localisation?: string;
   createdAt?: string | null;
 }
 
 interface ListingsGridProps {
+  categoryUuid?: string;
   filterType?: string;
   viewMode?: "grid" | "list";
   sortOption?: string;
+  onDataLoaded?: (count: number) => void;
 }
 
 const ListingsGrid: React.FC<ListingsGridProps> = ({
+  categoryUuid,
   filterType = "all",
   viewMode = "grid",
   sortOption = "recent",
+  onDataLoaded,
 }) => {
   const [listings, setListings] = useState<ListingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const isMountedRef = useRef(true); // AJOUT: pour suivre si le composant est monté
+  const isMountedRef = useRef(true);
+
+  // Récupérer les filtres de recherche depuis le contexte
+  const { searchQuery, selectedCategory, selectedLocation, maxPrice } =
+    useSearch();
 
   const MAX_RETRIES = 3;
   const PLACEHOLDER_IMAGE =
@@ -56,20 +67,17 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
     return PLACEHOLDER_IMAGE;
   }, []);
 
-  // CORRECTION: Fonction safe pour abort
   const abortCurrentRequest = useCallback(() => {
     if (abortControllerRef.current && isMountedRef.current) {
       try {
         abortControllerRef.current.abort();
       } catch (err) {
-        // Ignorer les erreurs d'abort
         console.log("Abort ignoré (composant démonté)");
       }
       abortControllerRef.current = null;
     }
   }, []);
 
-  // CORRECTION: Fonction getApiUrl sécurisée
   const getApiUrl = useCallback((endpoint: string): string => {
     if (endpoint.startsWith("http://") || endpoint.startsWith("https://")) {
       const useProxy = process.env.NEXT_PUBLIC_USE_PROXY === "true";
@@ -86,12 +94,9 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
     return endpoint;
   }, []);
 
-  // CORRECTION: Fonction fetchListings avec gestion d'état améliorée
   const fetchListings = useCallback(async () => {
-    // Nettoyer la requête précédente
     abortCurrentRequest();
 
-    // Vérifier si le composant est toujours monté
     if (!isMountedRef.current) return;
 
     setLoading(true);
@@ -99,32 +104,38 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
 
     try {
       let endpoint = "";
-      switch (filterType) {
-        case "donation":
-          endpoint = API_ENDPOINTS.DONS.PUBLISHED;
-          break;
-        case "exchange":
-          endpoint = API_ENDPOINTS.ECHANGES.PUBLISHED;
-          break;
-        case "sale":
-          endpoint = API_ENDPOINTS.PRODUCTS.PUBLISHED;
-          break;
-        case "all":
-        default:
-          endpoint = API_ENDPOINTS.ANNONCES.LIST_TOUTES_ANNONCES;
-          break;
+
+      // Si categoryUuid est fourni, charger les annonces de la catégorie spécifique
+      if (categoryUuid) {
+        // À adapter selon votre API - exemple avec un endpoint de catégorie
+        endpoint = API_ENDPOINTS.ANNONCES.LIST_TOUTES_ANNONCES;
+      } else {
+        switch (filterType) {
+          case "donation":
+            endpoint = API_ENDPOINTS.DONS.PUBLISHED;
+            break;
+          case "exchange":
+            endpoint = API_ENDPOINTS.ECHANGES.PUBLISHED;
+            break;
+          case "sale":
+            endpoint = API_ENDPOINTS.PRODUCTS.PUBLISHED;
+            break;
+          case "all":
+          default:
+            endpoint = API_ENDPOINTS.ANNONCES.LIST_TOUTES_ANNONCES;
+            break;
+        }
       }
 
       const controller = new AbortController();
       abortControllerRef.current = controller;
       const { signal } = controller;
 
-      // CORRECTION: Timeout plus long avec nettoyage sûr
       const timeoutId = setTimeout(() => {
         if (isMountedRef.current) {
           controller.abort();
         }
-      }, 15000); // 15 secondes
+      }, 15000);
 
       const url = getApiUrl(endpoint);
       console.log("🌐 Fetching from:", url);
@@ -140,10 +151,8 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
         signal,
       });
 
-      // CORRECTION: Nettoyer le timeout
       clearTimeout(timeoutId);
 
-      // Vérifier si le composant est toujours monté
       if (!isMountedRef.current) return;
 
       if (!response.ok) {
@@ -171,7 +180,6 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
         throw new Error("Réponse invalide du serveur");
       }
 
-      // CORRECTION: Vérifier encore si le composant est monté
       if (!isMountedRef.current) return;
 
       let transformedData: ListingItem[] = [];
@@ -190,17 +198,19 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           disponible: item.disponible,
           statut: item.statut,
           numero: item.numero,
+          localisation: item.localisation || item.ville || "",
         }));
       } else if (filterType === "donation") {
         transformedData = dataArray.map((item: any) => ({
           uuid: item.uuid || `don-${Math.random().toString(36).substr(2, 9)}`,
           type: "don" as const,
-          titre: item.titre || "Don sans titre",
+          titre: item.nom || item.titre || "Don sans titre",
           description: item.description,
           prix: item.prix,
           image: normalizeImageUrl(item.image),
           statut: item.statut,
           numero: item.numero,
+          localisation: item.localisation || item.ville || "",
           createdAt: item.createdAt,
         }));
       } else if (filterType === "exchange") {
@@ -208,12 +218,13 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           uuid:
             item.uuid || `echange-${Math.random().toString(36).substr(2, 9)}`,
           type: "echange" as const,
-          titre: item.titre || "Échange sans titre",
-          description: item.description,
+          titre: item.nomElementEchange || item.titre || "Échange sans titre",
+          description: item.message || item.description,
           prix: item.prix,
           image: normalizeImageUrl(item.image),
           statut: item.statut,
           numero: item.numero,
+          localisation: item.localisation || item.ville || "",
           createdAt: item.createdAt,
         }));
       } else if (filterType === "sale") {
@@ -229,10 +240,107 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           date: item.date,
           disponible: item.disponible,
           statut: item.statut,
+          localisation: item.localisation || item.ville || "",
         }));
       }
 
-      const sortedData = [...transformedData].sort((a, b) => {
+      // ============================================
+      // APPLICATION DES FILTRES DE RECHERCHE
+      // ============================================
+      let filteredData = transformedData;
+
+      // 1. Filtre par texte de recherche
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase().trim();
+        filteredData = filteredData.filter((item) => {
+          const titre = item.titre?.toLowerCase() || "";
+          const description = item.description?.toLowerCase() || "";
+          return titre.includes(query) || description.includes(query);
+        });
+        console.log(
+          `🔍 Filtre texte "${searchQuery}": ${filteredData.length} résultats`,
+        );
+      }
+
+      // 2. Filtre par catégorie
+      if (selectedCategory) {
+        filteredData = filteredData.filter((item) => {
+          // Adapter selon votre logique de catégorie
+          if (selectedCategory === "electronique") {
+            return (
+              item.titre?.toLowerCase().includes("téléphone") ||
+              item.titre?.toLowerCase().includes("ordinateur") ||
+              item.titre?.toLowerCase().includes("laptop") ||
+              item.titre?.toLowerCase().includes("smartphone")
+            );
+          }
+          if (selectedCategory === "mode") {
+            return (
+              item.titre?.toLowerCase().includes("vêtement") ||
+              item.titre?.toLowerCase().includes("robe") ||
+              item.titre?.toLowerCase().includes("chaussure")
+            );
+          }
+          if (selectedCategory === "maison") {
+            return (
+              item.titre?.toLowerCase().includes("meuble") ||
+              item.titre?.toLowerCase().includes("canapé") ||
+              item.titre?.toLowerCase().includes("table")
+            );
+          }
+          if (selectedCategory === "vehicules") {
+            return (
+              item.titre?.toLowerCase().includes("voiture") ||
+              item.titre?.toLowerCase().includes("moto") ||
+              item.titre?.toLowerCase().includes("vélo")
+            );
+          }
+          if (selectedCategory === "education") {
+            return (
+              item.titre?.toLowerCase().includes("livre") ||
+              item.titre?.toLowerCase().includes("cours") ||
+              item.titre?.toLowerCase().includes("manuel")
+            );
+          }
+          if (selectedCategory === "services") {
+            return (
+              item.titre?.toLowerCase().includes("service") ||
+              item.titre?.toLowerCase().includes("réparation")
+            );
+          }
+          return true;
+        });
+        console.log(
+          `📁 Filtre catégorie "${selectedCategory}": ${filteredData.length} résultats`,
+        );
+      }
+
+      // 3. Filtre par localisation
+      if (selectedLocation) {
+        const location = selectedLocation.toLowerCase();
+        filteredData = filteredData.filter((item) => {
+          const localisation = item.localisation?.toLowerCase() || "";
+          return localisation.includes(location);
+        });
+        console.log(
+          `📍 Filtre localisation "${selectedLocation}": ${filteredData.length} résultats`,
+        );
+      }
+
+      // 4. Filtre par prix maximum
+      if (maxPrice) {
+        const max = parseFloat(maxPrice);
+        filteredData = filteredData.filter((item) => {
+          const price = item.prix ? parseFloat(item.prix.toString()) : 0;
+          return price <= max;
+        });
+        console.log(
+          `💰 Filtre prix max ${maxPrice}: ${filteredData.length} résultats`,
+        );
+      }
+
+      // Tri des données
+      const sortedData = [...filteredData].sort((a, b) => {
         switch (sortOption) {
           case "price-asc": {
             const priceA = a.prix ? parseFloat(a.prix.toString()) : 0;
@@ -254,13 +362,14 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
         }
       });
 
-      // CORRECTION: Vérifier une dernière fois avant de mettre à jour l'état
       if (isMountedRef.current) {
         setListings(sortedData);
         setRetryCount(0);
+        if (onDataLoaded) {
+          onDataLoaded(sortedData.length);
+        }
       }
     } catch (err: any) {
-      // CORRECTION: Ne pas loguer les erreurs d'abort
       if (err.name === "AbortError") {
         console.log("Requête annulée");
         return;
@@ -268,7 +377,6 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
 
       console.error("Erreur fetch:", err);
 
-      // Vérifier si le composant est toujours monté
       if (!isMountedRef.current) return;
 
       if (retryCount >= MAX_RETRIES) {
@@ -285,7 +393,6 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
       setRetryCount((prev) => prev + 1);
       setListings([]);
     } finally {
-      // CORRECTION: Vérifier avant de mettre à jour l'état
       if (isMountedRef.current) {
         setLoading(false);
         abortControllerRef.current = null;
@@ -298,22 +405,24 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
     normalizeImageUrl,
     getApiUrl,
     abortCurrentRequest,
+    categoryUuid,
+    searchQuery,
+    selectedCategory,
+    selectedLocation,
+    maxPrice,
+    onDataLoaded,
   ]);
 
-  // CORRECTION: useEffect avec cleanup amélioré
   useEffect(() => {
     isMountedRef.current = true;
-
     fetchListings();
 
     return () => {
       isMountedRef.current = false;
-      // CORRECTION: Appeler abort avec vérification de montage
       abortCurrentRequest();
     };
   }, [fetchListings, abortCurrentRequest]);
 
-  // Les autres fonctions restent les mêmes...
   const getTypeLabel = useCallback((type: string) => {
     switch (type) {
       case "don":
@@ -425,9 +534,11 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
         </div>
         <h5 className="text-muted mb-2">Aucune annonce trouvée</h5>
         <p className="text-muted mb-4">
-          {filterType === "all"
-            ? "Aucune annonce n'est disponible pour le moment."
-            : `Aucun ${filterType === "donation" ? "don" : filterType === "exchange" ? "échange" : "produit"} n'est disponible.`}
+          {searchQuery || selectedCategory || selectedLocation || maxPrice
+            ? "Aucun résultat ne correspond à vos critères de recherche."
+            : filterType === "all"
+              ? "Aucune annonce n'est disponible pour le moment."
+              : `Aucun ${filterType === "donation" ? "don" : filterType === "exchange" ? "échange" : "produit"} n'est disponible.`}
         </p>
         <button className="btn btn-success" onClick={handleRefresh}>
           <i className="fa-solid fa-rotate me-2"></i>Rafraîchir
@@ -495,6 +606,12 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
                           ? `${item.description.substring(0, 100)}...`
                           : item.description}
                       </p>
+                    )}
+                    {item.localisation && (
+                      <div className="small text-muted mb-2">
+                        <i className="fa-solid fa-location-dot me-1"></i>
+                        {item.localisation}
+                      </div>
                     )}
                     <div className="d-flex justify-content-between align-items-center mt-auto">
                       <div
@@ -600,6 +717,12 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
                                   : "Non disponible"}
                               </span>
                             )}
+                          {item.localisation && (
+                            <span className="badge bg-light text-dark">
+                              <i className="fa-solid fa-location-dot me-1"></i>
+                              {item.localisation}
+                            </span>
+                          )}
                           <span className="text-muted small">
                             <i className="fa-solid fa-hashtag me-1"></i>Réf:{" "}
                             {item.uuid.substring(0, 8)}

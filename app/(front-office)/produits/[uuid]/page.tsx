@@ -1,4 +1,4 @@
-// app/produits/[uuid]/page.tsx
+// app/(front-office)/produits/[uuid]/page.tsx
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -78,7 +78,9 @@ import {
   faBox,
 } from "@fortawesome/free-solid-svg-icons";
 
-// Types basés sur votre réponse API
+// ============================================
+// TYPES - CORRIGÉS
+// ============================================
 interface CreateurInfo {
   uuid: string;
   nom: string;
@@ -92,7 +94,7 @@ interface CreateurInfo {
   instagram_url?: string | null;
   est_verifie?: boolean;
   est_bloque?: boolean;
-  userType?: string;
+  userType?: string; // "vendeur", "utilisateur", "agent", "admin"
 }
 
 interface BoutiqueAPI {
@@ -138,6 +140,7 @@ interface CategorieAPI {
   updatedAt: string;
 }
 
+// ✅ INTERFACE PRODUITAPI CORRIGÉE - Plus de doublon
 interface ProduitAPI {
   is_deleted: boolean;
   deleted_at: string | null;
@@ -156,8 +159,9 @@ interface ProduitAPI {
   prix: string | number;
   description: string | null;
   etoile: number;
-  vendeurUuid: string;
-  boutiqueUuid: string;
+  // ✅ CORRIGÉ: Utiliser underscore comme dans l'API
+  vendeur_uuid: string;
+  boutique_uuid: string;
   categorie_uuid: string;
   categorie?: CategorieAPI;
   boutique?: BoutiqueAPI;
@@ -175,8 +179,13 @@ interface ProduitAPI {
   nombre_favoris: number;
   etoiles_pleines: number;
   etoiles_vides: number;
+  utilisateur_uuid?: string | null;
+  // ✅ SUPPRIMÉ: vendeurUuid (doublon)
+  agentUuid?: string | null;
   createur?: CreateurInfo;
   createurType?: string;
+  estUtilisateur?: boolean;
+  estVendeur?: boolean;
 }
 
 interface ProduitSimilaireAPI {
@@ -197,8 +206,8 @@ interface ProduitSimilaireAPI {
   prix: string | number;
   description: string | null;
   etoile: number;
-  vendeurUuid: string;
-  boutiqueUuid: string;
+  vendeur_uuid: string;
+  boutique_uuid: string;
   categorie_uuid: string;
   estPublie: boolean;
   estBloque: boolean;
@@ -214,6 +223,8 @@ interface ProduitSimilaireAPI {
   nombre_favoris: number;
   etoiles_pleines: number;
   etoiles_vides: number;
+  utilisateur_uuid?: string | null;
+  agentUuid?: string | null;
   createur?: CreateurInfo;
   createurType?: string;
 }
@@ -223,7 +234,7 @@ interface APIResponse {
   similaires: ProduitSimilaireAPI[];
 }
 
-// Types pour notre composant
+// ✅ INTERFACE PRODUIT CORRIGÉE
 interface Produit {
   uuid: string;
   nom: string;
@@ -240,8 +251,9 @@ interface Produit {
   nombre_avis: number;
   nombre_favoris: number;
   quantite: number;
-  vendeurUuid: string;
-  boutiqueUuid: string;
+  // ✅ CORRIGÉ: Utiliser vendeur_uuid et boutique_uuid
+  vendeur_uuid: string;
+  boutique_uuid: string;
   createdAt: string;
   updatedAt: string;
   categorie?: {
@@ -352,19 +364,9 @@ interface NoteStats {
   moyenne: number;
 }
 
-// Interface pour le formulaire de message
-interface MessageFormData {
-  destinataireEmail: string;
-  destinataireUuid?: string;
-  destinataireNom: string;
-  sujet: string;
-  contenu: string;
-  type: string;
-  entiteType?: string;
-  entiteUuid?: string;
-}
-
-// Composant d'image sécurisé avec fallback
+// ============================================
+// COMPOSANT D'IMAGE SÉCURISÉ
+// ============================================
 const SecureImage = ({
   src,
   alt,
@@ -398,16 +400,13 @@ const SecureImage = ({
     if (!hasError) {
       setHasError(true);
 
-      // Essayer différentes méthodes de fallback
       const url = src;
 
-      // Vérifier si l'URL existe avant de l'utiliser
       if (!url) {
         console.log("URL est null ou undefined");
         return;
       }
 
-      // 1. Si c'est une URL Minio, essayer de la convertir
       if (url.includes("15.236.142.141:9000/oskar-bucket/")) {
         const key = url.replace("http://15.236.142.141:9000/oskar-bucket/", "");
         const encodedKey = encodeURIComponent(key);
@@ -417,13 +416,11 @@ const SecureImage = ({
         return;
       }
 
-      // 2. Utiliser le fallback fourni
       if (fallbackSrc && currentSrc !== fallbackSrc) {
         setCurrentSrc(fallbackSrc);
       }
     }
 
-    // Appeler le callback d'erreur personnalisé si fourni
     if (onError) {
       onError(e);
     }
@@ -450,7 +447,7 @@ const SecureImage = ({
         </div>
       )}
       <img
-        src={currentSrc}
+        src={currentSrc || fallbackSrc}
         alt={alt}
         className={`${className} ${loading && !hasError ? "opacity-0" : "opacity-100"}`}
         onError={handleError}
@@ -473,552 +470,9 @@ const SecureImage = ({
   );
 };
 
-// Composant Modal pour la messagerie
-const MessagerieModal = ({
-  isOpen,
-  onClose,
-  createur,
-  produit,
-  loading,
-  error,
-  success,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  createur: CreateurInfo | null;
-  produit: Produit | null;
-  loading: boolean;
-  error: string | null;
-  success: string | null;
-}) => {
-  const router = useRouter();
-  const { isLoggedIn, user, openLoginModal } = useAuth();
-  const [formData, setFormData] = useState<MessageFormData>({
-    destinataireEmail: createur?.email || "",
-    destinataireUuid: createur?.uuid || "",
-    destinataireNom: createur
-      ? `${createur.prenoms} ${createur.nom}`.trim()
-      : "",
-    sujet: produit ? `Question sur votre produit: ${produit.libelle}` : "",
-    contenu: "",
-    type: "NOTIFICATION",
-    entiteType: "PRODUIT",
-    entiteUuid: produit?.uuid || "",
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [localError, setLocalError] = useState<string | null>(null);
-  const [localSuccess, setLocalSuccess] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (createur && produit) {
-      setFormData({
-        destinataireEmail: createur.email || "",
-        destinataireUuid: createur.uuid || "",
-        destinataireNom: `${createur.prenoms} ${createur.nom}`.trim(),
-        sujet: `Question sur votre produit: ${produit.libelle}`,
-        contenu: "",
-        type: "NOTIFICATION",
-        entiteType: "PRODUIT",
-        entiteUuid: produit.uuid || "",
-      });
-    }
-  }, [createur, produit]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // Vérifier l'authentification
-    if (!isLoggedIn) {
-      setLocalError("Vous devez être connecté pour envoyer un message.");
-      setTimeout(() => {
-        onClose();
-        openLoginModal();
-      }, 2000);
-      return;
-    }
-
-    if (!formData.contenu.trim()) {
-      setLocalError("Veuillez saisir un message.");
-      return;
-    }
-
-    if (!formData.destinataireEmail) {
-      setLocalError("Destinataire invalide.");
-      return;
-    }
-
-    setIsSubmitting(true);
-    setLocalError(null);
-    setLocalSuccess(null);
-
-    try {
-      // Format de données le plus simple possible
-      const messageData = {
-        destinataireEmail: formData.destinataireEmail.trim(),
-        sujet: formData.sujet.trim(),
-        contenu: formData.contenu.trim(),
-        type: "NOTIFICATION",
-      };
-
-      console.log("📤 Tentative d'envoi de message avec données:", {
-        ...messageData,
-        contenu: `${messageData.contenu.substring(0, 50)}...`,
-      });
-
-      // CORRECTION ICI : Utiliser la méthode sendMessage de l'API client
-      let response;
-      try {
-        response = await api.sendMessage(messageData);
-        console.log("✅ Réponse API:", response);
-      } catch (err: any) {
-        console.warn("⚠️ Envoi via méthode spéciale échoué:", {
-          error: err,
-          message: err.message,
-        });
-
-        // Essayer avec l'endpoint standard
-        response = await api.post(API_ENDPOINTS.MESSAGERIE.SEND, messageData);
-        console.log("✅ Réponse API (essai standard):", response);
-      }
-
-      // Gérer la réponse
-      console.log("📥 Réponse complète de l'API:", response);
-
-      // Vérifier différents formats de réponse possibles
-      let successMessage = "Message envoyé avec succès !";
-
-      if (response) {
-        // Format 1: { success: true, message: "..." }
-        if (response.success === true || response.success === "true") {
-          successMessage = response.message || successMessage;
-        }
-        // Format 2: { message: "..." }
-        else if (response.message) {
-          successMessage = response.message;
-        }
-        // Format 3: { data: { message: "..." } }
-        else if (response.data?.message) {
-          successMessage = response.data.message;
-        }
-        // Format 4: { status: "success" }
-        else if (response.status === "success" || response.status === "ok") {
-          successMessage = response.message || successMessage;
-        }
-        // Format 5: Réponse simple (string)
-        else if (typeof response === "string") {
-          successMessage = response;
-        }
-        // Format 6: Réponse vide mais statut 200
-        else {
-          // On considère que c'est un succès si on arrive ici sans erreur
-          console.log(
-            "⚠️ Réponse sans format standard, mais pas d'erreur:",
-            response,
-          );
-        }
-      }
-
-      // Réinitialiser le formulaire
-      setFormData((prev) => ({ ...prev, contenu: "" }));
-
-      // Afficher le succès
-      setLocalSuccess(successMessage);
-      setLocalError(null);
-
-      // Fermer le modal après 3 secondes
-      setTimeout(() => {
-        onClose();
-      }, 3000);
-    } catch (err: any) {
-      console.error("❌ Erreur détaillée lors de l'envoi du message:", {
-        name: err.name,
-        message: err.message,
-        stack: err.stack,
-        response: err.response,
-        status: err.response?.status,
-        data: err.response?.data,
-      });
-
-      let errorMessage = "Erreur lors de l'envoi du message";
-
-      // Extraire les détails de l'erreur
-      if (err.response?.status === 401) {
-        errorMessage = "Votre session a expiré. Veuillez vous reconnecter.";
-      } else if (err.response?.status === 400) {
-        errorMessage = "Données invalides. Veuillez vérifier les informations.";
-        if (err.response?.data?.errors) {
-          const errors = Object.values(err.response.data.errors).flat();
-          errorMessage = errors.join(", ");
-        } else if (err.response?.data) {
-          errorMessage = JSON.stringify(err.response.data);
-        }
-      } else if (err.response?.status === 404) {
-        errorMessage = "Service de messagerie non disponible.";
-      } else if (err.response?.status === 403) {
-        errorMessage = "Vous n'êtes pas autorisé à envoyer ce message.";
-      } else if (err.response?.status === 422) {
-        errorMessage = "Validation des données échouée.";
-        if (err.response?.data?.errors) {
-          const errors = Object.values(err.response.data.errors).flat();
-          errorMessage = errors.join(", ");
-        }
-      } else if (err.response?.status === 500) {
-        errorMessage = "Erreur serveur interne. Veuillez réessayer plus tard.";
-      } else if (
-        err.message?.includes("timeout") ||
-        err.message?.includes("Timeout")
-      ) {
-        errorMessage = "Délai d'attente dépassé. Vérifiez votre connexion.";
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-
-      // Essayer d'extraire plus de détails
-      if (err.response?.data?.message) {
-        errorMessage = err.response.data.message;
-      } else if (err.response?.data?.error) {
-        errorMessage = err.response.data.error;
-      } else if (err.response?.data) {
-        try {
-          const errorData =
-            typeof err.response.data === "string"
-              ? err.response.data
-              : JSON.stringify(err.response.data);
-          errorMessage = `Erreur: ${errorData}`;
-        } catch (e) {
-          errorMessage = "Erreur inconnue du serveur";
-        }
-      }
-
-      setLocalError(errorMessage);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div
-      className="modal fade show"
-      style={{
-        display: "block",
-        backgroundColor: "rgba(0,0,0,0.5)",
-        zIndex: 1055,
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !isSubmitting) {
-          onClose();
-        }
-      }}
-    >
-      <div className="modal-dialog modal-lg modal-dialog-centered">
-        <div className="modal-content border-0 shadow-lg">
-          <div className="modal-header bg-primary text-white">
-            <h5 className="modal-title">
-              <FontAwesomeIcon icon={faMessage} className="me-2" />
-              Envoyer un message à {createur?.prenoms}
-            </h5>
-            <button
-              type="button"
-              className="btn-close btn-close-white"
-              onClick={onClose}
-              disabled={isSubmitting}
-              aria-label="Fermer"
-            ></button>
-          </div>
-          <div className="modal-body p-4">
-            {localSuccess && (
-              <div className="alert alert-success alert-dismissible fade show mb-4">
-                <div className="d-flex align-items-center">
-                  <FontAwesomeIcon icon={faCircleCheck} className="me-2 fs-4" />
-                  <div className="flex-grow-1">
-                    <strong>Succès !</strong>
-                    <p className="mb-0">{localSuccess}</p>
-                    <small className="text-success">
-                      Votre message a été envoyé avec succès.
-                    </small>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => setLocalSuccess(null)}
-                ></button>
-              </div>
-            )}
-
-            {error && (
-              <div className="alert alert-warning alert-dismissible fade show mb-4">
-                <div className="d-flex align-items-center">
-                  <FontAwesomeIcon
-                    icon={faExclamationTriangle}
-                    className="me-2 fs-4"
-                  />
-                  <div className="flex-grow-1">
-                    <strong>Erreur système</strong>
-                    <p className="mb-0">{error}</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => setLocalError(null)}
-                ></button>
-              </div>
-            )}
-
-            {localError && !localSuccess && (
-              <div className="alert alert-danger alert-dismissible fade show mb-4">
-                <div className="d-flex align-items-center">
-                  <FontAwesomeIcon
-                    icon={faCircleExclamation}
-                    className="me-2 fs-4"
-                  />
-                  <div className="flex-grow-1">
-                    <strong>Erreur d'envoi</strong>
-                    <p className="mb-0">{localError}</p>
-                    <small className="text-danger">
-                      Si le problème persiste, contactez le support technique.
-                    </small>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => setLocalError(null)}
-                ></button>
-              </div>
-            )}
-
-            {!isLoggedIn && (
-              <div className="alert alert-warning mb-4">
-                <div className="d-flex align-items-center">
-                  <FontAwesomeIcon
-                    icon={faExclamationTriangle}
-                    className="me-2"
-                  />
-                  <div className="flex-grow-1">
-                    <strong>Connexion requise</strong>
-                    <p className="mb-0">
-                      Vous devez être connecté pour envoyer un message via la
-                      messagerie interne.
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <button
-                    className="btn btn-primary btn-sm me-2"
-                    onClick={() => {
-                      onClose();
-                      openLoginModal();
-                    }}
-                  >
-                    <FontAwesomeIcon icon={faSignInAlt} className="me-1" />
-                    Se connecter
-                  </button>
-                  <Link
-                    href="/auth/register"
-                    className="btn btn-outline-primary btn-sm"
-                    onClick={onClose}
-                  >
-                    Créer un compte
-                  </Link>
-                </div>
-              </div>
-            )}
-
-            <div className="mb-4">
-              <div className="alert alert-info">
-                <div className="d-flex">
-                  <FontAwesomeIcon icon={faInfoCircle} className="me-2 mt-1" />
-                  <div>
-                    <strong>Note importante :</strong>
-                    <ul className="mb-0 mt-2 ps-3">
-                      <li>
-                        Utilisez la messagerie interne pour discuter du produit
-                        en toute sécurité.
-                      </li>
-                      <li>Les conversations sont chiffrées et protégées.</li>
-                      <li>
-                        Vous recevrez une notification lorsque le destinataire
-                        répondra.
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <form onSubmit={handleSubmit}>
-              <div className="mb-3">
-                <label className="form-label fw-bold">
-                  <FontAwesomeIcon icon={faUser} className="me-2" />
-                  Destinataire
-                </label>
-                <input
-                  type="text"
-                  className="form-control bg-light"
-                  value={formData.destinataireNom}
-                  disabled
-                />
-                <small className="text-muted">
-                  Conversation avec {createur?.prenoms} {createur?.nom}
-                  {createur?.userType && ` (${createur.userType})`}
-                </small>
-              </div>
-
-              <div className="mb-3">
-                <label className="form-label fw-bold">
-                  <FontAwesomeIcon icon={faEdit} className="me-2" />
-                  Sujet <span className="text-danger">*</span>
-                </label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={formData.sujet}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      sujet: e.target.value,
-                    }))
-                  }
-                  required
-                  disabled={isSubmitting || !isLoggedIn}
-                  maxLength={200}
-                  placeholder="Ex: Question sur votre produit..."
-                />
-                <small className="text-muted">Maximum 200 caractères</small>
-              </div>
-
-              <div className="mb-3">
-                <label className="form-label fw-bold">
-                  <FontAwesomeIcon icon={faCommentDots} className="me-2" />
-                  Message <span className="text-danger">*</span>
-                </label>
-                <textarea
-                  className="form-control"
-                  rows={6}
-                  value={formData.contenu}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      contenu: e.target.value,
-                    }))
-                  }
-                  placeholder={`Bonjour ${createur?.prenoms}, je vous contacte concernant votre produit "${produit?.libelle}"...`}
-                  required
-                  disabled={isSubmitting || !isLoggedIn}
-                  maxLength={2000}
-                />
-                <div className="d-flex justify-content-between align-items-center mt-1">
-                  <small className="text-muted">
-                    Soyez poli et précis dans votre message pour faciliter la
-                    discussion.
-                  </small>
-                  <small
-                    className={`text-muted ${formData.contenu.length > 1800 ? "text-danger" : ""}`}
-                  >
-                    {formData.contenu.length}/2000 caractères
-                  </small>
-                </div>
-              </div>
-
-              <div className="mb-4">
-                <label className="form-label fw-bold">
-                  <FontAwesomeIcon icon={faCertificate} className="me-2" />
-                  Type de message
-                </label>
-                <select
-                  className="form-select"
-                  value={formData.type}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      type: e.target.value,
-                    }))
-                  }
-                  disabled={isSubmitting || !isLoggedIn}
-                >
-                  <option value="NOTIFICATION">
-                    Notification (Recommandé)
-                  </option>
-                  <option value="ALERT">Alerte</option>
-                  <option value="INFO">Information</option>
-                  <option value="QUESTION">Question</option>
-                  <option value="DEMANDE">Demande</option>
-                  <option value="PRODUIT">Produit</option>
-                </select>
-                <small className="text-muted">
-                  Choisissez "Notification" pour la plupart des conversations.
-                </small>
-              </div>
-
-              <div className="d-flex justify-content-between gap-3">
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary"
-                  onClick={onClose}
-                  disabled={isSubmitting}
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary flex-grow-1 d-flex align-items-center justify-content-center gap-2"
-                  disabled={
-                    isSubmitting ||
-                    !formData.contenu.trim() ||
-                    !formData.sujet.trim() ||
-                    !isLoggedIn
-                  }
-                >
-                  {isSubmitting ? (
-                    <>
-                      <FontAwesomeIcon icon={faSpinner} spin />
-                      <span>Envoi en cours...</span>
-                    </>
-                  ) : !isLoggedIn ? (
-                    <>
-                      <FontAwesomeIcon icon={faSignInAlt} />
-                      <span>Se connecter pour envoyer</span>
-                    </>
-                  ) : (
-                    <>
-                      <FontAwesomeIcon icon={faPaperPlane} />
-                      <span>Envoyer le message</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-          <div className="modal-footer bg-light">
-            <div className="d-flex justify-content-between align-items-center w-100">
-              <div className="d-flex align-items-center gap-2">
-                <FontAwesomeIcon icon={faLock} className="text-success" />
-                <small className="text-muted">
-                  Conversation sécurisée et privée
-                </small>
-              </div>
-              {isLoggedIn && localSuccess && (
-                <Link
-                  href="/messages"
-                  className="btn btn-sm btn-outline-primary"
-                  onClick={onClose}
-                >
-                  <FontAwesomeIcon icon={faExternalLinkAlt} className="me-1" />
-                  Voir mes messages
-                </Link>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
+// ============================================
+// COMPOSANT PRINCIPAL
+// ============================================
 export default function ProduitDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -1055,38 +509,28 @@ export default function ProduitDetailPage() {
   });
   const [submittingReview, setSubmittingReview] = useState(false);
 
-  // États pour la messagerie
-  const [showMessagerieModal, setShowMessagerieModal] = useState(false);
-  const [messagerieLoading, setMessagerieLoading] = useState(false);
-  const [messagerieError, setMessagerieError] = useState<string | null>(null);
-  const [messagerieSuccess, setMessagerieSuccess] = useState<string | null>(
-    null,
-  );
-
   // États pour le contact
   const [contactVisible, setContactVisible] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
 
-  // URL d'avatar par défaut
+  // ============================================
+  // FONCTIONS UTILITAIRES
+  // ============================================
   const getDefaultAvatarUrl = (): string => {
     return `${API_CONFIG.BASE_URL || "http://localhost:3005"}/images/default-avatar.png`;
   };
 
-  // URL d'image par défaut pour les produits
   const getDefaultProductImage = (): string => {
     return `${API_CONFIG.BASE_URL || "http://localhost:3005"}/images/default-product.png`;
   };
 
-  // Fonction pour convertir les URLs Minio en URLs proxy
   const convertMinioUrlToProxy = (minioUrl: string): string => {
     if (!minioUrl) return getDefaultProductImage();
 
-    // Si c'est déjà une URL proxy, la retourner telle quelle
     if (minioUrl.includes("localhost:3005/api/files/")) {
       return minioUrl;
     }
 
-    // Si c'est une URL Minio
     if (minioUrl.includes("15.236.142.141:9000/oskar-bucket/")) {
       const key = minioUrl.replace(
         "http://15.236.142.141:9000/oskar-bucket/",
@@ -1096,11 +540,12 @@ export default function ProduitDetailPage() {
       return `http://localhost:3005/api/files/${encodedKey}`;
     }
 
-    // Si c'est juste une clé S3 (sans l'URL complète)
     if (
       minioUrl.includes("boutiques/") ||
       minioUrl.includes("produits/") ||
-      minioUrl.includes("categories/")
+      minioUrl.includes("categories/") ||
+      minioUrl.includes("utilisateurs/") ||
+      minioUrl.includes("vendeurs/")
     ) {
       const encodedKey = encodeURIComponent(minioUrl);
       return `http://localhost:3005/api/files/${encodedKey}`;
@@ -1109,18 +554,14 @@ export default function ProduitDetailPage() {
     return minioUrl;
   };
 
-  // Normaliser les URLs d'images - CORRIGÉ POUR MINIO ET BOUTIQUE
   const normalizeImageUrl = (
     url: string | null,
     key: string | null = null,
   ): string => {
     console.log("normalizeImageUrl appelée avec:", { url, key });
 
-    // Priorité 1: Utiliser la clé S3 si disponible
     if (key) {
-      // Si c'est une clé S3 (sans http://)
       if (!key.startsWith("http://") && !key.startsWith("https://")) {
-        // Construire l'URL proxy pour la clé S3
         const encodedKey = encodeURIComponent(key);
         const proxyUrl = `http://localhost:3005/api/files/${encodedKey}`;
         console.log("URL proxy générée depuis clé:", proxyUrl);
@@ -1128,37 +569,29 @@ export default function ProduitDetailPage() {
       }
     }
 
-    // Priorité 2: URL directe
     if (!url || url.trim() === "") {
       return getDefaultProductImage();
     }
 
     const cleanUrl = url.trim();
 
-    // Si c'est déjà une URL proxy local (localhost:3005/api/files/)
     if (cleanUrl.includes("localhost:3005/api/files/")) {
-      // S'assurer qu'elle est bien formatée
       if (cleanUrl.includes("http:localhost")) {
         return cleanUrl.replace("http:localhost", "http://localhost");
       }
       return cleanUrl;
     }
 
-    // IMPORTANT: Gestion spécifique pour les URLs Minio de la boutique
-    // Les URLs ressemblent à: http://15.236.142.141:9000/oskar-bucket/boutiques/logos/...
     if (cleanUrl.includes("15.236.142.141:9000/oskar-bucket/")) {
       return convertMinioUrlToProxy(cleanUrl);
     }
 
-    // Si c'est une URL S3/Cloud Storage sans proxy
     if (
       cleanUrl.includes("oskar-bucket/") &&
       !cleanUrl.includes("localhost:3005")
     ) {
-      // Essayer d'extraire la clé
       let minioKey = cleanUrl;
 
-      // Si c'est une URL complète avec http
       if (cleanUrl.includes("http://")) {
         const urlParts = cleanUrl.split("/");
         const bucketIndex = urlParts.indexOf("oskar-bucket");
@@ -1167,7 +600,6 @@ export default function ProduitDetailPage() {
         }
       }
 
-      // Nettoyer le début si nécessaire
       minioKey = minioKey.replace(/^oskar-bucket\//, "");
 
       console.log("Clé S3 extraite:", minioKey);
@@ -1175,26 +607,21 @@ export default function ProduitDetailPage() {
       return `http://localhost:3005/api/files/${encodedKey}`;
     }
 
-    // Pour les URLs externes valides, les retourner telles quelles
     if (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://")) {
-      // Corriger les URLs mal formées
       if (cleanUrl.includes("http:localhost")) {
         return cleanUrl.replace("http:localhost", "http://localhost");
       }
       return cleanUrl;
     }
 
-    // Pour les chemins relatifs
     if (cleanUrl.startsWith("/")) {
       return `${API_CONFIG.BASE_URL || "http://localhost:3005"}${cleanUrl}`;
     }
 
-    // Par défaut
     console.warn("URL d'image non reconnue:", cleanUrl);
     return getDefaultProductImage();
   };
 
-  // Fonction sécurisée pour formater les nombres
   const safeToFixed = (
     value: number | null | undefined,
     decimals: number = 1,
@@ -1205,7 +632,6 @@ export default function ProduitDetailPage() {
     return value.toFixed(decimals);
   };
 
-  // Fonction sécurisée pour obtenir la note moyenne
   const getSafeNoteMoyenne = (produit: Produit | null): number => {
     if (!produit) return 0;
     if (
@@ -1218,7 +644,9 @@ export default function ProduitDetailPage() {
     return produit.note_moyenne;
   };
 
-  // Transformer les données API vers notre format
+  // ============================================
+  // FONCTIONS DE TRANSFORMATION - CORRIGÉES
+  // ============================================
   const transformCreateurInfo = (apiCreateur: any): CreateurInfo => {
     return {
       uuid: apiCreateur.uuid || "",
@@ -1233,10 +661,11 @@ export default function ProduitDetailPage() {
       instagram_url: apiCreateur.instagram_url || null,
       est_verifie: apiCreateur.est_verifie || false,
       est_bloque: apiCreateur.est_bloque || false,
-      userType: apiCreateur.userType || "utilisateur",
+      userType: apiCreateur.userType || apiCreateur.type || "utilisateur",
     };
   };
 
+  // ✅ FONCTION TRANSFORM PRODUIT CORRIGÉE
   const transformProduitData = (apiProduit: ProduitAPI): Produit => {
     const safeNoteMoyenne =
       apiProduit.note_moyenne !== null && !isNaN(apiProduit.note_moyenne)
@@ -1262,8 +691,9 @@ export default function ProduitDetailPage() {
       nombre_avis: apiProduit.nombre_avis || 0,
       nombre_favoris: apiProduit.nombre_favoris || 0,
       quantite: apiProduit.quantite || 0,
-      vendeurUuid: apiProduit.vendeurUuid,
-      boutiqueUuid: apiProduit.boutiqueUuid,
+      // ✅ CORRIGÉ: Utiliser vendeur_uuid et boutique_uuid
+      vendeur_uuid: apiProduit.vendeur_uuid,
+      boutique_uuid: apiProduit.boutique_uuid,
       createdAt: apiProduit.createdAt || new Date().toISOString(),
       updatedAt: apiProduit.updatedAt || new Date().toISOString(),
       ...(apiProduit.categorie && {
@@ -1311,11 +741,9 @@ export default function ProduitDetailPage() {
       banniere_key: apiBoutique.banniere_key,
     });
 
-    // IMPORTANT: Utiliser d'abord logo_key et banniere_key si disponibles
-    // Ces clés sont plus fiables que les URLs directes
     const logoUrl = normalizeImageUrl(
-      apiBoutique.logo_key ? null : apiBoutique.logo, // Utiliser logo uniquement si pas de clé
-      apiBoutique.logo_key, // Priorité à la clé
+      apiBoutique.logo_key ? null : apiBoutique.logo,
+      apiBoutique.logo_key,
     );
 
     const banniereUrl = normalizeImageUrl(
@@ -1370,7 +798,9 @@ export default function ProduitDetailPage() {
     };
   };
 
-  // Charger les commentaires
+  // ============================================
+  // CHARGEMENT DES DONNÉES
+  // ============================================
   const fetchCommentaires = useCallback(
     async (produitUuid: string) => {
       if (!produitUuid || commentairesFetched) return;
@@ -1378,7 +808,6 @@ export default function ProduitDetailPage() {
       try {
         setLoadingComments(true);
 
-        // Charger les commentaires depuis l'API
         const response = await api.get<CommentairesResponse>(
           API_ENDPOINTS.COMMENTAIRES.BY_PRODUIT(produitUuid),
         );
@@ -1388,14 +817,12 @@ export default function ProduitDetailPage() {
             transformCommentaireData,
           );
 
-          // Trier par date (plus récent en premier)
           commentairesData.sort(
             (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
           );
 
           setCommentaires(commentairesData);
 
-          // S'assurer que les stats ne sont pas null
           const safeNoteMoyenne = response.stats?.noteMoyenne || 0;
           const safeDistributionNotes = response.stats?.distributionNotes || {
             1: 0,
@@ -1415,7 +842,6 @@ export default function ProduitDetailPage() {
         }
       } catch (err: any) {
         console.warn("Erreur chargement commentaires API:", err);
-        // Mettre à jour avec des stats par défaut
         const produitNoteMoyenne = getSafeNoteMoyenne(produit);
 
         setCommentairesStats({
@@ -1433,21 +859,7 @@ export default function ProduitDetailPage() {
     [produit, commentairesFetched],
   );
 
-  // Fonction pour debugger les URLs
-  const debugImageUrls = (boutique: Boutique | null) => {
-    if (!boutique) return;
-
-    console.log("=== DEBUG IMAGES BOUTIQUE ===");
-    console.log("Logo original:", boutique.logo);
-    console.log("Logo key:", boutique.logo_key);
-    console.log("Logo normalisé:", boutique.logo);
-
-    console.log("Bannière original:", boutique.banniere);
-    console.log("Bannière key:", boutique.banniere_key);
-    console.log("Bannière normalisée:", boutique.banniere);
-  };
-
-  // Charger les données du produit
+  // ✅ FONCTION FETCH PRODUIT DETAILS CORRIGÉE
   const fetchProduitDetails = useCallback(async () => {
     if (!uuid) return;
 
@@ -1455,7 +867,6 @@ export default function ProduitDetailPage() {
       setLoading(true);
       setError(null);
 
-      // 1. Charger le produit
       const response = await api.get<APIResponse>(
         API_ENDPOINTS.PRODUCTS.DETAIL_ALEATOIRE(uuid),
       );
@@ -1464,9 +875,14 @@ export default function ProduitDetailPage() {
         throw new Error("Produit non trouvé");
       }
 
-      console.log("Réponse API produit:", response.produit);
+      console.log("✅ Réponse API produit:", {
+        uuid: response.produit.uuid,
+        createur: response.produit.createur,
+        createurType: response.produit.createurType,
+        utilisateur_uuid: response.produit.utilisateur_uuid,
+        vendeur_uuid: response.produit.vendeur_uuid,
+      });
 
-      // Transformer les données
       const produitData = transformProduitData(response.produit);
       const similairesData = response.similaires.map(
         transformProduitSimilaireData,
@@ -1476,81 +892,77 @@ export default function ProduitDetailPage() {
       setProduitsSimilaires(similairesData);
       setFavori(response.produit.is_favoris || false);
 
-      // 2. Déterminer le créateur
+      // ✅ GESTION DU CRÉATEUR
       if (response.produit.createur) {
-        setCreateur(transformCreateurInfo(response.produit.createur));
-      } else if (response.produit.vendeurUuid) {
-        // Si pas de créateur dans la réponse, essayer de charger le vendeur
+        const createurData = transformCreateurInfo(response.produit.createur);
+        createurData.userType = response.produit.createurType || "utilisateur";
+        setCreateur(createurData);
+        console.log("✅ Créateur chargé depuis l'API:", createurData);
+      } else if (response.produit.vendeur_uuid) {
         try {
           const vendeurResponse = await api.get(
-            API_ENDPOINTS.AUTH.VENDEUR.DETAIL(response.produit.vendeurUuid),
+            API_ENDPOINTS.AUTH.VENDEUR.DETAIL(response.produit.vendeur_uuid),
           );
           if (vendeurResponse && vendeurResponse.data) {
-            setCreateur(transformCreateurInfo(vendeurResponse.data));
+            const vendeurData = transformCreateurInfo(vendeurResponse.data);
+            vendeurData.userType = "vendeur";
+            setCreateur(vendeurData);
+            console.log("✅ Vendeur chargé manuellement:", vendeurData);
           }
         } catch (err) {
-          console.warn("Impossible de charger les détails du vendeur:", err);
+          console.warn("❌ Impossible de charger les détails du vendeur:", err);
+        }
+      } else if (response.produit.utilisateur_uuid) {
+        try {
+          const utilisateurResponse = await api.get(
+            API_ENDPOINTS.AUTH.UTILISATEUR.DETAIL(
+              response.produit.utilisateur_uuid,
+            ),
+          );
+          if (utilisateurResponse && utilisateurResponse.data) {
+            const utilisateurData = transformCreateurInfo(
+              utilisateurResponse.data,
+            );
+            utilisateurData.userType = "utilisateur";
+            setCreateur(utilisateurData);
+            console.log("✅ Utilisateur chargé manuellement:", utilisateurData);
+          }
+        } catch (err) {
+          console.warn(
+            "❌ Impossible de charger les détails de l'utilisateur:",
+            err,
+          );
         }
       }
 
-      // 3. Préparer les images
+      // Gestion de la boutique
+      if (response.produit.boutique) {
+        const boutiqueData = transformBoutiqueData(response.produit.boutique);
+        setBoutique(boutiqueData);
+      }
+
+      // Gestion des images
       const imageUrls: string[] = [];
       const mainImage = produitData.image;
       imageUrls.push(mainImage);
       setImagePrincipale(mainImage);
 
-      // Ajouter des images supplémentaires depuis les produits similaires
       similairesData.slice(0, 4).forEach((similaire) => {
         if (similaire.image && !imageUrls.includes(similaire.image)) {
           imageUrls.push(similaire.image);
         }
       });
 
-      // Si moins de 4 images, ajouter des images par défaut
       while (imageUrls.length < 4) {
         imageUrls.push(getDefaultProductImage());
       }
 
       setImages(imageUrls);
 
-      // 4. Traiter les données de la boutique
-      if (response.produit.boutique) {
-        const boutiqueData = transformBoutiqueData(response.produit.boutique);
-        setBoutique(boutiqueData);
-        debugImageUrls(boutiqueData);
-      } else if (produitData.boutiqueUuid) {
-        try {
-          const boutiqueResponse = await api.get(
-            API_ENDPOINTS.BOUTIQUES.DETAIL(produitData.boutiqueUuid),
-          );
-          const boutiqueData = transformBoutiqueData(boutiqueResponse);
-          setBoutique(boutiqueData);
-          debugImageUrls(boutiqueData);
-        } catch (err) {
-          console.warn(
-            "Impossible de charger les détails de la boutique:",
-            err,
-          );
-          setBoutique({
-            uuid: produitData.boutiqueUuid,
-            nom: "Boutique OSKAR",
-            description: "Boutique officielle OSKAR",
-            statut: "en_review",
-            slug: "boutique-oskar",
-            logo: null,
-            banniere: null,
-            est_bloque: false,
-            est_ferme: false,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          });
-        }
-      }
-
-      // 5. Charger les commentaires
+      // Charger les commentaires
       fetchCommentaires(produitData.uuid);
     } catch (err: any) {
-      console.error("Erreur détail produit:", err);
+      console.error("❌ Erreur détail produit:", err);
 
       if (
         err.response?.status === 404 ||
@@ -1571,14 +983,15 @@ export default function ProduitDetailPage() {
     }
   }, [uuid, fetchCommentaires]);
 
-  // Charger les données une seule fois
   useEffect(() => {
     if (uuid && loading && !produit) {
       fetchProduitDetails();
     }
   }, [uuid, fetchProduitDetails, loading, produit]);
 
-  // Fonctions utilitaires
+  // ============================================
+  // FONCTIONS D'AFFICHAGE
+  // ============================================
   const formatPrice = (price: number) => {
     if (price === null || price === undefined || isNaN(price)) {
       return "0 FCFA";
@@ -1697,9 +1110,7 @@ export default function ProduitDetailPage() {
     }
   };
 
-  // Calculer les statistiques des notes depuis les commentaires réels
   const calculateNoteStats = (): NoteStats => {
-    // Utiliser les stats de l'API si disponibles
     const stats: NoteStats = {
       1: commentairesStats.distributionNotes[1] || 0,
       2: commentairesStats.distributionNotes[2] || 0,
@@ -1710,7 +1121,6 @@ export default function ProduitDetailPage() {
       moyenne: commentairesStats.noteMoyenne || 0,
     };
 
-    // Si pas de stats d'API, calculer à partir des commentaires
     if (stats.total === 0 && commentaires.length > 0) {
       stats.total = commentaires.length;
       let totalNotes = 0;
@@ -1729,7 +1139,6 @@ export default function ProduitDetailPage() {
       stats.moyenne = totalNotes / commentaires.length;
     }
 
-    // S'assurer que la moyenne n'est pas NaN
     if (isNaN(stats.moyenne)) {
       stats.moyenne = 0;
     }
@@ -1739,21 +1148,20 @@ export default function ProduitDetailPage() {
 
   const noteStats = calculateNoteStats();
 
-  // Fonctions pour le contact via réseaux sociaux
+  // ============================================
+  // FONCTIONS D'ACTIONS
+  // ============================================
   const handleContactWhatsApp = () => {
     if (!createur) return;
 
     let phoneNumber = createur.telephone || createur.whatsapp_url || "";
 
-    // Nettoyer le numéro de téléphone
     phoneNumber = phoneNumber.replace(/\D/g, "");
 
-    // Si c'est un numéro ivoirien (commence par 225), retirer le préfixe pour WhatsApp
     if (phoneNumber.startsWith("225")) {
       phoneNumber = phoneNumber.substring(3);
     }
 
-    // Ajouter l'indicateur de pays pour la Côte d'Ivoire
     if (phoneNumber && !phoneNumber.startsWith("+")) {
       phoneNumber = `+225${phoneNumber}`;
     }
@@ -1770,7 +1178,6 @@ export default function ProduitDetailPage() {
     if (createur.facebook_url) {
       window.open(createur.facebook_url, "_blank", "noopener,noreferrer");
     } else {
-      // Si pas de lien Facebook direct, ouvrir la recherche
       const searchQuery = encodeURIComponent(
         `${createur.prenoms} ${createur.nom} OSKAR`,
       );
@@ -1801,19 +1208,52 @@ export default function ProduitDetailPage() {
       });
   };
 
-  // Fonction pour ouvrir la messagerie
-  const handleOpenMessagerie = () => {
+  // ✅ FONCTION CONTACTER VENDEUR CORRIGÉE
+  const handleContactVendeur = () => {
     if (!isLoggedIn) {
       openLoginModal();
       return;
     }
 
-    setShowMessagerieModal(true);
-    setMessagerieError(null);
-    setMessagerieSuccess(null);
+    if (!createur) {
+      alert("Informations du vendeur non disponibles");
+      return;
+    }
+
+    // Déterminer le dashboard en fonction du type d'utilisateur connecté
+    const userType = user?.type || "utilisateur";
+
+    let dashboardPath = "";
+    switch (userType) {
+      case "admin":
+        dashboardPath = "/dashboard-admin";
+        break;
+      case "agent":
+        dashboardPath = "/dashboard-agent";
+        break;
+      case "vendeur":
+        dashboardPath = "/dashboard-vendeur";
+        break;
+      case "utilisateur":
+        dashboardPath = "/dashboard-utilisateur";
+        break;
+      default:
+        dashboardPath = "/dashboard-utilisateur";
+    }
+
+    // Construire les paramètres pour pré-remplir le formulaire de message
+    const params = new URLSearchParams({
+      destinataireUuid: createur.uuid,
+      destinataireEmail: createur.email || "",
+      destinataireNom: `${createur.prenoms} ${createur.nom}`,
+      sujet: `Question concernant votre produit: ${produit?.libelle}`,
+      produitUuid: produit?.uuid || "",
+    });
+
+    // Rediriger vers la page de messagerie du dashboard approprié
+    router.push(`${dashboardPath}/messages?${params.toString()}`);
   };
 
-  // Handlers existants
   const handleAddToFavorites = async () => {
     if (!produit) return;
 
@@ -1871,17 +1311,6 @@ export default function ProduitDetailPage() {
     }
   };
 
-  const handleBuyNow = () => {
-    if (!produit) return;
-
-    if (!isLoggedIn) {
-      openLoginModal();
-      return;
-    }
-
-    router.push(`/commande?produit=${produit.uuid}&quantite=${quantite}`);
-  };
-
   const handleShare = (platform: string) => {
     if (!produit) return;
 
@@ -1918,10 +1347,7 @@ export default function ProduitDetailPage() {
 
   const handleLikeComment = async (commentUuid: string) => {
     try {
-      // API pour liker un commentaire (à implémenter côté backend si nécessaire)
       await api.post(`/commentaires/${commentUuid}/like`, {});
-
-      // Mettre à jour localement
       setCommentaires((prev) =>
         prev.map((comment) =>
           comment.uuid === commentUuid
@@ -1931,7 +1357,6 @@ export default function ProduitDetailPage() {
       );
     } catch (err) {
       console.error("Erreur lors du like:", err);
-      // Mettre à jour localement malgré l'erreur
       setCommentaires((prev) =>
         prev.map((comment) =>
           comment.uuid === commentUuid
@@ -1970,8 +1395,7 @@ export default function ProduitDetailPage() {
     setSubmittingReview(true);
 
     try {
-      // Créer un commentaire avec note
-      const response = await api.post<{ commentaire: CommentaireAPI }>(
+      await api.post<{ commentaire: CommentaireAPI }>(
         API_ENDPOINTS.COMMENTAIRES.CREATE,
         {
           contenu: newReview.commentaire,
@@ -1980,10 +1404,8 @@ export default function ProduitDetailPage() {
         },
       );
 
-      // Recharger les commentaires
       await fetchCommentaires(produit.uuid);
 
-      // Réinitialiser le formulaire
       setNewReview({
         note: 5,
         commentaire: "",
@@ -1994,7 +1416,6 @@ export default function ProduitDetailPage() {
         "Votre avis a été ajouté avec succès ! Merci pour votre contribution.",
       );
 
-      // Recharger les détails du produit pour mettre à jour les statistiques
       await fetchProduitDetails();
     } catch (err: any) {
       console.error("Erreur ajout avis:", err);
@@ -2017,6 +1438,15 @@ export default function ProduitDetailPage() {
     }
   };
 
+  const handleVisitUtilisateur = () => {
+    if (createur) {
+      router.push(`/utilisateurs/${createur.uuid}`);
+    }
+  };
+
+  // ============================================
+  // RENDU
+  // ============================================
   if (loading) {
     return (
       <div className="bg-light min-vh-100">
@@ -2270,25 +1700,21 @@ export default function ProduitDetailPage() {
                         {/* Boutons d'action */}
                         <div className="mt-auto">
                           <div className="d-grid gap-2">
+                            {/* ✅ BOUTON CONTACTER LE VENDEUR - CORRIGÉ */}
                             <button
-                              className="btn btn-success btn-lg"
-                              onClick={handleBuyNow}
-                              disabled={!produit.disponible}
-                            >
-                              <FontAwesomeIcon icon={faBolt} className="me-2" />
-                              Acheter maintenant
-                            </button>
-                            <button
-                              className="btn btn-primary btn-lg"
-                              onClick={handleAddToCart}
-                              disabled={!produit.disponible}
+                              className="btn btn-outline-info btn-lg"
+                              onClick={handleContactVendeur}
+                              disabled={!createur}
                             >
                               <FontAwesomeIcon
-                                icon={faCartPlus}
+                                icon={faMessage}
                                 className="me-2"
                               />
-                              Ajouter au panier
+                              {createur?.userType === "vendeur"
+                                ? "Contacter le vendeur"
+                                : "Contacter le créateur"}
                             </button>
+
                             <div className="d-flex gap-2">
                               <button
                                 className="btn btn-outline-primary flex-fill"
@@ -2400,7 +1826,7 @@ export default function ProduitDetailPage() {
                           )}
                           <button
                             className="btn btn-outline-info btn-sm"
-                            onClick={handleOpenMessagerie}
+                            onClick={handleContactVendeur}
                           >
                             <FontAwesomeIcon
                               icon={faMessage}
@@ -2432,14 +1858,18 @@ export default function ProduitDetailPage() {
                 </div>
               )}
 
-              {/* Section contact créateur */}
+              {/* ✅ SECTION CONTACT CRÉATEUR */}
               {contactVisible && createur && (
                 <div className="card shadow-sm border-info mb-4">
                   <div className="card-header bg-info bg-opacity-10 border-info">
                     <div className="d-flex justify-content-between align-items-center">
                       <h5 className="fw-bold mb-0 text-info">
                         <FontAwesomeIcon icon={faUserCircle} className="me-2" />
-                        Informations du vendeur
+                        {createur.userType === "vendeur"
+                          ? "Informations du vendeur"
+                          : createur.userType === "agent"
+                            ? "Informations de l'agent"
+                            : "Informations de l'utilisateur"}
                       </h5>
                       <button
                         className="btn btn-sm btn-outline-info"
@@ -2484,13 +1914,23 @@ export default function ProduitDetailPage() {
                         </h5>
                         <div className="d-flex align-items-center justify-content-center gap-2 mb-2">
                           <span
-                            className={`badge bg-${createur.userType === "vendeur" ? "warning" : createur.userType === "agent" ? "primary" : "success"}`}
+                            className={`badge bg-${
+                              createur.userType === "vendeur"
+                                ? "warning"
+                                : createur.userType === "agent"
+                                  ? "primary"
+                                  : createur.userType === "admin"
+                                    ? "danger"
+                                    : "success"
+                            }`}
                           >
                             {createur.userType === "vendeur"
                               ? "Vendeur"
                               : createur.userType === "agent"
                                 ? "Agent"
-                                : "Utilisateur"}
+                                : createur.userType === "admin"
+                                  ? "Administrateur"
+                                  : "Utilisateur"}
                           </span>
                           {createur.est_verifie && (
                             <span className="badge bg-success">
@@ -2502,6 +1942,24 @@ export default function ProduitDetailPage() {
                             </span>
                           )}
                         </div>
+
+                        {/* ✅ BOUTON VOIR LE PROFIL */}
+                        <button
+                          className="btn btn-outline-primary btn-sm mt-2 w-100"
+                          onClick={handleVisitUtilisateur}
+                        >
+                          <FontAwesomeIcon icon={faUser} className="me-1" />
+                          Voir le profil complet
+                        </button>
+
+                        {/* ✅ BOUTON CONTACTER - CORRIGÉ */}
+                        <button
+                          className="btn btn-outline-info btn-sm mt-2 w-100"
+                          onClick={handleContactVendeur}
+                        >
+                          <FontAwesomeIcon icon={faMessage} className="me-1" />
+                          Contacter
+                        </button>
                       </div>
                       <div className="col-md-8">
                         <div className="row g-3">
@@ -2567,7 +2025,7 @@ export default function ProduitDetailPage() {
                               </button>
                               <button
                                 className="btn btn-outline-primary d-flex align-items-center gap-2"
-                                onClick={handleOpenMessagerie}
+                                onClick={handleContactVendeur}
                               >
                                 <FontAwesomeIcon icon={faMessage} />
                                 <span>Messagerie interne</span>
@@ -2687,9 +2145,19 @@ export default function ProduitDetailPage() {
                         )}
                         {produit.createur && (
                           <li className="mb-3">
-                            <strong className="text-muted">Vendeur:</strong>
+                            <strong className="text-muted">
+                              {produit.createurType === "vendeur"
+                                ? "Vendeur:"
+                                : "Créateur:"}
+                            </strong>
                             <span className="ms-2">
-                              {produit.createur.prenoms} {produit.createur.nom}
+                              <Link
+                                href={`/utilisateurs/${produit.createur.uuid}`}
+                                className="text-decoration-none text-primary fw-bold"
+                              >
+                                {produit.createur.prenoms}{" "}
+                                {produit.createur.nom}
+                              </Link>
                             </span>
                           </li>
                         )}
@@ -2724,10 +2192,10 @@ export default function ProduitDetailPage() {
                             <strong className="text-muted">Type:</strong>
                             <span className="ms-2">
                               {produit.createurType === "vendeur"
-                                ? "Vente"
+                                ? "Vente professionnelle"
                                 : produit.createurType === "agent"
                                   ? "Agent"
-                                  : "Utilisateur"}
+                                  : "Vente entre particuliers"}
                             </span>
                           </li>
                         )}
@@ -3080,11 +2548,20 @@ export default function ProduitDetailPage() {
                               </h5>
                               {produitSim.createur && (
                                 <div className="mb-2">
-                                  <small className="text-muted">Vendeur:</small>
+                                  <small className="text-muted">
+                                    {produitSim.createurType === "vendeur"
+                                      ? "Vendeur:"
+                                      : "Créateur:"}
+                                  </small>
                                   <br />
                                   <small>
-                                    {produitSim.createur.prenoms}{" "}
-                                    {produitSim.createur.nom}
+                                    <Link
+                                      href={`/utilisateurs/${produitSim.createur.uuid}`}
+                                      className="text-decoration-none text-dark"
+                                    >
+                                      {produitSim.createur.prenoms}{" "}
+                                      {produitSim.createur.nom}
+                                    </Link>
                                   </small>
                                 </div>
                               )}
@@ -3119,7 +2596,7 @@ export default function ProduitDetailPage() {
 
             {/* Colonne droite - Sidebar */}
             <div className="col-lg-4">
-              {/* Carte boutique améliorée avec vendeur */}
+              {/* Carte boutique - UNIQUEMENT SI BOUTIQUE EXISTE */}
               {boutique && (
                 <div className="card shadow-sm border-0 mb-4">
                   <div className="card-body p-4">
@@ -3185,7 +2662,7 @@ export default function ProduitDetailPage() {
                     </div>
 
                     {/* Informations vendeur */}
-                    {(boutique.vendeur || createur) && (
+                    {boutique.vendeur && (
                       <div className="mb-4">
                         <div className="d-flex align-items-center mb-3">
                           <div
@@ -3195,31 +2672,35 @@ export default function ProduitDetailPage() {
                             <SecureImage
                               src={
                                 boutique.vendeur?.avatar ||
-                                createur?.avatar ||
                                 getDefaultAvatarUrl()
                               }
-                              alt={
-                                boutique.vendeur
-                                  ? `${boutique.vendeur.prenoms} ${boutique.vendeur.nom}`
-                                  : createur
-                                    ? `${createur.prenoms} ${createur.nom}`
-                                    : "Vendeur"
-                              }
+                              alt={`${boutique.vendeur.prenoms} ${boutique.vendeur.nom}`}
                               fallbackSrc={getDefaultAvatarUrl()}
                               className="img-fluid h-100 w-100 object-fit-cover"
                             />
                           </div>
                           <div>
                             <h6 className="fw-bold mb-0">
-                              {boutique.vendeur
-                                ? `${boutique.vendeur.prenoms} ${boutique.vendeur.nom}`
-                                : createur
-                                  ? `${createur.prenoms} ${createur.nom}`
-                                  : "Vendeur"}
+                              <Link
+                                href={`/utilisateurs/${boutique.vendeur.uuid}`}
+                                className="text-decoration-none text-dark"
+                              >
+                                {boutique.vendeur.prenoms}{" "}
+                                {boutique.vendeur.nom}
+                              </Link>
                             </h6>
                             <small className="text-muted">Propriétaire</small>
                           </div>
                         </div>
+
+                        {/* ✅ BOUTON CONTACTER LE VENDEUR - CORRIGÉ */}
+                        <button
+                          className="btn btn-outline-info btn-sm w-100 mt-2"
+                          onClick={handleContactVendeur}
+                        >
+                          <FontAwesomeIcon icon={faMessage} className="me-1" />
+                          Contacter le vendeur
+                        </button>
                       </div>
                     )}
 
@@ -3266,7 +2747,151 @@ export default function ProduitDetailPage() {
                         onClick={() => setContactVisible(true)}
                       >
                         <FontAwesomeIcon icon={faUser} className="me-2" />
-                        Voir les contacts
+                        Voir le créateur
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ✅ CARTE CRÉATEUR - POUR LES PRODUITS SANS BOUTIQUE */}
+              {!boutique && createur && (
+                <div className="card shadow-sm border-0 mb-4">
+                  <div className="card-body p-4">
+                    <div className="d-flex align-items-center mb-4">
+                      <div
+                        className={`bg-${createur.userType === "vendeur" ? "warning" : "success"} bg-opacity-10 rounded-circle p-3 me-3`}
+                      >
+                        <FontAwesomeIcon
+                          icon={
+                            createur.userType === "vendeur" ? faStore : faUser
+                          }
+                          className={`text-${createur.userType === "vendeur" ? "warning" : "success"} fa-lg`}
+                        />
+                      </div>
+                      <div>
+                        <h4 className="h5 fw-bold mb-0">
+                          {createur.userType === "vendeur"
+                            ? "Vendeur"
+                            : "Créateur"}
+                        </h4>
+                        <p className="text-muted mb-0">
+                          {createur.userType === "vendeur"
+                            ? "Vente professionnelle"
+                            : "Vente entre particuliers"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Avatar du créateur */}
+                    <div className="text-center mb-4">
+                      {createur.avatar ? (
+                        <div
+                          className="rounded-circle d-inline-flex align-items-center justify-content-center mb-3 overflow-hidden border"
+                          style={{ width: "100px", height: "100px" }}
+                        >
+                          <SecureImage
+                            src={createur.avatar}
+                            alt={`${createur.prenoms} ${createur.nom}`}
+                            fallbackSrc={getDefaultAvatarUrl()}
+                            className="img-fluid h-100 w-100 object-fit-cover"
+                          />
+                        </div>
+                      ) : (
+                        <div
+                          className="bg-light rounded-circle d-inline-flex align-items-center justify-content-center mb-3 border"
+                          style={{ width: "100px", height: "100px" }}
+                        >
+                          <FontAwesomeIcon
+                            icon={faUserCircle}
+                            className="fa-2x text-muted"
+                          />
+                        </div>
+                      )}
+                      <h5 className="fw-bold mb-2">
+                        <Link
+                          href={`/utilisateurs/${createur.uuid}`}
+                          className="text-decoration-none text-dark"
+                        >
+                          {createur.prenoms} {createur.nom}
+                        </Link>
+                      </h5>
+                      <div className="d-flex flex-wrap justify-content-center gap-2 mb-3">
+                        <span
+                          className={`badge bg-${
+                            createur.userType === "vendeur"
+                              ? "warning"
+                              : createur.userType === "agent"
+                                ? "primary"
+                                : createur.userType === "admin"
+                                  ? "danger"
+                                  : "success"
+                          }`}
+                        >
+                          {createur.userType === "vendeur"
+                            ? "Vendeur"
+                            : createur.userType === "agent"
+                              ? "Agent"
+                              : createur.userType === "admin"
+                                ? "Administrateur"
+                                : "Utilisateur"}
+                        </span>
+                        {createur.est_verifie && (
+                          <span className="badge bg-success">
+                            <FontAwesomeIcon
+                              icon={faCheckCircle}
+                              className="me-1"
+                            />
+                            Vérifié
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Informations de contact */}
+                    <div className="mb-4">
+                      <div className="d-flex align-items-center mb-3">
+                        <FontAwesomeIcon
+                          icon={faEnvelope}
+                          className="text-primary me-2"
+                        />
+                        <div className="flex-grow-1">
+                          <small className="text-muted d-block">Email</small>
+                          <strong>{createur.email || "Non renseigné"}</strong>
+                        </div>
+                      </div>
+                      <div className="d-flex align-items-center mb-3">
+                        <FontAwesomeIcon
+                          icon={faPhone}
+                          className="text-success me-2"
+                        />
+                        <div className="flex-grow-1">
+                          <small className="text-muted d-block">
+                            Téléphone
+                          </small>
+                          <strong>
+                            {createur.telephone || "Non renseigné"}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="d-grid gap-2">
+                      <button
+                        className="btn btn-outline-info"
+                        onClick={() => setContactVisible(true)}
+                      >
+                        <FontAwesomeIcon icon={faUser} className="me-2" />
+                        Voir les détails
+                      </button>
+                      <button
+                        className="btn btn-outline-primary"
+                        onClick={handleContactVendeur}
+                      >
+                        <FontAwesomeIcon icon={faMessage} className="me-2" />
+                        {createur.userType === "vendeur"
+                          ? "Contacter le vendeur"
+                          : "Contacter le créateur"}
                       </button>
                     </div>
                   </div>
@@ -3496,21 +3121,6 @@ export default function ProduitDetailPage() {
           )}
         </div>
       </div>
-
-      {/* Modal de messagerie */}
-      <MessagerieModal
-        isOpen={showMessagerieModal}
-        onClose={() => {
-          setShowMessagerieModal(false);
-          setMessagerieError(null);
-          setMessagerieSuccess(null);
-        }}
-        createur={createur}
-        produit={produit}
-        loading={messagerieLoading}
-        error={messagerieError}
-        success={messagerieSuccess}
-      />
 
       <style jsx>{`
         .object-fit-cover {

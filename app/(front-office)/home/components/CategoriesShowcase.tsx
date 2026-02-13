@@ -1,235 +1,202 @@
-// CategoriesShowcase.tsx
+// app/(front-office)/home/components/CategoriesShowcase.tsx
 "use client";
 
-import { useState } from "react";
-import colors from "../../../shared/constants/colors";
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { api } from "@/lib/api-client";
+import { API_ENDPOINTS } from "@/config/api-endpoints";
+import {
+  CATEGORY_CONFIG,
+  DEFAULT_CATEGORIES,
+} from "@/app/shared/constants/categories";
+import colors from "@/app/shared/constants/colors";
 
 interface Category {
-  id: number;
-  name: string;
-  count: number;
-  icon: string;
-  iconColor: string;
-  bgColor: string;
+  uuid: string;
+  libelle: string;
+  slug: string;
+  type: string;
+  description?: string;
+  image?: string;
+  enfants?: Category[];
+  path?: string | null;
+  is_deleted?: boolean;
+  deleted_at?: string | null;
+  id?: number;
 }
 
-const CategoriesShowcase = () => {
-  const [hoveredCategory, setHoveredCategory] = useState<number | null>(null);
+export default function CategoriesShowcase() {
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const categories: Category[] = [
-    {
-      id: 1,
-      name: "Électronique",
-      count: 487,
-      icon: "fa-mobile-screen-button",
-      iconColor: "#2196F3", // Bleu
-      bgColor: "rgba(33, 150, 243, 0.1)",
-    },
-    {
-      id: 2,
-      name: "Vêtements & Chaussures",
-      count: 612,
-      icon: "fa-shirt",
-      iconColor: "#E91E63", // Rose
-      bgColor: "rgba(233, 30, 99, 0.1)",
-    },
-    {
-      id: 3,
-      name: "Éducation & Culture",
-      count: 198,
-      icon: "fa-book",
-      iconColor: colors.oskar.green, // Vert
-      bgColor: "rgba(76, 175, 80, 0.1)",
-    },
-    {
-      id: 4,
-      name: "Services de proximité",
-      count: 89,
-      icon: "fa-handshake-angle",
-      iconColor: "#673AB7", // Indigo
-      bgColor: "rgba(103, 58, 183, 0.1)",
-    },
-  ];
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        setLoading(true);
+        const response = await api.get(API_ENDPOINTS.CATEGORIES.LIST);
 
-  const handleCategoryClick = (categoryId: number) => {
-    console.log(`Catégorie cliquée: ${categoryId}`);
-    // Vous pouvez ajouter la navigation ici
-    // Ex: router.push(`/categories/${categoryId}`);
-  };
+        const activeCategories = response.filter(
+          (c: Category) => !c.is_deleted && c.deleted_at === null,
+        );
+
+        const mainCategories = activeCategories
+          .filter((c: Category) => !c.path || c.path === null || c.path === "")
+          .filter(
+            (c: Category, index: number, self: Category[]) =>
+              index === self.findIndex((cat) => cat.libelle === c.libelle),
+          )
+          .slice(0, 6); // Limiter à 6 catégories pour l'affichage
+
+        setCategories(mainCategories);
+      } catch (err) {
+        console.error("🔴 CategoriesShowcase - Error:", err);
+        // ✅ CORRECTION: DEFAULT_CATEGORIES n'ont pas de propriété 'path'
+        // Donc on les prend TOUTES car ce sont toutes des catégories principales
+        setCategories(DEFAULT_CATEGORIES.slice(0, 6));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCategories();
+  }, []);
+
+  if (loading) {
+    return (
+      <section className="py-5">
+        <div className="container">
+          <h2 className="h3 fw-bold text-center mb-4">
+            Parcourez par catégories
+          </h2>
+          <div className="row g-4">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="col-6 col-md-4 col-lg-2">
+                <div className="card border-0 shadow-sm">
+                  <div className="card-body text-center p-3">
+                    <div
+                      className="skeleton-loader rounded-circle mx-auto mb-3"
+                      style={{
+                        width: "60px",
+                        height: "60px",
+                        backgroundColor: "#e0e0e0",
+                      }}
+                    ></div>
+                    <div
+                      className="skeleton-loader mx-auto"
+                      style={{
+                        width: "80px",
+                        height: "16px",
+                        backgroundColor: "#e0e0e0",
+                        borderRadius: "4px",
+                      }}
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
-    <section
-      id="categories-showcase"
-      className="categories-section"
-      style={{ backgroundColor: colors.oskar.lightGrey }}
-    >
+    <section className="py-5">
       <div className="container">
-        {/* En-tête */}
         <div className="text-center mb-5">
-          <h2
-            className="section-title mb-3"
-            style={{ color: colors.oskar.black }}
-          >
-            Parcourir par Catégorie
-          </h2>
-          <p className="section-subtitle" style={{ color: colors.oskar.grey }}>
-            Trouvez exactement ce que vous cherchez
+          <h2 className="h2 fw-bold mb-2">Parcourez par catégories</h2>
+          <p className="text-muted fs-5">
+            Des milliers d'annonces dans des centaines de catégories
           </p>
         </div>
 
-        {/* Grille des catégories */}
         <div className="row g-4">
           {categories.map((category) => {
-            const isHovered = hoveredCategory === category.id;
+            const config =
+              CATEGORY_CONFIG[category?.type as keyof typeof CATEGORY_CONFIG] ||
+              CATEGORY_CONFIG["Autres"];
+            const subCount = category.enfants?.length || 0;
 
             return (
-              <div key={category.id} className="col-6 col-md-3">
-                <div
-                  className="category-card"
-                  onClick={() => handleCategoryClick(category.id)}
-                  onMouseEnter={() => setHoveredCategory(category.id)}
-                  onMouseLeave={() => setHoveredCategory(null)}
-                  style={{
-                    cursor: "pointer",
-                    transition: "all 0.3s ease",
-                  }}
+              <div key={category.uuid} className="col-6 col-md-4 col-lg-2">
+                <Link
+                  href={`/categories/${category.slug}`}
+                  className="text-decoration-none"
                 >
-                  {/* Icône */}
-                  <div
-                    className="category-icon-wrapper mx-auto mb-4"
-                    style={{
-                      backgroundColor: isHovered
-                        ? colors.oskar.green
-                        : category.bgColor,
-                      width: "64px",
-                      height: "64px",
-                      borderRadius: "50%",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      transition:
-                        "background-color 0.3s ease, transform 0.3s ease",
-                    }}
-                  >
-                    <i
-                      className={`fa-solid ${category.icon} category-icon`}
-                      style={{
-                        color: isHovered ? "white" : category.iconColor,
-                        fontSize: "1.75rem",
-                        transition: "color 0.3s ease, transform 0.3s ease",
-                      }}
-                    />
+                  <div className="card border-0 shadow-sm h-100 category-card">
+                    <div className="card-body text-center p-3">
+                      <div
+                        className="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3"
+                        style={{
+                          width: "70px",
+                          height: "70px",
+                          backgroundColor: `${config.color}15`,
+                          color: config.color,
+                          transition: "all 0.3s ease",
+                        }}
+                      >
+                        <i className={`fas ${config.icon} fa-2x`}></i>
+                      </div>
+                      <h6 className="fw-semibold mb-1 text-dark">
+                        {category.libelle}
+                      </h6>
+                      {subCount > 0 && (
+                        <small
+                          className="text-muted d-block"
+                          style={{ fontSize: "0.75rem" }}
+                        >
+                          {subCount} sous-catégorie{subCount > 1 ? "s" : ""}
+                        </small>
+                      )}
+                    </div>
                   </div>
-
-                  {/* Nom */}
-                  <h3
-                    className="category-name mb-2"
-                    style={{
-                      color: colors.oskar.black,
-                      fontSize: "1.125rem",
-                      fontWeight: "700",
-                      lineHeight: "1.3",
-                      transition: "color 0.3s ease",
-                    }}
-                  >
-                    {category.name}
-                  </h3>
-
-                  {/* Nombre d'articles */}
-                  <p
-                    className="category-count"
-                    style={{
-                      color: colors.oskar.grey,
-                      fontSize: "0.875rem",
-                      margin: 0,
-                    }}
-                  >
-                    {category.count.toLocaleString("fr-FR")} articles
-                  </p>
-                </div>
+                </Link>
               </div>
             );
           })}
         </div>
+
+        <div className="text-center mt-5">
+          <Link
+            href="/categories"
+            className="btn btn-outline-success px-4 py-2 fw-semibold"
+          >
+            <i className="fas fa-th-large me-2"></i>
+            Toutes les catégories
+          </Link>
+        </div>
       </div>
 
-      <style jsx>{`
-        .categories-section {
-          padding: 3rem 0;
-        }
-
-        .section-title {
-          font-size: 2rem;
-          font-weight: 700;
-        }
-
-        .section-subtitle {
-          font-size: 1.125rem;
-          margin-bottom: 0;
-        }
-
+      <style>{`
         .category-card {
-          background-color: white;
-          border-radius: 16px;
-          padding: 1.5rem;
-          height: 100%;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
           transition: all 0.3s ease;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          text-align: center;
+          cursor: pointer;
+          border-radius: 12px;
         }
-
         .category-card:hover {
-          transform: translateY(-8px);
-          box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+          transform: translateY(-6px);
+          box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.1) !important;
         }
-
-        .category-icon-wrapper:hover {
+        .category-card:hover .rounded-circle {
           transform: scale(1.1);
+          background-color: ${colors.oskar.green} !important;
+          color: white !important;
         }
-
-        .category-card:hover .category-icon {
-          transform: scale(1.1);
+        .skeleton-loader {
+          animation: pulse 1.5s ease-in-out infinite;
         }
-
-        @media (min-width: 768px) {
-          .categories-section {
-            padding: 4rem 0;
+        @keyframes pulse {
+          0% {
+            opacity: 0.6;
           }
-
-          .section-title {
-            font-size: 2.5rem;
+          50% {
+            opacity: 1;
           }
-
-          .category-icon-wrapper {
-            width: 72px;
-            height: 72px;
-          }
-
-          .category-icon {
-            font-size: 2rem;
-          }
-        }
-
-        @media (min-width: 992px) {
-          .categories-section {
-            padding: 5rem 0;
-          }
-
-          .category-icon-wrapper {
-            width: 80px;
-            height: 80px;
-          }
-
-          .category-icon {
-            font-size: 2.25rem;
+          100% {
+            opacity: 0.6;
           }
         }
       `}</style>
     </section>
   );
-};
-
-export default CategoriesShowcase;
+}

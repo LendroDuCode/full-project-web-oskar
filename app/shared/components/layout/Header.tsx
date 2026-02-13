@@ -1,3 +1,4 @@
+// app/shared/components/layout/Header.tsx
 "use client";
 
 import Link from "next/link";
@@ -118,6 +119,7 @@ const defaultCategories: Category[] = [
 ];
 
 const Header: FC = () => {
+  // ✅ TOUS LES HOOKS DOIVENT ÊTRE DÉCLARÉS AVANT LE PREMIER RETURN
   const pathname = usePathname();
   const [hoveredButton, setHoveredButton] = useState<string | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -209,10 +211,8 @@ const Header: FC = () => {
         // ÉTAPE 4: Pour chaque catégorie principale, traiter les enfants
         const processedCategories = uniqueMainCategories.map(
           (category: Category) => {
-            // Utiliser les enfants déjà présents dans le tableau `enfants`
             const enfants = category.enfants || [];
 
-            // Filtrer uniquement les enfants actifs et non supprimés
             const activeEnfants = enfants.filter(
               (enfant: Category) =>
                 !enfant.is_deleted && enfant.deleted_at === null,
@@ -226,13 +226,11 @@ const Header: FC = () => {
               })),
             );
 
-            // Éliminer les doublons dans les enfants basés sur le libellé
             const uniqueChildrenMap = new Map<string, Category>();
             activeEnfants.forEach((enfant: Category) => {
               if (!uniqueChildrenMap.has(enfant.libelle)) {
                 uniqueChildrenMap.set(enfant.libelle, enfant);
               } else {
-                // Si doublon, garder l'enfant avec l'ID le plus élevé
                 const existing = uniqueChildrenMap.get(enfant.libelle)!;
                 if ((enfant.id || 0) > (existing.id || 0)) {
                   uniqueChildrenMap.set(enfant.libelle, enfant);
@@ -284,7 +282,6 @@ const Header: FC = () => {
         setCategories(sortedCategories);
       } catch (error: any) {
         console.error("🔴 Header - Error loading categories:", error);
-        // En cas d'erreur, utiliser des catégories par défaut
         setCategories(defaultCategories);
       } finally {
         setLoadingCategories(false);
@@ -492,109 +489,7 @@ const Header: FC = () => {
     };
   }, [mobileMenuOpen]);
 
-  // Si nous sommes sur un dashboard, ne pas afficher le header normal
-  const isDashboardPage = pathname.startsWith("/dashboard-");
-  if (isDashboardPage) {
-    return null;
-  }
-
-  // Générer les liens de navigation dynamiquement depuis les catégories
-  const generateNavLinks = (): NavLink[] => {
-    const links: NavLink[] = [
-      { name: "Accueil", href: "/", exact: true },
-      // NOTE: On a retiré le lien statique "Don & Échange" pour utiliser la version dynamique
-    ];
-
-    if (!loadingCategories && categories.length > 0) {
-      categories.forEach((category: Category) => {
-        // Vérifier si cette catégorie n'est pas déjà dans les liens
-        // On compare par libellé ET par slug pour éviter tout doublon
-        const isDuplicate = links.some(
-          (link) =>
-            link.name === category.libelle ||
-            link.href === `/categories/${category.slug}`,
-        );
-
-        if (!isDuplicate) {
-          // Créer le lien principal de la catégorie
-          const mainLink: NavLink = {
-            name: category.libelle,
-            href: `/categories/${category.slug}`,
-            exact: false,
-            hasChildren: category.enfants && category.enfants.length > 0,
-          };
-
-          // Ajouter les sous-catégories si elles existent
-          if (category.enfants && category.enfants.length > 0) {
-            // Éliminer les doublons dans les sous-catégories
-            const uniqueChildren = category.enfants.reduce(
-              (acc: any[], child: Category) => {
-                const isChildDuplicate = acc.some(
-                  (sub) => sub.name === child.libelle,
-                );
-                if (!isChildDuplicate) {
-                  acc.push(child);
-                }
-                return acc;
-              },
-              [],
-            );
-
-            mainLink.children = uniqueChildren.map((child: Category) => ({
-              name: child.libelle,
-              href: `/categories/${category.slug}/${child.slug}`,
-            }));
-
-            console.log(
-              `✅ Header - Added category "${category.libelle}" with ${mainLink.children?.length || 0} children:`,
-              mainLink.children?.map((c) => c.name),
-            );
-          } else {
-            console.log(
-              `✅ Header - Added category "${category.libelle}" without children`,
-            );
-          }
-
-          links.push(mainLink);
-        } else {
-          console.warn(
-            `⚠️ Header - Duplicate category skipped: "${category.libelle}" (slug: ${category.slug})`,
-          );
-        }
-      });
-    } else if (!loadingCategories) {
-      console.log("⚠️ Header - No categories loaded from API");
-    }
-
-    console.log(
-      "✅ Header - Final generated nav links:",
-      links.map((l) => ({
-        name: l.name,
-        hasChildren: l.hasChildren,
-        childrenCount: l.children?.length || 0,
-        children: l.children?.map((c) => c.name) || [],
-      })),
-    );
-    return links;
-  };
-
-  const navLinks = generateNavLinks();
-
-  const isLinkActive = (link: NavLink) => {
-    if (link.exact) {
-      return pathname === link.href;
-    }
-    return pathname.startsWith(link.href);
-  };
-
-  const getLinkColor = (link: NavLink) => {
-    if (isLinkActive(link)) {
-      return colors.oskar.black;
-    }
-    return colors.oskar.grey;
-  };
-
-  // Fonction pour gérer la connexion
+  // ✅ HOOKS useCallback - TOUS DÉFINIS ICI
   const handleLoginClick = useCallback(() => {
     closeModals();
     setTimeout(() => {
@@ -602,7 +497,6 @@ const Header: FC = () => {
     }, 100);
   }, [closeModals, openLoginModal]);
 
-  // Fonction pour ouvrir le modal de publication
   const handlePublishClick = useCallback(() => {
     if (!isLoggedIn) {
       handleLoginClick();
@@ -621,16 +515,13 @@ const Header: FC = () => {
     setDropdownOpen(false);
     setMobileMenuOpen(false);
     setUserProfile(null);
-
     setForceUpdate((prev) => prev + 1);
   }, [logout]);
 
-  // Fonction pour fermer le modal de publication
   const handleClosePublishModal = useCallback(() => {
     setShowPublishModal(false);
   }, []);
 
-  // Fonction pour obtenir les initiales de l'utilisateur
   const getUserInitials = useCallback(() => {
     const profile = user || userProfile;
     if (!profile) return "U";
@@ -649,11 +540,9 @@ const Header: FC = () => {
     } else if (profile.nom_complet) {
       return profile.nom_complet.charAt(0).toUpperCase();
     }
-
     return "U";
   }, [user, userProfile]);
 
-  // Fonction pour obtenir le nom complet de l'utilisateur
   const getUserFullName = useCallback(() => {
     const profile = user || userProfile;
     if (!profile) return "Utilisateur";
@@ -674,11 +563,9 @@ const Header: FC = () => {
     } else if (profile.email) {
       return profile.email.split("@")[0];
     }
-
     return "Utilisateur";
   }, [user, userProfile]);
 
-  // Fonction pour obtenir le dashboard selon le type d'utilisateur
   const getUserDashboard = useCallback(() => {
     const userType = user?.type || userProfile?.type;
     if (!userType) return "/dashboard";
@@ -697,7 +584,6 @@ const Header: FC = () => {
     }
   }, [user, userProfile]);
 
-  // Fonction pour obtenir l'URL du profil selon le type d'utilisateur
   const getUserProfileUrl = useCallback(() => {
     const userType = user?.type || userProfile?.type;
     if (!userType) return "/mon-compte";
@@ -716,7 +602,6 @@ const Header: FC = () => {
     }
   }, [user, userProfile]);
 
-  // Fonction pour obtenir l'URL des annonces selon le type d'utilisateur
   const getUserAnnoncesUrl = useCallback(() => {
     const userType = user?.type || userProfile?.type;
     if (!userType) return "/mes-annonces";
@@ -731,7 +616,6 @@ const Header: FC = () => {
     }
   }, [user, userProfile]);
 
-  // Fonction pour obtenir l'URL des messages selon le type d'utilisateur
   const getUserMessagesUrl = useCallback(() => {
     const userType = user?.type || userProfile?.type;
     if (!userType) return "/messages";
@@ -750,38 +634,95 @@ const Header: FC = () => {
     }
   }, [user, userProfile]);
 
-  // Fonction pour vérifier si l'utilisateur est un vendeur ou utilisateur
   const isVendeurOrUtilisateur = useCallback(() => {
     const userType = user?.type || userProfile?.type;
     return userType === "vendeur" || userType === "utilisateur";
   }, [user, userProfile]);
 
-  // Obtenir l'avatar à afficher
   const getAvatarToDisplay = useCallback(() => {
     return user?.avatar || userProfile?.avatar;
   }, [user, userProfile]);
 
-  // Obtenir l'email à afficher
   const getEmailToDisplay = useCallback(() => {
     return user?.email || userProfile?.email;
   }, [user, userProfile]);
 
-  // Obtenir le type d'utilisateur à afficher
   const getUserTypeToDisplay = useCallback(() => {
     return user?.type || userProfile?.type;
   }, [user, userProfile]);
 
-  // Obtenir le rôle à afficher
   const getRoleToDisplay = useCallback(() => {
     return user?.role || userProfile?.role;
   }, [user, userProfile]);
 
-  // Gérer l'ouverture/fermeture des sous-menus de catégories
   const toggleCategoryDropdown = useCallback((categorySlug: string) => {
     setCategoriesDropdownOpen((prev) =>
       prev === categorySlug ? null : categorySlug,
     );
   }, []);
+
+  // ✅ GÉNÉRER LES LIENS DE NAVIGATION
+  const generateNavLinks = (): NavLink[] => {
+    const links: NavLink[] = [{ name: "Accueil", href: "/", exact: true }];
+
+    if (!loadingCategories && categories.length > 0) {
+      categories.forEach((category: Category) => {
+        const isDuplicate = links.some(
+          (link) =>
+            link.name === category.libelle ||
+            link.href === `/categories/${category.slug}`,
+        );
+
+        if (!isDuplicate) {
+          const mainLink: NavLink = {
+            name: category.libelle,
+            href: `/categories/${category.slug}`,
+            exact: false,
+            hasChildren: category.enfants && category.enfants.length > 0,
+          };
+
+          if (category.enfants && category.enfants.length > 0) {
+            const uniqueChildren = category.enfants.reduce(
+              (acc: any[], child: Category) => {
+                const isChildDuplicate = acc.some(
+                  (sub) => sub.name === child.libelle,
+                );
+                if (!isChildDuplicate) {
+                  acc.push(child);
+                }
+                return acc;
+              },
+              [],
+            );
+
+            mainLink.children = uniqueChildren.map((child: Category) => ({
+              name: child.libelle,
+              href: `/categories/${category.slug}/${child.slug}`,
+            }));
+          }
+
+          links.push(mainLink);
+        }
+      });
+    }
+    return links;
+  };
+
+  const navLinks = generateNavLinks();
+
+  const isLinkActive = (link: NavLink) => {
+    if (link.exact) {
+      return pathname === link.href;
+    }
+    return pathname.startsWith(link.href);
+  };
+
+  const getLinkColor = (link: NavLink) => {
+    if (isLinkActive(link)) {
+      return colors.oskar.black;
+    }
+    return colors.oskar.grey;
+  };
 
   console.log("🔄 Header - Rendering with state:", {
     isLoggedIn,
@@ -789,12 +730,15 @@ const Header: FC = () => {
     hasUserProfile: !!userProfile,
     categoriesCount: categories.length,
     navLinksCount: navLinks.length,
-    navLinksWithChildren: navLinks
-      .filter((l) => l.hasChildren)
-      .map((l) => l.name),
     forceUpdate,
     headerKey,
   });
+
+  // ✅ RETOUR CONDITIONNEL APRÈS TOUS LES HOOKS
+  const isDashboardPage = pathname.startsWith("/dashboard-");
+  if (isDashboardPage) {
+    return null;
+  }
 
   return (
     <>
@@ -870,7 +814,7 @@ const Header: FC = () => {
                 </span>
               </Link>
 
-              {/* Navigation Desktop avec catégories dynamiques */}
+              {/* Navigation Desktop */}
               {loadingCategories ? (
                 <div className="d-none d-lg-flex align-items-center ms-4 ms-xl-5">
                   <div
@@ -964,7 +908,7 @@ const Header: FC = () => {
                         )}
                       </Link>
 
-                      {/* Sous-menu déroulant pour les catégories avec enfants */}
+                      {/* Sous-menu déroulant */}
                       {link.hasChildren &&
                         link.children &&
                         categoriesDropdownOpen === link.name && (
@@ -1685,7 +1629,6 @@ const Header: FC = () => {
                     )}
                   </Link>
 
-                  {/* Sous-catégories dans le menu mobile */}
                   {link.hasChildren && link.children && (
                     <div className="ps-4">
                       {link.children.map((child, childIndex) => (
@@ -1708,7 +1651,6 @@ const Header: FC = () => {
                 </div>
               ))}
 
-              {/* Section utilisateur connecté dans le menu mobile */}
               {isLoggedIn && (
                 <div className="mt-4 border-top pt-3">
                   <div className="px-3 mb-2">
@@ -1782,7 +1724,6 @@ const Header: FC = () => {
                 </div>
               )}
 
-              {/* Bouton Publier dans le menu mobile */}
               <div className="p-3 mt-3">
                 <button
                   className="btn w-100 py-3"
@@ -1808,7 +1749,6 @@ const Header: FC = () => {
         </div>
       )}
 
-      {/* Modal de publication d'annonce */}
       <PublishAdModal
         visible={showPublishModal}
         onHide={handleClosePublishModal}
@@ -1823,22 +1763,18 @@ const Header: FC = () => {
         .hide-scrollbar::-webkit-scrollbar {
           display: none;
         }
-
         .dropdown-menu {
           max-height: calc(100vh - 100px);
           overflow-y: auto;
         }
-
         .dropdown-item {
           min-height: 44px;
           display: flex;
           align-items: center;
         }
-
         .dropdown-menu {
           animation: fadeIn 0.2s ease-in-out;
         }
-
         @keyframes fadeIn {
           from {
             opacity: 0;
@@ -1849,11 +1785,9 @@ const Header: FC = () => {
             transform: translateY(0);
           }
         }
-
         .skeleton-loader {
           animation: skeleton-loading 1.5s ease-in-out infinite;
         }
-
         @keyframes skeleton-loading {
           0% {
             opacity: 0.6;

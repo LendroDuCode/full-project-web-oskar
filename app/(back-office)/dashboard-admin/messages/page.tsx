@@ -1,7 +1,15 @@
 // app/(back-office)/dashboard-admin/messages/liste-messages/page.tsx
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+  Suspense,
+} from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faEnvelope,
@@ -64,6 +72,7 @@ import {
 // Import des services et hooks
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { api } from "@/lib/api-client";
+import { LoadingSpinner } from "@/app/shared/components/ui/LoadingSpinner";
 
 // Types pour les utilisateurs
 interface UtilisateurBase {
@@ -83,6 +92,7 @@ interface UtilisateurBase {
   est_bloque: boolean;
   is_deleted: boolean;
   is_admin?: boolean;
+  is_super_admin?: boolean;
   type?: string;
   created_at?: string;
   updated_at?: string;
@@ -90,11 +100,17 @@ interface UtilisateurBase {
   code?: string;
   avatar?: string;
   statut?: string;
+  userType?: "super_admin" | "admin" | "agent" | "vendeur" | "utilisateur";
+  boutique?: {
+    nom: string;
+    uuid: string;
+  };
 }
 
 interface Agent extends UtilisateurBase {}
 interface Vendeur extends UtilisateurBase {}
 interface Utilisateur extends UtilisateurBase {}
+interface SuperAdmin extends UtilisateurBase {}
 
 interface Message {
   uuid: string;
@@ -102,7 +118,9 @@ interface Message {
   contenu: string;
   expediteurNom: string;
   expediteurEmail: string;
+  expediteurUuid?: string;
   destinataireEmail: string;
+  destinataireUuid?: string;
   type: string;
   estEnvoye: boolean;
   envoyeLe: string;
@@ -117,388 +135,70 @@ interface MessageReceived {
   message: Message;
   statut: string;
   estLu: boolean;
-  dateLecture?: string;
+  dateLecture?: string | null;
   dateReception: string;
 }
 
-// Composant de badge de statut
-const StatusBadge = ({
-  est_bloque,
-  est_verifie,
-  is_deleted,
-}: {
-  est_bloque: boolean;
-  est_verifie: boolean;
-  is_deleted?: boolean;
-}) => {
-  if (is_deleted) {
-    return (
-      <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
-        <FontAwesomeIcon icon={faTrash} className="fs-12" />
-        <span className="fw-medium">Supprimé</span>
-      </span>
-    );
-  }
+interface ContactConversation extends UtilisateurBase {
+  userType: "super_admin" | "admin" | "agent" | "vendeur" | "utilisateur";
+  lastMessageDate?: string;
+  lastMessage?: string;
+  unreadCount?: number;
+  totalMessages?: number;
+}
 
-  if (est_bloque) {
-    return (
-      <span className="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
-        <FontAwesomeIcon icon={faBan} className="fs-12" />
-        <span className="fw-medium">Bloqué</span>
-      </span>
-    );
-  }
-
-  if (!est_verifie) {
-    return (
-      <span className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
-        <FontAwesomeIcon icon={faUserSlash} className="fs-12" />
-        <span className="fw-medium">Non vérifié</span>
-      </span>
-    );
-  }
-
-  return (
-    <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
-      <FontAwesomeIcon icon={faUserCheck} className="fs-12" />
-      <span className="fw-medium">Actif</span>
-    </span>
-  );
-};
-
-// Composant pour afficher un message dans la liste
-const MessageItem = ({
-  message,
-  isSelected,
-  onSelect,
-  showSeparator = false,
-}: {
-  message: Message;
-  isSelected: boolean;
-  onSelect: (message: Message) => void;
-  showSeparator?: boolean;
-}) => {
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) {
-        return "Date inconnue";
-      }
-
-      const now = new Date();
-      const diffMs = now.getTime() - date.getTime();
-      const diffMins = Math.floor(diffMs / 60000);
-      const diffHours = Math.floor(diffMs / 3600000);
-      const diffDays = Math.floor(diffMs / 86400000);
-
-      if (diffMins < 1) {
-        return "à l'instant";
-      } else if (diffMins < 60) {
-        return `il y a ${diffMins} min`;
-      } else if (diffHours < 24) {
-        return `il y a ${diffHours} h`;
-      } else if (diffDays < 7) {
-        return `il y a ${diffDays} j`;
-      } else {
-        return date.toLocaleDateString("fr-FR", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-        });
-      }
-    } catch (error) {
-      return "Date inconnue";
-    }
-  };
-
-  const getTypeColor = () => {
-    const type = (message.type || "").toUpperCase();
-    switch (type) {
-      case "ALERT":
-        return "danger";
-      case "WARNING":
-        return "warning";
-      case "INFO":
-        return "info";
-      case "NOTIFICATION":
-        return "primary";
-      default:
-        return "secondary";
-    }
-  };
-
-  const getTypeIcon = () => {
-    const type = (message.type || "").toUpperCase();
-    switch (type) {
-      case "ALERT":
-        return faBell;
-      case "WARNING":
-        return faExclamationCircle;
-      case "INFO":
-        return faInfoCircle;
-      case "NOTIFICATION":
-        return faEnvelopeCircleCheck;
-      default:
-        return faEnvelope;
-    }
-  };
-
-  return (
-    <>
-      {showSeparator && (
-        <div className="separator d-flex align-items-center my-3">
-          <hr className="flex-grow-1" />
-          <span className="px-3 text-muted fs-12 fw-medium">
-            <FontAwesomeIcon icon={faCalendarDays} className="me-2" />
-            Messages plus anciens
-          </span>
-          <hr className="flex-grow-1" />
-        </div>
-      )}
-
-      <div
-        className={`list-group-item list-group-item-action border-0 py-3 px-3 ${isSelected ? "bg-primary bg-opacity-10 selected-message" : "hover-bg-light"} ${!message.estLu ? "unread-message" : ""}`}
-        onClick={() => onSelect(message)}
-        style={{
-          cursor: "pointer",
-          borderLeft: isSelected
-            ? "4px solid var(--bs-primary)"
-            : !message.estLu
-              ? "4px solid var(--bs-warning)"
-              : "4px solid transparent",
-          transition: "all 0.2s ease",
-          borderRadius: "8px",
-          marginBottom: "4px",
-        }}
-      >
-        <div className="d-flex justify-content-between align-items-start mb-2">
-          <div className="d-flex align-items-center gap-3">
-            <div
-              className={`bg-${getTypeColor()} bg-opacity-10 text-${getTypeColor()} rounded-circle d-flex align-items-center justify-content-center`}
-              style={{ width: "40px", height: "40px" }}
-            >
-              <FontAwesomeIcon
-                icon={getTypeIcon()}
-                className={`fs-5 ${message.estLu ? "opacity-75" : ""}`}
-              />
-            </div>
-            <div className="d-flex flex-column">
-              <div className="d-flex align-items-center gap-2 mb-1">
-                <h6
-                  className="mb-0 fw-bold text-dark"
-                  style={{ fontSize: "0.9rem" }}
-                >
-                  {message.expediteurNom}
-                </h6>
-                {!message.estLu && (
-                  <span className="badge bg-warning bg-opacity-25 text-warning px-2 py-1">
-                    <FontAwesomeIcon icon={faCircle} className="fs-10 me-1" />
-                    Non lu
-                  </span>
-                )}
-              </div>
-              <div className="d-flex align-items-center gap-2 flex-wrap">
-                <small className="text-muted" style={{ fontSize: "0.75rem" }}>
-                  <FontAwesomeIcon icon={faUser} className="me-1 fs-11" />
-                  {message.expediteurEmail}
-                </small>
-                <span className="text-muted" style={{ fontSize: "0.75rem" }}>
-                  •
-                </span>
-                <small className="text-muted" style={{ fontSize: "0.75rem" }}>
-                  À: {message.destinataireEmail}
-                </small>
-              </div>
-            </div>
-          </div>
-          <div className="d-flex flex-column align-items-end gap-2">
-            <div className="d-flex align-items-center gap-2">
-              <small className="text-muted" style={{ fontSize: "0.75rem" }}>
-                <FontAwesomeIcon icon={faClock} className="me-1" />
-                {formatDate(message.envoyeLe)}
-              </small>
-              <span
-                className={`badge bg-${getTypeColor()} bg-opacity-10 text-${getTypeColor()} border border-${getTypeColor()} border-opacity-25 px-2 py-1 fw-medium`}
-                style={{ fontSize: "0.65rem" }}
-              >
-                {message.type.toUpperCase()}
-              </span>
-            </div>
-            {message.estEnvoye && (
-              <small
-                className="text-success fw-medium"
-                style={{ fontSize: "0.75rem" }}
-              >
-                <FontAwesomeIcon icon={faCheckCircle} className="me-1" />
-                Envoyé
-              </small>
-            )}
-          </div>
-        </div>
-
-        <h6 className="fw-bold mb-2 text-dark" style={{ fontSize: "0.9rem" }}>
-          {message.sujet}
-        </h6>
-
-        <p
-          className="mb-0 text-muted fs-14 line-clamp-2"
-          style={{
-            fontSize: "0.8rem",
-            maxWidth: "600px",
-            lineHeight: "1.4",
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
-            display: "-webkit-box",
-          }}
-        >
-          {message.contenu}
-        </p>
-
-        <div className="d-flex justify-content-between align-items-center mt-3">
-          <div className="d-flex gap-2">
-            <button
-              className="btn btn-sm btn-outline-primary d-flex align-items-center gap-1"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelect(message);
-              }}
-              style={{ fontSize: "0.8rem" }}
-            >
-              <FontAwesomeIcon icon={faEye} style={{ fontSize: "0.8rem" }} />
-              <span>Voir</span>
-            </button>
-            <button
-              className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
-              onClick={(e) => {
-                e.stopPropagation();
-                // Gérer la réponse plus tard
-              }}
-              style={{ fontSize: "0.8rem" }}
-            >
-              <FontAwesomeIcon icon={faReply} style={{ fontSize: "0.8rem" }} />
-              <span>Répondre</span>
-            </button>
-          </div>
-          {message.estEnvoye && !message.estLu && (
-            <span
-              className="badge bg-light text-dark border border-secondary-subtle px-2 py-1"
-              style={{ fontSize: "0.75rem" }}
-            >
-              <FontAwesomeIcon
-                icon={faClock}
-                className="me-1"
-                style={{ fontSize: "0.7rem" }}
-              />
-              En attente de lecture
-            </span>
-          )}
-        </div>
-      </div>
-    </>
-  );
-};
-
-// Composant de statistiques amélioré
-const StatsCard = ({
-  title,
-  value,
-  icon,
-  color,
-  subtitle,
-  trend,
-  isLoading,
-}: {
-  title: string;
-  value: number;
-  icon: any;
-  color: string;
-  subtitle?: string;
-  trend?: "up" | "down" | "neutral";
-  isLoading?: boolean;
-}) => {
-  const getTrendIcon = () => {
-    switch (trend) {
-      case "up":
-        return (
-          <FontAwesomeIcon icon={faChevronUp} className="text-success fs-12" />
-        );
-      case "down":
-        return (
-          <FontAwesomeIcon icon={faChevronDown} className="text-danger fs-12" />
-        );
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <div className="card border-0 shadow-sm h-100 stats-card">
-      <div className="card-body p-3">
-        <div className="d-flex align-items-center">
-          <div
-            className={`bg-${color} bg-opacity-10 text-${color} rounded-3 p-2 me-3`}
-            style={{ borderRadius: "12px" }}
-          >
-            <FontAwesomeIcon icon={icon} className="fs-2" />
-          </div>
-          <div className="flex-grow-1">
-            <div className="d-flex align-items-center gap-2 mb-1">
-              <h3 className="mb-0 fw-bold" style={{ fontSize: "1.25rem" }}>
-                {isLoading ? (
-                  <span
-                    className="spinner-border spinner-border-sm me-2"
-                    role="status"
-                  >
-                    <span className="visually-hidden">Chargement...</span>
-                  </span>
-                ) : (
-                  value.toLocaleString()
-                )}
-              </h3>
-              {trend && getTrendIcon()}
-            </div>
-            <p
-              className="text-muted mb-1 fw-medium"
-              style={{ fontSize: "0.8rem" }}
-            >
-              {title}
-            </p>
-            {subtitle && (
-              <small
-                className="text-muted d-flex align-items-center gap-1"
-                style={{ fontSize: "0.7rem" }}
-              >
-                <FontAwesomeIcon icon={faInfoCircle} className="fs-11" />
-                {subtitle}
-              </small>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
+// ============================================
+// COMPOSANT PRINCIPAL AVEC SUSPENSE
+// ============================================
 export default function ListeMessages() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-vh-100 d-flex align-items-center justify-content-center">
+          <LoadingSpinner
+            size="lg"
+            text="Chargement de votre messagerie..."
+            fullPage
+          />
+        </div>
+      }
+    >
+      <MessagesContent />
+    </Suspense>
+  );
+}
+
+// ============================================
+// COMPOSANT CONTENU DE LA MESSAGERIE
+// ============================================
+function MessagesContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
   // États pour les données
   const [agents, setAgents] = useState<Agent[]>([]);
   const [vendeurs, setVendeurs] = useState<Vendeur[]>([]);
   const [utilisateurs, setUtilisateurs] = useState<Utilisateur[]>([]);
+  const [superAdmins, setSuperAdmins] = useState<SuperAdmin[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [messagesEnvoyes, setMessagesEnvoyes] = useState<Message[]>([]);
+  const [contacts, setContacts] = useState<ContactConversation[]>([]);
+  const [adminProfile, setAdminProfile] = useState<SuperAdmin | null>(null);
 
   // États pour le chargement
   const [loading, setLoading] = useState({
+    initial: true,
     agents: false,
     vendeurs: false,
     utilisateurs: false,
+    superAdmins: false,
     messages: false,
     envoi: false,
   });
 
   // États pour les erreurs
   const [error, setError] = useState<string | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   // États pour les filtres
   const [searchTerm, setSearchTerm] = useState("");
@@ -508,6 +208,11 @@ export default function ListeMessages() {
   // États pour la sélection
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+  const [selectedContact, setSelectedContact] =
+    useState<ContactConversation | null>(null);
+
+  // ✅ État pour stocker le message original en réponse
+  const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
 
   // États pour les messages de succès/erreur
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -516,11 +221,13 @@ export default function ListeMessages() {
   // État pour le formulaire d'envoi de message
   const [newMessage, setNewMessage] = useState({
     destinataireEmail: "",
+    destinataireUuid: "",
     sujet: "",
     contenu: "",
-    type: "NOTIFICATION",
+    type: "notification",
     expediteurNom: "Administrateur SONEC",
-    expediteurEmail: "admin@sonec.com",
+    expediteurEmail: "",
+    expediteurUuid: "",
   });
 
   // Statistiques
@@ -532,462 +239,44 @@ export default function ListeMessages() {
   });
 
   // Onglet actif
-  const [activeTab, setActiveTab] = useState<"users" | "received" | "sent">(
-    "users",
+  const [activeTab, setActiveTab] = useState<"contacts" | "received" | "sent">(
+    "contacts",
   );
 
-  // Charger les agents
-  const fetchAgents = useCallback(async () => {
-    setLoading((prev) => ({ ...prev, agents: true }));
-    try {
-      const response = await api.get<{
-        data: Agent[];
-        count: number;
-        status: string;
-      }>(API_ENDPOINTS.ADMIN.AGENTS.LIST);
-      setAgents(response?.data || []);
-    } catch (err: any) {
-      console.error("❌ Error fetching agents:", err);
-      setError("Erreur lors du chargement des agents");
-    } finally {
-      setLoading((prev) => ({ ...prev, agents: false }));
-    }
-  }, []);
+  // ✅ REF pour éviter les boucles infinies
+  const isInitialLoad = useRef(true);
+  const isFetchingContacts = useRef(false);
+  const prevMessagesRecusLength = useRef(0);
+  const prevMessagesEnvoyesLength = useRef(0);
 
-  // Charger les vendeurs
-  const fetchVendeurs = useCallback(async () => {
-    setLoading((prev) => ({ ...prev, vendeurs: true }));
-    try {
-      const response = await api.get<{
-        data: Vendeur[];
-        count: number;
-        status: string;
-      }>(API_ENDPOINTS.ADMIN.VENDEURS.LIST);
-      setVendeurs(response?.data || []);
-    } catch (err: any) {
-      console.error("❌ Error fetching vendeurs:", err);
-      setError("Erreur lors du chargement des vendeurs");
-    } finally {
-      setLoading((prev) => ({ ...prev, vendeurs: false }));
-    }
-  }, []);
-
-  // Charger les utilisateurs
-  const fetchUtilisateurs = useCallback(async () => {
-    setLoading((prev) => ({ ...prev, utilisateurs: true }));
-    try {
-      const response = await api.get<{
-        data: Utilisateur[];
-        count: number;
-        status: string;
-      }>(API_ENDPOINTS.ADMIN.USERS.LIST);
-      setUtilisateurs(response?.data || []);
-    } catch (err: any) {
-      console.error("❌ Error fetching utilisateurs:", err);
-      setError("Erreur lors du chargement des utilisateurs");
-    } finally {
-      setLoading((prev) => ({ ...prev, utilisateurs: false }));
-    }
-  }, []);
-
-  // Charger les messages reçus
-  const fetchMessagesRecus = useCallback(async () => {
-    setLoading((prev) => ({ ...prev, messages: true }));
-    try {
-      console.log("🔄 Chargement des messages reçus...");
-      const response = await api.get<MessageReceived[]>(
-        API_ENDPOINTS.MESSAGERIE.RECEIVED,
-      );
-
-      console.log("📨 Réponse brute de l'API:", response);
-
-      if (!response) {
-        console.warn("⚠️ Réponse API vide (messages reçus)");
-        setMessages([]);
-        return;
-      }
-
-      // Transformer les données pour correspondre au format attendu
-      const transformedMessages = (Array.isArray(response) ? response : [])
-        .map((item: any) => {
-          if (!item) return null;
-
-          // Si l'API retourne directement un objet Message
-          if (item.message) {
-            const msg = item.message;
-            return {
-              estLu: item.estLu || false,
-              dateLecture: item.dateLecture || null,
-              envoyeLe:
-                msg.envoyeLe || item.dateReception || new Date().toISOString(),
-              uuid: msg.uuid || item.uuid || `msg-${Date.now()}`,
-              sujet: msg.sujet || "Sans sujet",
-              contenu: msg.contenu || "",
-              expediteurNom: msg.expediteurNom || "Expéditeur inconnu",
-              expediteurEmail: msg.expediteurEmail || "inconnu@exemple.com",
-              destinataireEmail:
-                msg.destinataireEmail || "destinataire@exemple.com",
-              type: (msg.type || "notification").toUpperCase(),
-              estEnvoye: msg.estEnvoye !== undefined ? msg.estEnvoye : true,
-              dateCreation: msg.dateCreation || item.dateReception,
-            } as Message;
-          } else {
-            // Si l'API retourne directement un message sans wrapper
-            return {
-              estLu: item.estLu || false,
-              dateLecture: item.dateLecture || null,
-              envoyeLe:
-                item.envoyeLe || item.dateReception || new Date().toISOString(),
-              uuid: item.uuid || `msg-${Date.now()}`,
-              sujet: item.sujet || "Sans sujet",
-              contenu: item.contenu || "",
-              expediteurNom: item.expediteurNom || "Expéditeur inconnu",
-              expediteurEmail: item.expediteurEmail || "inconnu@exemple.com",
-              destinataireEmail:
-                item.destinataireEmail || "destinataire@exemple.com",
-              type: (item.type || "notification").toUpperCase(),
-              estEnvoye: item.estEnvoye !== undefined ? item.estEnvoye : true,
-              dateCreation: item.dateCreation || item.dateReception,
-            } as Message;
-          }
-        })
-        .filter((item): item is Message => item !== null);
-
-      console.log("📨 Messages transformés:", transformedMessages);
-      setMessages(transformedMessages);
-    } catch (err: any) {
-      console.error("❌ Error fetching messages:", err);
-      setError("Erreur lors du chargement des messages");
-
-      // Données de démonstration avec type sécurisé
-      const demoMessages: Message[] = [
-        {
-          uuid: "c5d30cbd-b606-4721-8ec7-5a00f7df9e87",
-          sujet: "Confirmation de votre inscription",
-          contenu:
-            "Bienvenue Julien ! Votre compte SONEC a été créé avec succès. Connectez-vous dès maintenant pour découvrir nos services.",
-          expediteurNom: "N'GUESSAN Jessica Carine",
-          expediteurEmail: "jessica.nguessan@agent.com",
-          destinataireEmail: "admin@sonec.com",
-          type: "NOTIFICATION",
-          estEnvoye: true,
-          envoyeLe: new Date().toISOString(),
-          estLu: false,
-          dateLecture: null,
-        },
-        {
-          uuid: "2",
-          sujet: "Notification de sécurité importante",
-          contenu:
-            "Nous avons détecté une activité suspecte sur votre compte. Veuillez vérifier vos activités récentes...",
-          expediteurNom: "Système de sécurité",
-          expediteurEmail: "security@sonec.com",
-          destinataireEmail: "admin@sonec.com",
-          type: "ALERT",
-          estEnvoye: true,
-          envoyeLe: new Date(Date.now() - 3600000).toISOString(),
-          estLu: true,
-          dateLecture: new Date(Date.now() - 3500000).toISOString(),
-        },
-      ];
-      setMessages(demoMessages);
-    } finally {
-      setLoading((prev) => ({ ...prev, messages: false }));
-    }
-  }, []);
-
-  // Charger les messages envoyés
-  const fetchMessagesEnvoyes = useCallback(async () => {
-    try {
-      console.log("🔄 Chargement des messages envoyés...");
-      const response = await api.get<Message[]>(API_ENDPOINTS.MESSAGERIE.SENT);
-
-      if (!response) {
-        console.warn("⚠️ Réponse API vide (messages envoyés)");
-        setMessagesEnvoyes([]);
-        return;
-      }
-
-      // Formatter le type de message pour correspondre à l'interface
-      const formattedMessages = response
-        .map((msg: Message) => {
-          if (!msg) return null;
-
-          return {
-            ...msg,
-            type: (msg.type || "notification").toUpperCase(),
-            estLu: msg.estLu || false,
-            dateLecture: msg.dateLecture || null,
-            envoyeLe: msg.envoyeLe || new Date().toISOString(),
-            expediteurNom: msg.expediteurNom || "Administrateur SONEC",
-            expediteurEmail: msg.expediteurEmail || "admin@sonec.com",
-            estEnvoye: msg.estEnvoye !== undefined ? msg.estEnvoye : true,
-          } as Message;
-        })
-        .filter((msg): msg is Message => msg !== null);
-
-      console.log("📤 Messages envoyés transformés:", formattedMessages);
-      setMessagesEnvoyes(formattedMessages);
-    } catch (err: any) {
-      console.error("❌ Error fetching sent messages:", err);
-      setError("Erreur lors du chargement des messages envoyés");
-
-      const demoSentMessages: Message[] = [
-        {
-          uuid: "49807144-1990-41e9-a78c-a29307c74d5a",
-          sujet: "Confirmation de votre inscription",
-          contenu:
-            "Bienvenue Julien ! Votre compte SONEC a été créé avec succès. Connectez-vous dès maintenant pour découvrir nos services.",
-          expediteurNom: "Super Admin",
-          expediteurEmail: "superadmin@sonec.com",
-          destinataireEmail: "jessica.nguessan@agent.com",
-          type: "NOTIFICATION",
-          estEnvoye: true,
-          envoyeLe: new Date(Date.now() - 7200000).toISOString(),
-          estLu: true,
-          dateLecture: new Date(Date.now() - 7000000).toISOString(),
-        },
-        {
-          uuid: "6",
-          sujet: "Rappel de sécurité",
-          contenu:
-            "N'oubliez pas de mettre à jour votre mot de passe régulièrement...",
-          expediteurNom: "Administrateur SONEC",
-          expediteurEmail: "admin@sonec.com",
-          destinataireEmail: "fatou.kone@sonecafrica.com",
-          type: "WARNING",
-          estEnvoye: true,
-          envoyeLe: new Date(Date.now() - 43200000).toISOString(),
-          estLu: false,
-          dateLecture: null,
-        },
-      ];
-      setMessagesEnvoyes(demoSentMessages);
-    }
-  }, []);
-
-  // Recharger les messages périodiquement
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (activeTab === "received") {
-        fetchMessagesRecus();
-      } else if (activeTab === "sent") {
-        fetchMessagesEnvoyes();
-      }
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [activeTab, fetchMessagesRecus, fetchMessagesEnvoyes]);
-
-  // Charger toutes les données au montage
-  useEffect(() => {
-    console.log("🚀 Chargement des données...");
-    fetchAgents();
-    fetchVendeurs();
-    fetchUtilisateurs();
-    fetchMessagesRecus();
-    fetchMessagesEnvoyes();
-  }, []);
-
-  // Mettre à jour les statistiques
-  useEffect(() => {
-    const totalUsers = agents.length + vendeurs.length + utilisateurs.length;
-    const totalMessages = messages.length + messagesEnvoyes.length;
-    const unreadMessages = messages.filter((m) => !m.estLu).length;
-
-    setStats({
-      totalUsers,
-      totalMessages,
-      unreadMessages,
-      sentMessages: messagesEnvoyes.length,
-    });
-  }, [agents, vendeurs, utilisateurs, messages, messagesEnvoyes]);
-
-  // Combiner tous les utilisateurs
-  const allUsers = useMemo(() => {
-    const users = [];
-
-    if (selectedType === "all" || selectedType === "agent") {
-      users.push(
-        ...agents.map((agent) => ({ ...agent, userType: "agent" as const })),
-      );
-    }
-
-    if (selectedType === "all" || selectedType === "vendeur") {
-      users.push(
-        ...vendeurs.map((vendeur) => ({
-          ...vendeur,
-          userType: "vendeur" as const,
-        })),
-      );
-    }
-
-    if (selectedType === "all" || selectedType === "utilisateur") {
-      users.push(
-        ...utilisateurs.map((utilisateur) => ({
-          ...utilisateur,
-          userType: "utilisateur" as const,
-        })),
-      );
-    }
-
-    return users;
-  }, [agents, vendeurs, utilisateurs, selectedType]);
-
-  // Filtrer les utilisateurs
-  const filteredUsers = useMemo(() => {
-    let result = allUsers.filter((v) => !v.is_deleted);
-
-    // Filtrer par recherche
-    if (searchTerm.trim()) {
-      const searchLower = searchTerm.toLowerCase();
-      result = result.filter(
-        (v) =>
-          v.nom?.toLowerCase().includes(searchLower) ||
-          v.prenoms?.toLowerCase().includes(searchLower) ||
-          v.email?.toLowerCase().includes(searchLower) ||
-          v.telephone?.includes(searchTerm),
-      );
-    }
-
-    // Filtrer par statut
-    if (selectedStatus !== "all") {
-      if (selectedStatus === "active") {
-        result = result.filter((v) => !v.est_bloque && v.est_verifie);
-      } else if (selectedStatus === "blocked") {
-        result = result.filter((v) => v.est_bloque);
-      } else if (selectedStatus === "unverified") {
-        result = result.filter((v) => !v.est_verifie);
-      }
-    }
-
-    return result;
-  }, [allUsers, searchTerm, selectedStatus]);
-
-  // Gestion de la sélection multiple
-  const handleSelectUser = (userId: string) => {
-    setSelectedUsers((prev) => {
-      if (prev.includes(userId)) {
-        return prev.filter((id) => id !== userId);
-      } else {
-        return [...prev, userId];
-      }
-    });
-  };
-
-  const handleSelectAll = () => {
-    if (selectedUsers.length === filteredUsers.length) {
-      setSelectedUsers([]);
-    } else {
-      const allUserIds = filteredUsers.map((user) => user.uuid);
-      setSelectedUsers(allUserIds);
-    }
-  };
-
-  // Sélectionner un utilisateur pour envoyer un message
-  const selectUserForMessage = (
+  // ============================================
+  // FONCTIONS UTILITAIRES
+  // ============================================
+  const detectUserTypeFromEmail = (
     email: string,
-    nom?: string,
-    prenoms?: string,
-  ) => {
-    setNewMessage((prev) => ({
-      ...prev,
-      destinataireEmail: email,
-      sujet:
-        `Message pour ${nom || ""} ${prenoms || ""}`.trim() ||
-        "Message important",
-    }));
-  };
-
-  // Envoyer un message
-  const handleSendMessage = async () => {
+  ): "super_admin" | "admin" | "agent" | "vendeur" | "utilisateur" => {
+    const emailLower = email.toLowerCase();
+    if (emailLower.includes("superadmin") || emailLower.includes("@sonec.com"))
+      return "super_admin";
+    if (emailLower.includes("admin")) return "admin";
+    if (emailLower.includes("agent") || emailLower.includes("@agent.com"))
+      return "agent";
     if (
-      !newMessage.destinataireEmail.trim() ||
-      !newMessage.sujet.trim() ||
-      !newMessage.contenu.trim()
-    ) {
-      setInfoMessage("Veuillez remplir tous les champs obligatoires");
-      setTimeout(() => setInfoMessage(null), 3000);
-      return;
-    }
-
-    setLoading((prev) => ({ ...prev, envoi: true }));
-    setError(null);
-
-    try {
-      const response = await api.post<Message>(API_ENDPOINTS.MESSAGERIE.SEND, {
-        destinataireEmail: newMessage.destinataireEmail,
-        sujet: newMessage.sujet,
-        contenu: newMessage.contenu,
-        type: newMessage.type.toLowerCase(),
-      });
-
-      setSuccessMessage("Message envoyé avec succès !");
-
-      // Réinitialiser le formulaire
-      setNewMessage({
-        destinataireEmail: "",
-        sujet: "",
-        contenu: "",
-        type: "NOTIFICATION",
-        expediteurNom: "Administrateur SONEC",
-        expediteurEmail: "admin@sonec.com",
-      });
-
-      // Recharger les messages envoyés
-      fetchMessagesEnvoyes();
-
-      // Basculer vers l'onglet des messages envoyés
-      setActiveTab("sent");
-    } catch (err: any) {
-      console.error("❌ Error sending message:", err);
-      setError(
-        err.response?.data?.message || "Erreur lors de l'envoi du message",
-      );
-    } finally {
-      setLoading((prev) => ({ ...prev, envoi: false }));
-      setTimeout(() => {
-        setSuccessMessage(null);
-        setError(null);
-      }, 5000);
-    }
+      emailLower.includes("vendeur") ||
+      emailLower.includes("@sonecafrica.com")
+    )
+      return "vendeur";
+    if (emailLower.includes("boutique") || emailLower.includes("shop"))
+      return "vendeur";
+    return "utilisateur";
   };
 
-  // Marquer un message comme lu
-  const handleMarkAsRead = async (messageId: string) => {
-    try {
-      console.warn("⚠️ L'endpoint MARK_READ n'est pas disponible");
-
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.uuid === messageId ? { ...msg, estLu: true } : msg,
-        ),
-      );
-
-      if (selectedMessage?.uuid === messageId) {
-        setSelectedMessage((prev) => (prev ? { ...prev, estLu: true } : null));
-      }
-    } catch (err) {
-      console.error("Error marking message as read:", err);
-    }
-  };
-
-  // Répondre à un message
-  const handleReply = (message: Message) => {
-    setNewMessage({
-      destinataireEmail: message.expediteurEmail,
-      sujet: `RE: ${message.sujet}`,
-      contenu: `\n\n--- Message original ---\n${message.contenu}`,
-      type: "NOTIFICATION",
-      expediteurNom: "Administrateur SONEC",
-      expediteurEmail: "admin@sonec.com",
-    });
-    setActiveTab("users");
-  };
-
-  // Obtenir l'icône pour le type d'utilisateur
   const getUserTypeIcon = (userType: string) => {
     switch (userType) {
+      case "super_admin":
+        return faUserShield;
+      case "admin":
+        return faUserShield;
       case "agent":
         return faUserTie;
       case "vendeur":
@@ -999,23 +288,29 @@ export default function ListeMessages() {
     }
   };
 
-  // Obtenir la couleur pour le type d'utilisateur
   const getUserTypeColor = (userType: string) => {
     switch (userType) {
+      case "super_admin":
+        return "purple";
+      case "admin":
+        return "info";
       case "agent":
         return "primary";
       case "vendeur":
         return "warning";
       case "utilisateur":
-        return "info";
+        return "success";
       default:
         return "secondary";
     }
   };
 
-  // Obtenir le label pour le type d'utilisateur
   const getUserTypeLabel = (userType: string) => {
     switch (userType) {
+      case "super_admin":
+        return "Super Admin";
+      case "admin":
+        return "Admin";
       case "agent":
         return "Agent";
       case "vendeur":
@@ -1027,18 +322,24 @@ export default function ListeMessages() {
     }
   };
 
-  // Grouper les messages par date pour les séparateurs
-  const groupedMessages = useMemo(() => {
-    return messages.map((message, index) => {
-      const showSeparator = index > 0 && index % 3 === 0;
-      return {
-        message,
-        showSeparator,
-      };
-    });
-  }, [messages]);
+  const formatLastMessageDate = (dateString?: string) => {
+    if (!dateString) return "Jamais";
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffDays = Math.floor(diffMs / 86400000);
 
-  // Format date pour affichage
+      if (diffDays === 0)
+        return `Aujourd'hui à ${date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`;
+      if (diffDays === 1) return "Hier";
+      if (diffDays < 7) return `Il y a ${diffDays} jours`;
+      return date.toLocaleDateString("fr-FR");
+    } catch {
+      return "Date inconnue";
+    }
+  };
+
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString);
@@ -1055,6 +356,750 @@ export default function ListeMessages() {
     }
   };
 
+  // ============================================
+  // CHARGEMENT DU PROFIL ADMIN
+  // ============================================
+  const fetchAdminProfile = useCallback(async () => {
+    try {
+      console.log("🔍 Chargement du profil admin...");
+      const response = await api.get(API_ENDPOINTS.AUTH.ADMIN.PROFILE);
+      console.log("✅ Réponse profil admin:", response);
+
+      if (response && (response.data || response.nom)) {
+        const profile = response.data || response;
+        console.log("👤 Profil admin chargé:", {
+          nom: profile.nom,
+          prenoms: profile.prenoms,
+          email: profile.email,
+          type: profile.type,
+          uuid: profile.uuid,
+        });
+
+        setAdminProfile(profile);
+        setNewMessage((prev) => ({
+          ...prev,
+          expediteurEmail: profile.email || "",
+          expediteurNom:
+            `${profile.prenoms || ""} ${profile.nom || ""}`.trim() ||
+            "Administrateur SONEC",
+          expediteurUuid: profile.uuid || "",
+        }));
+      } else {
+        console.warn("⚠️ Structure de réponse inattendue:", response);
+      }
+    } catch (err: any) {
+      console.error("❌ Erreur lors du chargement du profil admin:", err);
+    }
+  }, []);
+
+  // ============================================
+  // CHARGEMENT DES UTILISATEURS
+  // ============================================
+  const fetchSuperAdmins = useCallback(async () => {
+    setLoading((prev) => ({ ...prev, superAdmins: true }));
+    try {
+      const response = await api.get<{
+        data: SuperAdmin[];
+        count: number;
+        status: string;
+      }>(API_ENDPOINTS.AUTH.ADMIN.LISTE_ADMIN);
+
+      if (response?.data) {
+        setSuperAdmins(response.data);
+      } else {
+        setSuperAdmins([]);
+      }
+    } catch (err: any) {
+      console.error("❌ Erreur chargement super-admins:", err);
+    } finally {
+      setLoading((prev) => ({ ...prev, superAdmins: false }));
+    }
+  }, []);
+
+  const fetchAgents = useCallback(async () => {
+    setLoading((prev) => ({ ...prev, agents: true }));
+    try {
+      const response = await api.get<{
+        data: Agent[];
+        count: number;
+        status: string;
+      }>(API_ENDPOINTS.ADMIN.AGENTS.LIST);
+      setAgents(response?.data || []);
+    } catch (err: any) {
+      console.error("❌ Error fetching agents:", err);
+    } finally {
+      setLoading((prev) => ({ ...prev, agents: false }));
+    }
+  }, []);
+
+  const fetchVendeurs = useCallback(async () => {
+    setLoading((prev) => ({ ...prev, vendeurs: true }));
+    try {
+      const response = await api.get<{
+        data: Vendeur[];
+        count: number;
+        status: string;
+      }>(API_ENDPOINTS.ADMIN.VENDEURS.LIST);
+      setVendeurs(response?.data || []);
+    } catch (err: any) {
+      console.error("❌ Error fetching vendeurs:", err);
+    } finally {
+      setLoading((prev) => ({ ...prev, vendeurs: false }));
+    }
+  }, []);
+
+  const fetchUtilisateurs = useCallback(async () => {
+    setLoading((prev) => ({ ...prev, utilisateurs: true }));
+    try {
+      const response = await api.get<{
+        data: Utilisateur[];
+        count: number;
+        status: string;
+      }>(API_ENDPOINTS.ADMIN.USERS.LIST);
+      setUtilisateurs(response?.data || []);
+    } catch (err: any) {
+      console.error("❌ Error fetching utilisateurs:", err);
+    } finally {
+      setLoading((prev) => ({ ...prev, utilisateurs: false }));
+    }
+  }, []);
+
+  // ============================================
+  // CHARGEMENT DES MESSAGES
+  // ============================================
+  const fetchMessagesRecus = useCallback(async () => {
+    setLoading((prev) => ({ ...prev, messages: true }));
+    try {
+      console.log("📥 Chargement des messages reçus...");
+      const response = await api.get<MessageReceived[] | Message[]>(
+        API_ENDPOINTS.MESSAGERIE.RECEIVED,
+      );
+
+      if (Array.isArray(response)) {
+        const transformedMessages = response
+          .map((item: any) => {
+            if (!item) return null;
+            const message = item.message || item;
+            return {
+              uuid: message.uuid || `msg-${Date.now()}`,
+              sujet: message.sujet || "Sans sujet",
+              contenu: message.contenu || "",
+              expediteurNom: message.expediteurNom || "Expéditeur inconnu",
+              expediteurEmail: message.expediteurEmail || "",
+              expediteurUuid: message.expediteurUuid,
+              destinataireEmail:
+                message.destinataireEmail || adminProfile?.email || "",
+              destinataireUuid: message.destinataireUuid || adminProfile?.uuid,
+              type: (message.type || "notification").toUpperCase(),
+              estEnvoye: false,
+              envoyeLe:
+                message.envoyeLe ||
+                item.dateReception ||
+                new Date().toISOString(),
+              estLu: message.estLu || item.estLu || false,
+              dateLecture: message.dateLecture || item.dateLecture || null,
+            } as Message;
+          })
+          .filter((item): item is Message => item !== null);
+
+        setMessages(transformedMessages);
+      } else {
+        setMessages([]);
+      }
+    } catch (err: any) {
+      console.error("❌ Erreur chargement messages:", err);
+      setMessages([]);
+    } finally {
+      setLoading((prev) => ({ ...prev, messages: false }));
+    }
+  }, [adminProfile]);
+
+  const fetchMessagesEnvoyes = useCallback(async () => {
+    try {
+      const response = await api.get<Message[]>(API_ENDPOINTS.MESSAGERIE.SENT);
+
+      if (Array.isArray(response)) {
+        const formattedMessages = response
+          .map((msg: any) => {
+            if (!msg) return null;
+            return {
+              uuid: msg.uuid || `sent-${Date.now()}`,
+              sujet: msg.sujet || "Sans sujet",
+              contenu: msg.contenu || "",
+              expediteurNom:
+                msg.expediteurNom ||
+                adminProfile?.nom ||
+                "Administrateur SONEC",
+              expediteurEmail: msg.expediteurEmail || adminProfile?.email || "",
+              expediteurUuid: msg.expediteurUuid || adminProfile?.uuid,
+              destinataireEmail: msg.destinataireEmail || "",
+              destinataireUuid: msg.destinataireUuid,
+              type: (msg.type || "notification").toUpperCase(),
+              estEnvoye: true,
+              envoyeLe: msg.envoyeLe || new Date().toISOString(),
+              estLu: msg.estLu || false,
+              dateLecture: msg.dateLecture || null,
+            } as Message;
+          })
+          .filter((msg): msg is Message => msg !== null);
+
+        setMessagesEnvoyes(formattedMessages);
+      }
+    } catch (err: any) {
+      console.error("❌ Error fetching sent messages:", err);
+      setMessagesEnvoyes([]);
+    }
+  }, [adminProfile]);
+
+  // ============================================
+  // ✅ CONSTRUCTION DES CONTACTS
+  // ============================================
+  const buildContactsFromMessages = useCallback(() => {
+    if (!adminProfile) return;
+
+    if (isFetchingContacts.current) return;
+    isFetchingContacts.current = true;
+
+    try {
+      console.log("👥 Construction des contacts depuis les messages...");
+
+      const contactsMap = new Map<string, ContactConversation>();
+
+      messages.forEach((msg) => {
+        if (msg.expediteurEmail && msg.expediteurEmail !== adminProfile.email) {
+          const key = msg.expediteurEmail;
+          if (!contactsMap.has(key)) {
+            contactsMap.set(key, {
+              uuid: msg.expediteurUuid || `contact-${Date.now()}-${key}`,
+              email: msg.expediteurEmail,
+              nom: msg.expediteurNom.split(" ").pop() || "",
+              prenoms:
+                msg.expediteurNom.split(" ").slice(0, -1).join(" ") ||
+                msg.expediteurNom,
+              telephone: "",
+              userType: detectUserTypeFromEmail(msg.expediteurEmail),
+              est_verifie: true,
+              est_bloque: false,
+              is_deleted: false,
+              lastMessageDate: msg.envoyeLe,
+              lastMessage: msg.contenu,
+              unreadCount: !msg.estLu ? 1 : 0,
+              totalMessages: 1,
+            });
+          } else {
+            const contact = contactsMap.get(key)!;
+            contact.totalMessages = (contact.totalMessages || 0) + 1;
+            if (!msg.estLu) {
+              contact.unreadCount = (contact.unreadCount || 0) + 1;
+            }
+            if (
+              new Date(msg.envoyeLe) > new Date(contact.lastMessageDate || "")
+            ) {
+              contact.lastMessageDate = msg.envoyeLe;
+              contact.lastMessage = msg.contenu;
+            }
+          }
+        }
+      });
+
+      messagesEnvoyes.forEach((msg) => {
+        if (
+          msg.destinataireEmail &&
+          msg.destinataireEmail !== adminProfile.email
+        ) {
+          const key = msg.destinataireEmail;
+          if (!contactsMap.has(key)) {
+            contactsMap.set(key, {
+              uuid: msg.destinataireUuid || `contact-${Date.now()}-${key}`,
+              email: msg.destinataireEmail,
+              nom: "",
+              prenoms: msg.destinataireEmail.split("@")[0] || "Contact",
+              telephone: "",
+              userType: detectUserTypeFromEmail(msg.destinataireEmail),
+              est_verifie: true,
+              est_bloque: false,
+              is_deleted: false,
+              lastMessageDate: msg.envoyeLe,
+              lastMessage: msg.contenu,
+              unreadCount: 0,
+              totalMessages: 1,
+            });
+          } else {
+            const contact = contactsMap.get(key)!;
+            contact.totalMessages = (contact.totalMessages || 0) + 1;
+            if (
+              new Date(msg.envoyeLe) > new Date(contact.lastMessageDate || "")
+            ) {
+              contact.lastMessageDate = msg.envoyeLe;
+              contact.lastMessage = msg.contenu;
+            }
+          }
+        }
+      });
+
+      const contactsArray = Array.from(contactsMap.values())
+        .filter((c) => c.email !== adminProfile.email)
+        .sort((a, b) => {
+          const dateA = a.lastMessageDate
+            ? new Date(a.lastMessageDate).getTime()
+            : 0;
+          const dateB = b.lastMessageDate
+            ? new Date(b.lastMessageDate).getTime()
+            : 0;
+          return dateB - dateA;
+        });
+
+      console.log(`✅ ${contactsArray.length} contacts trouvés`);
+      setContacts(contactsArray);
+    } catch (err) {
+      console.error("❌ Erreur construction contacts:", err);
+    } finally {
+      isFetchingContacts.current = false;
+    }
+  }, [adminProfile, messages, messagesEnvoyes]);
+
+  // ============================================
+  // ✅ CHARGEMENT INITIAL
+  // ============================================
+  useEffect(() => {
+    const loadInitialData = async () => {
+      setLoading((prev) => ({ ...prev, initial: true }));
+      try {
+        await fetchAdminProfile();
+        await fetchSuperAdmins();
+        await fetchAgents();
+        await fetchVendeurs();
+        await fetchUtilisateurs();
+        await fetchMessagesRecus();
+        await fetchMessagesEnvoyes();
+        isInitialLoad.current = false;
+      } catch (err) {
+        console.error("❌ Erreur chargement initial:", err);
+      } finally {
+        setLoading((prev) => ({ ...prev, initial: false }));
+      }
+    };
+
+    loadInitialData();
+  }, [
+    fetchAdminProfile,
+    fetchSuperAdmins,
+    fetchAgents,
+    fetchVendeurs,
+    fetchUtilisateurs,
+    fetchMessagesRecus,
+    fetchMessagesEnvoyes,
+  ]);
+
+  // ============================================
+  // ✅ CONSTRUCTION DES CONTACTS APRÈS CHARGEMENT
+  // ============================================
+  useEffect(() => {
+    if (isInitialLoad.current) return;
+    if (!adminProfile) return;
+
+    const messagesRecusChanged =
+      prevMessagesRecusLength.current !== messages.length;
+    const messagesEnvoyesChanged =
+      prevMessagesEnvoyesLength.current !== messagesEnvoyes.length;
+
+    if (messagesRecusChanged || messagesEnvoyesChanged) {
+      buildContactsFromMessages();
+
+      prevMessagesRecusLength.current = messages.length;
+      prevMessagesEnvoyesLength.current = messagesEnvoyes.length;
+    }
+  }, [adminProfile, messages, messagesEnvoyes, buildContactsFromMessages]);
+
+  // ============================================
+  // ✅ GESTION DES PARAMÈTRES D'URL - DÉCLARÉ EN PREMIER
+  // ============================================
+  const handleUrlParams = useCallback(() => {
+    const destinataireUuid = searchParams.get("destinataireUuid");
+    const destinataireEmail = searchParams.get("destinataireEmail");
+    const destinataireNom = searchParams.get("destinataireNom");
+    const sujet = searchParams.get("sujet");
+    const produitUuid = searchParams.get("produitUuid");
+    const donUuid = searchParams.get("donUuid");
+    const echangeUuid = searchParams.get("echangeUuid");
+
+    if (destinataireEmail && adminProfile) {
+      console.log("📨 Paramètres URL reçus:", {
+        destinataireUuid,
+        destinataireEmail,
+        destinataireNom,
+        sujet,
+        produitUuid,
+        donUuid,
+        echangeUuid,
+      });
+
+      // Créer un contact temporaire
+      const contact: ContactConversation = {
+        uuid: destinataireUuid || `contact-${Date.now()}`,
+        email: destinataireEmail,
+        nom: destinataireNom?.split(" ").pop() || "",
+        prenoms:
+          destinataireNom?.split(" ").slice(0, -1).join(" ") ||
+          destinataireNom ||
+          "Contact",
+        telephone: "",
+        userType: detectUserTypeFromEmail(destinataireEmail),
+        est_verifie: true,
+        est_bloque: false,
+        is_deleted: false,
+      };
+
+      // Mettre à jour le formulaire
+      setNewMessage((prev) => ({
+        ...prev,
+        destinataireEmail: destinataireEmail,
+        destinataireUuid: destinataireUuid || "",
+        sujet: sujet || `Question concernant votre annonce`,
+        contenu: "",
+        type: "notification",
+      }));
+
+      setSelectedContact(contact);
+      setActiveTab("contacts");
+
+      // ✅ Nettoyer l'URL (supprimer les paramètres)
+      const url = new URL(window.location.href);
+      url.search = "";
+      router.replace(url.pathname, { scroll: false });
+    }
+  }, [searchParams, adminProfile, router]);
+
+  // ============================================
+  // ✅ GESTION DES PARAMÈTRES URL APRÈS CHARGEMENT
+  // ============================================
+  useEffect(() => {
+    if (adminProfile && !loading.initial) {
+      handleUrlParams();
+    }
+  }, [adminProfile, loading.initial, handleUrlParams]);
+
+  // ============================================
+  // STATISTIQUES
+  // ============================================
+  useEffect(() => {
+    const totalUsers =
+      superAdmins.length +
+      agents.length +
+      vendeurs.length +
+      utilisateurs.length;
+    const totalMessages = messages.length + messagesEnvoyes.length;
+    const unreadMessages = messages.filter((m) => !m.estLu).length;
+
+    setStats({
+      totalUsers,
+      totalMessages,
+      unreadMessages,
+      sentMessages: messagesEnvoyes.length,
+    });
+  }, [superAdmins, agents, vendeurs, utilisateurs, messages, messagesEnvoyes]);
+
+  // ============================================
+  // COMBINER TOUS LES UTILISATEURS POUR LES CONTACTS
+  // ============================================
+  const allUsers = useMemo(() => {
+    const users: ContactConversation[] = [];
+
+    // Super Admins
+    superAdmins.forEach((user) => {
+      users.push({
+        ...user,
+        userType: "super_admin",
+        boutique: undefined,
+      });
+    });
+
+    // Agents
+    agents.forEach((user) => {
+      users.push({
+        ...user,
+        userType: "agent",
+        boutique: undefined,
+      });
+    });
+
+    // Vendeurs
+    vendeurs.forEach((user) => {
+      users.push({
+        ...user,
+        userType: "vendeur",
+        boutique: user.boutique,
+      });
+    });
+
+    // Utilisateurs
+    utilisateurs.forEach((user) => {
+      users.push({
+        ...user,
+        userType: "utilisateur",
+        boutique: undefined,
+      });
+    });
+
+    return users;
+  }, [superAdmins, agents, vendeurs, utilisateurs]);
+
+  // ============================================
+  // FILTRAGE DES CONTACTS
+  // ============================================
+  const filteredContacts = useMemo(() => {
+    // Commencer par les contacts des messages, puis ajouter les utilisateurs
+    let result = [...contacts];
+
+    // Ajouter les utilisateurs qui n'ont pas encore de conversation
+    allUsers.forEach((user) => {
+      const exists = result.some((c) => c.email === user.email);
+      if (!exists && user.email !== adminProfile?.email) {
+        result.push({
+          ...user,
+          lastMessageDate: undefined,
+          lastMessage: undefined,
+          unreadCount: 0,
+          totalMessages: 0,
+        });
+      }
+    });
+
+    result = result.filter((c) => !c.is_deleted);
+
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase();
+      result = result.filter(
+        (c) =>
+          c.nom?.toLowerCase().includes(searchLower) ||
+          c.prenoms?.toLowerCase().includes(searchLower) ||
+          c.email?.toLowerCase().includes(searchLower) ||
+          c.telephone?.includes(searchTerm),
+      );
+    }
+
+    if (selectedType !== "all") {
+      result = result.filter((c) => c.userType === selectedType);
+    }
+
+    if (selectedStatus !== "all") {
+      if (selectedStatus === "active") {
+        result = result.filter((c) => !c.est_bloque && c.est_verifie);
+      } else if (selectedStatus === "blocked") {
+        result = result.filter((c) => c.est_bloque);
+      } else if (selectedStatus === "unverified") {
+        result = result.filter((c) => !c.est_verifie);
+      } else if (selectedStatus === "super_admin") {
+        result = result.filter((c) => c.userType === "super_admin");
+      } else if (selectedStatus === "admin") {
+        result = result.filter((c) => c.userType === "admin");
+      }
+    }
+
+    // Trier par date du dernier message
+    result.sort((a, b) => {
+      const dateA = a.lastMessageDate
+        ? new Date(a.lastMessageDate).getTime()
+        : 0;
+      const dateB = b.lastMessageDate
+        ? new Date(b.lastMessageDate).getTime()
+        : 0;
+      return dateB - dateA;
+    });
+
+    return result;
+  }, [
+    contacts,
+    allUsers,
+    adminProfile,
+    searchTerm,
+    selectedType,
+    selectedStatus,
+  ]);
+
+  // ============================================
+  // ✅ ACTIONS - AVEC MESSAGE ORIGINAL EN LECTURE SEULE
+  // ============================================
+  const handleSendMessage = async () => {
+    if (
+      !newMessage.destinataireEmail.trim() ||
+      !newMessage.sujet.trim() ||
+      !newMessage.contenu.trim()
+    ) {
+      setInfoMessage("Veuillez remplir tous les champs obligatoires");
+      setTimeout(() => setInfoMessage(null), 3000);
+      return;
+    }
+
+    setLoading((prev) => ({ ...prev, envoi: true }));
+    setError(null);
+    setApiError(null);
+
+    try {
+      const response = await api.post<Message>(API_ENDPOINTS.MESSAGERIE.SEND, {
+        destinataireEmail: newMessage.destinataireEmail.trim(),
+        destinataireUuid: newMessage.destinataireUuid,
+        sujet: newMessage.sujet.trim(),
+        contenu: newMessage.contenu.trim(),
+        type: newMessage.type.toLowerCase(),
+      });
+
+      const sentMessage: Message = {
+        uuid: `temp-${Date.now()}`,
+        sujet: newMessage.sujet,
+        contenu: newMessage.contenu,
+        expediteurNom: newMessage.expediteurNom,
+        expediteurEmail: newMessage.expediteurEmail,
+        expediteurUuid: newMessage.expediteurUuid,
+        destinataireEmail: newMessage.destinataireEmail,
+        destinataireUuid: newMessage.destinataireUuid,
+        type: newMessage.type.toUpperCase(),
+        estEnvoye: true,
+        envoyeLe: new Date().toISOString(),
+        estLu: false,
+        dateLecture: null,
+      };
+
+      setMessagesEnvoyes((prev) => [sentMessage, ...prev]);
+      setSuccessMessage("Message envoyé avec succès !");
+
+      // ✅ Réinitialiser le message original
+      setReplyToMessage(null);
+
+      setNewMessage({
+        destinataireEmail: "",
+        destinataireUuid: "",
+        sujet: "",
+        contenu: "",
+        type: "notification",
+        expediteurNom: adminProfile
+          ? `${adminProfile.prenoms || ""} ${adminProfile.nom || ""}`.trim()
+          : "Administrateur SONEC",
+        expediteurEmail: adminProfile?.email || "",
+        expediteurUuid: adminProfile?.uuid || "",
+      });
+
+      setSelectedContact(null);
+      setActiveTab("sent");
+    } catch (err: any) {
+      console.error("❌ Error sending message:", err);
+      setApiError(
+        err.response?.data?.message || "Erreur lors de l'envoi du message",
+      );
+    } finally {
+      setLoading((prev) => ({ ...prev, envoi: false }));
+      setTimeout(() => {
+        setSuccessMessage(null);
+        setApiError(null);
+      }, 5000);
+    }
+  };
+
+  const handleMarkAsRead = async (messageId: string) => {
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.uuid === messageId ? { ...msg, estLu: true } : msg,
+      ),
+    );
+    if (selectedMessage?.uuid === messageId) {
+      setSelectedMessage((prev) => (prev ? { ...prev, estLu: true } : null));
+    }
+  };
+
+  // ✅ CORRECTION: Répondre avec message original en lecture seule
+  const handleReply = (message: Message) => {
+    // Stocker le message original
+    setReplyToMessage(message);
+
+    // Mettre à jour le formulaire
+    setNewMessage({
+      ...newMessage,
+      destinataireEmail: message.expediteurEmail,
+      destinataireUuid: message.expediteurUuid || "",
+      sujet: `RE: ${message.sujet}`,
+      contenu: "", // Le contenu est vide, le message original sera affiché séparément
+      type: message.type.toLowerCase(),
+    });
+
+    const contact = contacts.find((c) => c.email === message.expediteurEmail);
+    if (contact) setSelectedContact(contact);
+    setActiveTab("contacts");
+  };
+
+  // ✅ Fonction pour annuler la réponse
+  const handleCancelReply = () => {
+    setReplyToMessage(null);
+    setNewMessage({
+      ...newMessage,
+      sujet: "",
+      contenu: "",
+    });
+  };
+
+  const selectContactForMessage = (contact: ContactConversation) => {
+    // ✅ Annuler toute réponse en cours
+    setReplyToMessage(null);
+
+    setSelectedContact(contact);
+    setNewMessage((prev) => ({
+      ...prev,
+      destinataireEmail: contact.email,
+      destinataireUuid: contact.uuid,
+      sujet: `Message pour ${contact.prenoms} ${contact.nom}`.trim(),
+      contenu: "",
+    }));
+  };
+
+  const handleSelectAll = () => {
+    if (selectedUsers.length === filteredContacts.length) {
+      setSelectedUsers([]);
+    } else {
+      const allContactIds = filteredContacts.map((contact) => contact.uuid);
+      setSelectedUsers(allContactIds);
+    }
+  };
+
+  const handleSelectUser = (userId: string) => {
+    setSelectedUsers((prev) => {
+      if (prev.includes(userId)) {
+        return prev.filter((id) => id !== userId);
+      } else {
+        return [...prev, userId];
+      }
+    });
+  };
+
+  const handleRefresh = () => {
+    fetchMessagesRecus();
+    fetchMessagesEnvoyes();
+  };
+
+  // ============================================
+  // GROUPEMENT DES MESSAGES
+  // ============================================
+  const groupedMessages = useMemo(() => {
+    return messages.map((message, index) => ({
+      message,
+      showSeparator: index > 0 && index % 3 === 0,
+    }));
+  }, [messages]);
+
+  // ============================================
+  // RENDU
+  // ============================================
+  if (loading.initial) {
+    return (
+      <div className="min-vh-100 d-flex align-items-center justify-content-center">
+        <div className="text-center">
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Chargement...</span>
+          </div>
+          <p className="mt-3 text-muted">Chargement de votre messagerie...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="container-fluid px-3 py-3">
@@ -1069,16 +1114,27 @@ export default function ListeMessages() {
                 icon={faEnvelope}
                 className="me-3 text-primary"
               />
-              Messagerie
+              Messagerie Administrateur
             </h1>
             <p className="text-muted mb-0" style={{ fontSize: "0.9rem" }}>
-              Gérez vos messages et communiquez avec vos utilisateurs
+              {contacts.length > 0
+                ? `${contacts.length} contact${contacts.length > 1 ? "s" : ""} avec qui vous avez échangé`
+                : "Commencez une conversation avec un contact"}
             </p>
+            {adminProfile && (
+              <small className="text-success d-flex align-items-center gap-2 mt-1">
+                <FontAwesomeIcon icon={faUserShield} />
+                Connecté en tant que: {adminProfile.email}
+              </small>
+            )}
           </div>
           <div className="d-flex gap-3">
             <button
               className="btn btn-outline-primary d-flex align-items-center gap-2"
-              onClick={() => setActiveTab("users")}
+              onClick={() => {
+                setReplyToMessage(null);
+                setActiveTab("contacts");
+              }}
               style={{ fontSize: "0.85rem" }}
             >
               <FontAwesomeIcon icon={faUserPen} />
@@ -1086,10 +1142,7 @@ export default function ListeMessages() {
             </button>
             <button
               className="btn btn-primary d-flex align-items-center gap-2"
-              onClick={() => {
-                fetchMessagesRecus();
-                fetchMessagesEnvoyes();
-              }}
+              onClick={handleRefresh}
               style={{ fontSize: "0.85rem" }}
             >
               <FontAwesomeIcon icon={faHistory} />
@@ -1136,15 +1189,46 @@ export default function ListeMessages() {
           </div>
           <div className="col-xl-3 col-lg-6">
             <StatsCard
-              title="En Attente"
-              value={0}
-              icon={faClock}
+              title="Contacts"
+              value={contacts.length}
+              icon={faCommentDots}
               color="warning"
-              subtitle="Messages en cours"
-              trend="down"
+              subtitle="Conversations actives"
+              trend="neutral"
             />
           </div>
         </div>
+
+        {/* Messages d'erreur API */}
+        {apiError && (
+          <div
+            className="alert alert-danger alert-dismissible fade show mb-3"
+            role="alert"
+          >
+            <div className="d-flex align-items-center">
+              <FontAwesomeIcon
+                icon={faExclamationCircle}
+                className="me-2 fs-4"
+              />
+              <div className="flex-grow-1">
+                <h6
+                  className="alert-heading mb-1"
+                  style={{ fontSize: "0.85rem" }}
+                >
+                  Erreur d'envoi
+                </h6>
+                <p className="mb-0" style={{ fontSize: "0.8rem" }}>
+                  {apiError}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="btn-close"
+              onClick={() => setApiError(null)}
+            ></button>
+          </div>
+        )}
 
         {/* Onglets principaux améliorés */}
         <div className="card border-0 shadow-lg mb-4 overflow-hidden">
@@ -1156,20 +1240,34 @@ export default function ListeMessages() {
             >
               <li className="nav-item flex-grow-1" role="presentation">
                 <button
-                  className={`nav-link w-100 ${activeTab === "users" ? "active" : ""} d-flex align-items-center justify-content-center gap-2 py-2`}
-                  onClick={() => setActiveTab("users")}
+                  className={`nav-link w-100 ${activeTab === "contacts" ? "active" : ""} d-flex align-items-center justify-content-center gap-2 py-2`}
+                  onClick={() => {
+                    setReplyToMessage(null);
+                    setActiveTab("contacts");
+                  }}
                   style={{ fontSize: "0.85rem" }}
                 >
                   <div className="d-flex flex-column align-items-center">
                     <FontAwesomeIcon icon={faUsers} className="fs-5 mb-1" />
-                    <span className="fw-semibold">Contacts</span>
+                    <span className="fw-semibold">Mes contacts</span>
+                    {contacts.length > 0 && (
+                      <span
+                        className="badge bg-primary mt-1"
+                        style={{ fontSize: "0.65rem" }}
+                      >
+                        {contacts.length}
+                      </span>
+                    )}
                   </div>
                 </button>
               </li>
               <li className="nav-item flex-grow-1" role="presentation">
                 <button
                   className={`nav-link w-100 ${activeTab === "received" ? "active" : ""} d-flex align-items-center justify-content-center gap-2 py-2`}
-                  onClick={() => setActiveTab("received")}
+                  onClick={() => {
+                    setReplyToMessage(null);
+                    setActiveTab("received");
+                  }}
                   style={{ fontSize: "0.85rem" }}
                 >
                   <div className="d-flex flex-column align-items-center position-relative">
@@ -1189,7 +1287,10 @@ export default function ListeMessages() {
               <li className="nav-item flex-grow-1" role="presentation">
                 <button
                   className={`nav-link w-100 ${activeTab === "sent" ? "active" : ""} d-flex align-items-center justify-content-center gap-2 py-2`}
-                  onClick={() => setActiveTab("sent")}
+                  onClick={() => {
+                    setReplyToMessage(null);
+                    setActiveTab("sent");
+                  }}
                   style={{ fontSize: "0.85rem" }}
                 >
                   <div className="d-flex flex-column align-items-center">
@@ -1205,8 +1306,10 @@ export default function ListeMessages() {
           </div>
 
           <div className="card-body p-3">
-            {/* Onglet: Contacts */}
-            {activeTab === "users" && (
+            {/* ======================================== */}
+            {/* ONGLET: MES CONTACTS */}
+            {/* ======================================== */}
+            {activeTab === "contacts" && (
               <div className="row g-3">
                 <div className="col-lg-8">
                   <div className="card border-0 shadow-sm h-100">
@@ -1227,8 +1330,9 @@ export default function ListeMessages() {
                             className="text-muted mb-0 mt-1"
                             style={{ fontSize: "0.8rem" }}
                           >
-                            Sélectionnez des contacts pour leur envoyer des
-                            messages
+                            {filteredContacts.length > 0
+                              ? `${filteredContacts.length} contact(s) avec qui vous avez échangé`
+                              : "Vous n'avez pas encore échangé de messages"}
                           </p>
                         </div>
                         <div className="d-flex align-items-center gap-3">
@@ -1240,7 +1344,7 @@ export default function ListeMessages() {
                               icon={faUserCheck}
                               className="me-2"
                             />
-                            {filteredUsers.length} contact(s)
+                            {filteredContacts.length} contact(s)
                           </span>
                         </div>
                       </div>
@@ -1283,6 +1387,8 @@ export default function ListeMessages() {
                               style={{ fontSize: "0.85rem" }}
                             >
                               <option value="all">Tous les types</option>
+                              <option value="super_admin">Super Admins</option>
+                              <option value="admin">Admins</option>
                               <option value="agent">Agents</option>
                               <option value="vendeur">Vendeurs</option>
                               <option value="utilisateur">Utilisateurs</option>
@@ -1309,6 +1415,8 @@ export default function ListeMessages() {
                               style={{ fontSize: "0.85rem" }}
                             >
                               <option value="all">Tous les statuts</option>
+                              <option value="super_admin">Super Admins</option>
+                              <option value="admin">Admins</option>
                               <option value="active">Actifs</option>
                               <option value="blocked">Bloqués</option>
                               <option value="unverified">Non vérifiés</option>
@@ -1319,103 +1427,107 @@ export default function ListeMessages() {
                     </div>
 
                     <div className="card-body p-0">
-                      <div
-                        className="table-responsive"
-                        style={{ maxHeight: "500px", overflowY: "auto" }}
-                      >
-                        <table className="table table-hover align-middle mb-0">
-                          <thead
-                            className="table-light sticky-top"
-                            style={{ top: 0 }}
+                      {filteredContacts.length === 0 ? (
+                        <div className="text-center py-5">
+                          <FontAwesomeIcon
+                            icon={faUsers}
+                            className="fs-1 text-muted mb-3 opacity-25"
+                          />
+                          <h5
+                            className="fw-semibold mb-2"
+                            style={{ fontSize: "0.9rem" }}
                           >
-                            <tr>
-                              <th
-                                className="py-2 px-3"
-                                style={{ width: "50px", fontSize: "0.8rem" }}
-                              >
-                                <div className="form-check">
-                                  <input
-                                    type="checkbox"
-                                    className="form-check-input"
-                                    checked={
-                                      selectedUsers.length ===
-                                        filteredUsers.length &&
-                                      filteredUsers.length > 0
-                                    }
-                                    onChange={handleSelectAll}
-                                    disabled={filteredUsers.length === 0}
-                                  />
-                                </div>
-                              </th>
-                              <th
-                                className="py-2 px-3"
-                                style={{ width: "60px", fontSize: "0.8rem" }}
-                              >
-                                <span className="text-muted fw-medium">#</span>
-                              </th>
-                              <th
-                                className="py-2 px-3"
-                                style={{ fontSize: "0.8rem" }}
-                              >
-                                <span className="text-muted fw-medium">
-                                  Contact
-                                </span>
-                              </th>
-                              <th
-                                className="py-2 px-3"
-                                style={{ width: "120px", fontSize: "0.8rem" }}
-                              >
-                                <span className="text-muted fw-medium">
-                                  Type
-                                </span>
-                              </th>
-                              <th
-                                className="py-2 px-3"
-                                style={{ width: "120px", fontSize: "0.8rem" }}
-                              >
-                                <span className="text-muted fw-medium">
-                                  Statut
-                                </span>
-                              </th>
-                              <th
-                                className="py-2 px-3 text-center"
-                                style={{ width: "100px", fontSize: "0.8rem" }}
-                              >
-                                <span className="text-muted fw-medium">
-                                  Actions
-                                </span>
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {filteredUsers.length === 0 ? (
+                            Aucun contact trouvé
+                          </h5>
+                          <p className="mb-0" style={{ fontSize: "0.8rem" }}>
+                            {contacts.length === 0
+                              ? "Vous n'avez pas encore échangé de messages"
+                              : "Aucun contact ne correspond à vos filtres"}
+                          </p>
+                        </div>
+                      ) : (
+                        <div
+                          className="table-responsive"
+                          style={{ maxHeight: "500px", overflowY: "auto" }}
+                        >
+                          <table className="table table-hover align-middle mb-0">
+                            <thead
+                              className="table-light sticky-top"
+                              style={{ top: 0 }}
+                            >
                               <tr>
-                                <td colSpan={6} className="text-center py-4">
-                                  <div className="text-muted py-3">
-                                    <FontAwesomeIcon
-                                      icon={faUsers}
-                                      className="fs-1 mb-3 opacity-25"
+                                <th
+                                  className="py-2 px-3"
+                                  style={{ width: "50px", fontSize: "0.8rem" }}
+                                >
+                                  <div className="form-check">
+                                    <input
+                                      type="checkbox"
+                                      className="form-check-input"
+                                      checked={
+                                        selectedUsers.length ===
+                                          filteredContacts.length &&
+                                        filteredContacts.length > 0
+                                      }
+                                      onChange={handleSelectAll}
+                                      disabled={filteredContacts.length === 0}
                                     />
-                                    <h5
-                                      className="fw-semibold mb-2"
-                                      style={{ fontSize: "0.9rem" }}
-                                    >
-                                      Aucun contact trouvé
-                                    </h5>
-                                    <p
-                                      className="mb-0"
-                                      style={{ fontSize: "0.8rem" }}
-                                    >
-                                      Ajustez vos filtres ou vérifiez vos
-                                      permissions
-                                    </p>
                                   </div>
-                                </td>
+                                </th>
+                                <th
+                                  className="py-2 px-3"
+                                  style={{ width: "60px", fontSize: "0.8rem" }}
+                                >
+                                  <span className="text-muted fw-medium">
+                                    #
+                                  </span>
+                                </th>
+                                <th
+                                  className="py-2 px-3"
+                                  style={{ fontSize: "0.8rem" }}
+                                >
+                                  <span className="text-muted fw-medium">
+                                    Contact
+                                  </span>
+                                </th>
+                                <th
+                                  className="py-2 px-3"
+                                  style={{ width: "120px", fontSize: "0.8rem" }}
+                                >
+                                  <span className="text-muted fw-medium">
+                                    Type
+                                  </span>
+                                </th>
+                                <th
+                                  className="py-2 px-3"
+                                  style={{ width: "120px", fontSize: "0.8rem" }}
+                                >
+                                  <span className="text-muted fw-medium">
+                                    Statut
+                                  </span>
+                                </th>
+                                <th
+                                  className="py-2 px-3"
+                                  style={{ width: "150px", fontSize: "0.8rem" }}
+                                >
+                                  <span className="text-muted fw-medium">
+                                    Dernier message
+                                  </span>
+                                </th>
+                                <th
+                                  className="py-2 px-3 text-center"
+                                  style={{ width: "100px", fontSize: "0.8rem" }}
+                                >
+                                  <span className="text-muted fw-medium">
+                                    Actions
+                                  </span>
+                                </th>
                               </tr>
-                            ) : (
-                              filteredUsers.map((user, index) => (
+                            </thead>
+                            <tbody>
+                              {filteredContacts.map((contact, index) => (
                                 <tr
-                                  key={`${user.userType}-${user.uuid}`}
+                                  key={`${contact.userType}-${contact.uuid}`}
                                   className="align-middle"
                                 >
                                   <td className="py-2 px-3">
@@ -1424,10 +1536,10 @@ export default function ListeMessages() {
                                         type="checkbox"
                                         className="form-check-input"
                                         checked={selectedUsers.includes(
-                                          user.uuid,
+                                          contact.uuid,
                                         )}
                                         onChange={() =>
-                                          handleSelectUser(user.uuid)
+                                          handleSelectUser(contact.uuid)
                                         }
                                       />
                                     </div>
@@ -1443,7 +1555,7 @@ export default function ListeMessages() {
                                   <td className="py-2 px-3">
                                     <div className="d-flex align-items-center">
                                       <div
-                                        className={`bg-${getUserTypeColor(user.userType)} bg-opacity-10 text-${getUserTypeColor(user.userType)} rounded-circle d-flex align-items-center justify-content-center me-2`}
+                                        className={`bg-${getUserTypeColor(contact.userType)} bg-opacity-10 text-${getUserTypeColor(contact.userType)} rounded-circle d-flex align-items-center justify-content-center me-2`}
                                         style={{
                                           width: "36px",
                                           height: "36px",
@@ -1451,7 +1563,9 @@ export default function ListeMessages() {
                                         }}
                                       >
                                         <FontAwesomeIcon
-                                          icon={getUserTypeIcon(user.userType)}
+                                          icon={getUserTypeIcon(
+                                            contact.userType,
+                                          )}
                                           className="fs-5"
                                         />
                                       </div>
@@ -1463,7 +1577,7 @@ export default function ListeMessages() {
                                           className="fw-bold text-dark text-truncate"
                                           style={{ fontSize: "0.85rem" }}
                                         >
-                                          {user.email}
+                                          {contact.email}
                                         </div>
                                         <div className="d-flex align-items-center gap-2 flex-wrap">
                                           <small
@@ -1473,9 +1587,9 @@ export default function ListeMessages() {
                                               maxWidth: "200px",
                                             }}
                                           >
-                                            {user.nom} {user.prenoms}
+                                            {contact.prenoms} {contact.nom}
                                           </small>
-                                          {user.telephone && (
+                                          {contact.telephone && (
                                             <>
                                               <span
                                                 className="text-muted"
@@ -1494,39 +1608,94 @@ export default function ListeMessages() {
                                                   icon={faPhone}
                                                   className="me-1"
                                                 />
-                                                {user.telephone}
+                                                {contact.telephone}
                                               </small>
                                             </>
                                           )}
+                                          {contact.userType === "vendeur" &&
+                                            contact.boutique?.nom && (
+                                              <>
+                                                <span
+                                                  className="text-muted"
+                                                  style={{
+                                                    fontSize: "0.75rem",
+                                                  }}
+                                                >
+                                                  •
+                                                </span>
+                                                <small
+                                                  className="text-muted text-truncate"
+                                                  style={{
+                                                    fontSize: "0.75rem",
+                                                    maxWidth: "150px",
+                                                  }}
+                                                >
+                                                  <FontAwesomeIcon
+                                                    icon={faStore}
+                                                    className="me-1"
+                                                  />
+                                                  {contact.boutique.nom}
+                                                </small>
+                                              </>
+                                            )}
+                                          {contact.unreadCount ? (
+                                            <span className="badge bg-danger ms-1">
+                                              {contact.unreadCount}
+                                            </span>
+                                          ) : null}
                                         </div>
                                       </div>
                                     </div>
                                   </td>
                                   <td className="py-2 px-3">
                                     <span
-                                      className={`badge bg-${getUserTypeColor(user.userType)} bg-opacity-10 text-${getUserTypeColor(user.userType)} border border-${getUserTypeColor(user.userType)} border-opacity-25 px-2 py-1 fw-medium`}
+                                      className={`badge bg-${getUserTypeColor(contact.userType)} bg-opacity-10 text-${getUserTypeColor(contact.userType)} border border-${getUserTypeColor(contact.userType)} border-opacity-25 px-2 py-1 fw-medium`}
                                       style={{ fontSize: "0.7rem" }}
                                     >
-                                      {getUserTypeLabel(user.userType)}
+                                      {getUserTypeLabel(contact.userType)}
                                     </span>
                                   </td>
                                   <td className="py-2 px-3">
                                     <StatusBadge
-                                      est_bloque={user.est_bloque}
-                                      est_verifie={user.est_verifie}
-                                      is_deleted={user.is_deleted}
+                                      est_bloque={contact.est_bloque}
+                                      est_verifie={contact.est_verifie}
+                                      is_deleted={contact.is_deleted}
+                                      is_super_admin={
+                                        contact.userType === "super_admin"
+                                      }
+                                      is_admin={contact.userType === "admin"}
                                     />
+                                  </td>
+                                  <td className="py-2 px-3">
+                                    <div className="d-flex flex-column">
+                                      <small
+                                        className="text-muted"
+                                        style={{ fontSize: "0.7rem" }}
+                                      >
+                                        {formatLastMessageDate(
+                                          contact.lastMessageDate,
+                                        )}
+                                      </small>
+                                      {contact.lastMessage && (
+                                        <small
+                                          className="text-truncate"
+                                          style={{
+                                            fontSize: "0.75rem",
+                                            maxWidth: "150px",
+                                          }}
+                                        >
+                                          {contact.lastMessage.substring(0, 30)}
+                                          ...
+                                        </small>
+                                      )}
+                                    </div>
                                   </td>
                                   <td className="py-2 px-3 text-center">
                                     <button
-                                      className="btn btn-sm btn-primary d-flex align-items-center justify-content-center gap-1 px-2 py-1"
+                                      className="btn btn-sm btn-primary d-flex align-items-center justify-content-center gap-1 px-2 py-1 mx-auto"
                                       title="Envoyer un message"
                                       onClick={() =>
-                                        selectUserForMessage(
-                                          user.email,
-                                          user.nom,
-                                          user.prenoms,
-                                        )
+                                        selectContactForMessage(contact)
                                       }
                                       style={{ fontSize: "0.75rem" }}
                                     >
@@ -1540,11 +1709,11 @@ export default function ListeMessages() {
                                     </button>
                                   </td>
                                 </tr>
-                              ))
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1567,14 +1736,26 @@ export default function ListeMessages() {
                             className="mb-0 fw-bold text-dark"
                             style={{ fontSize: "0.95rem" }}
                           >
-                            Nouveau message
+                            {selectedContact
+                              ? replyToMessage
+                                ? `Réponse à ${selectedContact.prenoms}`
+                                : `Message à ${selectedContact.prenoms}`
+                              : "Nouveau message"}
                           </h5>
                           <p
                             className="text-muted mb-0"
                             style={{ fontSize: "0.8rem" }}
                           >
-                            Rédigez et envoyez un message
+                            {selectedContact
+                              ? selectedContact.email
+                              : "Rédigez et envoyez un message"}
                           </p>
+                          {adminProfile && (
+                            <small className="text-info d-flex align-items-center gap-1 mt-1">
+                              <FontAwesomeIcon icon={faUserShield} />
+                              Expéditeur: {adminProfile.email}
+                            </small>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1612,36 +1793,85 @@ export default function ListeMessages() {
                         </div>
                       )}
 
-                      {error && (
-                        <div
-                          className="alert alert-danger alert-dismissible fade show mb-3"
-                          role="alert"
-                        >
-                          <div className="d-flex align-items-center">
+                      {/* ✅ AFFICHAGE DU MESSAGE ORIGINAL EN LECTURE SEULE */}
+                      {replyToMessage && (
+                        <div className="mb-4">
+                          <div className="d-flex align-items-center mb-2">
                             <FontAwesomeIcon
-                              icon={faExclamationCircle}
-                              className="me-2 fs-4"
+                              icon={faReply}
+                              className="text-primary me-2"
                             />
-                            <div>
-                              <h6
-                                className="alert-heading mb-1"
-                                style={{ fontSize: "0.85rem" }}
+                            <span
+                              className="fw-semibold text-dark"
+                              style={{ fontSize: "0.85rem" }}
+                            >
+                              Vous répondez à :
+                            </span>
+                          </div>
+                          <div
+                            className="bg-light border rounded p-3"
+                            style={{
+                              backgroundColor: "#f8f9fa",
+                              borderColor: "#dee2e6",
+                              fontSize: "0.85rem",
+                              maxHeight: "200px",
+                              overflowY: "auto",
+                            }}
+                          >
+                            <div className="d-flex justify-content-between align-items-start mb-2">
+                              <div>
+                                <span className="fw-bold text-dark">
+                                  {replyToMessage.expediteurNom}
+                                </span>
+                                <span className="text-muted ms-2">
+                                  &lt;{replyToMessage.expediteurEmail}&gt;
+                                </span>
+                              </div>
+                              <small className="text-muted">
+                                {new Date(
+                                  replyToMessage.envoyeLe,
+                                ).toLocaleDateString("fr-FR", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </small>
+                            </div>
+                            <div className="mt-2">
+                              <div className="fw-semibold mb-1 text-dark">
+                                {replyToMessage.sujet}
+                              </div>
+                              <div
+                                className="text-muted"
+                                style={{
+                                  whiteSpace: "pre-wrap",
+                                  wordBreak: "break-word",
+                                  backgroundColor: "#f1f3f5",
+                                  padding: "0.75rem",
+                                  borderRadius: "0.375rem",
+                                  borderLeft: "3px solid #0d6efd",
+                                }}
                               >
-                                Erreur
-                              </h6>
-                              <p
-                                className="mb-0"
-                                style={{ fontSize: "0.8rem" }}
-                              >
-                                {error}
-                              </p>
+                                {replyToMessage.contenu}
+                              </div>
                             </div>
                           </div>
-                          <button
-                            type="button"
-                            className="btn-close"
-                            onClick={() => setError(null)}
-                          ></button>
+                          <div className="d-flex justify-content-end mt-2">
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-secondary"
+                              onClick={handleCancelReply}
+                              style={{ fontSize: "0.75rem" }}
+                            >
+                              <FontAwesomeIcon
+                                icon={faTimes}
+                                className="me-1"
+                              />
+                              Annuler la réponse
+                            </button>
+                          </div>
                         </div>
                       )}
 
@@ -1668,13 +1898,14 @@ export default function ListeMessages() {
                             placeholder="contact@exemple.com"
                             value={newMessage.destinataireEmail}
                             onChange={(e) =>
-                              setNewMessage((prev) => ({
-                                ...prev,
+                              setNewMessage({
+                                ...newMessage,
                                 destinataireEmail: e.target.value,
-                              }))
+                              })
                             }
                             required
                             style={{ fontSize: "0.85rem" }}
+                            readOnly={!!replyToMessage}
                           />
                           <small
                             className="text-muted d-block mt-1"
@@ -1684,7 +1915,7 @@ export default function ListeMessages() {
                               icon={faInfoCircle}
                               className="me-1"
                             />
-                            Sélectionnez un contact dans le tableau
+                            Sélectionnez un contact dans la liste
                           </small>
                         </div>
 
@@ -1705,10 +1936,10 @@ export default function ListeMessages() {
                             placeholder="Sujet du message"
                             value={newMessage.sujet}
                             onChange={(e) =>
-                              setNewMessage((prev) => ({
-                                ...prev,
+                              setNewMessage({
+                                ...newMessage,
                                 sujet: e.target.value,
-                              }))
+                              })
                             }
                             required
                             style={{ fontSize: "0.85rem" }}
@@ -1730,17 +1961,17 @@ export default function ListeMessages() {
                             className="form-select form-select-sm border-2 py-2"
                             value={newMessage.type}
                             onChange={(e) =>
-                              setNewMessage((prev) => ({
-                                ...prev,
+                              setNewMessage({
+                                ...newMessage,
                                 type: e.target.value,
-                              }))
+                              })
                             }
                             style={{ fontSize: "0.85rem" }}
                           >
-                            <option value="NOTIFICATION">Notification</option>
-                            <option value="ALERT">Alerte</option>
-                            <option value="INFO">Information</option>
-                            <option value="WARNING">Avertissement</option>
+                            <option value="notification">Notification</option>
+                            <option value="alert">Alerte</option>
+                            <option value="info">Information</option>
+                            <option value="warning">Avertissement</option>
                           </select>
                         </div>
 
@@ -1757,14 +1988,14 @@ export default function ListeMessages() {
                           </label>
                           <textarea
                             className="form-control border-2 py-2"
-                            rows={6}
+                            rows={replyToMessage ? 4 : 6}
                             placeholder="Écrivez votre message ici..."
                             value={newMessage.contenu}
                             onChange={(e) =>
-                              setNewMessage((prev) => ({
-                                ...prev,
+                              setNewMessage({
+                                ...newMessage,
                                 contenu: e.target.value,
-                              }))
+                              })
                             }
                             required
                             style={{ fontSize: "0.85rem" }}
@@ -1789,7 +2020,11 @@ export default function ListeMessages() {
                                   icon={faPaperPlane}
                                   className="fs-5"
                                 />
-                                <span>Envoyer le message</span>
+                                <span>
+                                  {replyToMessage
+                                    ? "Répondre"
+                                    : "Envoyer le message"}
+                                </span>
                               </>
                             )}
                           </button>
@@ -1801,7 +2036,9 @@ export default function ListeMessages() {
               </div>
             )}
 
-            {/* Onglet: Messages reçus */}
+            {/* ======================================== */}
+            {/* ONGLET: MESSAGES REÇUS */}
+            {/* ======================================== */}
             {activeTab === "received" && (
               <div className="row g-3">
                 <div className="col-lg-8">
@@ -1873,24 +2110,21 @@ export default function ListeMessages() {
                             </div>
                           </div>
                         ) : (
-                          groupedMessages.map(
-                            ({ message, showSeparator }, index) => (
-                              <MessageItem
-                                key={message.uuid}
-                                message={message}
-                                isSelected={
-                                  selectedMessage?.uuid === message.uuid
-                                }
-                                onSelect={(msg) => {
-                                  setSelectedMessage(msg);
-                                  if (!msg.estLu) {
-                                    handleMarkAsRead(msg.uuid);
-                                  }
-                                }}
-                                showSeparator={showSeparator}
-                              />
-                            ),
-                          )
+                          groupedMessages.map(({ message, showSeparator }) => (
+                            <MessageItem
+                              key={message.uuid}
+                              message={message}
+                              isSelected={
+                                selectedMessage?.uuid === message.uuid
+                              }
+                              onSelect={(msg) => {
+                                setSelectedMessage(msg);
+                                if (!msg.estLu) handleMarkAsRead(msg.uuid);
+                              }}
+                              onReply={() => handleReply(message)}
+                              showSeparator={showSeparator}
+                            />
+                          ))
                         )}
                       </div>
                     </div>
@@ -2014,7 +2248,10 @@ export default function ListeMessages() {
                           <div className="d-grid gap-2">
                             <button
                               className="btn btn-primary d-flex align-items-center justify-content-center gap-3 py-2 fw-bold"
-                              onClick={() => handleReply(selectedMessage)}
+                              onClick={() => {
+                                handleReply(selectedMessage);
+                                setSelectedMessage(null);
+                              }}
                               style={{ fontSize: "0.85rem" }}
                             >
                               <FontAwesomeIcon
@@ -2058,7 +2295,9 @@ export default function ListeMessages() {
               </div>
             )}
 
-            {/* Onglet: Messages envoyés */}
+            {/* ======================================== */}
+            {/* ONGLET: MESSAGES ENVOYÉS */}
+            {/* ======================================== */}
             {activeTab === "sent" && (
               <div className="row">
                 <div className="col-12">
@@ -2253,16 +2492,25 @@ export default function ListeMessages() {
                                     <button
                                       className="btn btn-sm btn-outline-primary d-flex align-items-center gap-2 px-2 py-1"
                                       onClick={() => {
+                                        setReplyToMessage(null);
                                         setNewMessage({
+                                          ...newMessage,
                                           destinataireEmail:
                                             message.destinataireEmail,
+                                          destinataireUuid:
+                                            message.destinataireUuid || "",
                                           sujet: `RE: ${message.sujet}`,
                                           contenu: "",
-                                          type: "NOTIFICATION",
-                                          expediteurNom: "Administrateur SONEC",
-                                          expediteurEmail: "admin@sonec.com",
+                                          type: message.type.toLowerCase(),
+                                          expediteurNom: adminProfile
+                                            ? `${adminProfile.prenoms || ""} ${adminProfile.nom || ""}`.trim()
+                                            : "Administrateur SONEC",
+                                          expediteurEmail:
+                                            adminProfile?.email || "",
+                                          expediteurUuid:
+                                            adminProfile?.uuid || "",
                                         });
-                                        setActiveTab("users");
+                                        setActiveTab("contacts");
                                       }}
                                       style={{ fontSize: "0.75rem" }}
                                     >
@@ -2321,6 +2569,24 @@ export default function ListeMessages() {
         :root {
           --bs-primary: #0d6efd;
           --bs-primary-rgb: 13, 110, 253;
+          --bs-purple: #6f42c1;
+          --bs-purple-rgb: 111, 66, 193;
+        }
+
+        .bg-purple {
+          background-color: var(--bs-purple) !important;
+        }
+
+        .text-purple {
+          color: var(--bs-purple) !important;
+        }
+
+        .border-purple {
+          border-color: var(--bs-purple) !important;
+        }
+
+        .bg-purple.bg-opacity-10 {
+          background-color: rgba(var(--bs-purple-rgb), 0.1) !important;
         }
 
         .nav-tabs-custom .nav-link {
@@ -2519,3 +2785,392 @@ export default function ListeMessages() {
     </>
   );
 }
+
+// ============================================
+// COMPOSANT DE BADGE DE STATUT
+// ============================================
+const StatusBadge = ({
+  est_bloque,
+  est_verifie,
+  is_deleted,
+  is_super_admin,
+  is_admin,
+}: {
+  est_bloque: boolean;
+  est_verifie: boolean;
+  is_deleted?: boolean;
+  is_super_admin?: boolean;
+  is_admin?: boolean;
+}) => {
+  if (is_deleted) {
+    return (
+      <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
+        <FontAwesomeIcon icon={faTrash} className="fs-12" />
+        <span className="fw-medium">Supprimé</span>
+      </span>
+    );
+  }
+
+  if (est_bloque) {
+    return (
+      <span className="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
+        <FontAwesomeIcon icon={faBan} className="fs-12" />
+        <span className="fw-medium">Bloqué</span>
+      </span>
+    );
+  }
+
+  if (!est_verifie) {
+    return (
+      <span className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
+        <FontAwesomeIcon icon={faUserSlash} className="fs-12" />
+        <span className="fw-medium">Non vérifié</span>
+      </span>
+    );
+  }
+
+  if (is_super_admin) {
+    return (
+      <span className="badge bg-purple bg-opacity-10 text-purple border border-purple border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
+        <FontAwesomeIcon icon={faUserShield} className="fs-12" />
+        <span className="fw-medium">Super Admin</span>
+      </span>
+    );
+  }
+
+  if (is_admin) {
+    return (
+      <span className="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
+        <FontAwesomeIcon icon={faUserShield} className="fs-12" />
+        <span className="fw-medium">Admin</span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
+      <FontAwesomeIcon icon={faUserCheck} className="fs-12" />
+      <span className="fw-medium">Actif</span>
+    </span>
+  );
+};
+
+// ============================================
+// COMPOSANT DE STATISTIQUES
+// ============================================
+const StatsCard = ({
+  title,
+  value,
+  icon,
+  color,
+  subtitle,
+  trend,
+  isLoading,
+}: {
+  title: string;
+  value: number;
+  icon: any;
+  color: string;
+  subtitle?: string;
+  trend?: "up" | "down" | "neutral";
+  isLoading?: boolean;
+}) => {
+  const getTrendIcon = () => {
+    switch (trend) {
+      case "up":
+        return (
+          <FontAwesomeIcon icon={faChevronUp} className="text-success fs-12" />
+        );
+      case "down":
+        return (
+          <FontAwesomeIcon icon={faChevronDown} className="text-danger fs-12" />
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="card border-0 shadow-sm h-100 stats-card">
+      <div className="card-body p-3">
+        <div className="d-flex align-items-center">
+          <div
+            className={`bg-${color} bg-opacity-10 text-${color} rounded-3 p-2 me-3`}
+            style={{ borderRadius: "12px" }}
+          >
+            <FontAwesomeIcon icon={icon} className="fs-2" />
+          </div>
+          <div className="flex-grow-1">
+            <div className="d-flex align-items-center gap-2 mb-1">
+              <h3 className="mb-0 fw-bold" style={{ fontSize: "1.25rem" }}>
+                {isLoading ? (
+                  <span
+                    className="spinner-border spinner-border-sm me-2"
+                    role="status"
+                  >
+                    <span className="visually-hidden">Chargement...</span>
+                  </span>
+                ) : (
+                  value.toLocaleString()
+                )}
+              </h3>
+              {trend && getTrendIcon()}
+            </div>
+            <p
+              className="text-muted mb-1 fw-medium"
+              style={{ fontSize: "0.8rem" }}
+            >
+              {title}
+            </p>
+            {subtitle && (
+              <small
+                className="text-muted d-flex align-items-center gap-1"
+                style={{ fontSize: "0.7rem" }}
+              >
+                <FontAwesomeIcon icon={faInfoCircle} className="fs-11" />
+                {subtitle}
+              </small>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ============================================
+// COMPOSANT MESSAGE ITEM - AVEC FONCTION RÉPONDRE
+// ============================================
+const MessageItem = ({
+  message,
+  isSelected,
+  onSelect,
+  onReply,
+  showSeparator = false,
+}: {
+  message: Message;
+  isSelected: boolean;
+  onSelect: (message: Message) => void;
+  onReply?: (message: Message) => void;
+  showSeparator?: boolean;
+}) => {
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return "Date inconnue";
+      }
+
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+
+      if (diffMins < 1) {
+        return "à l'instant";
+      } else if (diffMins < 60) {
+        return `il y a ${diffMins} min`;
+      } else if (diffHours < 24) {
+        return `il y a ${diffHours} h`;
+      } else if (diffDays < 7) {
+        return `il y a ${diffDays} j`;
+      } else {
+        return date.toLocaleDateString("fr-FR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        });
+      }
+    } catch {
+      return "Date inconnue";
+    }
+  };
+
+  const getTypeColor = () => {
+    const type = (message.type || "").toUpperCase();
+    switch (type) {
+      case "ALERT":
+        return "danger";
+      case "WARNING":
+        return "warning";
+      case "INFO":
+        return "info";
+      case "NOTIFICATION":
+        return "primary";
+      default:
+        return "secondary";
+    }
+  };
+
+  const getTypeIcon = () => {
+    const type = (message.type || "").toUpperCase();
+    switch (type) {
+      case "ALERT":
+        return faBell;
+      case "WARNING":
+        return faExclamationCircle;
+      case "INFO":
+        return faInfoCircle;
+      case "NOTIFICATION":
+        return faEnvelopeCircleCheck;
+      default:
+        return faEnvelope;
+    }
+  };
+
+  return (
+    <>
+      {showSeparator && (
+        <div className="separator d-flex align-items-center my-3">
+          <hr className="flex-grow-1" />
+          <span className="px-3 text-muted fs-12 fw-medium">
+            <FontAwesomeIcon icon={faCalendarDays} className="me-2" />
+            Messages plus anciens
+          </span>
+          <hr className="flex-grow-1" />
+        </div>
+      )}
+
+      <div
+        className={`list-group-item list-group-item-action border-0 py-3 px-3 ${isSelected ? "bg-primary bg-opacity-10 selected-message" : "hover-bg-light"} ${!message.estLu ? "unread-message" : ""}`}
+        onClick={() => onSelect(message)}
+        style={{
+          cursor: "pointer",
+          borderLeft: isSelected
+            ? "4px solid var(--bs-primary)"
+            : !message.estLu
+              ? "4px solid var(--bs-warning)"
+              : "4px solid transparent",
+          transition: "all 0.2s ease",
+          borderRadius: "8px",
+          marginBottom: "4px",
+        }}
+      >
+        <div className="d-flex justify-content-between align-items-start mb-2">
+          <div className="d-flex align-items-center gap-3">
+            <div
+              className={`bg-${getTypeColor()} bg-opacity-10 text-${getTypeColor()} rounded-circle d-flex align-items-center justify-content-center`}
+              style={{ width: "40px", height: "40px" }}
+            >
+              <FontAwesomeIcon
+                icon={getTypeIcon()}
+                className={`fs-5 ${message.estLu ? "opacity-75" : ""}`}
+              />
+            </div>
+            <div className="d-flex flex-column">
+              <div className="d-flex align-items-center gap-2 mb-1">
+                <h6
+                  className="mb-0 fw-bold text-dark"
+                  style={{ fontSize: "0.9rem" }}
+                >
+                  {message.expediteurNom}
+                </h6>
+                {!message.estLu && (
+                  <span className="badge bg-warning bg-opacity-25 text-warning px-2 py-1">
+                    <FontAwesomeIcon icon={faCircle} className="fs-10 me-1" />
+                    Non lu
+                  </span>
+                )}
+              </div>
+              <div className="d-flex align-items-center gap-2 flex-wrap">
+                <small className="text-muted" style={{ fontSize: "0.75rem" }}>
+                  <FontAwesomeIcon icon={faUser} className="me-1 fs-11" />
+                  {message.expediteurEmail}
+                </small>
+                <span className="text-muted" style={{ fontSize: "0.75rem" }}>
+                  •
+                </span>
+                <small className="text-muted" style={{ fontSize: "0.75rem" }}>
+                  À: {message.destinataireEmail}
+                </small>
+              </div>
+            </div>
+          </div>
+          <div className="d-flex flex-column align-items-end gap-2">
+            <div className="d-flex align-items-center gap-2">
+              <small className="text-muted" style={{ fontSize: "0.75rem" }}>
+                <FontAwesomeIcon icon={faClock} className="me-1" />
+                {formatDate(message.envoyeLe)}
+              </small>
+              <span
+                className={`badge bg-${getTypeColor()} bg-opacity-10 text-${getTypeColor()} border border-${getTypeColor()} border-opacity-25 px-2 py-1 fw-medium`}
+                style={{ fontSize: "0.65rem" }}
+              >
+                {message.type.toUpperCase()}
+              </span>
+            </div>
+            {message.estEnvoye && (
+              <small
+                className="text-success fw-medium"
+                style={{ fontSize: "0.75rem" }}
+              >
+                <FontAwesomeIcon icon={faCheckCircle} className="me-1" />
+                Envoyé
+              </small>
+            )}
+          </div>
+        </div>
+
+        <h6 className="fw-bold mb-2 text-dark" style={{ fontSize: "0.9rem" }}>
+          {message.sujet}
+        </h6>
+
+        <p
+          className="mb-0 text-muted fs-14 line-clamp-2"
+          style={{
+            fontSize: "0.8rem",
+            maxWidth: "600px",
+            lineHeight: "1.4",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+            display: "-webkit-box",
+          }}
+        >
+          {message.contenu}
+        </p>
+
+        <div className="d-flex justify-content-between align-items-center mt-3">
+          <div className="d-flex gap-2">
+            <button
+              className="btn btn-sm btn-outline-primary d-flex align-items-center gap-1"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelect(message);
+              }}
+              style={{ fontSize: "0.8rem" }}
+            >
+              <FontAwesomeIcon icon={faEye} style={{ fontSize: "0.8rem" }} />
+              <span>Voir</span>
+            </button>
+            <button
+              className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onReply) onReply(message);
+              }}
+              style={{ fontSize: "0.8rem" }}
+            >
+              <FontAwesomeIcon icon={faReply} style={{ fontSize: "0.8rem" }} />
+              <span>Répondre</span>
+            </button>
+          </div>
+          {message.estEnvoye && !message.estLu && (
+            <span
+              className="badge bg-light text-dark border border-secondary-subtle px-2 py-1"
+              style={{ fontSize: "0.75rem" }}
+            >
+              <FontAwesomeIcon
+                icon={faClock}
+                className="me-1"
+                style={{ fontSize: "0.7rem" }}
+              />
+              En attente de lecture
+            </span>
+          )}
+        </div>
+      </div>
+    </>
+  );
+};

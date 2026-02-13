@@ -551,8 +551,8 @@ export const API_ENDPOINTS = {
     WITH_ITEMS: withBaseUrl("/categories/with-items"),
     WITH_ITEMS_BY_UUID: (uuid: string) =>
       withBaseUrl(`/categories/${uuid}/with-items`),
-    BY_LIBELLE_WITH_ITEMS: (libelle: string) =>
-      withBaseUrl(`/categories/libelle/${libelle}/with-items`),
+    BY_LIBELLE_WITH_ITEMS: (slug: string) =>
+      withBaseUrl(`/categories/libelle/${slug}/with-items`),
     BY_TYPE_WITH_ITEMS: (type: string) =>
       withBaseUrl(`/categories/type/${type}/with-items`),
   },

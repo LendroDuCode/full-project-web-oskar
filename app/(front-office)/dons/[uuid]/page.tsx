@@ -1,4 +1,4 @@
-// app/dons/[uuid]/page.tsx
+// app/(front-office)/dons/[uuid]/page.tsx
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -16,6 +16,10 @@ interface Createur {
   email: string;
   telephone: string;
   avatar: string | null;
+  facebook_url?: string | null;
+  whatsapp_url?: string | null;
+  twitter_url?: string | null;
+  instagram_url?: string | null;
 }
 
 interface Categorie {
@@ -70,7 +74,7 @@ interface DonAPI {
   is_favoris: boolean;
   createur: Createur;
   createurType: "utilisateur" | "vendeur";
-  categorie: Categorie;
+  categorie: Categorie | null;
   numero: string;
   categorie_uuid: string;
   publieLe: string | null;
@@ -144,7 +148,7 @@ interface Don {
   is_favoris: boolean;
   createur: Createur;
   createurType: "utilisateur" | "vendeur";
-  categorie: Categorie;
+  categorie: Categorie | null;
   numero: string;
 }
 
@@ -237,7 +241,7 @@ interface DonateurInfo {
   email: string;
   telephone: string;
   avatar: string | null;
-  facebook_url?: string | null;
+  facebook_url?: string | null | undefined;
   whatsapp_url?: string | null;
   twitter_url?: string | null;
   instagram_url?: string | null;
@@ -277,15 +281,6 @@ export default function DonDetailPage() {
   const [submittingReview, setSubmittingReview] = useState(false);
   const [contactVisible, setContactVisible] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
-  const [showMessageModal, setShowMessageModal] = useState(false);
-  const [newMessage, setNewMessage] = useState({
-    sujet: "",
-    contenu: "",
-    type: "INFO", // CORRECTION : Ajout du champ type
-  });
-  const [sendingMessage, setSendingMessage] = useState(false);
-  const [messageError, setMessageError] = useState<string | null>(null);
-  const [messageSuccess, setMessageSuccess] = useState<string | null>(null);
 
   // Vérifier l'authentification et le type d'utilisateur
   useEffect(() => {
@@ -293,7 +288,6 @@ export default function DonDetailPage() {
       const token = api.getToken();
       setIsAuthenticated(!!token);
 
-      // Récupérer le type d'utilisateur depuis le cookie
       const userCookie = document.cookie
         .split("; ")
         .find((row) => row.startsWith("oskar_user="));
@@ -316,9 +310,8 @@ export default function DonDetailPage() {
     return () => window.removeEventListener("storage", checkAuth);
   }, []);
 
-  // CORRECTION : Fonction pour rediriger vers la page de connexion appropriée
+  // ✅ Redirection vers la page de connexion appropriée
   const redirectToLogin = () => {
-    // Déterminer le type d'utilisateur
     const userCookie = document.cookie
       .split("; ")
       .find((row) => row.startsWith("oskar_user="));
@@ -336,25 +329,50 @@ export default function DonDetailPage() {
       }
     }
 
-    // Construire l'URL de redirection en fonction du type d'utilisateur
-    // CORRECTION : Utiliser la structure correcte de votre app
-    // Selon votre structure de dossiers, les pages de login sont dans /auth/[type]/login
     const redirectPath = `/auth/${currentUserType}/login?redirect=/dons/${uuid}`;
     console.log("Redirecting to:", redirectPath);
     router.push(redirectPath);
   };
 
-  // URL d'avatar par défaut
+  // ✅ Redirection vers la messagerie - SANS MODAL
+  const redirectToMessaging = (donateur: DonateurInfo, don: Don) => {
+    if (!isAuthenticated) {
+      redirectToLogin();
+      return;
+    }
+
+    // Déterminer le dashboard en fonction du type d'utilisateur
+    let dashboardPath = "/dashboard-utilisateur/messages";
+
+    if (userType === "agent") {
+      dashboardPath = "/dashboard-agent/messages";
+    } else if (userType === "vendeur") {
+      dashboardPath = "/dashboard-vendeur/messages";
+    } else if (userType === "admin") {
+      dashboardPath = "/dashboard-admin/messages";
+    }
+
+    // Construire les paramètres pour pré-remplir le formulaire
+    const params = new URLSearchParams({
+      destinataireUuid: donateur.uuid,
+      destinataireEmail: donateur.email,
+      destinataireNom: `${donateur.prenoms} ${donateur.nom}`,
+      sujet: `Question concernant votre don: ${don.nom}`,
+      donUuid: don.uuid,
+    });
+
+    // ✅ REDIRECTION DIRECTE - SANS MODAL
+    router.push(`${dashboardPath}?${params.toString()}`);
+  };
+
   const getDefaultAvatarUrl = (): string => {
     return `${API_CONFIG.BASE_URL || "http://localhost:3005"}/images/default-avatar.png`;
   };
 
-  // URL d'image par défaut pour les dons
   const getDefaultDonImage = (): string => {
     return `${API_CONFIG.BASE_URL || "http://localhost:3005"}/images/default-don.png`;
   };
 
-  // Normaliser les URLs d'images
   const normalizeImageUrl = (url: string | null): string => {
     if (!url) return getDefaultDonImage();
 
@@ -378,7 +396,6 @@ export default function DonDetailPage() {
     return getDefaultDonImage();
   };
 
-  // Fonction sécurisée pour formater les nombres
   const safeToFixed = (
     value: number | null | undefined,
     decimals: number = 1,
@@ -389,7 +406,6 @@ export default function DonDetailPage() {
     return value.toFixed(decimals);
   };
 
-  // Fonction sécurisée pour obtenir la note moyenne
   const getSafeNoteMoyenne = (don: Don | null): number => {
     if (!don) return 0;
     if (
@@ -402,7 +418,6 @@ export default function DonDetailPage() {
     return don.note_moyenne;
   };
 
-  // Transformer les données API
   const transformDonData = (apiDon: DonAPI): Don => {
     return {
       uuid: apiDon.uuid,
@@ -474,7 +489,160 @@ export default function DonDetailPage() {
     };
   };
 
-  // Charger les commentaires
+  // ✅ CHARGEMENT SÉCURISÉ DES INFORMATIONS DU DONATEUR - CORRIGÉ
+  const fetchDonateurInfo = useCallback(
+    async (createur: Createur, createurType: "utilisateur" | "vendeur") => {
+      if (!createur || !createur.uuid) {
+        console.warn(
+          "❌ Créateur sans UUID, impossible de charger les détails",
+        );
+        return null;
+      }
+
+      console.log("🟡 Chargement des informations du donateur:", {
+        uuid: createur.uuid,
+        email: createur.email,
+        nom: createur.nom,
+        prenoms: createur.prenoms,
+        createurType: createurType,
+      });
+
+      try {
+        // ✅ ÉTAPE 1: Essayer d'abord avec l'endpoint utilisateur SANS skipAuth
+        try {
+          console.log(`🟡 Tentative 1/3: Chargement en tant qu'utilisateur...`);
+
+          // ✅ CORRIGÉ: Supprimer l'option skipAuth qui n'existe pas
+          const userResponse = await api.get(
+            API_ENDPOINTS.AUTH.UTILISATEUR.DETAIL(createur.uuid),
+          );
+
+          if (userResponse) {
+            console.log("✅ Donateur chargé comme utilisateur:", userResponse);
+
+            const donateurData: DonateurInfo = {
+              uuid: createur.uuid,
+              nom: userResponse.nom || createur.nom || "",
+              prenoms: userResponse.prenoms || createur.prenoms || "",
+              email: userResponse.email || createur.email || "",
+              telephone: userResponse.telephone || createur.telephone || "",
+              avatar: userResponse.avatar
+                ? normalizeImageUrl(userResponse.avatar)
+                : createur.avatar
+                  ? normalizeImageUrl(createur.avatar)
+                  : null,
+              facebook_url: userResponse.facebook_url || null,
+              whatsapp_url: userResponse.whatsapp_url || null,
+              twitter_url: userResponse.twitter_url || null,
+              instagram_url: userResponse.instagram_url || null,
+              userType: "utilisateur",
+            };
+
+            setDonateur(donateurData);
+            return donateurData;
+          }
+        } catch (userErr: any) {
+          console.log("🟡 Tentative 1 échouée - Ce n'est pas un utilisateur:", {
+            status: userErr.response?.status,
+            message: userErr.message,
+          });
+        }
+
+        // ✅ ÉTAPE 2: Essayer avec l'endpoint vendeur SANS skipAuth
+        try {
+          console.log(`🟡 Tentative 2/3: Chargement en tant que vendeur...`);
+
+          // ✅ CORRIGÉ: Supprimer l'option skipAuth qui n'existe pas
+          const vendeurResponse = await api.get(
+            API_ENDPOINTS.AUTH.VENDEUR.DETAIL(createur.uuid),
+          );
+
+          if (vendeurResponse) {
+            console.log("✅ Donateur chargé comme vendeur:", vendeurResponse);
+
+            const donateurData: DonateurInfo = {
+              uuid: createur.uuid,
+              nom: vendeurResponse.nom || createur.nom || "",
+              prenoms: vendeurResponse.prenoms || createur.prenoms || "",
+              email: vendeurResponse.email || createur.email || "",
+              telephone: vendeurResponse.telephone || createur.telephone || "",
+              avatar: vendeurResponse.avatar
+                ? normalizeImageUrl(vendeurResponse.avatar)
+                : createur.avatar
+                  ? normalizeImageUrl(createur.avatar)
+                  : null,
+              facebook_url: vendeurResponse.facebook_url || null,
+              whatsapp_url: vendeurResponse.whatsapp_url || null,
+              twitter_url: vendeurResponse.twitter_url || null,
+              instagram_url: vendeurResponse.instagram_url || null,
+              userType: "vendeur",
+            };
+
+            setDonateur(donateurData);
+            return donateurData;
+          }
+        } catch (vendeurErr: any) {
+          console.log("🟡 Tentative 2 échouée - Ce n'est pas un vendeur:", {
+            status: vendeurErr.response?.status,
+            message: vendeurErr.message,
+          });
+        }
+
+        // ✅ ÉTAPE 3: Utiliser les données du createur fournies par l'API
+        console.log("🟡 Tentative 3/3: Utilisation des données du créateur");
+
+        const donateurData: DonateurInfo = {
+          uuid: createur.uuid,
+          nom: createur.nom || "",
+          prenoms: createur.prenoms || "",
+          email: createur.email || "",
+          telephone: createur.telephone || "",
+          avatar: createur.avatar ? normalizeImageUrl(createur.avatar) : null,
+          facebook_url: createur.facebook_url || null,
+          whatsapp_url: createur.whatsapp_url || null,
+          twitter_url: createur.twitter_url || null,
+          instagram_url: createur.instagram_url || null,
+          userType: createurType === "vendeur" ? "vendeur" : "utilisateur",
+        };
+
+        console.log(
+          "✅ Donateur créé à partir des données de base:",
+          donateurData,
+        );
+        setDonateur(donateurData);
+        return donateurData;
+      } catch (err) {
+        console.error(
+          "❌ Erreur critique lors du chargement du donateur:",
+          err,
+        );
+
+        // ✅ ÉTAPE 4: Fallback - Utiliser les données minimales
+        const donateurData: DonateurInfo = {
+          uuid: createur.uuid,
+          nom: createur.nom || "Donateur",
+          prenoms: createur.prenoms || "OSKAR",
+          email: createur.email || "",
+          telephone: createur.telephone || "",
+          avatar: createur.avatar ? normalizeImageUrl(createur.avatar) : null,
+          facebook_url: null,
+          whatsapp_url: null,
+          twitter_url: null,
+          instagram_url: null,
+          userType: "utilisateur",
+        };
+
+        console.log(
+          "✅ Fallback: Donateur créé avec données minimales:",
+          donateurData,
+        );
+        setDonateur(donateurData);
+        return donateurData;
+      }
+    },
+    [],
+  );
+
   const fetchCommentaires = useCallback(
     async (donUuid: string) => {
       if (!donUuid || commentairesFetched) return;
@@ -529,119 +697,10 @@ export default function DonDetailPage() {
         setLoadingComments(false);
       }
     },
-    [don, commentairesFetched],
+    [don],
   );
 
-  // Charger les infos complètes du donateur
-  const fetchDonateurInfo = useCallback(async (createur: Createur) => {
-    if (!createur) return;
-
-    try {
-      let donateurData: DonateurInfo | null = null;
-
-      // CORRECTION : Vérifier d'abord si c'est un vendeur en fonction du createurType
-      let userType: "utilisateur" | "vendeur" = "utilisateur";
-
-      // Essayer d'utiliser l'endpoint utilisateur d'abord
-      try {
-        const userResponse = await api.get(
-          API_ENDPOINTS.AUTH.UTILISATEUR.DETAIL(createur.uuid),
-        );
-
-        if (userResponse) {
-          donateurData = {
-            uuid: createur.uuid,
-            nom: userResponse.nom || createur.nom,
-            prenoms: userResponse.prenoms || createur.prenoms,
-            email: userResponse.email || createur.email,
-            telephone: userResponse.telephone || createur.telephone,
-            avatar: userResponse.avatar
-              ? normalizeImageUrl(userResponse.avatar)
-              : createur.avatar
-                ? normalizeImageUrl(createur.avatar)
-                : null,
-            facebook_url: userResponse.facebook_url || null,
-            whatsapp_url: userResponse.whatsapp_url || null,
-            twitter_url: userResponse.twitter_url || null,
-            instagram_url: userResponse.instagram_url || null,
-            userType: "utilisateur",
-          };
-        }
-      } catch (userErr) {
-        console.log("Ce n'est pas un utilisateur, essayons vendeur...");
-
-        // Essayer l'endpoint vendeur
-        try {
-          const vendeurResponse = await api.get(
-            API_ENDPOINTS.AUTH.VENDEUR.DETAIL(createur.uuid),
-          );
-
-          if (vendeurResponse) {
-            userType = "vendeur";
-            donateurData = {
-              uuid: createur.uuid,
-              nom: vendeurResponse.nom || createur.nom,
-              prenoms: vendeurResponse.prenoms || createur.prenoms,
-              email: vendeurResponse.email || createur.email,
-              telephone: vendeurResponse.telephone || createur.telephone,
-              avatar: vendeurResponse.avatar
-                ? normalizeImageUrl(vendeurResponse.avatar)
-                : createur.avatar
-                  ? normalizeImageUrl(createur.avatar)
-                  : null,
-              facebook_url: vendeurResponse.facebook_url || null,
-              whatsapp_url: vendeurResponse.whatsapp_url || null,
-              twitter_url: vendeurResponse.twitter_url || null,
-              instagram_url: vendeurResponse.instagram_url || null,
-              userType: "vendeur",
-            };
-          }
-        } catch (vendeurErr) {
-          console.warn(
-            "Erreur chargement info vendeur, utilisation des données de base:",
-            vendeurErr,
-          );
-        }
-      }
-
-      // Si pas de réponse API, utiliser les données de base du createur
-      if (!donateurData) {
-        donateurData = {
-          uuid: createur.uuid,
-          nom: createur.nom,
-          prenoms: createur.prenoms,
-          email: createur.email,
-          telephone: createur.telephone,
-          avatar: createur.avatar ? normalizeImageUrl(createur.avatar) : null,
-          facebook_url: null,
-          whatsapp_url: null,
-          twitter_url: null,
-          instagram_url: null,
-          userType: userType,
-        };
-      }
-
-      setDonateur(donateurData);
-    } catch (err) {
-      console.warn("Erreur chargement info donateur:", err);
-      // Utiliser les données de base du createur en cas d'erreur
-      setDonateur({
-        uuid: createur.uuid,
-        nom: createur.nom,
-        prenoms: createur.prenoms,
-        email: createur.email,
-        telephone: createur.telephone,
-        avatar: createur.avatar ? normalizeImageUrl(createur.avatar) : null,
-        facebook_url: null,
-        whatsapp_url: null,
-        twitter_url: null,
-        instagram_url: null,
-        userType: "utilisateur",
-      });
-    }
-  }, []);
-
-  // Charger les données du don
+  // ✅ Chargement principal avec gestion d'erreur améliorée
   const fetchDonDetails = useCallback(async () => {
     if (!uuid) return;
 
@@ -649,7 +708,7 @@ export default function DonDetailPage() {
       setLoading(true);
       setError(null);
 
-      // Charger le don
+      console.log("🟡 Chargement du don:", uuid);
       const response = await api.get<DonResponse>(
         API_ENDPOINTS.DONS.RANDOM_DETAIL(uuid),
       );
@@ -658,7 +717,9 @@ export default function DonDetailPage() {
         throw new Error("Don non trouvé");
       }
 
-      // Transformer les données
+      console.log("✅ Don chargé avec succès:", response.don.uuid);
+      console.log("📊 Catégorie reçue:", response.don.categorie);
+
       const donData = transformDonData(response.don);
       const similairesData = response.similaires.map(transformDonSimilaireData);
 
@@ -666,7 +727,6 @@ export default function DonDetailPage() {
       setDonsSimilaires(similairesData);
       setFavori(response.don.is_favoris || false);
 
-      // Préparer les images
       const imageUrls: string[] = [];
       const mainImage = donData.image;
       imageUrls.push(mainImage);
@@ -678,35 +738,29 @@ export default function DonDetailPage() {
         }
       });
 
-      // Remplir avec des images par défaut si nécessaire
       while (imageUrls.length < 4) {
         imageUrls.push(getDefaultDonImage());
       }
 
       setImages(imageUrls);
 
-      // Charger les infos complètes du donateur
-      if (response.don.createur) {
-        await fetchDonateurInfo(response.don.createur);
+      // ✅ Charger les informations du donateur de manière sécurisée
+      if (response.don.createur && response.don.createur.uuid) {
+        console.log("🟡 Chargement des informations du donateur...");
+        await fetchDonateurInfo(
+          response.don.createur,
+          response.don.createurType,
+        );
       } else {
-        // Données par défaut si pas de createur
-        setDonateur({
-          uuid: "",
-          nom: "Donateur",
-          prenoms: "OSKAR",
-          email: "",
-          telephone: "",
-          avatar: null,
-          userType: "utilisateur",
-        });
+        console.warn("⚠️ Aucun créateur trouvé pour ce don");
       }
 
       // Charger les commentaires
       fetchCommentaires(donData.uuid);
     } catch (err: any) {
-      console.error("Erreur détail don:", err);
+      console.error("❌ Erreur détail don:", err);
 
-      if (err.response?.status === 404 || err.message.includes("non trouvé")) {
+      if (err.response?.status === 404 || err.message?.includes("non trouvé")) {
         setError("Ce don n'existe pas ou a été supprimé.");
       } else if (err.response?.status === 401) {
         setError("Vous devez être connecté pour voir ce don.");
@@ -720,15 +774,14 @@ export default function DonDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [uuid, fetchCommentaires, fetchDonateurInfo]);
+  }, [uuid, fetchDonateurInfo, fetchCommentaires]);
 
   useEffect(() => {
-    if (uuid && loading && !don) {
+    if (uuid && !don && loading) {
       fetchDonDetails();
     }
   }, [uuid, fetchDonDetails, loading, don]);
 
-  // Fonctions utilitaires
   const formatPrice = (price: number | null) => {
     if (price === null || price === undefined || isNaN(price)) {
       return "Gratuit";
@@ -836,7 +889,6 @@ export default function DonDetailPage() {
     }
   };
 
-  // Calculer les statistiques des notes
   const calculateNoteStats = (): NoteStats => {
     const stats: NoteStats = {
       1: commentairesStats.distributionNotes[1] || 0,
@@ -875,7 +927,6 @@ export default function DonDetailPage() {
 
   const noteStats = calculateNoteStats();
 
-  // Handlers
   const handleAddToFavorites = async () => {
     if (!don) return;
 
@@ -886,7 +937,6 @@ export default function DonDetailPage() {
 
     try {
       if (favori) {
-        // API pour retirer des favoris
         await api.delete(API_ENDPOINTS.FAVORIS.REMOVE(don.uuid));
         setFavori(false);
         alert("Don retiré des favoris");
@@ -912,7 +962,15 @@ export default function DonDetailPage() {
       return;
     }
 
-    setContactVisible(true);
+    if (!donateur) {
+      alert(
+        "Impossible de contacter le donateur. Informations non disponibles.",
+      );
+      return;
+    }
+
+    // ✅ REDIRECTION DIRECTE VERS LA MESSAGERIE - SANS MODAL
+    redirectToMessaging(donateur, don!);
   };
 
   const handleSubmitReview = async () => {
@@ -968,7 +1026,6 @@ export default function DonDetailPage() {
     }
   };
 
-  // Fonctions de partage vers réseaux sociaux
   const handleShare = (platform: string) => {
     if (!don) return;
 
@@ -994,187 +1051,26 @@ export default function DonDetailPage() {
     setShowShareMenu(false);
   };
 
-  // Ouvrir WhatsApp avec le numéro du donateur
   const openWhatsApp = (phoneNumber: string | null) => {
     if (!phoneNumber) {
       alert("Le donateur n'a pas fourni de numéro WhatsApp.");
       return;
     }
 
-    // Nettoyer le numéro (supprimer les caractères non numériques)
     const cleanPhone = phoneNumber.replace(/\D/g, "");
-
     const message = `Bonjour, je suis intéressé(e) par votre don "${don?.nom}" sur OSKAR. Pourrions-nous discuter ?`;
-
     const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
-  // Ouvrir Facebook avec le profil du donateur
   const openFacebook = (facebookUrl: string | null) => {
     if (!facebookUrl) {
       alert("Le donateur n'a pas fourni de lien Facebook.");
       return;
     }
-
     window.open(facebookUrl, "_blank", "noopener,noreferrer");
   };
 
-  // Ouvrir la messagerie intégrée
-  const openMessageModal = () => {
-    if (!isAuthenticated) {
-      redirectToLogin();
-      return;
-    }
-
-    if (!donateur) {
-      alert("Impossible de contacter le donateur.");
-      return;
-    }
-
-    setNewMessage({
-      sujet: `Question concernant votre don : ${don?.nom}`,
-      contenu: `Bonjour ${donateur?.prenoms || ""} ${donateur?.nom || ""},\n\nJe suis intéressé(e) par votre don "${don?.nom}" sur OSKAR.\n\nCordialement,\n[Votre nom]`,
-      type: "INFO",
-    });
-    setShowMessageModal(true);
-    setMessageError(null);
-    setMessageSuccess(null);
-  };
-
-  // CORRECTION : Fonction robuste pour envoyer un message via la messagerie intégrée
-  const handleSendMessage = async () => {
-    if (!donateur || !don) {
-      setMessageError("Informations du donateur manquantes.");
-      return;
-    }
-
-    if (!newMessage.sujet.trim() || !newMessage.contenu.trim()) {
-      setMessageError("Veuillez remplir le sujet et le contenu du message.");
-      return;
-    }
-
-    setSendingMessage(true);
-    setMessageError(null);
-    setMessageSuccess(null);
-
-    try {
-      console.log("🔄 Envoi du message à:", donateur.email);
-      console.log("📝 Contenu du message:", {
-        sujet: newMessage.sujet,
-        contenu: newMessage.contenu.substring(0, 100) + "...",
-        type: newMessage.type,
-      });
-
-      // CORRECTION : Données complètes avec le champ type
-      const messageData = {
-        destinataireEmail: donateur.email,
-        sujet: newMessage.sujet,
-        contenu: newMessage.contenu,
-        type: newMessage.type, // CORRECTION : Ajout du champ type
-      };
-
-      console.log("📤 Données envoyées à l'API:", messageData);
-
-      // CORRECTION : Appel API corrigé avec gestion d'erreur améliorée
-      // Utiliser l'endpoint approprié selon le type d'utilisateur
-      let messageEndpoint = API_ENDPOINTS.MESSAGERIE.SEND;
-
-      // Vérifier si l'utilisateur est authentifié
-      const token = api.getToken();
-      if (!token) {
-        setMessageError("Vous devez être connecté pour envoyer un message.");
-        redirectToLogin();
-        return;
-      }
-
-      console.log("📤 Endpoint utilisé:", messageEndpoint);
-
-      const response = await api.post(messageEndpoint, messageData, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      console.log("✅ Réponse de l'API:", response);
-
-      if (response) {
-        setMessageSuccess("Votre message a été envoyé avec succès !");
-
-        // Réinitialiser le formulaire
-        setNewMessage({
-          sujet: "",
-          contenu: "",
-          type: "INFO",
-        });
-
-        // Fermer le modal après 2 secondes
-        setTimeout(() => {
-          setShowMessageModal(false);
-
-          // Rediriger vers la messagerie après un court délai
-          setTimeout(() => {
-            // Rediriger vers le tableau de bord approprié selon le type d'utilisateur
-            let dashboardPath = "/dashboard-utilisateur/messages";
-
-            if (userType === "agent") {
-              dashboardPath = "/dashboard-agent/messages";
-            } else if (userType === "vendeur") {
-              dashboardPath = "/dashboard-vendeur/messages";
-            } else if (userType === "admin") {
-              dashboardPath = "/dashboard-admin/messages";
-            }
-
-            router.push(dashboardPath);
-          }, 500);
-        }, 2000);
-      } else {
-        setMessageError("Réponse inattendue de l'API.");
-      }
-    } catch (err: any) {
-      console.error("❌ Erreur envoi message:", err);
-
-      let errorMessage = "Une erreur est survenue lors de l'envoi du message.";
-
-      if (err.response) {
-        console.error("📥 Détails de l'erreur:", {
-          status: err.response.status,
-          data: err.response.data,
-        });
-
-        if (err.response.status === 401) {
-          errorMessage = "Votre session a expiré. Veuillez vous reconnecter.";
-          redirectToLogin();
-        } else if (err.response.status === 400) {
-          errorMessage =
-            "Données invalides. Vérifiez les informations saisies.";
-          if (err.response.data?.errors) {
-            errorMessage +=
-              " Détails: " + JSON.stringify(err.response.data.errors);
-          }
-        } else if (err.response.status === 404) {
-          errorMessage = "Destinataire non trouvé.";
-        } else if (err.response.status === 500) {
-          errorMessage = "Erreur serveur. Veuillez réessayer plus tard.";
-        }
-
-        if (err.response.data?.message) {
-          errorMessage = err.response.data.message;
-        } else if (err.response.data?.error) {
-          errorMessage = err.response.data.error;
-        }
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-
-      setMessageError(errorMessage);
-    } finally {
-      setSendingMessage(false);
-    }
-  };
-
-  // Copier le lien
   const handleCopyLink = () => {
     navigator.clipboard
       .writeText(window.location.href)
@@ -1188,10 +1084,8 @@ export default function DonDetailPage() {
       });
   };
 
-  // Formater le numéro de téléphone pour l'affichage
   const formatPhoneNumber = (phone: string) => {
     if (!phone) return "";
-    // Format: +225 XX XX XX XX
     const cleaned = phone.replace(/\D/g, "");
     if (cleaned.startsWith("225")) {
       const rest = cleaned.slice(3);
@@ -1271,7 +1165,7 @@ export default function DonDetailPage() {
 
   return (
     <div className="bg-light min-vh-100">
-      {/* Breadcrumb */}
+      {/* Breadcrumb - CORRIGÉ */}
       <nav aria-label="breadcrumb" className="bg-white border-bottom">
         <div className="container">
           <div className="d-flex justify-content-between align-items-center py-3">
@@ -1288,15 +1182,18 @@ export default function DonDetailPage() {
                   Dons
                 </Link>
               </li>
-              <li className="breadcrumb-item">
-                <Link
-                  href={`/dons?categorie=${don.categorie.slug}`}
-                  className="text-decoration-none text-muted"
-                >
-                  <i className="fas fa-tag me-1"></i>
-                  {don.categorie.libelle}
-                </Link>
-              </li>
+              {/* ✅ CORRIGÉ: Vérifier que don.categorie existe */}
+              {don.categorie && (
+                <li className="breadcrumb-item">
+                  <Link
+                    href={`/dons?categorie=${don.categorie.slug}`}
+                    className="text-decoration-none text-muted"
+                  >
+                    <i className="fas fa-tag me-1"></i>
+                    {don.categorie.libelle}
+                  </Link>
+                </li>
+              )}
               <li
                 className="breadcrumb-item active text-truncate"
                 style={{ maxWidth: "200px" }}
@@ -1378,15 +1275,16 @@ export default function DonDetailPage() {
                     <div className="p-4 h-100 d-flex flex-column">
                       <h1 className="h3 fw-bold mb-3">{don.nom}</h1>
 
-                      {/* Catégorie */}
-                      <div className="mb-3">
-                        <span className="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25">
-                          <i className="fas fa-tag me-1"></i>
-                          {don.categorie.libelle}
-                        </span>
-                      </div>
+                      {/* ✅ CORRIGÉ: Badge catégorie avec condition */}
+                      {don.categorie && (
+                        <div className="mb-3">
+                          <span className="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25">
+                            <i className="fas fa-tag me-1"></i>
+                            {don.categorie.libelle}
+                          </span>
+                        </div>
+                      )}
 
-                      {/* Note et avis */}
                       <div className="mb-4">
                         <div className="d-flex align-items-center mb-2">
                           <div className="me-3">
@@ -1407,7 +1305,6 @@ export default function DonDetailPage() {
                         </div>
                       </div>
 
-                      {/* Prix */}
                       <div className="mb-4">
                         <h2 className="text-success fw-bold mb-2">
                           {formatPrice(don.prix)}
@@ -1418,7 +1315,6 @@ export default function DonDetailPage() {
                         </span>
                       </div>
 
-                      {/* Informations principales */}
                       <div className="mb-4">
                         <div className="row g-2 mb-3">
                           <div className="col-6">
@@ -1456,7 +1352,6 @@ export default function DonDetailPage() {
                         </div>
                       </div>
 
-                      {/* Boutons d'action */}
                       <div className="mt-auto">
                         <div className="d-grid gap-2">
                           <button
@@ -1622,7 +1517,7 @@ export default function DonDetailPage() {
               </div>
             </div>
 
-            {/* Spécifications */}
+            {/* Spécifications - CORRIGÉ */}
             <div className="card shadow-sm border-0 mb-4">
               <div className="card-body p-4">
                 <h3 className="h5 fw-bold mb-4">
@@ -1640,10 +1535,13 @@ export default function DonDetailPage() {
                         <strong className="text-muted">Quantité:</strong>
                         <span className="ms-2">{don.quantite} unité(s)</span>
                       </li>
-                      <li className="mb-3">
-                        <strong className="text-muted">Catégorie:</strong>
-                        <span className="ms-2">{don.categorie.libelle}</span>
-                      </li>
+                      {/* ✅ CORRIGÉ: Catégorie avec condition */}
+                      {don.categorie && (
+                        <li className="mb-3">
+                          <strong className="text-muted">Catégorie:</strong>
+                          <span className="ms-2">{don.categorie.libelle}</span>
+                        </li>
+                      )}
                       <li className="mb-3">
                         <strong className="text-muted">Note moyenne:</strong>
                         <span className="ms-2">
@@ -1708,7 +1606,6 @@ export default function DonDetailPage() {
                   </div>
                 ) : (
                   <>
-                    {/* Statistiques des notes */}
                     {don.nombre_avis > 0 && (
                       <div className="bg-light rounded p-4 mb-4">
                         <div className="row align-items-center">
@@ -1767,7 +1664,6 @@ export default function DonDetailPage() {
                       </div>
                     )}
 
-                    {/* Formulaire d'ajout d'avis */}
                     {showAddReview ? (
                       <div className="card border mb-4">
                         <div className="card-body">
@@ -1855,7 +1751,6 @@ export default function DonDetailPage() {
                       </div>
                     )}
 
-                    {/* Liste des commentaires */}
                     {commentaires.length > 0 ? (
                       <>
                         <div className="mt-4">
@@ -2018,7 +1913,7 @@ export default function DonDetailPage() {
             )}
           </div>
 
-          {/* Colonne droite - Sidebar */}
+          {/* Colonne droite - Sidebar - CORRIGÉ */}
           <div className="col-lg-4">
             {/* Carte donateur */}
             {donateur && (
@@ -2074,82 +1969,74 @@ export default function DonDetailPage() {
                     </div>
                   </div>
 
-                  {/* Informations contact */}
                   <div className="border-top pt-4">
                     {contactVisible ? (
                       <div className="space-y-4">
-                        {/* Boutons de contact direct */}
-                        <div className="d-grid gap-3">
-                          {/* WhatsApp */}
-                          {donateur.telephone && (
-                            <button
-                              className="btn btn-success d-flex align-items-center justify-content-center gap-3 py-3"
-                              onClick={() => openWhatsApp(donateur.telephone)}
-                            >
-                              <i className="fab fa-whatsapp fa-2x"></i>
-                              <div className="text-start">
-                                <div className="fw-bold">WhatsApp</div>
-                                <small className="opacity-75">
-                                  {formatPhoneNumber(donateur.telephone)}
-                                </small>
-                              </div>
-                            </button>
-                          )}
-
-                          {/* Facebook */}
-                          {donateur.facebook_url ? (
-                            <button
-                              className="btn btn-primary d-flex align-items-center justify-content-center gap-3 py-3"
-                              onClick={() =>
-                                openFacebook(donateur.facebook_url || null)
-                              }
-                            >
-                              <i className="fab fa-facebook-f fa-2x"></i>
-                              <div className="text-start">
-                                <div className="fw-bold">Facebook</div>
-                                <small className="opacity-75">
-                                  Profil Facebook
-                                </small>
-                              </div>
-                            </button>
-                          ) : (
-                            <div className="alert alert-info py-2">
-                              <i className="fas fa-info-circle me-2"></i>
-                              Le donateur n'a pas fourni de lien Facebook
-                            </div>
-                          )}
-
-                          {/* Messagerie intégrée */}
+                        {/* BOUTON WHATSAPP */}
+                        {donateur.telephone && (
                           <button
-                            className="btn btn-info d-flex align-items-center justify-content-center gap-3 py-3"
-                            onClick={openMessageModal}
+                            className="btn btn-success d-flex align-items-center justify-content-center gap-3 py-3 w-100 mb-3"
+                            onClick={() => openWhatsApp(donateur.telephone)}
                           >
-                            <i className="fas fa-envelope fa-2x"></i>
+                            <i className="fab fa-whatsapp fa-2x"></i>
                             <div className="text-start">
-                              <div className="fw-bold">Messagerie OSKAR</div>
+                              <div className="fw-bold">WhatsApp</div>
                               <small className="opacity-75">
-                                Message sécurisé
+                                {formatPhoneNumber(donateur.telephone)}
                               </small>
                             </div>
                           </button>
-
-                          {/* Email */}
-                          {donateur.email && (
-                            <div className="alert alert-light border">
-                              <div className="d-flex align-items-center">
-                                <i className="fas fa-envelope text-primary fa-lg me-3"></i>
-                                <div className="flex-grow-1">
-                                  <div className="fw-bold mb-1">Email</div>
-                                  <div className="text-break">
-                                    {donateur.email}
-                                  </div>
+                        )}
+                        {/* BOUTON FACEBOOK */}
+                        // app/(front-office)/dons/[uuid]/page.tsx // Lignes
+                        1993-1998 - CORRIGÉ
+                        {/* BOUTON FACEBOOK */}
+                        {donateur.facebook_url && (
+                          <button
+                            className="btn btn-primary d-flex align-items-center justify-content-center gap-3 py-3 w-100 mb-3"
+                            onClick={() => {
+                              // ✅ CORRIGÉ: Vérification que facebook_url n'est pas undefined
+                              if (donateur.facebook_url) {
+                                openFacebook(donateur.facebook_url);
+                              }
+                            }}
+                          >
+                            <i className="fab fa-facebook-f fa-2x"></i>
+                            <div className="text-start">
+                              <div className="fw-bold">Facebook</div>
+                              <small className="opacity-75">
+                                Profil Facebook
+                              </small>
+                            </div>
+                          </button>
+                        )}
+                        {/* ✅ BOUTON MESSAGERIE - REDIRECTION DIRECTE */}
+                        <button
+                          className="btn btn-info d-flex align-items-center justify-content-center gap-3 py-3 w-100 mb-3"
+                          onClick={handleContactDonateur}
+                        >
+                          <i className="fas fa-envelope fa-2x"></i>
+                          <div className="text-start">
+                            <div className="fw-bold">Messagerie OSKAR</div>
+                            <small className="opacity-75">
+                              Nouvelle conversation
+                            </small>
+                          </div>
+                        </button>
+                        {/* EMAIL */}
+                        {donateur.email && (
+                          <div className="alert alert-light border">
+                            <div className="d-flex align-items-center">
+                              <i className="fas fa-envelope text-primary fa-lg me-3"></i>
+                              <div className="flex-grow-1">
+                                <div className="fw-bold mb-1">Email</div>
+                                <div className="text-break">
+                                  {donateur.email}
                                 </div>
                               </div>
                             </div>
-                          )}
-                        </div>
-
-                        {/* Informations de sécurité */}
+                          </div>
+                        )}
                         <div className="alert alert-warning mt-3">
                           <h6 className="fw-bold">
                             <i className="fas fa-shield-alt me-2"></i>
@@ -2161,7 +2048,6 @@ export default function DonDetailPage() {
                             <li>Ne partagez pas d'informations personnelles</li>
                           </ul>
                         </div>
-
                         <button
                           className="btn btn-outline-secondary w-100"
                           onClick={() => setContactVisible(false)}
@@ -2173,7 +2059,7 @@ export default function DonDetailPage() {
                     ) : (
                       <button
                         className="btn btn-outline-success w-100"
-                        onClick={handleContactDonateur}
+                        onClick={() => setContactVisible(true)}
                       >
                         <i className="fas fa-eye me-2"></i>
                         Voir les options de contact
@@ -2184,7 +2070,7 @@ export default function DonDetailPage() {
               </div>
             )}
 
-            {/* Informations don */}
+            {/* Informations don - CORRIGÉ */}
             <div className="card shadow-sm border-0 mb-4">
               <div className="card-body p-4">
                 <h5 className="fw-bold mb-4">
@@ -2241,12 +2127,15 @@ export default function DonDetailPage() {
                       <span className="fw-bold text-primary">{don.numero}</span>
                     </div>
                   </div>
-                  <div className="list-group-item border-0 px-0 py-2">
-                    <div className="d-flex justify-content-between">
-                      <span className="text-muted">Catégorie</span>
-                      <span className="fw-bold">{don.categorie.libelle}</span>
+                  {/* ✅ CORRIGÉ: Catégorie avec condition */}
+                  {don.categorie && (
+                    <div className="list-group-item border-0 px-0 py-2">
+                      <div className="d-flex justify-content-between">
+                        <span className="text-muted">Catégorie</span>
+                        <span className="fw-bold">{don.categorie.libelle}</span>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -2321,295 +2210,6 @@ export default function DonDetailPage() {
           </div>
         </div>
       </div>
-
-      {/* Modal de messagerie intégrée - CORRIGÉ */}
-      {showMessageModal && donateur && (
-        <div
-          className="modal fade show d-block"
-          style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1050 }}
-          tabIndex={-1}
-          role="dialog"
-        >
-          <div
-            className="modal-dialog modal-lg modal-dialog-centered"
-            role="document"
-          >
-            <div className="modal-content border-0 shadow-lg">
-              <div className="modal-header bg-primary text-white">
-                <h5 className="modal-title">
-                  <i className="fas fa-envelope me-2"></i>
-                  Envoyer un message à {donateur.prenoms} {donateur.nom}
-                </h5>
-                <button
-                  type="button"
-                  className="btn-close btn-close-white"
-                  onClick={() => {
-                    setShowMessageModal(false);
-                    setMessageError(null);
-                    setMessageSuccess(null);
-                  }}
-                  disabled={sendingMessage}
-                ></button>
-              </div>
-              <div className="modal-body">
-                {messageError && (
-                  <div
-                    className="alert alert-danger alert-dismissible fade show mb-4"
-                    role="alert"
-                  >
-                    <div className="d-flex align-items-center">
-                      <i className="fas fa-exclamation-circle me-2"></i>
-                      <div>
-                        <strong>Erreur</strong>
-                        <p className="mb-0">{messageError}</p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className="btn-close"
-                      onClick={() => setMessageError(null)}
-                    ></button>
-                  </div>
-                )}
-
-                {messageSuccess && (
-                  <div
-                    className="alert alert-success alert-dismissible fade show mb-4"
-                    role="alert"
-                  >
-                    <div className="d-flex align-items-center">
-                      <i className="fas fa-check-circle me-2"></i>
-                      <div>
-                        <strong>Succès !</strong>
-                        <p className="mb-0">{messageSuccess}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="mb-4">
-                  <div className="alert alert-info">
-                    <div className="d-flex">
-                      <i className="fas fa-info-circle me-2 mt-1"></i>
-                      <div>
-                        <strong>Messagerie sécurisée OSKAR</strong>
-                        <p className="mb-0">
-                          Ce message sera envoyé via la plateforme. Vous pourrez
-                          suivre la conversation dans votre tableau de bord.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mb-3">
-                  <label className="form-label fw-bold">
-                    Sujet <span className="text-danger">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={newMessage.sujet}
-                    onChange={(e) =>
-                      setNewMessage({ ...newMessage, sujet: e.target.value })
-                    }
-                    placeholder="Sujet du message"
-                    disabled={sendingMessage}
-                  />
-                </div>
-
-                {/* CORRECTION : Ajout du champ type dans le formulaire */}
-                <div className="mb-3">
-                  <label className="form-label fw-bold">
-                    Type de message <span className="text-danger">*</span>
-                  </label>
-                  <select
-                    className="form-select"
-                    value={newMessage.type}
-                    onChange={(e) =>
-                      setNewMessage({ ...newMessage, type: e.target.value })
-                    }
-                    disabled={sendingMessage}
-                  >
-                    <option value="INFO">Information</option>
-                    <option value="QUESTION">Question</option>
-                    <option value="DEMANDE">Demande</option>
-                    <option value="SUPPORT">Support</option>
-                    <option value="ALERT">Alerte</option>
-                  </select>
-                  <small className="text-muted">
-                    Sélectionnez le type de message le plus approprié.
-                  </small>
-                </div>
-
-                <div className="mb-4">
-                  <label className="form-label fw-bold">
-                    Message <span className="text-danger">*</span>
-                  </label>
-                  <textarea
-                    className="form-control"
-                    rows={8}
-                    value={newMessage.contenu}
-                    onChange={(e) =>
-                      setNewMessage({ ...newMessage, contenu: e.target.value })
-                    }
-                    placeholder={`Bonjour ${donateur.prenoms},\n\nJe suis intéressé(e) par votre don "${don?.nom}"...`}
-                    disabled={sendingMessage}
-                  />
-                  <small className="text-muted">
-                    Soyez clair et poli dans votre message.
-                  </small>
-                </div>
-
-                {!messageSuccess && (
-                  <div className="alert alert-warning">
-                    <h6 className="fw-bold">
-                      <i className="fas fa-shield-alt me-2"></i>
-                      Conseils de sécurité
-                    </h6>
-                    <ul className="mb-0">
-                      <li>
-                        Ne partagez jamais vos informations personnelles
-                        sensibles
-                      </li>
-                      <li>
-                        Organisez les rencontres dans des lieux publics et de
-                        jour
-                      </li>
-                      <li>
-                        Méfiez-vous des demandes de paiement en dehors de la
-                        plateforme
-                      </li>
-                      <li>Signalez tout comportement suspect au support</li>
-                    </ul>
-                  </div>
-                )}
-              </div>
-              <div className="modal-footer">
-                {!messageSuccess ? (
-                  <>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={() => {
-                        setShowMessageModal(false);
-                        setMessageError(null);
-                        setMessageSuccess(null);
-                      }}
-                      disabled={sendingMessage}
-                    >
-                      Annuler
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={handleSendMessage}
-                      disabled={
-                        sendingMessage ||
-                        !newMessage.sujet.trim() ||
-                        !newMessage.contenu.trim() ||
-                        !newMessage.type
-                      }
-                    >
-                      {sendingMessage ? (
-                        <>
-                          <span
-                            className="spinner-border spinner-border-sm me-2"
-                            role="status"
-                          ></span>
-                          Envoi en cours...
-                        </>
-                      ) : (
-                        <>
-                          <i className="fas fa-paper-plane me-2"></i>
-                          Envoyer le message
-                        </>
-                      )}
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    className="btn btn-success w-100"
-                    onClick={() => {
-                      setShowMessageModal(false);
-                      // Rediriger vers le tableau de bord approprié
-                      let dashboardPath = "/dashboard-utilisateur/messages";
-
-                      if (userType === "agent") {
-                        dashboardPath = "/dashboard-agent/messages";
-                      } else if (userType === "vendeur") {
-                        dashboardPath = "/dashboard-vendeur/messages";
-                      } else if (userType === "admin") {
-                        dashboardPath = "/dashboard-admin/messages";
-                      }
-
-                      router.push(dashboardPath);
-                    }}
-                  >
-                    <i className="fas fa-check me-2"></i>
-                    Voir mes messages
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Backdrop pour le modal */}
-      {showMessageModal && (
-        <div
-          className="modal-backdrop fade show"
-          style={{ zIndex: 1040 }}
-          onClick={() => !sendingMessage && setShowMessageModal(false)}
-        ></div>
-      )}
-
-      <style jsx>{`
-        .object-fit-cover {
-          object-fit: cover;
-        }
-        .prose {
-          line-height: 1.7;
-        }
-        .prose p {
-          white-space: pre-line;
-        }
-        .cursor-pointer {
-          cursor: pointer;
-        }
-        .bg-purple {
-          background-color: #9c27b0 !important;
-        }
-        .btn-outline-purple {
-          color: #9c27b0;
-          border-color: #9c27b0;
-        }
-        .btn-outline-purple:hover {
-          background-color: #9c27b0;
-          color: white;
-        }
-        .modal-backdrop {
-          background-color: rgba(0, 0, 0, 0.5);
-          position: fixed;
-          top: 0;
-          left: 0;
-          width: 100%;
-          height: 100%;
-        }
-        .rounded-start {
-          border-top-left-radius: 0.375rem !important;
-          border-bottom-left-radius: 0.375rem !important;
-        }
-        @media (max-width: 768px) {
-          .rounded-start {
-            border-top-left-radius: 0.375rem !important;
-            border-top-right-radius: 0.375rem !important;
-            border-bottom-left-radius: 0 !important;
-          }
-        }
-      `}</style>
     </div>
   );
 }
