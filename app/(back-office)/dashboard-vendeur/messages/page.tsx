@@ -409,6 +409,7 @@ function MessagesContent() {
   const isFetchingContacts = useRef(false);
   const prevMessagesRecusLength = useRef(0);
   const prevMessagesEnvoyesLength = useRef(0);
+  const hasLoadedInitialData = useRef(false);
 
   // ============================================
   // ✅ GESTION DES PARAMÈTRES D'URL - DÉCLARÉ EN PREMIER
@@ -546,7 +547,7 @@ function MessagesContent() {
   };
 
   // ============================================
-  // CHARGEMENT DU PROFIL
+  // ✅ CHARGEMENT DU PROFIL - SANS DÉPENDANCES CYCLIQUES
   // ============================================
   const fetchVendeurProfile = useCallback(async () => {
     setLoading((prev) => ({ ...prev, profile: true }));
@@ -567,6 +568,7 @@ function MessagesContent() {
             "Vendeur SONEC",
           expediteurUuid: profile.uuid || "",
         }));
+        return profile;
       }
     } catch (err) {
       console.error("❌ Erreur chargement profil vendeur:", err);
@@ -576,106 +578,112 @@ function MessagesContent() {
   }, []);
 
   // ============================================
-  // CHARGEMENT DES MESSAGES REÇUS
+  // ✅ CHARGEMENT DES MESSAGES REÇUS - AVEC PARAMÈTRES
   // ============================================
-  const fetchMessagesRecus = useCallback(async () => {
-    setLoading((prev) => ({ ...prev, messages: true }));
-    try {
-      const response = await api.get<MessageReceived[]>(
-        API_ENDPOINTS.MESSAGERIE.RECEIVED,
-      );
+  const fetchMessagesRecus = useCallback(
+    async (profileEmail?: string, profileUuid?: string) => {
+      setLoading((prev) => ({ ...prev, messages: true }));
+      try {
+        const response = await api.get<MessageReceived[]>(
+          API_ENDPOINTS.MESSAGERIE.RECEIVED,
+        );
 
-      if (!response || !Array.isArray(response) || response.length === 0) {
-        setMessagesRecus([]);
-        return;
+        if (!response || !Array.isArray(response) || response.length === 0) {
+          setMessagesRecus([]);
+          return;
+        }
+
+        const transformedMessages = response
+          .map((item: any) => {
+            const messageData = item.message || item;
+            return {
+              uuid: messageData.uuid || item.uuid || `msg-${Date.now()}`,
+              sujet: messageData.sujet || "Sans sujet",
+              contenu: messageData.contenu || "",
+              expediteurNom: messageData.expediteurNom || "Expéditeur inconnu",
+              expediteurEmail:
+                messageData.expediteurEmail || "inconnu@exemple.com",
+              expediteurUuid: messageData.expediteurUuid,
+              destinataireEmail: messageData.destinataireEmail || profileEmail,
+              destinataireUuid: messageData.destinataireUuid || profileUuid,
+              type: (messageData.type || "notification").toUpperCase(),
+              estEnvoye: false,
+              envoyeLe:
+                messageData.envoyeLe ||
+                item.dateReception ||
+                new Date().toISOString(),
+              estLu: item.estLu || messageData.estLu || false,
+              dateLecture: item.dateLecture || messageData.dateLecture,
+            } as Message;
+          })
+          .filter((item): item is Message => item !== null);
+
+        setMessagesRecus(transformedMessages);
+      } catch (err) {
+        console.error("❌ Erreur chargement messages reçus:", err);
+      } finally {
+        setLoading((prev) => ({ ...prev, messages: false }));
       }
-
-      const transformedMessages = response
-        .map((item: any) => {
-          const messageData = item.message || item;
-          return {
-            uuid: messageData.uuid || item.uuid || `msg-${Date.now()}`,
-            sujet: messageData.sujet || "Sans sujet",
-            contenu: messageData.contenu || "",
-            expediteurNom: messageData.expediteurNom || "Expéditeur inconnu",
-            expediteurEmail:
-              messageData.expediteurEmail || "inconnu@exemple.com",
-            expediteurUuid: messageData.expediteurUuid,
-            destinataireEmail:
-              messageData.destinataireEmail || vendeurProfile?.email,
-            destinataireUuid:
-              messageData.destinataireUuid || vendeurProfile?.uuid,
-            type: (messageData.type || "notification").toUpperCase(),
-            estEnvoye: false,
-            envoyeLe:
-              messageData.envoyeLe ||
-              item.dateReception ||
-              new Date().toISOString(),
-            estLu: item.estLu || messageData.estLu || false,
-            dateLecture: item.dateLecture || messageData.dateLecture,
-          } as Message;
-        })
-        .filter((item): item is Message => item !== null);
-
-      setMessagesRecus(transformedMessages);
-    } catch (err) {
-      console.error("❌ Erreur chargement messages reçus:", err);
-    } finally {
-      setLoading((prev) => ({ ...prev, messages: false }));
-    }
-  }, [vendeurProfile]);
+    },
+    [],
+  );
 
   // ============================================
-  // CHARGEMENT DES MESSAGES ENVOYÉS - CORRIGÉ
+  // ✅ CHARGEMENT DES MESSAGES ENVOYÉS - AVEC PARAMÈTRES
   // ============================================
-  const fetchMessagesEnvoyes = useCallback(async () => {
-    setLoading((prev) => ({ ...prev, messages: true }));
-    try {
-      const response = await api.get<any[]>(API_ENDPOINTS.MESSAGERIE.SENT);
+  const fetchMessagesEnvoyes = useCallback(
+    async (
+      profileNom?: string,
+      profileEmail?: string,
+      profileUuid?: string,
+    ) => {
+      setLoading((prev) => ({ ...prev, messages: true }));
+      try {
+        const response = await api.get<any[]>(API_ENDPOINTS.MESSAGERIE.SENT);
 
-      if (!response || !Array.isArray(response) || response.length === 0) {
-        setMessagesEnvoyes([]);
-        return;
+        if (!response || !Array.isArray(response) || response.length === 0) {
+          setMessagesEnvoyes([]);
+          return;
+        }
+
+        const formattedMessages = response
+          .map((msg: any) => {
+            if (!msg) return null;
+
+            const formattedMsg: Message = {
+              uuid: msg.uuid || `sent-${Date.now()}`,
+              sujet: msg.sujet || "Sans sujet",
+              contenu: msg.contenu || "",
+              expediteurNom: msg.expediteurNom || profileNom || "Vendeur SONEC",
+              expediteurEmail: msg.expediteurEmail || profileEmail || "",
+              destinataireEmail: msg.destinataireEmail || "",
+              type: (msg.type || "notification").toUpperCase(),
+              estEnvoye: true,
+              envoyeLe: msg.envoyeLe || new Date().toISOString(),
+              estLu: msg.estLu || false,
+              dateLecture: msg.dateLecture || null,
+            };
+
+            if (msg.expediteurUuid || profileUuid) {
+              formattedMsg.expediteurUuid = msg.expediteurUuid || profileUuid;
+            }
+            if (msg.destinataireUuid) {
+              formattedMsg.destinataireUuid = msg.destinataireUuid;
+            }
+
+            return formattedMsg;
+          })
+          .filter((msg): msg is Message => msg !== null);
+
+        setMessagesEnvoyes(formattedMessages);
+      } catch (err) {
+        console.error("❌ Erreur chargement messages envoyés:", err);
+      } finally {
+        setLoading((prev) => ({ ...prev, messages: false }));
       }
-
-      const formattedMessages = response
-        .map((msg: any) => {
-          if (!msg) return null;
-
-          const formattedMsg: Message = {
-            uuid: msg.uuid || `sent-${Date.now()}`,
-            sujet: msg.sujet || "Sans sujet",
-            contenu: msg.contenu || "",
-            expediteurNom:
-              msg.expediteurNom || vendeurProfile?.nom || "Vendeur SONEC",
-            expediteurEmail: msg.expediteurEmail || vendeurProfile?.email || "",
-            destinataireEmail: msg.destinataireEmail || "",
-            type: (msg.type || "notification").toUpperCase(),
-            estEnvoye: true,
-            envoyeLe: msg.envoyeLe || new Date().toISOString(),
-            estLu: msg.estLu || false,
-            dateLecture: msg.dateLecture || null,
-          };
-
-          if (msg.expediteurUuid || vendeurProfile?.uuid) {
-            formattedMsg.expediteurUuid =
-              msg.expediteurUuid || vendeurProfile?.uuid;
-          }
-          if (msg.destinataireUuid) {
-            formattedMsg.destinataireUuid = msg.destinataireUuid;
-          }
-
-          return formattedMsg;
-        })
-        .filter((msg): msg is Message => msg !== null);
-
-      setMessagesEnvoyes(formattedMessages);
-    } catch (err) {
-      console.error("❌ Erreur chargement messages envoyés:", err);
-    } finally {
-      setLoading((prev) => ({ ...prev, messages: false }));
-    }
-  }, [vendeurProfile]);
+    },
+    [],
+  );
 
   // ============================================
   // CONSTRUCTION DES CONTACTS
@@ -790,25 +798,47 @@ function MessagesContent() {
   }, [vendeurProfile, messagesRecus, messagesEnvoyes]);
 
   // ============================================
-  // CHARGEMENT INITIAL
+  // ✅ CHARGEMENT INITIAL - UNE SEULE FOIS
   // ============================================
   useEffect(() => {
+    let isMounted = true;
+
     const loadInitialData = async () => {
+      if (hasLoadedInitialData.current) return;
+
       setLoading((prev) => ({ ...prev, initial: true }));
       try {
-        await fetchVendeurProfile();
-        await fetchMessagesRecus();
-        await fetchMessagesEnvoyes();
+        const profile = await fetchVendeurProfile();
+
+        if (!isMounted) return;
+
+        if (profile) {
+          await fetchMessagesRecus(profile.email, profile.uuid);
+          await fetchMessagesEnvoyes(
+            `${profile.prenoms || ""} ${profile.nom || ""}`.trim() ||
+              "Vendeur SONEC",
+            profile.email,
+            profile.uuid,
+          );
+        }
+
+        hasLoadedInitialData.current = true;
         isInitialLoad.current = false;
       } catch (err) {
         console.error("❌ Erreur chargement initial:", err);
       } finally {
-        setLoading((prev) => ({ ...prev, initial: false }));
+        if (isMounted) {
+          setLoading((prev) => ({ ...prev, initial: false }));
+        }
       }
     };
 
     loadInitialData();
-  }, [fetchVendeurProfile, fetchMessagesRecus, fetchMessagesEnvoyes]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, []); // ✅ TABLEAU VIDE - EXÉCUTÉ UNE SEULE FOIS
 
   // ============================================
   // CONSTRUCTION DES CONTACTS APRÈS CHARGEMENT
@@ -1046,8 +1076,15 @@ function MessagesContent() {
   };
 
   const handleRefresh = () => {
-    fetchMessagesRecus();
-    fetchMessagesEnvoyes();
+    if (vendeurProfile) {
+      fetchMessagesRecus(vendeurProfile.email, vendeurProfile.uuid);
+      fetchMessagesEnvoyes(
+        `${vendeurProfile.prenoms || ""} ${vendeurProfile.nom || ""}`.trim() ||
+          "Vendeur SONEC",
+        vendeurProfile.email,
+        vendeurProfile.uuid,
+      );
+    }
   };
 
   // ============================================
@@ -2029,7 +2066,13 @@ function MessagesContent() {
                           </span>
                           <button
                             className="btn btn-outline-primary d-flex align-items-center gap-2"
-                            onClick={fetchMessagesRecus}
+                            onClick={() =>
+                              vendeurProfile &&
+                              fetchMessagesRecus(
+                                vendeurProfile.email,
+                                vendeurProfile.uuid,
+                              )
+                            }
                             style={{ fontSize: "0.85rem" }}
                           >
                             <FontAwesomeIcon icon={faHistory} />
@@ -2290,7 +2333,15 @@ function MessagesContent() {
                           </span>
                           <button
                             className="btn btn-outline-primary d-flex align-items-center gap-2"
-                            onClick={fetchMessagesEnvoyes}
+                            onClick={() =>
+                              vendeurProfile &&
+                              fetchMessagesEnvoyes(
+                                `${vendeurProfile.prenoms || ""} ${vendeurProfile.nom || ""}`.trim() ||
+                                  "Vendeur SONEC",
+                                vendeurProfile.email,
+                                vendeurProfile.uuid,
+                              )
+                            }
                             style={{ fontSize: "0.85rem" }}
                           >
                             <FontAwesomeIcon icon={faHistory} />

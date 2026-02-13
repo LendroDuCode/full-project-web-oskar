@@ -1,4 +1,3 @@
-// app/shared/components/layout/Header.tsx
 "use client";
 
 import Link from "next/link";
@@ -119,7 +118,6 @@ const defaultCategories: Category[] = [
 ];
 
 const Header: FC = () => {
-  // ✅ TOUS LES HOOKS DOIVENT ÊTRE DÉCLARÉS AVANT LE PREMIER RETURN
   const pathname = usePathname();
   const [hoveredButton, setHoveredButton] = useState<string | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -143,6 +141,30 @@ const Header: FC = () => {
   const { isLoggedIn, user, logout, openLoginModal, closeModals } = useAuth();
 
   const headerKey = `header-${isLoggedIn ? "logged-in" : "logged-out"}-${user?.type || "none"}-${user?.uuid?.substring(0, 8) || "none"}-${forceUpdate}`;
+
+  // ÉCOUTER L'ÉVÉNEMENT DE DÉCONNEXION POUR METTRE À JOUR L'ÉTAT
+  useEffect(() => {
+    const handleLogoutEvent = () => {
+      console.log("🔄 Header - Logout event detected, updating state...");
+
+      // Vider le profil utilisateur immédiatement
+      setUserProfile(null);
+      setDropdownOpen(false);
+      setMobileMenuOpen(false);
+      setForceUpdate((prev) => prev + 1);
+
+      // Rediriger vers la page d'accueil si on est sur une page dashboard
+      if (pathname.startsWith("/dashboard-")) {
+        window.location.href = "/";
+      }
+    };
+
+    window.addEventListener("oskar-logout", handleLogoutEvent);
+
+    return () => {
+      window.removeEventListener("oskar-logout", handleLogoutEvent);
+    };
+  }, [pathname]);
 
   // Récupérer les catégories dynamiquement depuis l'API
   useEffect(() => {
@@ -481,15 +503,15 @@ const Header: FC = () => {
     if (mobileMenuOpen) {
       document.body.style.overflow = "hidden";
     } else {
-      document.body.style.overflow = "unset";
+      document.body.style.overflow = "";
     }
 
     return () => {
-      document.body.style.overflow = "unset";
+      document.body.style.overflow = "";
     };
   }, [mobileMenuOpen]);
 
-  // ✅ HOOKS useCallback - TOUS DÉFINIS ICI
+  // HOOKS useCallback
   const handleLoginClick = useCallback(() => {
     closeModals();
     setTimeout(() => {
@@ -505,18 +527,37 @@ const Header: FC = () => {
     setShowPublishModal(true);
   }, [isLoggedIn, handleLoginClick]);
 
-  const handleLogout = useCallback(() => {
+  const handleLogout = useCallback(async () => {
     console.log("🔴 Header - Logging out...");
 
-    const logoutEvent = new CustomEvent("header-logout");
-    window.dispatchEvent(logoutEvent);
+    try {
+      // Appeler la méthode logout du contexte
+      await logout();
 
-    logout();
-    setDropdownOpen(false);
-    setMobileMenuOpen(false);
-    setUserProfile(null);
-    setForceUpdate((prev) => prev + 1);
-  }, [logout]);
+      // Fermer tous les menus
+      setDropdownOpen(false);
+      setMobileMenuOpen(false);
+
+      // Vider le profil utilisateur
+      setUserProfile(null);
+
+      // Forcer une mise à jour
+      setForceUpdate((prev) => prev + 1);
+
+      // Rediriger vers la page d'accueil si on est sur une page protégée
+      if (pathname.startsWith("/dashboard-")) {
+        window.location.href = "/";
+      }
+
+      // Déclencher un événement personnalisé pour notifier les autres composants
+      const logoutEvent = new CustomEvent("oskar-logout", {
+        detail: { timestamp: Date.now() },
+      });
+      window.dispatchEvent(logoutEvent);
+    } catch (error) {
+      console.error("🔴 Header - Error during logout:", error);
+    }
+  }, [logout, pathname]);
 
   const handleClosePublishModal = useCallback(() => {
     setShowPublishModal(false);
@@ -661,7 +702,7 @@ const Header: FC = () => {
     );
   }, []);
 
-  // ✅ GÉNÉRER LES LIENS DE NAVIGATION
+  // GÉNÉRER LES LIENS DE NAVIGATION
   const generateNavLinks = (): NavLink[] => {
     const links: NavLink[] = [{ name: "Accueil", href: "/", exact: true }];
 
@@ -734,7 +775,7 @@ const Header: FC = () => {
     headerKey,
   });
 
-  // ✅ RETOUR CONDITIONNEL APRÈS TOUS LES HOOKS
+  // RETOUR CONDITIONNEL APRÈS TOUS LES HOOKS
   const isDashboardPage = pathname.startsWith("/dashboard-");
   if (isDashboardPage) {
     return null;

@@ -421,9 +421,7 @@ function MessagesContent() {
   const isFetchingContacts = useRef(false);
   const prevMessagesRecusLength = useRef(0);
   const prevMessagesEnvoyesLength = useRef(0);
-
-  // Debug state
-  const [debugInfo, setDebugInfo] = useState<any>(null);
+  const hasLoadedInitialData = useRef(false);
 
   // ============================================
   // ✅ GESTION DES PARAMÈTRES D'URL - DÉCLARÉ EN PREMIER
@@ -577,7 +575,7 @@ function MessagesContent() {
   };
 
   // ============================================
-  // CHARGEMENT DU PROFIL
+  // ✅ CHARGEMENT DU PROFIL - SANS DÉPENDANCES CYCLIQUES
   // ============================================
   const fetchAgentProfile = useCallback(async () => {
     try {
@@ -604,16 +602,19 @@ function MessagesContent() {
             "Agent SONEC",
           expediteurUuid: profile.uuid || "",
         }));
+        return profile;
       } else {
         console.warn("⚠️ Structure de réponse inattendue:", response);
+        return null;
       }
     } catch (err: any) {
       console.error("❌ Erreur lors du chargement du profil agent:", err);
+      return null;
     }
   }, []);
 
   // ============================================
-  // CHARGEMENT DES UTILISATEURS
+  // ✅ CHARGEMENT DES UTILISATEURS - SANS DÉPENDANCES
   // ============================================
   const fetchSuperAdmins = useCallback(async () => {
     setLoading((prev) => ({ ...prev, superAdmins: true }));
@@ -692,95 +693,106 @@ function MessagesContent() {
   }, []);
 
   // ============================================
-  // CHARGEMENT DES MESSAGES
+  // ✅ CHARGEMENT DES MESSAGES - AVEC PARAMÈTRES (PAS DE DÉPENDANCES)
   // ============================================
-  const fetchMessagesRecus = useCallback(async () => {
-    setLoading((prev) => ({ ...prev, messages: true }));
-    try {
-      console.log("📥 Chargement des messages reçus...");
-      const response = await api.get<MessageReceived[] | Message[]>(
-        API_ENDPOINTS.MESSAGERIE.RECEIVED,
-      );
+  const fetchMessagesRecus = useCallback(
+    async (profileEmail?: string, profileUuid?: string) => {
+      setLoading((prev) => ({ ...prev, messages: true }));
+      try {
+        console.log("📥 Chargement des messages reçus...");
+        const response = await api.get<MessageReceived[] | Message[]>(
+          API_ENDPOINTS.MESSAGERIE.RECEIVED,
+        );
 
-      if (Array.isArray(response)) {
-        const formattedMessages = response.map((item: any) => {
-          const message = item.message || item;
-          return {
-            uuid: message.uuid || `msg-${Date.now()}`,
-            sujet: message.sujet || "Sans sujet",
-            contenu: message.contenu || "",
-            expediteurNom: message.expediteurNom || "Expéditeur inconnu",
-            expediteurEmail: message.expediteurEmail || "",
-            expediteurUuid: message.expediteurUuid,
-            destinataireEmail:
-              message.destinataireEmail || agentProfile?.email || "",
-            destinataireUuid: message.destinataireUuid || agentProfile?.uuid,
-            type: (message.type || "notification").toUpperCase(),
-            estEnvoye: false,
-            envoyeLe:
-              message.envoyeLe ||
-              item.dateReception ||
-              new Date().toISOString(),
-            estLu: message.estLu || item.estLu || false,
-            dateLecture: message.dateLecture || item.dateLecture || null,
-          } as Message;
-        });
-        setMessages(formattedMessages);
-      } else {
-        setMessages([]);
+        if (Array.isArray(response)) {
+          const formattedMessages = response.map((item: any) => {
+            const message = item.message || item;
+            return {
+              uuid: message.uuid || `msg-${Date.now()}`,
+              sujet: message.sujet || "Sans sujet",
+              contenu: message.contenu || "",
+              expediteurNom: message.expediteurNom || "Expéditeur inconnu",
+              expediteurEmail: message.expediteurEmail || "",
+              expediteurUuid: message.expediteurUuid,
+              destinataireEmail:
+                message.destinataireEmail || profileEmail || "",
+              destinataireUuid: message.destinataireUuid || profileUuid,
+              type: (message.type || "notification").toUpperCase(),
+              estEnvoye: false,
+              envoyeLe:
+                message.envoyeLe ||
+                item.dateReception ||
+                new Date().toISOString(),
+              estLu: message.estLu || item.estLu || false,
+              dateLecture: message.dateLecture || item.dateLecture || null,
+            } as Message;
+          });
+          setMessages(formattedMessages);
+        } else {
+          setMessages([]);
+        }
+      } catch (err: any) {
+        console.error("❌ Erreur chargement messages:", err);
+        const demoMessages: Message[] = [
+          {
+            uuid: "demo-1",
+            sujet: "Confirmation de votre inscription",
+            contenu: "Bienvenue Agent ! Votre compte a été créé avec succès.",
+            expediteurNom: "Super Admin",
+            expediteurEmail: "superadmin@sonec.com",
+            expediteurUuid: "superadmin-uuid",
+            destinataireEmail: profileEmail || "agent@sonec.com",
+            destinataireUuid: profileUuid,
+            type: "SUPER_ADMIN",
+            estEnvoye: true,
+            estLu: false,
+            envoyeLe: new Date().toISOString(),
+            dateLecture: null,
+          },
+        ];
+        setMessages(demoMessages);
+      } finally {
+        setLoading((prev) => ({ ...prev, messages: false }));
       }
-    } catch (err: any) {
-      console.error("❌ Erreur chargement messages:", err);
-      const demoMessages: Message[] = [
-        {
-          uuid: "demo-1",
-          sujet: "Confirmation de votre inscription",
-          contenu: "Bienvenue Agent ! Votre compte a été créé avec succès.",
-          expediteurNom: "Super Admin",
-          expediteurEmail: "superadmin@sonec.com",
-          expediteurUuid: "superadmin-uuid",
-          destinataireEmail: agentProfile?.email || "agent@sonec.com",
-          destinataireUuid: agentProfile?.uuid,
-          type: "SUPER_ADMIN",
-          estEnvoye: true,
-          estLu: false,
-          envoyeLe: new Date().toISOString(),
-          dateLecture: null,
-        },
-      ];
-      setMessages(demoMessages);
-    } finally {
-      setLoading((prev) => ({ ...prev, messages: false }));
-    }
-  }, [agentProfile]);
+    },
+    [],
+  );
 
-  const fetchMessagesEnvoyes = useCallback(async () => {
-    try {
-      const response = await api.get<Message[]>(API_ENDPOINTS.MESSAGERIE.SENT);
+  const fetchMessagesEnvoyes = useCallback(
+    async (
+      profileNom?: string,
+      profileEmail?: string,
+      profileUuid?: string,
+    ) => {
+      try {
+        const response = await api.get<Message[]>(
+          API_ENDPOINTS.MESSAGERIE.SENT,
+        );
 
-      if (Array.isArray(response)) {
-        const formattedMessages = response.map((msg: any) => ({
-          uuid: msg.uuid || `sent-${Date.now()}`,
-          sujet: msg.sujet || "Sans sujet",
-          contenu: msg.contenu || "",
-          expediteurNom:
-            msg.expediteurNom || agentProfile?.nom || "Agent SONEC",
-          expediteurEmail: msg.expediteurEmail || agentProfile?.email || "",
-          expediteurUuid: msg.expediteurUuid || agentProfile?.uuid,
-          destinataireEmail: msg.destinataireEmail || "",
-          destinataireUuid: msg.destinataireUuid,
-          type: (msg.type || "notification").toUpperCase(),
-          estEnvoye: true,
-          envoyeLe: msg.envoyeLe || new Date().toISOString(),
-          estLu: msg.estLu || false,
-          dateLecture: msg.dateLecture || null,
-        }));
-        setMessagesEnvoyes(formattedMessages);
+        if (Array.isArray(response)) {
+          const formattedMessages = response.map((msg: any) => ({
+            uuid: msg.uuid || `sent-${Date.now()}`,
+            sujet: msg.sujet || "Sans sujet",
+            contenu: msg.contenu || "",
+            expediteurNom: msg.expediteurNom || profileNom || "Agent SONEC",
+            expediteurEmail: msg.expediteurEmail || profileEmail || "",
+            expediteurUuid: msg.expediteurUuid || profileUuid,
+            destinataireEmail: msg.destinataireEmail || "",
+            destinataireUuid: msg.destinataireUuid,
+            type: (msg.type || "notification").toUpperCase(),
+            estEnvoye: true,
+            envoyeLe: msg.envoyeLe || new Date().toISOString(),
+            estLu: msg.estLu || false,
+            dateLecture: msg.dateLecture || null,
+          }));
+          setMessagesEnvoyes(formattedMessages);
+        }
+      } catch (err: any) {
+        console.error("❌ Error fetching sent messages:", err);
       }
-    } catch (err: any) {
-      console.error("❌ Error fetching sent messages:", err);
-    }
-  }, [agentProfile]);
+    },
+    [],
+  );
 
   // ============================================
   // ✅ CONSTRUCTION DES CONTACTS - CORRIGÉ AVEC BOUTIQUE
@@ -900,36 +912,60 @@ function MessagesContent() {
   }, [agentProfile, messages, messagesEnvoyes]);
 
   // ============================================
-  // ✅ CHARGEMENT INITIAL
+  // ✅ CHARGEMENT INITIAL - UNE SEULE FOIS
   // ============================================
   useEffect(() => {
+    let isMounted = true;
+
     const loadInitialData = async () => {
+      if (hasLoadedInitialData.current) return;
+
       setLoading((prev) => ({ ...prev, initial: true }));
       try {
-        await fetchAgentProfile();
-        await fetchSuperAdmins();
-        await fetchAgents();
-        await fetchVendeurs();
-        await fetchUtilisateurs();
-        await fetchMessagesRecus();
-        await fetchMessagesEnvoyes();
+        // 1. Charger le profil agent
+        const profile = await fetchAgentProfile();
+
+        if (!isMounted) return;
+
+        // 2. Charger les utilisateurs en parallèle
+        await Promise.all([
+          fetchSuperAdmins(),
+          fetchAgents(),
+          fetchVendeurs(),
+          fetchUtilisateurs(),
+        ]);
+
+        if (!isMounted) return;
+
+        // 3. Charger les messages avec le profil
+        if (profile) {
+          await fetchMessagesRecus(profile.email, profile.uuid);
+          await fetchMessagesEnvoyes(
+            `${profile.prenoms || ""} ${profile.nom || ""}`.trim() ||
+              "Agent SONEC",
+            profile.email,
+            profile.uuid,
+          );
+        }
+
+        hasLoadedInitialData.current = true;
         isInitialLoad.current = false;
       } catch (err) {
         console.error("❌ Erreur chargement initial:", err);
       } finally {
-        setLoading((prev) => ({ ...prev, initial: false }));
+        if (isMounted) {
+          setLoading((prev) => ({ ...prev, initial: false }));
+        }
       }
     };
+
     loadInitialData();
-  }, [
-    fetchAgentProfile,
-    fetchSuperAdmins,
-    fetchAgents,
-    fetchVendeurs,
-    fetchUtilisateurs,
-    fetchMessagesRecus,
-    fetchMessagesEnvoyes,
-  ]);
+
+    return () => {
+      isMounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ✅ TABLEAU VIDE - EXÉCUTÉ UNE SEULE FOIS
 
   // ============================================
   // ✅ CONSTRUCTION DES CONTACTS APRÈS CHARGEMENT
@@ -1265,8 +1301,15 @@ function MessagesContent() {
   };
 
   const handleRefresh = () => {
-    fetchMessagesRecus();
-    fetchMessagesEnvoyes();
+    if (agentProfile) {
+      fetchMessagesRecus(agentProfile.email, agentProfile.uuid);
+      fetchMessagesEnvoyes(
+        `${agentProfile.prenoms || ""} ${agentProfile.nom || ""}`.trim() ||
+          "Agent SONEC",
+        agentProfile.email,
+        agentProfile.uuid,
+      );
+    }
   };
 
   // ============================================
@@ -2271,7 +2314,13 @@ function MessagesContent() {
                           </span>
                           <button
                             className="btn btn-outline-primary d-flex align-items-center gap-2"
-                            onClick={fetchMessagesRecus}
+                            onClick={() =>
+                              agentProfile &&
+                              fetchMessagesRecus(
+                                agentProfile.email,
+                                agentProfile.uuid,
+                              )
+                            }
                             style={{ fontSize: "0.85rem" }}
                           >
                             <FontAwesomeIcon icon={faHistory} />
@@ -2528,7 +2577,15 @@ function MessagesContent() {
                           </span>
                           <button
                             className="btn btn-outline-primary d-flex align-items-center gap-2"
-                            onClick={fetchMessagesEnvoyes}
+                            onClick={() =>
+                              agentProfile &&
+                              fetchMessagesEnvoyes(
+                                `${agentProfile.prenoms || ""} ${agentProfile.nom || ""}`.trim() ||
+                                  "Agent SONEC",
+                                agentProfile.email,
+                                agentProfile.uuid,
+                              )
+                            }
                             style={{ fontSize: "0.85rem" }}
                           >
                             <FontAwesomeIcon icon={faHistory} />

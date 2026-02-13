@@ -248,6 +248,7 @@ function MessagesContent() {
   const isFetchingContacts = useRef(false);
   const prevMessagesRecusLength = useRef(0);
   const prevMessagesEnvoyesLength = useRef(0);
+  const hasLoadedInitialData = useRef(false);
 
   // ============================================
   // FONCTIONS UTILITAIRES
@@ -357,9 +358,10 @@ function MessagesContent() {
   };
 
   // ============================================
-  // CHARGEMENT DU PROFIL ADMIN
+  // ✅ CHARGEMENT DU PROFIL ADMIN - SANS DÉPENDANCES
   // ============================================
   const fetchAdminProfile = useCallback(async () => {
+    setLoading((prev) => ({ ...prev, profile: true }));
     try {
       console.log("🔍 Chargement du profil admin...");
       const response = await api.get(API_ENDPOINTS.AUTH.ADMIN.PROFILE);
@@ -384,16 +386,21 @@ function MessagesContent() {
             "Administrateur SONEC",
           expediteurUuid: profile.uuid || "",
         }));
+        return profile;
       } else {
         console.warn("⚠️ Structure de réponse inattendue:", response);
+        return null;
       }
     } catch (err: any) {
       console.error("❌ Erreur lors du chargement du profil admin:", err);
+      return null;
+    } finally {
+      setLoading((prev) => ({ ...prev, profile: false }));
     }
   }, []);
 
   // ============================================
-  // CHARGEMENT DES UTILISATEURS
+  // ✅ CHARGEMENT DES UTILISATEURS - SANS DÉPENDANCES
   // ============================================
   const fetchSuperAdmins = useCallback(async () => {
     setLoading((prev) => ({ ...prev, superAdmins: true }));
@@ -465,91 +472,101 @@ function MessagesContent() {
   }, []);
 
   // ============================================
-  // CHARGEMENT DES MESSAGES
+  // ✅ CHARGEMENT DES MESSAGES - AVEC PARAMÈTRES
   // ============================================
-  const fetchMessagesRecus = useCallback(async () => {
-    setLoading((prev) => ({ ...prev, messages: true }));
-    try {
-      console.log("📥 Chargement des messages reçus...");
-      const response = await api.get<MessageReceived[] | Message[]>(
-        API_ENDPOINTS.MESSAGERIE.RECEIVED,
-      );
+  const fetchMessagesRecus = useCallback(
+    async (profileEmail?: string, profileUuid?: string) => {
+      setLoading((prev) => ({ ...prev, messages: true }));
+      try {
+        console.log("📥 Chargement des messages reçus...");
+        const response = await api.get<MessageReceived[] | Message[]>(
+          API_ENDPOINTS.MESSAGERIE.RECEIVED,
+        );
 
-      if (Array.isArray(response)) {
-        const transformedMessages = response
-          .map((item: any) => {
-            if (!item) return null;
-            const message = item.message || item;
-            return {
-              uuid: message.uuid || `msg-${Date.now()}`,
-              sujet: message.sujet || "Sans sujet",
-              contenu: message.contenu || "",
-              expediteurNom: message.expediteurNom || "Expéditeur inconnu",
-              expediteurEmail: message.expediteurEmail || "",
-              expediteurUuid: message.expediteurUuid,
-              destinataireEmail:
-                message.destinataireEmail || adminProfile?.email || "",
-              destinataireUuid: message.destinataireUuid || adminProfile?.uuid,
-              type: (message.type || "notification").toUpperCase(),
-              estEnvoye: false,
-              envoyeLe:
-                message.envoyeLe ||
-                item.dateReception ||
-                new Date().toISOString(),
-              estLu: message.estLu || item.estLu || false,
-              dateLecture: message.dateLecture || item.dateLecture || null,
-            } as Message;
-          })
-          .filter((item): item is Message => item !== null);
+        if (Array.isArray(response)) {
+          const transformedMessages = response
+            .map((item: any) => {
+              if (!item) return null;
+              const message = item.message || item;
+              return {
+                uuid: message.uuid || `msg-${Date.now()}`,
+                sujet: message.sujet || "Sans sujet",
+                contenu: message.contenu || "",
+                expediteurNom: message.expediteurNom || "Expéditeur inconnu",
+                expediteurEmail: message.expediteurEmail || "",
+                expediteurUuid: message.expediteurUuid,
+                destinataireEmail:
+                  message.destinataireEmail || profileEmail || "",
+                destinataireUuid: message.destinataireUuid || profileUuid,
+                type: (message.type || "notification").toUpperCase(),
+                estEnvoye: false,
+                envoyeLe:
+                  message.envoyeLe ||
+                  item.dateReception ||
+                  new Date().toISOString(),
+                estLu: message.estLu || item.estLu || false,
+                dateLecture: message.dateLecture || item.dateLecture || null,
+              } as Message;
+            })
+            .filter((item): item is Message => item !== null);
 
-        setMessages(transformedMessages);
-      } else {
+          setMessages(transformedMessages);
+        } else {
+          setMessages([]);
+        }
+      } catch (err: any) {
+        console.error("❌ Erreur chargement messages:", err);
         setMessages([]);
+      } finally {
+        setLoading((prev) => ({ ...prev, messages: false }));
       }
-    } catch (err: any) {
-      console.error("❌ Erreur chargement messages:", err);
-      setMessages([]);
-    } finally {
-      setLoading((prev) => ({ ...prev, messages: false }));
-    }
-  }, [adminProfile]);
+    },
+    [],
+  );
 
-  const fetchMessagesEnvoyes = useCallback(async () => {
-    try {
-      const response = await api.get<Message[]>(API_ENDPOINTS.MESSAGERIE.SENT);
+  const fetchMessagesEnvoyes = useCallback(
+    async (
+      profileNom?: string,
+      profileEmail?: string,
+      profileUuid?: string,
+    ) => {
+      try {
+        const response = await api.get<Message[]>(
+          API_ENDPOINTS.MESSAGERIE.SENT,
+        );
 
-      if (Array.isArray(response)) {
-        const formattedMessages = response
-          .map((msg: any) => {
-            if (!msg) return null;
-            return {
-              uuid: msg.uuid || `sent-${Date.now()}`,
-              sujet: msg.sujet || "Sans sujet",
-              contenu: msg.contenu || "",
-              expediteurNom:
-                msg.expediteurNom ||
-                adminProfile?.nom ||
-                "Administrateur SONEC",
-              expediteurEmail: msg.expediteurEmail || adminProfile?.email || "",
-              expediteurUuid: msg.expediteurUuid || adminProfile?.uuid,
-              destinataireEmail: msg.destinataireEmail || "",
-              destinataireUuid: msg.destinataireUuid,
-              type: (msg.type || "notification").toUpperCase(),
-              estEnvoye: true,
-              envoyeLe: msg.envoyeLe || new Date().toISOString(),
-              estLu: msg.estLu || false,
-              dateLecture: msg.dateLecture || null,
-            } as Message;
-          })
-          .filter((msg): msg is Message => msg !== null);
+        if (Array.isArray(response)) {
+          const formattedMessages = response
+            .map((msg: any) => {
+              if (!msg) return null;
+              return {
+                uuid: msg.uuid || `sent-${Date.now()}`,
+                sujet: msg.sujet || "Sans sujet",
+                contenu: msg.contenu || "",
+                expediteurNom:
+                  msg.expediteurNom || profileNom || "Administrateur SONEC",
+                expediteurEmail: msg.expediteurEmail || profileEmail || "",
+                expediteurUuid: msg.expediteurUuid || profileUuid,
+                destinataireEmail: msg.destinataireEmail || "",
+                destinataireUuid: msg.destinataireUuid,
+                type: (msg.type || "notification").toUpperCase(),
+                estEnvoye: true,
+                envoyeLe: msg.envoyeLe || new Date().toISOString(),
+                estLu: msg.estLu || false,
+                dateLecture: msg.dateLecture || null,
+              } as Message;
+            })
+            .filter((msg): msg is Message => msg !== null);
 
-        setMessagesEnvoyes(formattedMessages);
+          setMessagesEnvoyes(formattedMessages);
+        }
+      } catch (err: any) {
+        console.error("❌ Error fetching sent messages:", err);
+        setMessagesEnvoyes([]);
       }
-    } catch (err: any) {
-      console.error("❌ Error fetching sent messages:", err);
-      setMessagesEnvoyes([]);
-    }
-  }, [adminProfile]);
+    },
+    [],
+  );
 
   // ============================================
   // ✅ CONSTRUCTION DES CONTACTS
@@ -659,37 +676,60 @@ function MessagesContent() {
   }, [adminProfile, messages, messagesEnvoyes]);
 
   // ============================================
-  // ✅ CHARGEMENT INITIAL
+  // ✅ CHARGEMENT INITIAL - UNE SEULE FOIS
   // ============================================
   useEffect(() => {
+    let isMounted = true;
+
     const loadInitialData = async () => {
+      if (hasLoadedInitialData.current) return;
+
       setLoading((prev) => ({ ...prev, initial: true }));
       try {
-        await fetchAdminProfile();
-        await fetchSuperAdmins();
-        await fetchAgents();
-        await fetchVendeurs();
-        await fetchUtilisateurs();
-        await fetchMessagesRecus();
-        await fetchMessagesEnvoyes();
+        // 1. Charger le profil admin
+        const profile = await fetchAdminProfile();
+
+        if (!isMounted) return;
+
+        // 2. Charger les utilisateurs en parallèle
+        await Promise.all([
+          fetchSuperAdmins(),
+          fetchAgents(),
+          fetchVendeurs(),
+          fetchUtilisateurs(),
+        ]);
+
+        if (!isMounted) return;
+
+        // 3. Charger les messages avec le profil
+        if (profile) {
+          await fetchMessagesRecus(profile.email, profile.uuid);
+          await fetchMessagesEnvoyes(
+            `${profile.prenoms || ""} ${profile.nom || ""}`.trim() ||
+              "Administrateur SONEC",
+            profile.email,
+            profile.uuid,
+          );
+        }
+
+        hasLoadedInitialData.current = true;
         isInitialLoad.current = false;
       } catch (err) {
         console.error("❌ Erreur chargement initial:", err);
       } finally {
-        setLoading((prev) => ({ ...prev, initial: false }));
+        if (isMounted) {
+          setLoading((prev) => ({ ...prev, initial: false }));
+        }
       }
     };
 
     loadInitialData();
-  }, [
-    fetchAdminProfile,
-    fetchSuperAdmins,
-    fetchAgents,
-    fetchVendeurs,
-    fetchUtilisateurs,
-    fetchMessagesRecus,
-    fetchMessagesEnvoyes,
-  ]);
+
+    return () => {
+      isMounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ✅ TABLEAU VIDE - EXÉCUTÉ UNE SEULE FOIS
 
   // ============================================
   // ✅ CONSTRUCTION DES CONTACTS APRÈS CHARGEMENT
@@ -1070,8 +1110,15 @@ function MessagesContent() {
   };
 
   const handleRefresh = () => {
-    fetchMessagesRecus();
-    fetchMessagesEnvoyes();
+    if (adminProfile) {
+      fetchMessagesRecus(adminProfile.email, adminProfile.uuid);
+      fetchMessagesEnvoyes(
+        `${adminProfile.prenoms || ""} ${adminProfile.nom || ""}`.trim() ||
+          "Administrateur SONEC",
+        adminProfile.email,
+        adminProfile.uuid,
+      );
+    }
   };
 
   // ============================================
@@ -2074,7 +2121,13 @@ function MessagesContent() {
                           </span>
                           <button
                             className="btn btn-outline-primary d-flex align-items-center gap-2"
-                            onClick={fetchMessagesRecus}
+                            onClick={() =>
+                              adminProfile &&
+                              fetchMessagesRecus(
+                                adminProfile.email,
+                                adminProfile.uuid,
+                              )
+                            }
                             style={{ fontSize: "0.85rem" }}
                           >
                             <FontAwesomeIcon icon={faHistory} />
@@ -2331,7 +2384,15 @@ function MessagesContent() {
                           </span>
                           <button
                             className="btn btn-outline-primary d-flex align-items-center gap-2"
-                            onClick={fetchMessagesEnvoyes}
+                            onClick={() =>
+                              adminProfile &&
+                              fetchMessagesEnvoyes(
+                                `${adminProfile.prenoms || ""} ${adminProfile.nom || ""}`.trim() ||
+                                  "Administrateur SONEC",
+                                adminProfile.email,
+                                adminProfile.uuid,
+                              )
+                            }
                             style={{ fontSize: "0.85rem" }}
                           >
                             <FontAwesomeIcon icon={faHistory} />

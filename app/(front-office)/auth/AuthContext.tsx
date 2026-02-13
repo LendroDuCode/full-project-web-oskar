@@ -7,6 +7,7 @@ import React, {
   useEffect,
   ReactNode,
   useCallback,
+  useRef,
 } from "react";
 import { useRouter } from "next/navigation";
 
@@ -33,7 +34,7 @@ interface AuthContextType {
   isLoggedIn: boolean;
   user: User | null;
   login: (userData: any, token: string, shouldRedirect?: boolean) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
   openLoginModal: () => void;
   openRegisterModal: () => void;
   closeModals: () => void;
@@ -66,10 +67,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [authVersion, setAuthVersion] = useState(0);
+  const [isInitialized, setIsInitialized] = useState(false);
   const router = useRouter();
+
+  // Référence pour éviter les appels multiples
+  const initialCheckDone = useRef(false);
+  const logoutInProgress = useRef(false);
 
   // Fonction pour initialiser l'authentification
   const initializeAuth = useCallback(() => {
+    if (logoutInProgress.current) {
+      console.log(
+        "🔄 AuthContext - Logout in progress, skipping initialization",
+      );
+      return;
+    }
+
     console.log("🔄 AuthContext - Initializing auth state...");
 
     const savedUser = localStorage.getItem("oskar_user");
@@ -93,7 +106,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               const exp = payload.exp * 1000;
               if (Date.now() >= exp) {
                 console.warn("⚠️ AuthContext - Token expiré");
-                logout();
+                await handleLogout(false);
                 return false;
               }
             }
@@ -109,6 +122,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.error("❌ AuthContext - Erreur parsing utilisateur:", error);
         localStorage.removeItem("oskar_user");
         localStorage.removeItem("oskar_token");
+        localStorage.removeItem("oskar_user_type");
         setUser(null);
         setIsLoggedIn(false);
       }
@@ -118,9 +132,70 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoggedIn(false);
     }
 
-    // Forcer un re-render
+    setIsInitialized(true);
+    initialCheckDone.current = true;
     setAuthVersion((prev) => prev + 1);
   }, []);
+
+  // Fonction de déconnexion interne
+  const handleLogout = async (shouldRedirect: boolean = true) => {
+    if (logoutInProgress.current) {
+      console.log("🔄 AuthContext - Logout already in progress");
+      return;
+    }
+
+    logoutInProgress.current = true;
+    console.log("🔴 AuthContext - Starting logout process...");
+
+    try {
+      // Nettoyer le localStorage
+      localStorage.removeItem("oskar_user");
+      localStorage.removeItem("oskar_token");
+      localStorage.removeItem("oskar_user_type");
+      localStorage.removeItem("oskar_remember_email");
+      localStorage.removeItem("oskar_role");
+
+      // Nettoyer les cookies
+      document.cookie = "oskar_token=; path=/; max-age=0";
+      document.cookie = "access_token=; path=/; max-age=0";
+
+      // Mettre à jour le state
+      setUser(null);
+      setIsLoggedIn(false);
+      setShowLoginModal(false);
+      setShowRegisterModal(false);
+
+      // Émettre l'événement de déconnexion
+      const logoutEvent = new CustomEvent("oskar-logout", {
+        detail: { timestamp: Date.now() },
+      });
+      window.dispatchEvent(logoutEvent);
+
+      // Émettre l'événement de changement
+      emitAuthChangeEvent(false, null);
+
+      // Forcer un re-render
+      setAuthVersion((prev) => prev + 1);
+
+      console.log("✅ AuthContext - Logout successful");
+
+      // Rediriger vers l'accueil
+      if (shouldRedirect) {
+        // Vérifier si on est déjà sur la page d'accueil
+        const currentPath = window.location.pathname;
+        if (currentPath !== "/") {
+          router.push("/");
+        } else {
+          // Forcer un rechargement de la page d'accueil
+          window.location.reload();
+        }
+      }
+    } catch (error) {
+      console.error("❌ AuthContext - Error during logout:", error);
+    } finally {
+      logoutInProgress.current = false;
+    }
+  };
 
   // Écouter les changements de localStorage
   useEffect(() => {
@@ -131,25 +206,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     };
 
+    // Écouter l'événement de déconnexion personnalisé
+    const handleLogoutEvent = () => {
+      console.log("🔄 AuthContext - Logout event received");
+      handleLogout(false);
+    };
+
     // Écouter les événements de localStorage
     window.addEventListener("storage", handleStorageChange);
 
     // Écouter les événements personnalisés
-    const handleAuthChange = () => {
-      console.log("🔄 AuthContext - Custom auth change event received");
-      initializeAuth();
-    };
-
+    window.addEventListener("oskar-logout", handleLogoutEvent as EventListener);
     window.addEventListener(
       "auth-change-event",
       handleAuthChange as EventListener,
     );
 
-    // Initialiser au montage
-    initializeAuth();
+    // Initialiser au montage (une seule fois)
+    if (!initialCheckDone.current) {
+      initializeAuth();
+    }
 
     return () => {
       window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener(
+        "oskar-logout",
+        handleLogoutEvent as EventListener,
+      );
       window.removeEventListener(
         "auth-change-event",
         handleAuthChange as EventListener,
@@ -159,6 +242,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Fonction pour rediriger vers le dashboard
   const redirectToDashboard = (userType?: string) => {
+    if (logoutInProgress.current) {
+      console.log("🔄 AuthContext - Logout in progress, skipping redirect");
+      return;
+    }
+
     const typeToUse = userType?.toLowerCase() || user?.type?.toLowerCase();
 
     if (!typeToUse) {
@@ -188,22 +276,34 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Fonction pour forcer la mise à jour
   const refreshAuthState = () => {
+    if (logoutInProgress.current) return;
+
     console.log("🔄 AuthContext - Manual refresh triggered");
     initializeAuth();
 
     // Émettre un événement pour notifier les autres composants
+    emitAuthChangeEvent(isLoggedIn, user);
+  };
+
+  // Émettre un événement de changement d'authentification
+  const emitAuthChangeEvent = (loggedIn: boolean, userData: User | null) => {
     const event = new CustomEvent("auth-state-changed", {
-      detail: { isLoggedIn, user },
+      detail: { isLoggedIn: loggedIn, user: userData },
     });
     window.dispatchEvent(event);
   };
 
-  // Émettre un événement de changement d'authentification
-  const emitAuthChangeEvent = (isLoggedIn: boolean, user: User | null) => {
-    const event = new CustomEvent("auth-state-changed", {
-      detail: { isLoggedIn, user },
-    });
-    window.dispatchEvent(event);
+  // Gestionnaire pour les événements de changement d'authentification
+  const handleAuthChange = (event: Event) => {
+    const customEvent = event as CustomEvent;
+    console.log(
+      "🔄 AuthContext - Auth change event received:",
+      customEvent.detail,
+    );
+
+    if (customEvent.detail?.isLoggedIn === false) {
+      handleLogout(false);
+    }
   };
 
   // Fonction login
@@ -212,12 +312,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     token: string,
     shouldRedirect: boolean = false,
   ) => {
+    if (logoutInProgress.current) {
+      console.log("🔄 AuthContext - Logout in progress, cannot login");
+      return;
+    }
+
     console.log("✅ AuthContext - Login function called");
 
     // Sauvegarder les données
     localStorage.setItem("oskar_user", JSON.stringify(userData));
     localStorage.setItem("oskar_token", token);
     localStorage.setItem("oskar_user_type", userData.type);
+    if (userData.role) {
+      localStorage.setItem("oskar_role", userData.role);
+    }
 
     // Mettre à jour le state IMMÉDIATEMENT
     setUser(userData);
@@ -244,43 +352,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const logout = () => {
-    console.log("🔴 AuthContext - Logging out...");
-
-    // Nettoyer le localStorage
-    localStorage.removeItem("oskar_user");
-    localStorage.removeItem("oskar_token");
-    localStorage.removeItem("oskar_user_type");
-    localStorage.removeItem("oskar_remember_email");
-
-    // Nettoyer les cookies
-    document.cookie = "oskar_token=; path=/; max-age=0";
-    document.cookie = "access_token=; path=/; max-age=0";
-
-    // Mettre à jour le state
-    setUser(null);
-    setIsLoggedIn(false);
-    setShowLoginModal(false);
-    setShowRegisterModal(false);
-
-    // Émettre l'événement
-    emitAuthChangeEvent(false, null);
-
-    // Forcer un re-render
-    setAuthVersion((prev) => prev + 1);
-
-    console.log("✅ AuthContext - Logout successful");
-
-    // Rediriger vers l'accueil
-    setTimeout(() => router.push("/"), 100);
+  // Fonction logout publique
+  const logout = async () => {
+    await handleLogout(true);
   };
 
   const openLoginModal = () => {
+    if (logoutInProgress.current) return;
     setShowLoginModal(true);
     setShowRegisterModal(false);
   };
 
   const openRegisterModal = () => {
+    if (logoutInProgress.current) return;
     setShowRegisterModal(true);
     setShowLoginModal(false);
   };
@@ -291,16 +375,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const switchToRegister = () => {
+    if (logoutInProgress.current) return;
     setShowLoginModal(false);
     setShowRegisterModal(true);
   };
 
   const switchToLogin = () => {
+    if (logoutInProgress.current) return;
     setShowRegisterModal(false);
     setShowLoginModal(true);
   };
 
   const validateToken = async (): Promise<boolean> => {
+    if (logoutInProgress.current) return false;
+
     const token = localStorage.getItem("oskar_token");
     if (!token) return false;
 
@@ -309,7 +397,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (tokenParts.length === 3) {
         const payload = JSON.parse(atob(tokenParts[1]));
         const exp = payload.exp * 1000;
-        return Date.now() < exp;
+        const isValid = Date.now() < exp;
+
+        if (!isValid) {
+          console.warn("⚠️ AuthContext - Token expiré");
+          await handleLogout(false);
+        }
+
+        return isValid;
       }
       return true;
     } catch (error) {
@@ -317,6 +412,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return false;
     }
   };
+
+  // Ne pas afficher les enfants tant que l'initialisation n'est pas terminée
+  if (!isInitialized) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "100vh",
+          backgroundColor: "#f8f9fa",
+        }}
+      >
+        <div className="text-center">
+          <div className="spinner-border text-success mb-3" role="status">
+            <span className="visually-hidden">Chargement...</span>
+          </div>
+          <p className="text-muted">Initialisation de l'application...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AuthContext.Provider

@@ -56,10 +56,32 @@ export default function DashboardHeader({
   const [error, setError] = useState<string | null>(null);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showPublishModal, setShowPublishModal] = useState(false);
+  const [forceUpdate, setForceUpdate] = useState(0);
 
   const router = useRouter();
   const userMenuRef = useRef<HTMLDivElement>(null);
   const userMenuButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Écouter l'événement de déconnexion
+  useEffect(() => {
+    const handleLogoutEvent = () => {
+      console.log("🔄 DashboardHeader - Logout event detected");
+
+      // Nettoyer l'état
+      setProfile(null);
+      setShowUserMenu(false);
+      setForceUpdate((prev) => prev + 1);
+
+      // Rediriger vers la page d'accueil
+      router.push("/");
+    };
+
+    window.addEventListener("oskar-logout", handleLogoutEvent);
+
+    return () => {
+      window.removeEventListener("oskar-logout", handleLogoutEvent);
+    };
+  }, [router]);
 
   // Fermeture du menu au clic externe
   useEffect(() => {
@@ -121,7 +143,7 @@ export default function DashboardHeader({
 
   useEffect(() => {
     fetchProfile();
-  }, [fetchProfile]);
+  }, [fetchProfile, forceUpdate]);
 
   // Gestion des événements
   const handlePublish = useCallback(() => {
@@ -142,8 +164,6 @@ export default function DashboardHeader({
 
   // Pour l'admin, on considère qu'il est toujours connecté
   const handleLoginRequired = useCallback(() => {
-    // Pour l'admin, on peut rediriger vers la page de connexion admin
-    // ou simplement fermer le modal
     handleClosePublishModal();
   }, [handleClosePublishModal]);
 
@@ -155,14 +175,12 @@ export default function DashboardHeader({
   const handleNotificationClick = () => {
     console.log("Opening notifications...");
     setNotificationCount(0);
-    // Redirection vers la page des notifications
     router.push("/dashboard-admin/notifications");
   };
 
   const handleMessagesClick = () => {
     console.log("Opening messages...");
     setMessageCount(0);
-    // Redirection vers la page des messages
     router.push("/dashboard-admin/messages");
   };
 
@@ -178,20 +196,33 @@ export default function DashboardHeader({
       localStorage.removeItem("oskar_token");
       localStorage.removeItem("oskar_role");
 
-      // Rediriger vers la page de connexion
+      // Déclencher l'événement de déconnexion
+      const logoutEvent = new CustomEvent("oskar-logout", {
+        detail: { timestamp: Date.now() },
+      });
+      window.dispatchEvent(logoutEvent);
+
+      // Rediriger vers la page d'accueil
       setTimeout(() => {
         router.push("/");
-      }, 500);
+      }, 100);
     } catch (error) {
       console.error("Erreur lors de la déconnexion:", error);
+
       // Nettoyer quand même le localStorage en cas d'erreur
       localStorage.removeItem("oskar_user");
       localStorage.removeItem("oskar_token");
       localStorage.removeItem("oskar_role");
 
+      // Déclencher l'événement de déconnexion
+      const logoutEvent = new CustomEvent("oskar-logout", {
+        detail: { timestamp: Date.now() },
+      });
+      window.dispatchEvent(logoutEvent);
+
       setTimeout(() => {
         router.push("/");
-      }, 500);
+      }, 100);
     }
   };
 
@@ -289,6 +320,7 @@ export default function DashboardHeader({
         id="dashboard-header"
         className="bg-white border-bottom px-3 px-md-4 py-2 shadow-sm"
         style={{ minHeight: "64px" }}
+        key={`dashboard-header-${forceUpdate}`}
       >
         <div className="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-2">
           {/* Section titre et informations utilisateur */}
