@@ -1,3 +1,4 @@
+// app/(front-office)/publication-annonce/components/SaleForm.tsx
 "use client";
 
 import { useState, useEffect, ChangeEvent } from "react";
@@ -27,6 +28,54 @@ import {
   Boutique,
   VenteFormProps,
 } from "../components/constantes/types";
+
+// ============================================
+// COMPOSANT D'IMAGE SÉCURISÉ
+// ============================================
+const SafeImage = ({
+  src,
+  alt,
+  className,
+  style,
+  fallbackIcon = faStore,
+  fallbackSize = "24px",
+}: any) => {
+  const [error, setError] = useState(false);
+  const [imgSrc, setImgSrc] = useState(src || "");
+
+  useEffect(() => {
+    setImgSrc(src || "");
+    setError(false);
+  }, [src]);
+
+  if (error || !imgSrc) {
+    return (
+      <div
+        className={`${className} d-flex align-items-center justify-content-center`}
+        style={{
+          ...style,
+          backgroundColor: "#f8f9fa",
+        }}
+      >
+        <FontAwesomeIcon
+          icon={fallbackIcon}
+          className="text-muted"
+          style={{ fontSize: fallbackSize }}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={imgSrc}
+      alt={alt}
+      className={className}
+      style={style}
+      onError={() => setError(true)}
+    />
+  );
+};
 
 const VenteForm: React.FC<VenteFormProps> = ({
   venteData,
@@ -197,7 +246,13 @@ const VenteForm: React.FC<VenteFormProps> = ({
     };
 
     fetchVendeurBoutique();
-  }, [user?.type, user?.uuid]);
+  }, [
+    user?.type,
+    user?.uuid,
+    venteData.boutiqueUuid,
+    onChange,
+    onBoutiqueChange,
+  ]);
 
   const renderVenteStep2 = () => (
     <div className="p-4">
@@ -281,7 +336,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
                       <div className="card border border-success border-2 bg-success bg-opacity-5 p-3">
                         <div className="d-flex align-items-center">
                           {vendeurBoutique.logo ? (
-                            <img
+                            <SafeImage
                               src={vendeurBoutique.logo}
                               alt={vendeurBoutique.nom}
                               className="rounded-circle me-3"
@@ -290,6 +345,8 @@ const VenteForm: React.FC<VenteFormProps> = ({
                                 height: "50px",
                                 objectFit: "cover",
                               }}
+                              fallbackIcon={faBuilding}
+                              fallbackSize="20px"
                             />
                           ) : (
                             <div className="bg-white rounded-circle p-3 me-3 border border-success">
@@ -416,7 +473,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
                     <div className="mt-3 card border-0 bg-success bg-opacity-10 p-3">
                       <div className="d-flex align-items-center">
                         {selectedBoutique.logo ? (
-                          <img
+                          <SafeImage
                             src={selectedBoutique.logo}
                             alt={selectedBoutique.nom}
                             className="rounded-circle me-3"
@@ -425,6 +482,8 @@ const VenteForm: React.FC<VenteFormProps> = ({
                               height: "50px",
                               objectFit: "cover",
                             }}
+                            fallbackIcon={faBuilding}
+                            fallbackSize="20px"
                           />
                         ) : (
                           <div className="bg-white rounded-circle p-3 me-3">
@@ -610,6 +669,9 @@ const VenteForm: React.FC<VenteFormProps> = ({
                         objectFit: "cover",
                         width: "100%",
                       }}
+                      onError={(e) => {
+                        e.currentTarget.src = "/images/default-product.png";
+                      }}
                     />
                     <button
                       type="button"
@@ -756,15 +818,22 @@ const VenteForm: React.FC<VenteFormProps> = ({
                   >
                     <div className="d-flex align-items-center">
                       {selectedBoutique?.logo || vendeurBoutique?.logo ? (
-                        <img
-                          src={(vendeurBoutique || selectedBoutique)?.logo}
-                          alt={(vendeurBoutique || selectedBoutique)?.nom}
+                        <SafeImage
+                          src={
+                            (vendeurBoutique || selectedBoutique)?.logo || ""
+                          }
+                          alt={
+                            (vendeurBoutique || selectedBoutique)?.nom ||
+                            "Boutique"
+                          }
                           className="rounded-circle me-3"
                           style={{
                             width: "60px",
                             height: "60px",
                             objectFit: "cover",
                           }}
+                          fallbackIcon={faStore}
+                          fallbackSize="24px"
                         />
                       ) : (
                         <div
@@ -794,13 +863,17 @@ const VenteForm: React.FC<VenteFormProps> = ({
                           )}
                         </h5>
                         <div className="d-flex align-items-center gap-2 mb-2">
-                          {getBoutiqueStatusBadge(
-                            vendeurBoutique || selectedBoutique!,
+                          {(vendeurBoutique || selectedBoutique) && (
+                            <>
+                              {getBoutiqueStatusBadge(
+                                vendeurBoutique || selectedBoutique!,
+                              )}
+                              <span className="badge bg-light text-dark">
+                                {(vendeurBoutique || selectedBoutique)
+                                  ?.type_boutique?.libelle || "Type inconnu"}
+                              </span>
+                            </>
                           )}
-                          <span className="badge bg-light text-dark">
-                            {(vendeurBoutique || selectedBoutique)
-                              ?.type_boutique?.libelle || "Type inconnu"}
-                          </span>
                         </div>
                         <p className="text-muted small mb-0">
                           {(vendeurBoutique || selectedBoutique)?.description ||
@@ -934,6 +1007,9 @@ const VenteForm: React.FC<VenteFormProps> = ({
                     alt="Preview"
                     className="img-fluid rounded-3 border shadow-sm"
                     style={{ maxHeight: "200px", objectFit: "cover" }}
+                    onError={(e) => {
+                      e.currentTarget.src = "/images/default-product.png";
+                    }}
                   />
                 </div>
               ) : (
