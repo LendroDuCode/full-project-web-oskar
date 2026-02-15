@@ -1,7 +1,5 @@
-// Pagination.tsx
+// app/(front-office)/home/components/Pagination.tsx
 "use client";
-
-import colors from "../../../shared/constants/colors";
 
 interface PaginationProps {
   currentPage: number;
@@ -10,47 +8,43 @@ interface PaginationProps {
 }
 
 const Pagination: React.FC<PaginationProps> = ({
-  currentPage = 1,
-  totalPages = 119,
+  currentPage,
+  totalPages = 1, // ✅ Valeur par défaut ajoutée
   onPageChange,
 }) => {
-  const handlePrevious = () => {
-    if (currentPage > 1) {
-      onPageChange(currentPage - 1);
-    }
-  };
-
-  const handleNext = () => {
-    if (currentPage < totalPages) {
-      onPageChange(currentPage + 1);
-    }
-  };
-
   const getPageNumbers = () => {
     const pages = [];
+    const maxVisible = 5;
 
-    if (totalPages <= 7) {
-      // Afficher toutes les pages
+    // ✅ Si totalPages est 0 ou 1, on affiche juste la page 1
+    if (totalPages <= 1) {
+      return [1];
+    }
+
+    if (totalPages <= maxVisible) {
       for (let i = 1; i <= totalPages; i++) {
         pages.push(i);
       }
     } else {
-      // Logique pour les ellipses
-      if (currentPage <= 4) {
-        pages.push(1, 2, 3, 4, 5);
-        pages.push("ellipsis");
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 4; i++) {
+          pages.push(i);
+        }
+        pages.push("...");
         pages.push(totalPages);
-      } else if (currentPage >= totalPages - 3) {
+      } else if (currentPage >= totalPages - 2) {
         pages.push(1);
-        pages.push("ellipsis");
-        for (let i = totalPages - 4; i <= totalPages; i++) {
+        pages.push("...");
+        for (let i = totalPages - 3; i <= totalPages; i++) {
           pages.push(i);
         }
       } else {
         pages.push(1);
-        pages.push("ellipsis");
-        pages.push(currentPage - 1, currentPage, currentPage + 1);
-        pages.push("ellipsis");
+        pages.push("...");
+        pages.push(currentPage - 1);
+        pages.push(currentPage);
+        pages.push(currentPage + 1);
+        pages.push("...");
         pages.push(totalPages);
       }
     }
@@ -58,93 +52,54 @@ const Pagination: React.FC<PaginationProps> = ({
     return pages;
   };
 
-  const pageNumbers = getPageNumbers();
+  // ✅ Si pas de pages, ne pas afficher la pagination
+  if (totalPages <= 1) {
+    return null;
+  }
 
   return (
-    <div id="pagination" className="pagination-container">
-      <button
-        className={`pagination-btn ${currentPage === 1 ? "disabled" : ""}`}
-        onClick={handlePrevious}
-        disabled={currentPage === 1}
-      >
-        <i className="fa-solid fa-chevron-left" />
-      </button>
-
-      {pageNumbers.map((page, index) => {
-        if (page === "ellipsis") {
-          return (
-            <span key={`ellipsis-${index}`} className="pagination-ellipsis">
-              ...
-            </span>
-          );
-        }
-
-        return (
+    <nav aria-label="Pagination" className="d-flex justify-content-center mt-5">
+      <ul className="pagination">
+        <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
           <button
-            key={page}
-            className={`pagination-btn ${page === currentPage ? "active" : ""}`}
-            onClick={() => onPageChange(page as number)}
+            className="page-link"
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            aria-label="Précédent"
           >
-            {page}
+            <i className="fa-solid fa-chevron-left"></i>
           </button>
-        );
-      })}
+        </li>
 
-      <button
-        className={`pagination-btn ${currentPage === totalPages ? "disabled" : ""}`}
-        onClick={handleNext}
-        disabled={currentPage === totalPages}
-      >
-        <i className="fa-solid fa-chevron-right" />
-      </button>
+        {getPageNumbers().map((page, index) => (
+          <li
+            key={index}
+            className={`page-item ${page === "..." ? "disabled" : ""} ${page === currentPage ? "active" : ""}`}
+          >
+            <button
+              className="page-link"
+              onClick={() => typeof page === "number" && onPageChange(page)}
+              disabled={page === "..."}
+            >
+              {page}
+            </button>
+          </li>
+        ))}
 
-      <style jsx>{`
-        .pagination-container {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          gap: 0.5rem;
-          margin-top: 3rem;
-        }
-
-        .pagination-btn {
-          width: 2.5rem;
-          height: 2.5rem;
-          border-radius: 8px;
-          border: 2px solid ${colors.oskar.lightGrey};
-          background-color: white;
-          color: ${colors.oskar.grey};
-          font-weight: 600;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          transition: all 0.3s ease;
-          font-size: 0.875rem;
-        }
-
-        .pagination-btn:hover:not(.disabled):not(.active) {
-          border-color: ${colors.oskar.green};
-          color: ${colors.oskar.green};
-        }
-
-        .pagination-btn.active {
-          background-color: ${colors.oskar.green};
-          color: white;
-          border-color: ${colors.oskar.green};
-        }
-
-        .pagination-btn.disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        .pagination-ellipsis {
-          color: ${colors.oskar.grey};
-          padding: 0 0.5rem;
-        }
-      `}</style>
-    </div>
+        <li
+          className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}
+        >
+          <button
+            className="page-link"
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            aria-label="Suivant"
+          >
+            <i className="fa-solid fa-chevron-right"></i>
+          </button>
+        </li>
+      </ul>
+    </nav>
   );
 };
 

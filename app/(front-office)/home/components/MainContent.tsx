@@ -1,10 +1,9 @@
-// MainContent.tsx - VERSION COMPLÈTE AVEC FILTRES
 "use client";
 
 import { useState, useEffect } from "react";
 import colors from "../../../shared/constants/colors";
 import FiltersSidebar from "./FiltersSidebar";
-import FilterStatsBar from "./FilterStatsBar"; // Importez FilterStatsBar
+import FilterStatsBar from "./FilterStatsBar";
 import ListingsGrid from "./ListingsGrid";
 import Pagination from "./Pagination";
 
@@ -18,14 +17,15 @@ const MainContent = () => {
   const [sortOption, setSortOption] = useState<string>("recent");
   const [currentPage, setCurrentPage] = useState(1);
 
-  // État pour le nombre total d'annonces (vous devrez le calculer)
-  const [totalItems, setTotalItems] = useState<number>(0);
+  // État pour le nombre total d'annonces
+  const [totalItems, setTotalItems] = useState<number>(2847);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Fonction pour gérer le changement de filtre type
   const handleFilterChange = (filterId: string) => {
     console.log("Filtre type changé:", filterId);
     setActiveFilter(filterId);
-    setCurrentPage(1); // Réinitialise à la première page quand le filtre change
+    setCurrentPage(1);
   };
 
   // Fonction pour gérer le changement de mode d'affichage
@@ -39,108 +39,127 @@ const MainContent = () => {
   };
 
   // Fonction pour mettre à jour le nombre total d'annonces
-  // (À appeler quand ListingsGrid a fini de charger les données)
   const handleDataLoaded = (itemsCount: number) => {
     setTotalItems(itemsCount);
   };
 
-  // Simulation de chargement du nombre total
-  useEffect(() => {
-    // Ici, vous devriez faire un appel API pour obtenir le nombre total
-    // Pour l'instant, on simule
-    setTimeout(() => {
-      // Valeur simulée - à remplacer par votre logique réelle
-      const simulatedTotal =
-        activeFilter === "all"
-          ? 150
-          : activeFilter === "donation"
-            ? 45
-            : activeFilter === "exchange"
-              ? 60
-              : activeFilter === "sale"
-                ? 45
-                : 0;
-      setTotalItems(simulatedTotal);
-    }, 500);
-  }, [activeFilter]);
-
   return (
-    <main id="main-content">
-      <div className="container">
-        <div className="row g-4">
-          {/* Sidebar des filtres avancés */}
-          <div className="col-lg-3 col-xxl-2 d-none d-lg-block">
-            <FiltersSidebar filters={filters} onFiltersChange={setFilters} />
+    <main id="main-content" className="container-fluid py-5">
+      <div className="row g-4">
+        {/* Sidebar des filtres avancés - visible sur desktop */}
+        <div className="col-auto d-none d-lg-block">
+          <FiltersSidebar filters={filters} onFiltersChange={setFilters} />
+        </div>
+
+        {/* Contenu principal */}
+        <div className="col">
+          {/* Barre de filtres rapides et statistiques */}
+          <FilterStatsBar
+            totalItems={totalItems}
+            activeFilter={activeFilter}
+            onFilterChange={handleFilterChange}
+            viewMode={viewMode}
+            onViewModeChange={handleViewModeChange}
+            sortOption={sortOption}
+            onSortChange={handleSortChange}
+          />
+
+          {/* Grid des annonces avec filtres */}
+          <div className="mt-4">
+            <ListingsGrid
+              key={`${activeFilter}-${sortOption}`}
+              filterType={activeFilter}
+              viewMode={viewMode}
+              sortOption={sortOption}
+              onDataLoaded={handleDataLoaded}
+              showFeatured={true}
+            />
           </div>
 
-          {/* Contenu principal */}
-          <div className="col-lg-9 col-xxl-10">
-            <div className="listings-container">
-              {/* Barre de filtres rapides et statistiques */}
-              <FilterStatsBar
-                totalItems={totalItems}
-                activeFilter={activeFilter}
-                onFilterChange={handleFilterChange}
-                viewMode={viewMode}
-                onViewModeChange={handleViewModeChange}
-                sortOption={sortOption}
-                onSortChange={handleSortChange}
-              />
-
-              {/* Grid des annonces avec filtres */}
-              <ListingsGrid
-                key={`${activeFilter}-${sortOption}`} // Force le re-render quand les filtres changent
-                filterType={activeFilter}
-                viewMode={viewMode}
-                sortOption={sortOption}
-                // Vous pouvez ajouter un callback si besoin
-                // onDataLoaded={handleDataLoaded}
-              />
-
-              {/* Pagination */}
-              <Pagination
-                currentPage={currentPage}
-                totalPages={Math.ceil(totalItems / 12)} // Supposons 12 items par page
-                onPageChange={setCurrentPage}
-              />
-            </div>
-          </div>
+          {/* Pagination */}
+          <Pagination
+            currentPage={currentPage}
+            totalPages={Math.ceil(totalItems / 12)}
+            onPageChange={setCurrentPage}
+          />
         </div>
       </div>
 
-      {/* Optionnel: Bouton de filtres mobile */}
+      {/* Bouton de filtres mobile */}
       <div className="d-lg-none fixed-bottom p-3">
         <button
-          className="btn btn-success w-100 d-flex align-items-center justify-content-center gap-2"
-          style={{
-            borderRadius: "50px",
-            padding: "12px 24px",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-          }}
-          onClick={() => {
-            // À implémenter: ouvrir un modal ou drawer avec les filtres
-            alert("Ouvrir les filtres mobile");
-          }}
+          className="btn w-100 py-3 fw-semibold text-white border-0 rounded-4 shadow-lg d-flex align-items-center justify-content-center gap-2"
+          style={{ backgroundColor: colors.oskar.orange }}
+          onClick={() => setMobileSidebarOpen(true)}
         >
           <i className="fa-solid fa-sliders"></i>
           Filtres & Tri
         </button>
       </div>
 
+      {/* Sidebar mobile */}
+      {mobileSidebarOpen && (
+        <div className="d-lg-none">
+          <div
+            className="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50"
+            style={{ zIndex: 1040 }}
+            onClick={() => setMobileSidebarOpen(false)}
+          />
+          <div
+            className="position-fixed top-0 start-0 h-100 bg-white shadow-lg"
+            style={{
+              width: "85%",
+              maxWidth: "320px",
+              zIndex: 1045,
+              overflowY: "auto",
+              transform: mobileSidebarOpen
+                ? "translateX(0)"
+                : "translateX(-100%)",
+              transition: "transform 0.3s ease",
+            }}
+          >
+            <div className="p-3 border-bottom d-flex justify-content-between align-items-center">
+              <h5 className="fw-bold text-dark mb-0">
+                <i
+                  className="fa-solid fa-sliders me-2"
+                  style={{ color: colors.oskar.orange }}
+                ></i>
+                Filtres
+              </h5>
+              <button
+                className="btn btn-link p-0 text-muted"
+                onClick={() => setMobileSidebarOpen(false)}
+                style={{ fontSize: "1.5rem" }}
+              >
+                <i className="fa-solid fa-times"></i>
+              </button>
+            </div>
+            <div className="p-3">
+              <FiltersSidebar filters={filters} onFiltersChange={setFilters} />
+            </div>
+          </div>
+        </div>
+      )}
+
       <style jsx>{`
         #main-content {
-          padding: 2rem 0;
           min-height: 100vh;
-        }
-
-        .listings-container {
-          padding-left: 1rem;
+          background-color: ${colors.oskar.lightGrey}20;
+          padding-left: 2rem;
+          padding-right: 2rem;
         }
 
         @media (max-width: 991.98px) {
-          .listings-container {
-            padding-left: 0;
-            padding-bottom: 80px; /* Pour éviter que le bouton mobile ne cache le contenu */
+          #main-content {
+            padding-left: 1rem;
+            padding-right: 1rem;
+            padding-bottom: 80px;
+          }
+        }
+
+        @media (min-width: 1400px) {
+          #main-content {
+            max-width: 1400px;
           }
         }
       `}</style>

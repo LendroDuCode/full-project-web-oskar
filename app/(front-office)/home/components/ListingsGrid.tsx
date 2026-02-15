@@ -1,28 +1,9 @@
-// app/(front-office)/home/components/ListingsGrid.tsx
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import Link from "next/link";
-import colors from "../../../shared/constants/colors";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { useSearch } from "../contexts/SearchContext";
-
-interface ListingItem {
-  uuid: string;
-  type: "produit" | "echange" | "don";
-  titre?: string;
-  nom?: string;
-  libelle?: string;
-  description?: string | null;
-  prix?: number | string | null;
-  image?: string | null;
-  date?: string;
-  disponible?: boolean;
-  statut?: string;
-  numero?: string;
-  localisation?: string;
-  createdAt?: string | null;
-}
+import ListingCard, { ListingItem } from "./ListingCard";
 
 interface ListingsGridProps {
   categoryUuid?: string;
@@ -30,6 +11,7 @@ interface ListingsGridProps {
   viewMode?: "grid" | "list";
   sortOption?: string;
   onDataLoaded?: (count: number) => void;
+  showFeatured?: boolean;
 }
 
 const ListingsGrid: React.FC<ListingsGridProps> = ({
@@ -38,8 +20,10 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
   viewMode = "grid",
   sortOption = "recent",
   onDataLoaded,
+  showFeatured = true,
 }) => {
   const [listings, setListings] = useState<ListingItem[]>([]);
+  const [featuredListings, setFeaturedListings] = useState<ListingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
@@ -52,7 +36,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
 
   const MAX_RETRIES = 3;
   const PLACEHOLDER_IMAGE =
-    "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayI+PHJlY3Qgd2lkdGg9IjIwMCIgaGVpZ2h0PSIyMDAiIGZpbGw9IiNmM2Y0ZjYiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjEyIiBmaWxsPSIjNjY2NjY2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSIgZm9udC13ZWlnaHQ9IjUwMCI+Tm8gaW1hZ2U8L3RleHQ+PC9zdmc+";
+    "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2YzZjRmNiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM2NjY2NjYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5BdWN1bmUgaW1hZ2U8L3RleHQ+PC9zdmc+";
 
   const normalizeImageUrl = useCallback((url: string | null): string => {
     if (!url) return PLACEHOLDER_IMAGE;
@@ -62,7 +46,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
       url.startsWith("/images/") ||
       url.startsWith("/api/files/")
     ) {
-      return `${process.env.NEXT_PUBLIC_API_URL}${url}`;
+      return `${process.env.NEXT_PUBLIC_API_URL || ""}${url}`;
     }
     return PLACEHOLDER_IMAGE;
   }, []);
@@ -107,7 +91,6 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
 
       // Si categoryUuid est fourni, charger les annonces de la catégorie spécifique
       if (categoryUuid) {
-        // À adapter selon votre API - exemple avec un endpoint de catégorie
         endpoint = API_ENDPOINTS.ANNONCES.LIST_TOUTES_ANNONCES;
       } else {
         switch (filterType) {
@@ -194,11 +177,21 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           description: item.description,
           prix: item.prix,
           image: normalizeImageUrl(item.image),
-          date: item.date || item.createdAt,
+          date: item.date || item.createdAt || item.publieLe,
           disponible: item.disponible,
           statut: item.statut,
           numero: item.numero,
-          localisation: item.localisation || item.ville || "",
+          localisation:
+            item.localisation || item.ville || item.lieu_rencontre || "",
+          seller: item.createur
+            ? {
+                name:
+                  `${item.createur.prenoms || ""} ${item.createur.nom || ""}`.trim() ||
+                  "Annonceur",
+                avatar: item.createur.avatar || "/images/default-avatar.png",
+              }
+            : undefined,
+          createdAt: item.createdAt,
         }));
       } else if (filterType === "donation") {
         transformedData = dataArray.map((item: any) => ({
@@ -210,7 +203,17 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           image: normalizeImageUrl(item.image),
           statut: item.statut,
           numero: item.numero,
-          localisation: item.localisation || item.ville || "",
+          localisation:
+            item.localisation || item.ville || item.lieu_retrait || "",
+          date: item.createdAt || item.publieLe,
+          seller: item.createur
+            ? {
+                name:
+                  `${item.createur.prenoms || ""} ${item.createur.nom || ""}`.trim() ||
+                  "Donateur",
+                avatar: item.createur.avatar || "/images/default-avatar.png",
+              }
+            : undefined,
           createdAt: item.createdAt,
         }));
       } else if (filterType === "exchange") {
@@ -224,7 +227,17 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           image: normalizeImageUrl(item.image),
           statut: item.statut,
           numero: item.numero,
-          localisation: item.localisation || item.ville || "",
+          localisation:
+            item.localisation || item.ville || item.lieu_rencontre || "",
+          date: item.createdAt || item.publieLe,
+          seller: item.createur
+            ? {
+                name:
+                  `${item.createur.prenoms || ""} ${item.createur.nom || ""}`.trim() ||
+                  "Initiateur",
+                avatar: item.createur.avatar || "/images/default-avatar.png",
+              }
+            : undefined,
           createdAt: item.createdAt,
         }));
       } else if (filterType === "sale") {
@@ -237,10 +250,21 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           description: item.description,
           prix: item.prix,
           image: normalizeImageUrl(item.image),
-          date: item.date,
+          date: item.date || item.createdAt || item.publieLe,
           disponible: item.disponible,
           statut: item.statut,
           localisation: item.localisation || item.ville || "",
+          seller:
+            item.vendeur || item.createur
+              ? {
+                  name:
+                    `${(item.vendeur || item.createur)?.prenoms || ""} ${(item.vendeur || item.createur)?.nom || ""}`.trim() ||
+                    "Vendeur",
+                  avatar:
+                    (item.vendeur || item.createur)?.avatar ||
+                    "/images/default-avatar.png",
+                }
+              : undefined,
         }));
       }
 
@@ -363,8 +387,14 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
       });
 
       if (isMountedRef.current) {
-        setListings(sortedData);
+        // Simuler des annonces à la une (les 3 premières)
+        const featured = sortedData.slice(0, 3);
+        const regular = sortedData.slice(3);
+
+        setFeaturedListings(featured);
+        setListings(regular);
         setRetryCount(0);
+
         if (onDataLoaded) {
           onDataLoaded(sortedData.length);
         }
@@ -392,6 +422,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
       setError(err.message || "Erreur de chargement");
       setRetryCount((prev) => prev + 1);
       setListings([]);
+      setFeaturedListings([]);
     } finally {
       if (isMountedRef.current) {
         setLoading(false);
@@ -422,71 +453,6 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
       abortCurrentRequest();
     };
   }, [fetchListings, abortCurrentRequest]);
-
-  const getTypeLabel = useCallback((type: string) => {
-    switch (type) {
-      case "don":
-        return "Don";
-      case "echange":
-        return "Échange";
-      case "produit":
-        return "Vente";
-      default:
-        return "Annonce";
-    }
-  }, []);
-
-  const getTypeColor = useCallback((type: string) => {
-    switch (type) {
-      case "don":
-        return "#9C27B0";
-      case "echange":
-        return "#2196F3";
-      case "produit":
-        return colors.oskar.green;
-      default:
-        return colors.oskar.grey;
-    }
-  }, []);
-
-  const formatPrice = useCallback(
-    (price: number | string | null | undefined) => {
-      if (price === null || price === undefined) return "Gratuit";
-      if (price === 0) return "Gratuit";
-      const priceNum = typeof price === "string" ? parseFloat(price) : price;
-      if (isNaN(priceNum)) return "Prix à discuter";
-      return `${priceNum.toLocaleString("fr-FR")} FCFA`;
-    },
-    [],
-  );
-
-  const formatDate = useCallback((dateString?: string) => {
-    if (!dateString) return "";
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return "";
-      return date.toLocaleDateString("fr-FR", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      });
-    } catch {
-      return "";
-    }
-  }, []);
-
-  const getDetailLink = useCallback((item: ListingItem) => {
-    switch (item.type) {
-      case "don":
-        return `/dons/${item.uuid}`;
-      case "echange":
-        return `/echanges/${item.uuid}`;
-      case "produit":
-        return `/produits/${item.uuid}`;
-      default:
-        return `/annonces/${item.uuid}`;
-    }
-  }, []);
 
   const handleRefresh = () => {
     setRetryCount(0);
@@ -526,7 +492,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
     );
   }
 
-  if (listings.length === 0) {
+  if (listings.length === 0 && featuredListings.length === 0) {
     return (
       <div className="text-center py-5">
         <div className="mb-3">
@@ -548,335 +514,56 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
   }
 
   return (
-    <div
-      id="listings-grid"
-      className={viewMode === "grid" ? "grid-view" : "list-view"}
-    >
-      {viewMode === "grid" ? (
-        <div className="row g-4">
-          {listings.map((item) => (
-            <div
-              key={item.uuid}
-              className="col-xl-3 col-lg-4 col-md-6 col-sm-6"
-            >
-              <div className="card listing-card h-100 border-0 shadow-sm">
-                <div className="position-relative">
-                  <div className="listing-image-container">
-                    <img
-                      src={item.image || PLACEHOLDER_IMAGE}
-                      alt={item.titre || "Annonce"}
-                      className="card-img-top listing-image"
-                      loading="lazy"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.onerror = null;
-                        target.src = PLACEHOLDER_IMAGE;
-                      }}
-                    />
-                    <span
-                      className="listing-type-badge"
-                      style={{ backgroundColor: getTypeColor(item.type) }}
-                    >
-                      {getTypeLabel(item.type)}
-                    </span>
-                    {item.statut && (
-                      <span className="listing-status-badge">
-                        {item.statut === "disponible"
-                          ? "Disponible"
-                          : item.statut === "en_attente"
-                            ? "En attente"
-                            : item.statut === "publie"
-                              ? "Publié"
-                              : item.statut}
-                      </span>
-                    )}
-                  </div>
-                  <div className="card-body p-3 d-flex flex-column">
-                    <h5 className="card-title listing-title mb-2 flex-grow-0">
-                      <Link
-                        href={getDetailLink(item)}
-                        className="text-decoration-none text-dark"
-                      >
-                        {item.titre}
-                      </Link>
-                    </h5>
-                    {item.description && (
-                      <p className="card-text listing-description text-muted small mb-3 flex-grow-1">
-                        {item.description.length > 100
-                          ? `${item.description.substring(0, 100)}...`
-                          : item.description}
-                      </p>
-                    )}
-                    {item.localisation && (
-                      <div className="small text-muted mb-2">
-                        <i className="fa-solid fa-location-dot me-1"></i>
-                        {item.localisation}
-                      </div>
-                    )}
-                    <div className="d-flex justify-content-between align-items-center mt-auto">
-                      <div
-                        className="listing-price fw-bold"
-                        style={{
-                          color: colors.oskar.green,
-                          fontSize: "1.1rem",
-                        }}
-                      >
-                        {formatPrice(item.prix)}
-                      </div>
-                      {item.date && (
-                        <div className="listing-date text-muted small">
-                          <i className="fa-solid fa-clock me-1"></i>
-                          {formatDate(item.date)}
-                        </div>
-                      )}
-                    </div>
-                    {item.type === "produit" &&
-                      item.disponible !== undefined && (
-                        <div className="mt-2">
-                          <span
-                            className={`badge ${item.disponible ? "bg-success" : "bg-danger"}`}
-                          >
-                            {item.disponible ? "Disponible" : "Non disponible"}
-                          </span>
-                        </div>
-                      )}
-                    <div className="mt-3">
-                      <Link
-                        href={getDetailLink(item)}
-                        className="btn btn-outline-success btn-sm w-100"
-                      >
-                        <i className="fa-solid fa-eye me-2"></i>Voir les détails
-                      </Link>
-                    </div>
-                  </div>
-                </div>
+    <div className="listings-grid flex-1">
+      {/* Annonces à la une */}
+      {showFeatured && featuredListings.length > 0 && (
+        <div className="featured-listings mb-5">
+          <div className="d-flex align-items-center justify-content-between mb-4">
+            <h2 className="h4 fw-bold text-dark d-flex align-items-center">
+              <i className="fa-solid fa-star text-warning me-2"></i>
+              Annonces à la Une
+            </h2>
+          </div>
+          <div className="row g-4">
+            {featuredListings.map((item) => (
+              <div key={item.uuid} className="col-lg-4 col-md-6">
+                <ListingCard
+                  listing={item}
+                  featured={true}
+                  viewMode={viewMode}
+                />
               </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="list-view-container">
-          {listings.map((item) => (
-            <div
-              key={item.uuid}
-              className="listing-list-item card mb-3 border-0 shadow-sm"
-            >
-              <div className="row g-0">
-                <div className="col-md-3">
-                  <div className="position-relative h-100">
-                    <img
-                      src={item.image || PLACEHOLDER_IMAGE}
-                      alt={item.titre || "Annonce"}
-                      className="img-fluid rounded-start h-100 w-100 object-fit-cover"
-                      style={{ height: "200px" }}
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.onerror = null;
-                        target.src = PLACEHOLDER_IMAGE;
-                      }}
-                    />
-                    <span
-                      className="listing-type-badge"
-                      style={{ backgroundColor: getTypeColor(item.type) }}
-                    >
-                      {getTypeLabel(item.type)}
-                    </span>
-                  </div>
-                </div>
-                <div className="col-md-9">
-                  <div className="card-body h-100 d-flex flex-column">
-                    <div className="d-flex justify-content-between align-items-start mb-2">
-                      <div className="flex-grow-1">
-                        <h5 className="card-title mb-1">
-                          <Link
-                            href={getDetailLink(item)}
-                            className="text-decoration-none text-dark"
-                          >
-                            {item.titre}
-                          </Link>
-                        </h5>
-                        <div className="d-flex flex-wrap gap-2 mt-2">
-                          {item.statut && (
-                            <span className="badge bg-secondary">
-                              {item.statut === "disponible"
-                                ? "Disponible"
-                                : item.statut === "en_attente"
-                                  ? "En attente"
-                                  : item.statut === "publie"
-                                    ? "Publié"
-                                    : item.statut}
-                            </span>
-                          )}
-                          {item.type === "produit" &&
-                            item.disponible !== undefined && (
-                              <span
-                                className={`badge ${item.disponible ? "bg-success" : "bg-danger"}`}
-                              >
-                                {item.disponible
-                                  ? "Disponible"
-                                  : "Non disponible"}
-                              </span>
-                            )}
-                          {item.localisation && (
-                            <span className="badge bg-light text-dark">
-                              <i className="fa-solid fa-location-dot me-1"></i>
-                              {item.localisation}
-                            </span>
-                          )}
-                          <span className="text-muted small">
-                            <i className="fa-solid fa-hashtag me-1"></i>Réf:{" "}
-                            {item.uuid.substring(0, 8)}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-end ms-3">
-                        <div
-                          className="listing-price fw-bold fs-4"
-                          style={{ color: colors.oskar.green }}
-                        >
-                          {formatPrice(item.prix)}
-                        </div>
-                        {item.date && (
-                          <div className="text-muted small mt-1">
-                            <i className="fa-solid fa-clock me-1"></i>
-                            {formatDate(item.date)}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    {item.description && (
-                      <p className="card-text text-muted flex-grow-1 mb-3">
-                        {item.description}
-                      </p>
-                    )}
-                    <div className="d-flex justify-content-between align-items-end mt-auto">
-                      <div className="small">
-                        {item.numero && (
-                          <span className="text-muted me-3">
-                            <i className="fa-solid fa-phone me-1"></i>
-                            {item.numero}
-                          </span>
-                        )}
-                      </div>
-                      <div>
-                        <Link
-                          href={getDetailLink(item)}
-                          className="btn btn-success"
-                        >
-                          <i className="fa-solid fa-eye me-2"></i>Voir les
-                          détails
-                        </Link>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
-      <style jsx>{`
-        .listing-card {
-          transition:
-            transform 0.3s ease,
-            box-shadow 0.3s ease;
-          border-radius: 12px;
-          overflow: hidden;
-        }
-        .listing-card:hover {
-          transform: translateY(-5px);
-          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1) !important;
-        }
-        .listing-image-container {
-          position: relative;
-          height: 200px;
-          overflow: hidden;
-          background-color: ${colors.oskar.lightGrey};
-        }
-        .listing-image {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          transition: transform 0.5s ease;
-        }
-        .listing-card:hover .listing-image {
-          transform: scale(1.05);
-        }
-        .listing-type-badge {
-          position: absolute;
-          top: 10px;
-          left: 10px;
-          color: white;
-          padding: 4px 12px;
-          border-radius: 20px;
-          font-size: 0.75rem;
-          font-weight: 600;
-          z-index: 2;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-        }
-        .listing-status-badge {
-          position: absolute;
-          top: 10px;
-          right: 10px;
-          background-color: rgba(255, 255, 255, 0.95);
-          color: ${colors.oskar.black};
-          padding: 4px 12px;
-          border-radius: 20px;
-          font-size: 0.75rem;
-          font-weight: 600;
-          z-index: 2;
-          border: 1px solid ${colors.oskar.lightGrey};
-        }
-        .listing-title {
-          font-size: 1rem;
-          font-weight: 600;
-          line-height: 1.4;
-          overflow: hidden;
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-        }
-        .listing-description {
-          line-height: 1.5;
-          overflow: hidden;
-          display: -webkit-box;
-          -webkit-line-clamp: 3;
-          -webkit-box-orient: vertical;
-        }
-        .listing-price {
-          font-size: 1.1rem;
-        }
-        .listing-date {
-          font-size: 0.8rem;
-        }
-        .list-view-container {
-          padding: 1rem 0;
-        }
-        .listing-list-item {
-          transition:
-            transform 0.3s ease,
-            box-shadow 0.3s ease;
-        }
-        .listing-list-item:hover {
-          transform: translateY(-3px);
-          box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1) !important;
-        }
-        .object-fit-cover {
-          object-fit: cover;
-        }
-        @media (max-width: 767.98px) {
-          .listing-image-container {
-            height: 180px;
-          }
-          .listing-list-item .col-md-3 {
-            height: 180px;
-          }
-          .listing-list-item .card-body {
-            padding: 1rem !important;
-          }
-        }
-      `}</style>
+
+      {/* Toutes les annonces */}
+      <div className="all-listings mb-5">
+        <div className="d-flex align-items-center justify-content-between mb-4">
+          <h2 className="h4 fw-bold text-dark">Toutes les annonces</h2>
+          <p className="text-muted mb-0">
+            Affichage de 1-{listings.length} sur{" "}
+            {featuredListings.length + listings.length} résultats
+          </p>
+        </div>
+
+        {viewMode === "grid" ? (
+          <div className="row g-4">
+            {listings.map((item) => (
+              <div key={item.uuid} className="col-lg-4 col-md-6">
+                <ListingCard listing={item} viewMode="grid" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="list-view-container">
+            {listings.map((item) => (
+              <ListingCard key={item.uuid} listing={item} viewMode="list" />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

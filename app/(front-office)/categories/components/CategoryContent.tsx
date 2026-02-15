@@ -1,4 +1,3 @@
-// app/(front-office)/categories/components/CategoryContent.tsx
 "use client";
 
 import { useState } from "react";
@@ -8,7 +7,7 @@ import FilterStatsBar from "../../home/components/FilterStatsBar";
 import ListingsGrid from "../../home/components/ListingsGrid";
 import Pagination from "../../home/components/Pagination";
 import Link from "next/link";
-import { SearchProvider } from "../../home/contexts/SearchContext"; // AJOUT
+import { SearchProvider } from "../../home/contexts/SearchContext";
 
 interface CategoryContentProps {
   category: {
@@ -32,7 +31,6 @@ function CategoryContentInner({
   stats,
   subCategories = [],
 }: CategoryContentProps) {
-  // Tout le contenu existant...
   const [filters, setFilters] = useState({});
   const [activeFilter, setActiveFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -64,7 +62,7 @@ function CategoryContentInner({
       "Don & Échange": { color: "#9C27B0", icon: "fa-exchange-alt" },
       "Éducation & Culture": { color: "#2196F3", icon: "fa-graduation-cap" },
       "Services de proximité": { color: "#795548", icon: "fa-broom" },
-      Autres: { color: "#607D8B", icon: "fa-tag" },
+      Autres: { color: colors.oskar.green, icon: "fa-tag" },
     };
     return (
       configs[category.libelle] || { color: colors.oskar.green, icon: "fa-tag" }
@@ -214,9 +212,9 @@ function CategoryContentInner({
       {/* Contenu principal */}
       <section className="py-4">
         <div className="container">
-          <div className="row g-4">
-            {/* Sidebar des filtres */}
-            <div className="col-lg-3 col-xxl-2 d-none d-lg-block">
+          <div className="row">
+            {/* Sidebar des filtres - prend 3 colonnes sur desktop */}
+            <div className="col-lg-3 d-none d-lg-block">
               <div className="sticky-top" style={{ top: "90px" }}>
                 <FiltersSidebar
                   filters={filters}
@@ -225,8 +223,8 @@ function CategoryContentInner({
               </div>
             </div>
 
-            {/* Contenu principal avec grille d'annonces */}
-            <div className="col-lg-9 col-xxl-10">
+            {/* Contenu principal avec grille d'annonces - prend 9 colonnes sur desktop */}
+            <div className="col-lg-9">
               <div className="listings-container">
                 <FilterStatsBar
                   totalItems={totalItems}
@@ -238,20 +236,24 @@ function CategoryContentInner({
                   onSortChange={handleSortChange}
                 />
 
-                <ListingsGrid
-                  key={`${category.uuid}-${activeFilter}-${sortOption}`}
-                  categoryUuid={category.uuid}
-                  filterType={activeFilter}
-                  viewMode={viewMode}
-                  sortOption={sortOption}
-                  onDataLoaded={handleDataLoaded}
-                />
+                <div className="mt-4">
+                  <ListingsGrid
+                    key={`${category.uuid}-${activeFilter}-${sortOption}`}
+                    categoryUuid={category.uuid}
+                    filterType={activeFilter}
+                    viewMode={viewMode}
+                    sortOption={sortOption}
+                    onDataLoaded={handleDataLoaded}
+                  />
+                </div>
 
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={Math.ceil(totalItems / 12)}
-                  onPageChange={setCurrentPage}
-                />
+                <div className="mt-4">
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={Math.ceil(totalItems / 12)}
+                    onPageChange={setCurrentPage}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -276,7 +278,7 @@ function CategoryContentInner({
 
       <style jsx>{`
         .listings-container {
-          padding-left: 1rem;
+          width: 100%;
         }
         .sticky-top {
           position: sticky;
@@ -284,7 +286,6 @@ function CategoryContentInner({
         }
         @media (max-width: 991.98px) {
           .listings-container {
-            padding-left: 0;
             padding-bottom: 80px;
           }
         }

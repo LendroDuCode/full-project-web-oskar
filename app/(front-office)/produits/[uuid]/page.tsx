@@ -1,7 +1,6 @@
-// app/(front-office)/produits/[uuid]/page.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api-client";
@@ -11,17 +10,15 @@ import { useAuth } from "@/app/(front-office)/auth/AuthContext";
 
 // Import des icônes FontAwesome
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faWhatsapp,
-  faFacebook,
-  faFacebookF,
-  faWhatsapp as faWhatsappBrand,
-} from "@fortawesome/free-brands-svg-icons";
+import { faWhatsapp, faFacebookF } from "@fortawesome/free-brands-svg-icons";
 import {
   faUser,
   faEnvelope,
   faPhone,
   faMessage,
+  faUserCheck,
+  faHeadset,
+  faUsers,
   faCommentDots,
   faShareAlt,
   faCertificate,
@@ -35,13 +32,9 @@ import {
   faChevronUp,
   faChevronDown,
   faCopy,
-  faPaperPlane,
   faEye,
-  faEyeSlash,
   faHome,
   faArrowLeft,
-  faArrowUp,
-  faArrowDown,
   faThLarge,
   faCheck,
   faCommentSlash,
@@ -51,19 +44,9 @@ import {
   faEdit,
   faUserCircle,
   faIdCard,
-  faExternalLinkAlt,
-  faLock,
-  faCircleCheck,
-  faCircleExclamation,
-  faCircleInfo,
   faExclamationCircle,
   faSpinner,
-  faSignInAlt,
-  faExclamationTriangle,
-  faStore,
   faTag,
-  faBolt,
-  faCartPlus,
   faBoxOpen,
   faFileAlt,
   faListAlt,
@@ -74,12 +57,18 @@ import {
   faQuestion,
   faMinus,
   faPlus,
-  faShoppingCart,
-  faBox,
+  faMapLocationDot,
+  faLocationDot,
+  faStore,
+  faCalendarAlt,
+  faClock,
+  faDollarSign,
+  faGift,
+  faExchangeAlt,
 } from "@fortawesome/free-solid-svg-icons";
 
 // ============================================
-// TYPES - CORRIGÉS
+// TYPES
 // ============================================
 interface CreateurInfo {
   uuid: string;
@@ -94,7 +83,12 @@ interface CreateurInfo {
   instagram_url?: string | null;
   est_verifie?: boolean;
   est_bloque?: boolean;
-  userType?: string; // "vendeur", "utilisateur", "agent", "admin"
+  userType?: string;
+  created_at?: string;
+  nombre_annonces?: number;
+  nombre_ventes?: number;
+  taux_reponse?: number;
+  temps_reponse?: string;
 }
 
 interface BoutiqueAPI {
@@ -140,7 +134,6 @@ interface CategorieAPI {
   updatedAt: string;
 }
 
-// ✅ INTERFACE PRODUITAPI CORRIGÉE - Plus de doublon
 interface ProduitAPI {
   is_deleted: boolean;
   deleted_at: string | null;
@@ -154,12 +147,12 @@ interface ProduitAPI {
   disponible: boolean;
   publieLe: string | null;
   expireLe: string | null;
+  nombreFavoris: number;
   statut: string;
   image: string | null;
   prix: string | number;
   description: string | null;
   etoile: number;
-  // ✅ CORRIGÉ: Utiliser underscore comme dans l'API
   vendeur_uuid: string;
   boutique_uuid: string;
   categorie_uuid: string;
@@ -176,11 +169,9 @@ interface ProduitAPI {
   nombre_avis: number;
   repartition_notes: any | null;
   demi_etoile: number;
-  nombre_favoris: number;
   etoiles_pleines: number;
   etoiles_vides: number;
   utilisateur_uuid?: string | null;
-  // ✅ SUPPRIMÉ: vendeurUuid (doublon)
   agentUuid?: string | null;
   createur?: CreateurInfo;
   createurType?: string;
@@ -201,6 +192,7 @@ interface ProduitSimilaireAPI {
   disponible: boolean;
   publieLe: string | null;
   expireLe: string | null;
+  nombreFavoris: number;
   statut: string;
   image: string;
   prix: string | number;
@@ -220,13 +212,13 @@ interface ProduitSimilaireAPI {
   nombre_avis: number;
   repartition_notes: any | null;
   demi_etoile: number;
-  nombre_favoris: number;
   etoiles_pleines: number;
   etoiles_vides: number;
   utilisateur_uuid?: string | null;
   agentUuid?: string | null;
   createur?: CreateurInfo;
   createurType?: string;
+  categorie?: CategorieAPI;
 }
 
 interface APIResponse {
@@ -234,7 +226,6 @@ interface APIResponse {
   similaires: ProduitSimilaireAPI[];
 }
 
-// ✅ INTERFACE PRODUIT CORRIGÉE
 interface Produit {
   uuid: string;
   nom: string;
@@ -251,7 +242,6 @@ interface Produit {
   nombre_avis: number;
   nombre_favoris: number;
   quantite: number;
-  // ✅ CORRIGÉ: Utiliser vendeur_uuid et boutique_uuid
   vendeur_uuid: string;
   boutique_uuid: string;
   createdAt: string;
@@ -263,6 +253,7 @@ interface Produit {
   };
   createur?: CreateurInfo;
   createurType?: string;
+  boutique?: Boutique;
 }
 
 interface ProduitSimilaire {
@@ -277,6 +268,13 @@ interface ProduitSimilaire {
   quantite: number;
   createur?: CreateurInfo;
   createurType?: string;
+  vendeur_uuid: string;
+  boutique_uuid: string;
+  categorie?: {
+    libelle: string;
+  };
+  nombre_favoris: number;
+  nombre_avis: number;
 }
 
 interface Boutique {
@@ -294,6 +292,9 @@ interface Boutique {
   created_at: string;
   updated_at: string;
   vendeur?: CreateurInfo;
+  type_boutique_uuid?: string;
+  politique_retour?: string | null;
+  conditions_utilisation?: string | null;
 }
 
 interface CommentaireAPI {
@@ -351,7 +352,6 @@ interface Commentaire {
   date: string;
   likes: number;
   is_helpful: boolean;
-  reponses?: Commentaire[];
 }
 
 interface NoteStats {
@@ -373,6 +373,7 @@ const SecureImage = ({
   fallbackSrc,
   className = "",
   style = {},
+  onClick,
   onError = null,
 }: {
   src: string | null;
@@ -380,6 +381,7 @@ const SecureImage = ({
   fallbackSrc: string;
   className?: string;
   style?: React.CSSProperties;
+  onClick?: () => void;
   onError?:
     | ((event: React.SyntheticEvent<HTMLImageElement, Event>) => void)
     | null;
@@ -403,7 +405,6 @@ const SecureImage = ({
       const url = src;
 
       if (!url) {
-        console.log("URL est null ou undefined");
         return;
       }
 
@@ -411,7 +412,6 @@ const SecureImage = ({
         const key = url.replace("http://15.236.142.141:9000/oskar-bucket/", "");
         const encodedKey = encodeURIComponent(key);
         const proxyUrl = `http://localhost:3005/api/files/${encodedKey}`;
-        console.log("Tentative conversion URL Minio vers proxy:", proxyUrl);
         setCurrentSrc(proxyUrl);
         return;
       }
@@ -433,11 +433,12 @@ const SecureImage = ({
 
   return (
     <div
-      className="position-relative"
-      style={{ ...style, minHeight: (style.height as number) || "auto" }}
+      className="position-relative w-100 h-100"
+      onClick={onClick}
+      style={{ cursor: onClick ? "pointer" : "default" }}
     >
       {loading && !hasError && (
-        <div className="position-absolute top-0 left-0 w-100 h-100 d-flex align-items-center justify-content-center bg-light">
+        <div className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-light">
           <div
             className="spinner-border spinner-border-sm text-primary"
             role="status"
@@ -455,17 +456,9 @@ const SecureImage = ({
         loading="lazy"
         style={{
           transition: "opacity 0.3s ease",
-          ...(hasError && { display: "none" }),
+          ...style,
         }}
       />
-      {hasError && fallbackSrc && (
-        <img
-          src={fallbackSrc}
-          alt={alt}
-          className={className}
-          style={{ opacity: 1 }}
-        />
-      )}
     </div>
   );
 };
@@ -486,6 +479,9 @@ export default function ProduitDetailPage() {
   const [produitsSimilaires, setProduitsSimilaires] = useState<
     ProduitSimilaire[]
   >([]);
+  const [produitsRecents, setProduitsRecents] = useState<ProduitSimilaire[]>(
+    [],
+  );
   const [commentaires, setCommentaires] = useState<Commentaire[]>([]);
   const [commentairesStats, setCommentairesStats] = useState({
     nombreCommentaires: 0,
@@ -496,6 +492,7 @@ export default function ProduitDetailPage() {
   const [images, setImages] = useState<string[]>([]);
   const [imagePrincipale, setImagePrincipale] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [loadingRecents, setLoadingRecents] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [quantite, setQuantite] = useState(1);
   const [favori, setFavori] = useState(false);
@@ -503,15 +500,46 @@ export default function ProduitDetailPage() {
   const [loadingComments, setLoadingComments] = useState(false);
   const [commentairesFetched, setCommentairesFetched] = useState(false);
   const [showAddReview, setShowAddReview] = useState(false);
+  const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
   const [newReview, setNewReview] = useState({
     note: 5,
     commentaire: "",
   });
   const [submittingReview, setSubmittingReview] = useState(false);
 
-  // États pour le contact
+  // États pour les galeries
+  const [selectedThumbnail, setSelectedThumbnail] = useState(0);
   const [contactVisible, setContactVisible] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
+
+  // FAQ
+  const faqs = [
+    {
+      question: "Comment contacter le vendeur ?",
+      answer:
+        "Vous pouvez contacter le vendeur en utilisant les boutons Appeler, WhatsApp ou Envoyer un message sur cette page. Assurez-vous de vous présenter et de poser toutes vos questions sur l'article avant d'organiser une rencontre.",
+    },
+    {
+      question: "Le prix est-il négociable ?",
+      answer:
+        "Le prix affiché peut être négociable. N'hésitez pas à contacter le vendeur pour discuter du prix.",
+    },
+    {
+      question: "Comment puis-je vérifier l'authenticité de l'article ?",
+      answer:
+        "Lors de la rencontre, examinez attentivement l'article, vérifiez les numéros de série si disponibles, et demandez tous les documents d'authenticité.",
+    },
+    {
+      question: "Quels modes de paiement sont acceptés ?",
+      answer:
+        "Les modes de paiement sont à convenir entre l'acheteur et le vendeur. Privilégiez les paiements en espèces lors de la rencontre.",
+    },
+    {
+      question: "Puis-je retourner l'article si je ne suis pas satisfait ?",
+      answer:
+        "Les retours dépendent de l'accord entre l'acheteur et le vendeur. Discutez-en avant la transaction.",
+    },
+  ];
 
   // ============================================
   // FONCTIONS UTILITAIRES
@@ -558,13 +586,10 @@ export default function ProduitDetailPage() {
     url: string | null,
     key: string | null = null,
   ): string => {
-    console.log("normalizeImageUrl appelée avec:", { url, key });
-
     if (key) {
       if (!key.startsWith("http://") && !key.startsWith("https://")) {
         const encodedKey = encodeURIComponent(key);
         const proxyUrl = `http://localhost:3005/api/files/${encodedKey}`;
-        console.log("URL proxy générée depuis clé:", proxyUrl);
         return proxyUrl;
       }
     }
@@ -586,27 +611,6 @@ export default function ProduitDetailPage() {
       return convertMinioUrlToProxy(cleanUrl);
     }
 
-    if (
-      cleanUrl.includes("oskar-bucket/") &&
-      !cleanUrl.includes("localhost:3005")
-    ) {
-      let minioKey = cleanUrl;
-
-      if (cleanUrl.includes("http://")) {
-        const urlParts = cleanUrl.split("/");
-        const bucketIndex = urlParts.indexOf("oskar-bucket");
-        if (bucketIndex !== -1 && bucketIndex + 1 < urlParts.length) {
-          minioKey = urlParts.slice(bucketIndex + 1).join("/");
-        }
-      }
-
-      minioKey = minioKey.replace(/^oskar-bucket\//, "");
-
-      console.log("Clé S3 extraite:", minioKey);
-      const encodedKey = encodeURIComponent(minioKey);
-      return `http://localhost:3005/api/files/${encodedKey}`;
-    }
-
     if (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://")) {
       if (cleanUrl.includes("http:localhost")) {
         return cleanUrl.replace("http:localhost", "http://localhost");
@@ -618,7 +622,6 @@ export default function ProduitDetailPage() {
       return `${API_CONFIG.BASE_URL || "http://localhost:3005"}${cleanUrl}`;
     }
 
-    console.warn("URL d'image non reconnue:", cleanUrl);
     return getDefaultProductImage();
   };
 
@@ -644,8 +647,95 @@ export default function ProduitDetailPage() {
     return produit.note_moyenne;
   };
 
+  const formatMemberSince = (dateString: string | undefined) => {
+    if (!dateString) return "mars 2023";
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString("fr-FR", {
+        month: "long",
+        year: "numeric",
+      });
+    } catch {
+      return "mars 2023";
+    }
+  };
+
+  const getStatutBadge = (statut: string) => {
+    switch (statut?.toLowerCase()) {
+      case "actif":
+      case "active":
+        return { text: "Active", color: "success" };
+      case "en_review":
+        return { text: "En révision", color: "warning" };
+      case "ferme":
+      case "fermée":
+        return { text: "Fermée", color: "danger" };
+      case "bloque":
+      case "bloquée":
+        return { text: "Bloquée", color: "danger" };
+      default:
+        return { text: statut || "En attente", color: "secondary" };
+    }
+  };
+
+  const getTypeIcon = (type: string | undefined) => {
+    switch (type) {
+      case "produit":
+      case "vente":
+        return faTag;
+      case "don":
+      case "donation":
+        return faGift;
+      case "echange":
+      case "exchange":
+        return faExchangeAlt;
+      default:
+        return faTag;
+    }
+  };
+
+  const getConditionBadge = (statut: string) => {
+    switch (statut?.toLowerCase()) {
+      case "neuf":
+        return {
+          text: "Neuf",
+          color: "success",
+          bgColor: "bg-success",
+          icon: faCertificate,
+        };
+      case "bon_etat":
+        return {
+          text: "Bon état",
+          color: "warning",
+          bgColor: "bg-warning",
+          icon: faThumbsUp,
+        };
+      case "occasion":
+        return {
+          text: "Occasion",
+          color: "info",
+          bgColor: "bg-info",
+          icon: faRecycle,
+        };
+      case "publie":
+        return {
+          text: "Publié",
+          color: "primary",
+          bgColor: "bg-primary",
+          icon: faCheck,
+        };
+      default:
+        return {
+          text: "À vérifier",
+          color: "secondary",
+          bgColor: "bg-secondary",
+          icon: faQuestion,
+        };
+    }
+  };
+
   // ============================================
-  // FONCTIONS DE TRANSFORMATION - CORRIGÉES
+  // FONCTIONS DE TRANSFORMATION
   // ============================================
   const transformCreateurInfo = (apiCreateur: any): CreateurInfo => {
     return {
@@ -662,10 +752,14 @@ export default function ProduitDetailPage() {
       est_verifie: apiCreateur.est_verifie || false,
       est_bloque: apiCreateur.est_bloque || false,
       userType: apiCreateur.userType || apiCreateur.type || "utilisateur",
+      created_at: apiCreateur.created_at || apiCreateur.createdAt,
+      nombre_annonces: apiCreateur.nombre_annonces || 0,
+      nombre_ventes: apiCreateur.nombre_ventes || 0,
+      taux_reponse: apiCreateur.taux_reponse || 98,
+      temps_reponse: apiCreateur.temps_reponse || "Moins de 2 heures",
     };
   };
 
-  // ✅ FONCTION TRANSFORM PRODUIT CORRIGÉE
   const transformProduitData = (apiProduit: ProduitAPI): Produit => {
     const safeNoteMoyenne =
       apiProduit.note_moyenne !== null && !isNaN(apiProduit.note_moyenne)
@@ -689,9 +783,8 @@ export default function ProduitDetailPage() {
       etoile: apiProduit.etoile || 0,
       note_moyenne: safeNoteMoyenne,
       nombre_avis: apiProduit.nombre_avis || 0,
-      nombre_favoris: apiProduit.nombre_favoris || 0,
+      nombre_favoris: apiProduit.nombreFavoris || 0,
       quantite: apiProduit.quantite || 0,
-      // ✅ CORRIGÉ: Utiliser vendeur_uuid et boutique_uuid
       vendeur_uuid: apiProduit.vendeur_uuid,
       boutique_uuid: apiProduit.boutique_uuid,
       createdAt: apiProduit.createdAt || new Date().toISOString(),
@@ -707,6 +800,9 @@ export default function ProduitDetailPage() {
         createur: transformCreateurInfo(apiProduit.createur),
       }),
       createurType: apiProduit.createurType,
+      ...(apiProduit.boutique && {
+        boutique: transformBoutiqueData(apiProduit.boutique),
+      }),
     };
   };
 
@@ -726,21 +822,23 @@ export default function ProduitDetailPage() {
       note_moyenne: apiSimilaire.note_moyenne || 0,
       disponible: apiSimilaire.disponible,
       quantite: apiSimilaire.quantite || 0,
+      vendeur_uuid: apiSimilaire.vendeur_uuid,
+      boutique_uuid: apiSimilaire.boutique_uuid,
+      nombre_favoris: apiSimilaire.nombreFavoris || 0,
+      nombre_avis: apiSimilaire.nombre_avis || 0,
       ...(apiSimilaire.createur && {
         createur: transformCreateurInfo(apiSimilaire.createur),
       }),
       createurType: apiSimilaire.createurType,
+      ...(apiSimilaire.categorie && {
+        categorie: {
+          libelle: apiSimilaire.categorie.libelle,
+        },
+      }),
     };
   };
 
   const transformBoutiqueData = (apiBoutique: BoutiqueAPI): Boutique => {
-    console.log("Transform boutique data:", {
-      logo: apiBoutique.logo,
-      logo_key: apiBoutique.logo_key,
-      banniere: apiBoutique.banniere,
-      banniere_key: apiBoutique.banniere_key,
-    });
-
     const logoUrl = normalizeImageUrl(
       apiBoutique.logo_key ? null : apiBoutique.logo,
       apiBoutique.logo_key,
@@ -750,13 +848,6 @@ export default function ProduitDetailPage() {
       apiBoutique.banniere_key ? null : apiBoutique.banniere,
       apiBoutique.banniere_key,
     );
-
-    console.log("URLs normalisées boutique:", {
-      logoUrl,
-      banniereUrl,
-      logoKey: apiBoutique.logo_key,
-      banniereKey: apiBoutique.banniere_key,
-    });
 
     return {
       uuid: apiBoutique.uuid,
@@ -772,6 +863,9 @@ export default function ProduitDetailPage() {
       est_ferme: apiBoutique.est_ferme || false,
       created_at: apiBoutique.created_at,
       updated_at: apiBoutique.updated_at,
+      type_boutique_uuid: apiBoutique.type_boutique_uuid,
+      politique_retour: apiBoutique.politique_retour,
+      conditions_utilisation: apiBoutique.conditions_utilisation,
       ...(apiBoutique.vendeur && {
         vendeur: transformCreateurInfo(apiBoutique.vendeur),
       }),
@@ -801,6 +895,61 @@ export default function ProduitDetailPage() {
   // ============================================
   // CHARGEMENT DES DONNÉES
   // ============================================
+  // app/(front-office)/produits/[uuid]/page.tsx
+  // Lignes 880-944 - Correction de la fonction fetchProduitsRecents
+
+  const fetchProduitsRecents = useCallback(async () => {
+    try {
+      setLoadingRecents(true);
+
+      const endpoints = [
+        API_ENDPOINTS.PRODUCTS.PUBLISHED,
+        API_ENDPOINTS.DONS.PUBLISHED,
+        API_ENDPOINTS.ECHANGES.PUBLISHED,
+      ];
+
+      const randomEndpoint =
+        endpoints[Math.floor(Math.random() * endpoints.length)];
+
+      const response = await api.get<any[]>(randomEndpoint);
+
+      if (response && Array.isArray(response)) {
+        // Filtrer pour ne pas inclure le produit courant
+        const filtered = response.filter((item) => item.uuid !== uuid);
+        // Mélanger et prendre les 4 premiers
+        const shuffled = filtered.sort(() => 0.5 - Math.random());
+        const selected = shuffled.slice(0, 4);
+
+        const transformed = selected.map((item: any) => ({
+          uuid:
+            item.uuid || `recent-${Math.random().toString(36).substr(2, 9)}`,
+          nom: item.libelle || item.nom || item.titre || "Produit récent",
+          libelle: item.libelle || item.nom || item.titre || "Produit récent",
+          prix: item.prix || 0,
+          image: normalizeImageUrl(item.image, item.image_key),
+          note_moyenne: item.note_moyenne || 0,
+          disponible: item.disponible || true,
+          vendeur_uuid: item.vendeur_uuid || "",
+          boutique_uuid: item.boutique_uuid || "",
+          createur: item.createur
+            ? transformCreateurInfo(item.createur)
+            : undefined,
+          createurType: item.createurType || "utilisateur",
+          statut: item.statut || "disponible",
+          quantite: item.quantite || 1,
+          nombre_favoris: item.nombreFavoris || 0,
+          nombre_avis: item.nombre_avis || 0,
+        }));
+
+        setProduitsRecents(transformed);
+      }
+    } catch (err) {
+      console.warn("Erreur chargement produits récents:", err);
+      setProduitsRecents([]);
+    } finally {
+      setLoadingRecents(false);
+    }
+  }, [uuid, normalizeImageUrl, transformCreateurInfo]);
   const fetchCommentaires = useCallback(
     async (produitUuid: string) => {
       if (!produitUuid || commentairesFetched) return;
@@ -859,7 +1008,6 @@ export default function ProduitDetailPage() {
     [produit, commentairesFetched],
   );
 
-  // ✅ FONCTION FETCH PRODUIT DETAILS CORRIGÉE
   const fetchProduitDetails = useCallback(async () => {
     if (!uuid) return;
 
@@ -875,14 +1023,6 @@ export default function ProduitDetailPage() {
         throw new Error("Produit non trouvé");
       }
 
-      console.log("✅ Réponse API produit:", {
-        uuid: response.produit.uuid,
-        createur: response.produit.createur,
-        createurType: response.produit.createurType,
-        utilisateur_uuid: response.produit.utilisateur_uuid,
-        vendeur_uuid: response.produit.vendeur_uuid,
-      });
-
       const produitData = transformProduitData(response.produit);
       const similairesData = response.similaires.map(
         transformProduitSimilaireData,
@@ -892,12 +1032,11 @@ export default function ProduitDetailPage() {
       setProduitsSimilaires(similairesData);
       setFavori(response.produit.is_favoris || false);
 
-      // ✅ GESTION DU CRÉATEUR
+      // Gestion du créateur
       if (response.produit.createur) {
         const createurData = transformCreateurInfo(response.produit.createur);
         createurData.userType = response.produit.createurType || "utilisateur";
         setCreateur(createurData);
-        console.log("✅ Créateur chargé depuis l'API:", createurData);
       } else if (response.produit.vendeur_uuid) {
         try {
           const vendeurResponse = await api.get(
@@ -907,10 +1046,9 @@ export default function ProduitDetailPage() {
             const vendeurData = transformCreateurInfo(vendeurResponse.data);
             vendeurData.userType = "vendeur";
             setCreateur(vendeurData);
-            console.log("✅ Vendeur chargé manuellement:", vendeurData);
           }
         } catch (err) {
-          console.warn("❌ Impossible de charger les détails du vendeur:", err);
+          console.warn("Impossible de charger les détails du vendeur:", err);
         }
       } else if (response.produit.utilisateur_uuid) {
         try {
@@ -925,11 +1063,10 @@ export default function ProduitDetailPage() {
             );
             utilisateurData.userType = "utilisateur";
             setCreateur(utilisateurData);
-            console.log("✅ Utilisateur chargé manuellement:", utilisateurData);
           }
         } catch (err) {
           console.warn(
-            "❌ Impossible de charger les détails de l'utilisateur:",
+            "Impossible de charger les détails de l'utilisateur:",
             err,
           );
         }
@@ -941,28 +1078,32 @@ export default function ProduitDetailPage() {
         setBoutique(boutiqueData);
       }
 
-      // Gestion des images
-      const imageUrls: string[] = [];
-      const mainImage = produitData.image;
-      imageUrls.push(mainImage);
-      setImagePrincipale(mainImage);
+      // Gestion des images - Générer plusieurs images à partir des produits similaires et récents
+      const imageUrls: string[] = [produitData.image];
 
-      similairesData.slice(0, 4).forEach((similaire) => {
-        if (similaire.image && !imageUrls.includes(similaire.image)) {
-          imageUrls.push(similaire.image);
+      // Ajouter des images des produits similaires
+      response.similaires.slice(0, 4).forEach((similaire) => {
+        const imgUrl = normalizeImageUrl(similaire.image, similaire.image_key);
+        if (imgUrl && !imageUrls.includes(imgUrl)) {
+          imageUrls.push(imgUrl);
         }
       });
 
-      while (imageUrls.length < 4) {
+      // Si pas assez d'images, ajouter des placeholders
+      while (imageUrls.length < 5) {
         imageUrls.push(getDefaultProductImage());
       }
 
-      setImages(imageUrls);
+      setImages(imageUrls.slice(0, 5));
+      setImagePrincipale(imageUrls[0]);
 
       // Charger les commentaires
       fetchCommentaires(produitData.uuid);
+
+      // Charger les produits récents
+      fetchProduitsRecents();
     } catch (err: any) {
-      console.error("❌ Erreur détail produit:", err);
+      console.error("Erreur détail produit:", err);
 
       if (
         err.response?.status === 404 ||
@@ -981,7 +1122,7 @@ export default function ProduitDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [uuid, fetchCommentaires]);
+  }, [uuid, fetchCommentaires, fetchProduitsRecents]);
 
   useEffect(() => {
     if (uuid && loading && !produit) {
@@ -1068,46 +1209,6 @@ export default function ProduitDetailPage() {
       );
     }
     return <>{stars}</>;
-  };
-
-  const getConditionBadge = (statut: string) => {
-    switch (statut?.toLowerCase()) {
-      case "neuf":
-        return {
-          text: "Neuf",
-          color: "success",
-          bgColor: "bg-success",
-          icon: faCertificate,
-        };
-      case "bon_etat":
-        return {
-          text: "Bon état",
-          color: "warning",
-          bgColor: "bg-warning",
-          icon: faThumbsUp,
-        };
-      case "occasion":
-        return {
-          text: "Occasion",
-          color: "info",
-          bgColor: "bg-info",
-          icon: faRecycle,
-        };
-      case "publie":
-        return {
-          text: "Publié",
-          color: "primary",
-          bgColor: "bg-primary",
-          icon: faCheck,
-        };
-      default:
-        return {
-          text: "À vérifier",
-          color: "secondary",
-          bgColor: "bg-secondary",
-          icon: faQuestion,
-        };
-    }
   };
 
   const calculateNoteStats = (): NoteStats => {
@@ -1208,7 +1309,6 @@ export default function ProduitDetailPage() {
       });
   };
 
-  // ✅ FONCTION CONTACTER VENDEUR CORRIGÉE
   const handleContactVendeur = () => {
     if (!isLoggedIn) {
       openLoginModal();
@@ -1220,7 +1320,6 @@ export default function ProduitDetailPage() {
       return;
     }
 
-    // Déterminer le dashboard en fonction du type d'utilisateur connecté
     const userType = user?.type || "utilisateur";
 
     let dashboardPath = "";
@@ -1241,7 +1340,6 @@ export default function ProduitDetailPage() {
         dashboardPath = "/dashboard-utilisateur";
     }
 
-    // Construire les paramètres pour pré-remplir le formulaire de message
     const params = new URLSearchParams({
       destinataireUuid: createur.uuid,
       destinataireEmail: createur.email || "",
@@ -1250,7 +1348,6 @@ export default function ProduitDetailPage() {
       produitUuid: produit?.uuid || "",
     });
 
-    // Rediriger vers la page de messagerie du dashboard approprié
     router.push(`${dashboardPath}/messages?${params.toString()}`);
   };
 
@@ -1286,43 +1383,15 @@ export default function ProduitDetailPage() {
     }
   };
 
-  const handleAddToCart = async () => {
-    if (!produit) return;
-
-    if (!isLoggedIn) {
-      openLoginModal();
-      return;
-    }
-
-    try {
-      await api.post(API_ENDPOINTS.PANIER.ADD, {
-        produitUuid: produit.uuid,
-        quantite: quantite,
-      });
-      alert("Produit ajouté au panier !");
-    } catch (err: any) {
-      console.error("Erreur ajout panier:", err);
-      if (err.response?.status === 401) {
-        alert("Votre session a expiré. Veuillez vous reconnecter.");
-        openLoginModal();
-      } else {
-        alert("Une erreur est survenue. Veuillez réessayer.");
-      }
-    }
-  };
-
   const handleShare = (platform: string) => {
     if (!produit) return;
 
     const shareUrl = window.location.href;
     const shareText = `Découvrez ce produit sur OSKAR : ${produit.libelle} - ${formatPrice(produit.prix)}`;
-    const hashtags = "OSKAR,Produit,Vente,Commerce";
 
     const urls: { [key: string]: string } = {
       facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`,
-      twitter: `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}&hashtags=${encodeURIComponent(hashtags)}`,
       whatsapp: `https://wa.me/?text=${encodeURIComponent(shareText + " " + shareUrl)}`,
-      linkedin: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`,
     };
 
     if (urls[platform]) {
@@ -1456,14 +1525,14 @@ export default function ProduitDetailPage() {
               <div className="placeholder-glow">
                 <div
                   className="placeholder col-12 rounded bg-secondary"
-                  style={{ height: "400px" }}
+                  style={{ height: "600px" }}
                 ></div>
                 <div className="row mt-4">
-                  {[...Array(4)].map((_, i) => (
-                    <div key={i} className="col-3">
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="col-2">
                       <div
                         className="placeholder rounded bg-secondary"
-                        style={{ height: "80px" }}
+                        style={{ height: "100px" }}
                       ></div>
                     </div>
                   ))}
@@ -1482,7 +1551,7 @@ export default function ProduitDetailPage() {
         <div className="container">
           <div className="row justify-content-center">
             <div className="col-md-8 col-lg-6 text-center">
-              <div className="card border-0 shadow">
+              <div className="card border-0 shadow-lg rounded-4">
                 <div className="card-body py-5">
                   <div className="mb-4">
                     <FontAwesomeIcon
@@ -1495,11 +1564,17 @@ export default function ProduitDetailPage() {
                     {error || "Ce produit n'existe pas ou a été supprimé."}
                   </p>
                   <div className="d-flex gap-3 justify-content-center">
-                    <Link href="/produits" className="btn btn-outline-primary">
+                    <Link
+                      href="/produits"
+                      className="btn btn-outline-primary rounded-pill px-4"
+                    >
                       <FontAwesomeIcon icon={faArrowLeft} className="me-2" />
                       Retour aux produits
                     </Link>
-                    <Link href="/" className="btn btn-primary">
+                    <Link
+                      href="/"
+                      className="btn btn-primary rounded-pill px-4"
+                    >
                       <FontAwesomeIcon icon={faHome} className="me-2" />
                       Retour à l'accueil
                     </Link>
@@ -1518,1630 +1593,1239 @@ export default function ProduitDetailPage() {
     ? commentaires
     : commentaires.slice(0, 3);
 
+  const boutiqueStatut = boutique ? getStatutBadge(boutique.statut) : null;
+
+  // Déterminer les produits à afficher dans la section "Articles Similaires"
+  const produitsAShow =
+    produitsSimilaires.length > 0
+      ? produitsSimilaires.slice(0, 4)
+      : produitsRecents.slice(0, 4);
+
   return (
-    <>
-      <div className="bg-light min-vh-100">
-        {/* Breadcrumb */}
-        <nav aria-label="breadcrumb" className="bg-white border-bottom">
-          <div className="container">
-            <div className="d-flex justify-content-between align-items-center py-3">
-              <ol className="breadcrumb mb-0">
-                <li className="breadcrumb-item">
-                  <Link href="/" className="text-decoration-none text-muted">
-                    <FontAwesomeIcon icon={faHome} className="me-1" />
-                    Accueil
-                  </Link>
-                </li>
-                <li className="breadcrumb-item">
-                  <Link
-                    href="/produits"
-                    className="text-decoration-none text-muted"
-                  >
-                    <FontAwesomeIcon icon={faShoppingBag} className="me-1" />
-                    Produits
-                  </Link>
-                </li>
-                <li
-                  className="breadcrumb-item active text-truncate"
-                  style={{ maxWidth: "200px" }}
+    <div className="bg-light min-vh-100">
+      {/* Breadcrumb */}
+      <section className="bg-white border-bottom py-3">
+        <div className="container">
+          <nav aria-label="breadcrumb">
+            <ol className="breadcrumb mb-0">
+              <li className="breadcrumb-item">
+                <Link href="/" className="text-decoration-none text-muted">
+                  <FontAwesomeIcon icon={faHome} className="me-1" />
+                  Accueil
+                </Link>
+              </li>
+              {produit.categorie && (
+                <>
+                  <li className="breadcrumb-item">
+                    <Link
+                      href={`/categories/${produit.categorie.libelle.toLowerCase().replace(/ /g, "-")}`}
+                      className="text-decoration-none text-muted"
+                    >
+                      {produit.categorie.libelle}
+                    </Link>
+                  </li>
+                </>
+              )}
+              <li
+                className="breadcrumb-item active text-truncate"
+                style={{ maxWidth: "200px" }}
+              >
+                {produit.libelle}
+              </li>
+            </ol>
+          </nav>
+        </div>
+      </section>
+
+      {/* Main Content */}
+      <main className="container py-5">
+        <div className="row g-4">
+          {/* Colonne gauche - Galerie et description (8/12) */}
+          <div className="col-lg-8">
+            {/* Galerie principale */}
+            <div className="card border-0 shadow-lg rounded-4 overflow-hidden mb-4">
+              <div className="position-relative" style={{ height: "600px" }}>
+                <SecureImage
+                  src={imagePrincipale}
+                  alt={produit.libelle}
+                  fallbackSrc={getDefaultProductImage()}
+                  className="w-100 h-100 object-cover"
+                />
+                <button
+                  onClick={handleAddToFavorites}
+                  className="position-absolute top-0 end-0 m-3 btn btn-light rounded-circle p-3 shadow-lg hover-bg-warning hover-text-white transition-all"
+                  style={{ width: "50px", height: "50px" }}
                 >
-                  {produit.libelle}
-                </li>
-              </ol>
-              <div className="d-flex gap-2">
-                <span
-                  className={`badge bg-${produit.disponible ? "success" : "danger"} px-3 py-2`}
-                >
-                  <FontAwesomeIcon
-                    icon={produit.disponible ? faCheckCircle : faTimesCircle}
-                    className="me-1"
+                  <i
+                    className={`fa-${favori ? "solid" : "regular"} fa-heart`}
                   />
-                  {produit.disponible ? "Disponible" : "Non disponible"}
-                </span>
-                {boutique && (
-                  <span className="badge bg-info px-3 py-2">
-                    <FontAwesomeIcon icon={faStore} className="me-1" />
-                    {boutique.nom}
+                </button>
+                <div className="position-absolute top-0 start-0 m-3 bg-success text-white px-4 py-2 rounded-pill fw-semibold d-flex align-items-center gap-2">
+                  <FontAwesomeIcon icon={getTypeIcon(produit.createurType)} />
+                  <span>
+                    {produit.createurType === "vendeur" ? "vente" : "don"}
                   </span>
+                </div>
+                {images.length > 1 && (
+                  <>
+                    <button
+                      onClick={() => {
+                        const newIndex =
+                          (selectedThumbnail - 1 + images.length) %
+                          images.length;
+                        setSelectedThumbnail(newIndex);
+                        setImagePrincipale(images[newIndex]);
+                      }}
+                      className="position-absolute start-0 top-50 translate-middle-y ms-3 btn btn-light bg-opacity-90 rounded-circle p-3 shadow-lg hover-bg-warning hover-text-white transition-all"
+                    >
+                      <i className="fa-solid fa-chevron-left"></i>
+                    </button>
+                    <button
+                      onClick={() => {
+                        const newIndex =
+                          (selectedThumbnail + 1) % images.length;
+                        setSelectedThumbnail(newIndex);
+                        setImagePrincipale(images[newIndex]);
+                      }}
+                      className="position-absolute end-0 top-50 translate-middle-y me-3 btn btn-light bg-opacity-90 rounded-circle p-3 shadow-lg hover-bg-warning hover-text-white transition-all"
+                    >
+                      <i className="fa-solid fa-chevron-right"></i>
+                    </button>
+                  </>
                 )}
               </div>
             </div>
-          </div>
-        </nav>
 
-        {/* Contenu principal */}
-        <div className="container py-5">
-          <div className="row g-4">
-            {/* Colonne gauche - Images et description */}
-            <div className="col-lg-8">
-              {/* Image principale */}
-              <div className="card shadow-sm border-0 mb-4">
-                <div className="card-body p-0">
-                  <div className="row g-0">
-                    <div className="col-md-7">
-                      <div
-                        className="position-relative"
-                        style={{ height: "400px" }}
-                      >
-                        <SecureImage
-                          src={imagePrincipale}
-                          alt={produit.libelle}
-                          fallbackSrc={getDefaultProductImage()}
-                          className="img-fluid h-100 w-100 object-fit-cover"
-                        />
-                        <div className="position-absolute top-0 start-0 p-3">
-                          <span
-                            className={`badge ${condition.bgColor} text-white px-3 py-2`}
-                          >
-                            <FontAwesomeIcon
-                              icon={condition.icon}
-                              className="me-1"
-                            />
-                            {condition.text}
-                          </span>
-                        </div>
-                        <button
-                          onClick={handleAddToFavorites}
-                          className={`position-absolute top-0 end-0 m-3 btn ${favori ? "btn-danger" : "btn-light"} rounded-circle`}
-                          style={{ width: "50px", height: "50px" }}
-                          title={
-                            favori
-                              ? "Retirer des favoris"
-                              : "Ajouter aux favoris"
-                          }
-                        >
-                          <FontAwesomeIcon
-                            icon={faHeart}
-                            className={favori ? "fas" : "far"}
-                          />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="col-md-5">
-                      <div className="p-4 h-100 d-flex flex-column">
-                        <h1 className="h3 fw-bold mb-3">{produit.libelle}</h1>
-
-                        {/* Note et avis */}
-                        <div className="mb-4">
-                          <div className="d-flex align-items-center mb-2">
-                            <div className="me-3">
-                              {renderStars(produit.note_moyenne)}
-                            </div>
-                            <span className="text-muted">
-                              {safeToFixed(produit.note_moyenne)}
-                              /5 ({produit.nombre_avis} avis)
-                            </span>
-                          </div>
-                          <div className="d-flex align-items-center">
-                            <FontAwesomeIcon
-                              icon={faHeart}
-                              className="text-danger me-2"
-                            />
-                            <span className="text-muted">
-                              {produit.nombre_favoris} favoris
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Prix */}
-                        <div className="mb-4">
-                          <h2 className="text-success fw-bold mb-2">
-                            {formatPrice(produit.prix)}
-                          </h2>
-                          <span className="badge bg-success">
-                            <FontAwesomeIcon icon={faTag} className="me-1" />
-                            Vente
-                          </span>
-                        </div>
-
-                        {/* Quantité */}
-                        <div className="mb-4">
-                          <label className="form-label fw-bold">Quantité</label>
-                          <div className="d-flex align-items-center">
-                            <button
-                              className="btn btn-outline-secondary"
-                              onClick={() =>
-                                setQuantite(Math.max(1, quantite - 1))
-                              }
-                              disabled={quantite <= 1}
-                            >
-                              <FontAwesomeIcon icon={faMinus} />
-                            </button>
-                            <input
-                              type="number"
-                              className="form-control text-center mx-2"
-                              style={{ maxWidth: "80px" }}
-                              value={quantite}
-                              onChange={(e) =>
-                                setQuantite(
-                                  Math.max(1, parseInt(e.target.value) || 1),
-                                )
-                              }
-                              min="1"
-                              max={produit.quantite}
-                            />
-                            <button
-                              className="btn btn-outline-secondary"
-                              onClick={() =>
-                                setQuantite(
-                                  Math.min(produit.quantite, quantite + 1),
-                                )
-                              }
-                              disabled={quantite >= produit.quantite}
-                            >
-                              <FontAwesomeIcon icon={faPlus} />
-                            </button>
-                            <small className="text-muted ms-3">
-                              {produit.quantite} disponible(s)
-                            </small>
-                          </div>
-                        </div>
-
-                        {/* Boutons d'action */}
-                        <div className="mt-auto">
-                          <div className="d-grid gap-2">
-                            {/* ✅ BOUTON CONTACTER LE VENDEUR - CORRIGÉ */}
-                            <button
-                              className="btn btn-outline-info btn-lg"
-                              onClick={handleContactVendeur}
-                              disabled={!createur}
-                            >
-                              <FontAwesomeIcon
-                                icon={faMessage}
-                                className="me-2"
-                              />
-                              {createur?.userType === "vendeur"
-                                ? "Contacter le vendeur"
-                                : "Contacter le créateur"}
-                            </button>
-
-                            <div className="d-flex gap-2">
-                              <button
-                                className="btn btn-outline-primary flex-fill"
-                                onClick={() => setShowShareMenu(!showShareMenu)}
-                              >
-                                <FontAwesomeIcon
-                                  icon={faShareAlt}
-                                  className="me-2"
-                                />
-                                Partager
-                              </button>
-                              <button
-                                className="btn btn-outline-info flex-fill"
-                                onClick={() =>
-                                  setContactVisible(!contactVisible)
-                                }
-                              >
-                                <FontAwesomeIcon
-                                  icon={faUser}
-                                  className="me-2"
-                                />
-                                Contact
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Menu de partage */}
-              {showShareMenu && (
-                <div className="card shadow-sm border-0 mb-4">
-                  <div className="card-body p-4">
-                    <div className="d-flex justify-content-between align-items-center mb-3">
-                      <h5 className="fw-bold mb-0">
-                        <FontAwesomeIcon
-                          icon={faShareAlt}
-                          className="me-2 text-primary"
-                        />
-                        Partager ce produit
-                      </h5>
-                      <button
-                        className="btn btn-sm btn-outline-secondary"
-                        onClick={() => setShowShareMenu(false)}
-                      >
-                        <FontAwesomeIcon icon={faTimes} />
-                      </button>
-                    </div>
-
-                    <div className="row g-3">
-                      <div className="col-6">
-                        <h6 className="text-muted mb-2">
-                          Partager sur les réseaux
-                        </h6>
-                        <div className="d-flex flex-wrap gap-2">
-                          <button
-                            className="btn btn-outline-primary btn-sm"
-                            onClick={() => handleShare("facebook")}
-                          >
-                            <FontAwesomeIcon
-                              icon={faFacebookF}
-                              className="me-1"
-                            />
-                            Facebook
-                          </button>
-                          <button
-                            className="btn btn-outline-success btn-sm"
-                            onClick={() => handleShare("whatsapp")}
-                          >
-                            <FontAwesomeIcon
-                              icon={faWhatsapp}
-                              className="me-1"
-                            />
-                            WhatsApp
-                          </button>
-                        </div>
-                      </div>
-                      <div className="col-6">
-                        <h6 className="text-muted mb-2">
-                          Contacter le vendeur
-                        </h6>
-                        <div className="d-flex flex-wrap gap-2">
-                          {(createur?.facebook_url || true) && (
-                            <button
-                              className="btn btn-outline-primary btn-sm"
-                              onClick={handleContactFacebook}
-                            >
-                              <FontAwesomeIcon
-                                icon={faFacebookF}
-                                className="me-1"
-                              />
-                              Facebook
-                            </button>
-                          )}
-                          {(createur?.telephone || createur?.whatsapp_url) && (
-                            <button
-                              className="btn btn-outline-success btn-sm"
-                              onClick={handleContactWhatsApp}
-                            >
-                              <FontAwesomeIcon
-                                icon={faWhatsapp}
-                                className="me-1"
-                              />
-                              WhatsApp
-                            </button>
-                          )}
-                          <button
-                            className="btn btn-outline-info btn-sm"
-                            onClick={handleContactVendeur}
-                          >
-                            <FontAwesomeIcon
-                              icon={faMessage}
-                              className="me-1"
-                            />
-                            Messagerie
-                          </button>
-                        </div>
-                      </div>
-                      <div className="col-12">
-                        <div className="input-group">
-                          <input
-                            type="text"
-                            className="form-control"
-                            value={window.location.href}
-                            readOnly
-                          />
-                          <button
-                            className="btn btn-outline-secondary"
-                            onClick={handleCopyLink}
-                          >
-                            <FontAwesomeIcon icon={faCopy} className="me-1" />
-                            Copier
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* ✅ SECTION CONTACT CRÉATEUR */}
-              {contactVisible && createur && (
-                <div className="card shadow-sm border-info mb-4">
-                  <div className="card-header bg-info bg-opacity-10 border-info">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <h5 className="fw-bold mb-0 text-info">
-                        <FontAwesomeIcon icon={faUserCircle} className="me-2" />
-                        {createur.userType === "vendeur"
-                          ? "Informations du vendeur"
-                          : createur.userType === "agent"
-                            ? "Informations de l'agent"
-                            : "Informations de l'utilisateur"}
-                      </h5>
-                      <button
-                        className="btn btn-sm btn-outline-info"
-                        onClick={() => setContactVisible(false)}
-                      >
-                        <FontAwesomeIcon icon={faTimes} />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="card-body">
-                    <div className="row">
-                      <div className="col-md-4 text-center mb-4 mb-md-0">
-                        {createur.avatar ? (
-                          <div className="mb-3">
-                            <SecureImage
-                              src={createur.avatar}
-                              alt={`${createur.prenoms} ${createur.nom}`}
-                              fallbackSrc={getDefaultAvatarUrl()}
-                              className="rounded-circle img-fluid"
-                              style={{
-                                width: "120px",
-                                height: "120px",
-                                objectFit: "cover",
-                              }}
-                            />
-                          </div>
-                        ) : (
-                          <div className="mb-3">
-                            <div
-                              className="rounded-circle bg-light d-flex align-items-center justify-content-center mx-auto"
-                              style={{ width: "120px", height: "120px" }}
-                            >
-                              <FontAwesomeIcon
-                                icon={faUserCircle}
-                                className="text-muted fa-4x"
-                              />
-                            </div>
-                          </div>
-                        )}
-                        <h5 className="fw-bold mb-1">
-                          {createur.prenoms} {createur.nom}
-                        </h5>
-                        <div className="d-flex align-items-center justify-content-center gap-2 mb-2">
-                          <span
-                            className={`badge bg-${
-                              createur.userType === "vendeur"
-                                ? "warning"
-                                : createur.userType === "agent"
-                                  ? "primary"
-                                  : createur.userType === "admin"
-                                    ? "danger"
-                                    : "success"
-                            }`}
-                          >
-                            {createur.userType === "vendeur"
-                              ? "Vendeur"
-                              : createur.userType === "agent"
-                                ? "Agent"
-                                : createur.userType === "admin"
-                                  ? "Administrateur"
-                                  : "Utilisateur"}
-                          </span>
-                          {createur.est_verifie && (
-                            <span className="badge bg-success">
-                              <FontAwesomeIcon
-                                icon={faCheckCircle}
-                                className="me-1"
-                              />
-                              Vérifié
-                            </span>
-                          )}
-                        </div>
-
-                        {/* ✅ BOUTON VOIR LE PROFIL */}
-                        <button
-                          className="btn btn-outline-primary btn-sm mt-2 w-100"
-                          onClick={handleVisitUtilisateur}
-                        >
-                          <FontAwesomeIcon icon={faUser} className="me-1" />
-                          Voir le profil complet
-                        </button>
-
-                        {/* ✅ BOUTON CONTACTER - CORRIGÉ */}
-                        <button
-                          className="btn btn-outline-info btn-sm mt-2 w-100"
-                          onClick={handleContactVendeur}
-                        >
-                          <FontAwesomeIcon icon={faMessage} className="me-1" />
-                          Contacter
-                        </button>
-                      </div>
-                      <div className="col-md-8">
-                        <div className="row g-3">
-                          <div className="col-12">
-                            <h6 className="fw-bold text-muted mb-3">
-                              Informations de contact
-                            </h6>
-                          </div>
-                          {createur.email && (
-                            <div className="col-md-6">
-                              <div className="d-flex align-items-center mb-2">
-                                <FontAwesomeIcon
-                                  icon={faEnvelope}
-                                  className="text-primary me-2"
-                                />
-                                <div>
-                                  <small className="text-muted d-block">
-                                    Email
-                                  </small>
-                                  <strong>{createur.email}</strong>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                          {createur.telephone && (
-                            <div className="col-md-6">
-                              <div className="d-flex align-items-center mb-2">
-                                <FontAwesomeIcon
-                                  icon={faPhone}
-                                  className="text-success me-2"
-                                />
-                                <div>
-                                  <small className="text-muted d-block">
-                                    Téléphone
-                                  </small>
-                                  <strong>{createur.telephone}</strong>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                          <div className="col-12">
-                            <hr />
-                            <h6 className="fw-bold text-muted mb-3">
-                              Contacter via
-                            </h6>
-                            <div className="d-flex flex-wrap gap-2">
-                              {(createur.whatsapp_url ||
-                                createur.telephone) && (
-                                <button
-                                  className="btn btn-success d-flex align-items-center gap-2"
-                                  onClick={handleContactWhatsApp}
-                                >
-                                  <FontAwesomeIcon icon={faWhatsappBrand} />
-                                  <span>WhatsApp</span>
-                                </button>
-                              )}
-                              <button
-                                className="btn btn-primary d-flex align-items-center gap-2"
-                                onClick={handleContactFacebook}
-                              >
-                                <FontAwesomeIcon icon={faFacebookF} />
-                                <span>Facebook</span>
-                              </button>
-                              <button
-                                className="btn btn-outline-primary d-flex align-items-center gap-2"
-                                onClick={handleContactVendeur}
-                              >
-                                <FontAwesomeIcon icon={faMessage} />
-                                <span>Messagerie interne</span>
-                              </button>
-                              <button
-                                className="btn btn-outline-secondary d-flex align-items-center gap-2"
-                                onClick={handleCopyContactInfo}
-                              >
-                                <FontAwesomeIcon icon={faCopy} />
-                                <span>Copier les infos</span>
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Miniatures d'images */}
-              {images.length > 1 && (
-                <div className="card shadow-sm border-0 mb-4">
-                  <div className="card-body p-4">
-                    <h5 className="fw-bold mb-3">
-                      <FontAwesomeIcon
-                        icon={faImages}
-                        className="me-2 text-primary"
+            {/* Miniatures - Mêmes images au-dessus de l'image principale */}
+            {images.length > 1 && (
+              <div className="row g-4 mb-4">
+                {images.map((img, index) => (
+                  <div key={index} className="col">
+                    <div
+                      onClick={() => {
+                        setSelectedThumbnail(index);
+                        setImagePrincipale(img);
+                      }}
+                      className={`rounded-lg overflow-hidden border-2 cursor-pointer h-24 transition-all ${
+                        selectedThumbnail === index
+                          ? "border-warning"
+                          : "border-secondary hover-border-warning"
+                      }`}
+                      style={{ height: "96px" }}
+                    >
+                      <SecureImage
+                        src={img}
+                        alt={`${produit.libelle} - vue ${index + 1}`}
+                        fallbackSrc={getDefaultProductImage()}
+                        className="w-100 h-100 object-cover"
                       />
-                      Galerie d'images
-                    </h5>
-                    <div className="row g-3">
-                      {images.map((img, index) => (
-                        <div key={index} className="col-6 col-md-3">
-                          <div
-                            className={`border ${imagePrincipale === img ? "border-primary border-2" : "border-secondary"} rounded cursor-pointer overflow-hidden`}
-                            onClick={() => setImagePrincipale(img)}
-                            style={{ height: "120px" }}
-                          >
-                            <SecureImage
-                              src={img}
-                              alt={`${produit.libelle} - vue ${index + 1}`}
-                              fallbackSrc={getDefaultProductImage()}
-                              className="img-fluid h-100 w-100 object-fit-cover"
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Description */}
-              <div className="card shadow-sm border-0 mb-4">
-                <div className="card-body p-4">
-                  <h3 className="h5 fw-bold mb-4">
-                    <FontAwesomeIcon
-                      icon={faFileAlt}
-                      className="me-2 text-primary"
-                    />
-                    Description du produit
-                  </h3>
-                  {produit.description ? (
-                    <div className="prose">
-                      <p className="lead">{produit.description}</p>
-                    </div>
-                  ) : (
-                    <p className="text-muted">
-                      Aucune description disponible pour ce produit.
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Spécifications */}
-              <div className="card shadow-sm border-0 mb-4">
-                <div className="card-body p-4">
-                  <h3 className="h5 fw-bold mb-4">
-                    <FontAwesomeIcon
-                      icon={faListAlt}
-                      className="me-2 text-primary"
-                    />
-                    Spécifications
-                  </h3>
-                  <div className="row">
-                    <div className="col-md-6">
-                      <ul className="list-unstyled">
-                        <li className="mb-3">
-                          <strong className="text-muted">Condition:</strong>
-                          <span className={`badge bg-${condition.color} ms-2`}>
-                            {condition.text}
-                          </span>
-                        </li>
-                        <li className="mb-3">
-                          <strong className="text-muted">
-                            Quantité disponible:
-                          </strong>
-                          <span className="ms-2">
-                            {produit.quantite} unité(s)
-                          </span>
-                        </li>
-                        <li className="mb-3">
-                          <strong className="text-muted">Note moyenne:</strong>
-                          <span className="ms-2">
-                            {safeToFixed(produit.note_moyenne)}
-                            /5
-                          </span>
-                        </li>
-                        {produit.categorie && (
-                          <li className="mb-3">
-                            <strong className="text-muted">Catégorie:</strong>
-                            <span className="ms-2">
-                              {produit.categorie.libelle}
-                            </span>
-                          </li>
-                        )}
-                        {produit.createur && (
-                          <li className="mb-3">
-                            <strong className="text-muted">
-                              {produit.createurType === "vendeur"
-                                ? "Vendeur:"
-                                : "Créateur:"}
-                            </strong>
-                            <span className="ms-2">
-                              <Link
-                                href={`/utilisateurs/${produit.createur.uuid}`}
-                                className="text-decoration-none text-primary fw-bold"
-                              >
-                                {produit.createur.prenoms}{" "}
-                                {produit.createur.nom}
-                              </Link>
-                            </span>
-                          </li>
-                        )}
-                      </ul>
-                    </div>
-                    <div className="col-md-6">
-                      <ul className="list-unstyled">
-                        <li className="mb-3">
-                          <strong className="text-muted">Publié le:</strong>
-                          <span className="ms-2">
-                            {formatDate(produit.createdAt)}
-                          </span>
-                        </li>
-                        <li className="mb-3">
-                          <strong className="text-muted">Mise à jour:</strong>
-                          <span className="ms-2">
-                            {formatDate(produit.updatedAt)}
-                          </span>
-                        </li>
-                        <li className="mb-3">
-                          <strong className="text-muted">Favoris:</strong>
-                          <span className="ms-2">{produit.nombre_favoris}</span>
-                        </li>
-                        <li className="mb-3">
-                          <strong className="text-muted">Référence:</strong>
-                          <span className="ms-2">
-                            {produit.uuid.substring(0, 8).toUpperCase()}
-                          </span>
-                        </li>
-                        {produit.createurType && (
-                          <li className="mb-3">
-                            <strong className="text-muted">Type:</strong>
-                            <span className="ms-2">
-                              {produit.createurType === "vendeur"
-                                ? "Vente professionnelle"
-                                : produit.createurType === "agent"
-                                  ? "Agent"
-                                  : "Vente entre particuliers"}
-                            </span>
-                          </li>
-                        )}
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Commentaires et avis */}
-              <div className="card shadow-sm border-0 mb-4">
-                <div className="card-body p-4">
-                  <h3 className="h5 fw-bold mb-4">
-                    <FontAwesomeIcon
-                      icon={faStar}
-                      className="me-2 text-warning"
-                    />
-                    Avis et commentaires ({produit.nombre_avis})
-                  </h3>
-
-                  {loadingComments ? (
-                    <div className="text-center py-4">
-                      <div
-                        className="spinner-border text-primary"
-                        role="status"
-                      >
-                        <span className="visually-hidden">Chargement...</span>
-                      </div>
-                      <p className="text-muted mt-2">Chargement des avis...</p>
-                    </div>
-                  ) : (
-                    <>
-                      {/* Statistiques des notes */}
-                      <div className="bg-light rounded p-4 mb-4">
-                        <div className="row align-items-center">
-                          <div className="col-md-4 text-center">
-                            <div className="display-4 fw-bold text-primary mb-2">
-                              {safeToFixed(noteStats.moyenne)}
-                            </div>
-                            <div className="mb-2">
-                              {renderStars(noteStats.moyenne)}
-                            </div>
-                            <p className="text-muted mb-0">
-                              Basé sur {noteStats.total} avis
-                            </p>
-                          </div>
-                          <div className="col-md-8">
-                            {[5, 4, 3, 2, 1].map((rating) => {
-                              const count = noteStats[
-                                rating as keyof typeof noteStats
-                              ] as number;
-                              const percentage =
-                                noteStats.total > 0
-                                  ? Math.round((count / noteStats.total) * 100)
-                                  : 0;
-
-                              return (
-                                <div
-                                  key={rating}
-                                  className="d-flex align-items-center mb-2"
-                                >
-                                  <span
-                                    className="text-muted me-2"
-                                    style={{ width: "70px" }}
-                                  >
-                                    {rating} étoiles
-                                  </span>
-                                  <div
-                                    className="progress flex-grow-1 me-2"
-                                    style={{ height: "10px" }}
-                                  >
-                                    <div
-                                      className="progress-bar bg-warning"
-                                      style={{ width: `${percentage}%` }}
-                                    ></div>
-                                  </div>
-                                  <span
-                                    className="text-muted"
-                                    style={{ width: "40px" }}
-                                  >
-                                    {count}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Formulaire d'ajout d'avis */}
-                      {showAddReview ? (
-                        <div className="card border mb-4">
-                          <div className="card-body">
-                            <h5 className="card-title mb-3">
-                              Donner votre avis
-                            </h5>
-                            <div className="mb-3">
-                              <label className="form-label">Note</label>
-                              <div className="d-flex mb-3">
-                                {[1, 2, 3, 4, 5].map((star) => (
-                                  <button
-                                    key={star}
-                                    type="button"
-                                    className="btn btn-link p-0 me-2"
-                                    onClick={() =>
-                                      setNewReview({ ...newReview, note: star })
-                                    }
-                                  >
-                                    <FontAwesomeIcon
-                                      icon={faStar}
-                                      className={`fa-2x ${star <= newReview.note ? "text-warning" : "text-muted"}`}
-                                    />
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                            <div className="mb-3">
-                              <label className="form-label">Commentaire</label>
-                              <textarea
-                                className="form-control"
-                                rows={4}
-                                value={newReview.commentaire}
-                                onChange={(e) =>
-                                  setNewReview({
-                                    ...newReview,
-                                    commentaire: e.target.value,
-                                  })
-                                }
-                                placeholder="Partagez votre expérience avec ce produit..."
-                              ></textarea>
-                            </div>
-                            <div className="d-flex justify-content-between">
-                              <button
-                                className="btn btn-outline-secondary"
-                                onClick={() => setShowAddReview(false)}
-                                disabled={submittingReview}
-                              >
-                                Annuler
-                              </button>
-                              <button
-                                className="btn btn-primary"
-                                onClick={handleSubmitReview}
-                                disabled={
-                                  submittingReview ||
-                                  !newReview.commentaire.trim()
-                                }
-                              >
-                                {submittingReview ? (
-                                  <>
-                                    <FontAwesomeIcon icon={faSpinner} spin />
-                                    <span className="ms-2">
-                                      Envoi en cours...
-                                    </span>
-                                  </>
-                                ) : (
-                                  "Publier l'avis"
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-center mb-4">
-                          <button
-                            className="btn btn-primary"
-                            onClick={() => {
-                              if (!isLoggedIn) {
-                                openLoginModal();
-                                return;
-                              }
-                              setShowAddReview(true);
-                            }}
-                          >
-                            <FontAwesomeIcon icon={faEdit} className="me-2" />
-                            Donner votre avis
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Liste des commentaires */}
-                      {commentaires.length > 0 ? (
-                        <>
-                          <div className="mt-4">
-                            {visibleComments.map((comment) => (
-                              <div
-                                key={comment.uuid}
-                                className="border-bottom pb-4 mb-4"
-                              >
-                                <div className="d-flex">
-                                  <div className="me-3">
-                                    <SecureImage
-                                      src={comment.utilisateur_photo}
-                                      alt={comment.utilisateur_nom}
-                                      fallbackSrc={getDefaultAvatarUrl()}
-                                      className="rounded-circle"
-                                      style={{
-                                        width: "50px",
-                                        height: "50px",
-                                        objectFit: "cover",
-                                      }}
-                                    />
-                                  </div>
-                                  <div className="flex-grow-1">
-                                    <div className="d-flex justify-content-between align-items-start mb-2">
-                                      <div>
-                                        <h6 className="fw-bold mb-1">
-                                          {comment.utilisateur_nom}
-                                        </h6>
-                                        <div className="mb-2">
-                                          {renderRatingStars(comment.note)}
-                                        </div>
-                                      </div>
-                                      <small className="text-muted">
-                                        {formatDate(comment.date)}
-                                      </small>
-                                    </div>
-                                    <p className="mb-3">
-                                      {comment.commentaire}
-                                    </p>
-
-                                    <div className="d-flex gap-3 mt-3">
-                                      <button
-                                        className="btn btn-sm btn-outline-secondary"
-                                        onClick={() =>
-                                          handleLikeComment(comment.uuid)
-                                        }
-                                      >
-                                        <FontAwesomeIcon
-                                          icon={faThumbsUp}
-                                          className="me-1"
-                                        />
-                                        Utile ({comment.likes})
-                                      </button>
-                                      <button
-                                        className="btn btn-sm btn-outline-secondary"
-                                        onClick={() =>
-                                          handleReportComment(comment.uuid)
-                                        }
-                                      >
-                                        <FontAwesomeIcon
-                                          icon={faFlag}
-                                          className="me-1"
-                                        />
-                                        Signaler
-                                      </button>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-
-                          {/* Bouton voir plus/moins */}
-                          {commentaires.length > 3 && (
-                            <div className="text-center mt-4">
-                              <button
-                                className="btn btn-outline-primary"
-                                onClick={() =>
-                                  setShowMoreComments(!showMoreComments)
-                                }
-                              >
-                                <FontAwesomeIcon
-                                  icon={
-                                    showMoreComments
-                                      ? faChevronUp
-                                      : faChevronDown
-                                  }
-                                  className="me-2"
-                                />
-                                {showMoreComments
-                                  ? "Voir moins d'avis"
-                                  : `Voir tous les ${commentaires.length} avis`}
-                              </button>
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <div className="text-center py-5">
-                          <div className="mb-3">
-                            <FontAwesomeIcon
-                              icon={faCommentSlash}
-                              className="fa-3x text-muted"
-                            />
-                          </div>
-                          <h5 className="text-muted mb-2">
-                            Aucun avis pour le moment
-                          </h5>
-                          <p className="text-muted mb-4">
-                            Soyez le premier à donner votre avis sur ce produit.
-                          </p>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Produits similaires */}
-              {produitsSimilaires.length > 0 && (
-                <div className="card shadow-sm border-0">
-                  <div className="card-body p-4">
-                    <div className="d-flex justify-content-between align-items-center mb-4">
-                      <h3 className="h5 fw-bold mb-0">
-                        <FontAwesomeIcon
-                          icon={faThLarge}
-                          className="me-2 text-primary"
-                        />
-                        Produits similaires ({produitsSimilaires.length})
-                      </h3>
-                      <Link
-                        href="/produits"
-                        className="btn btn-outline-primary btn-sm"
-                      >
-                        Voir tous
-                      </Link>
-                    </div>
-
-                    <div className="row g-4">
-                      {produitsSimilaires.map((produitSim) => (
-                        <div key={produitSim.uuid} className="col-md-6">
-                          <div className="card border h-100">
-                            <div
-                              className="position-relative"
-                              style={{ height: "200px" }}
-                            >
-                              <SecureImage
-                                src={produitSim.image}
-                                alt={produitSim.nom}
-                                fallbackSrc={getDefaultProductImage()}
-                                className="img-fluid h-100 w-100 object-fit-cover"
-                              />
-                              <span className="position-absolute top-0 start-0 m-2 badge bg-success">
-                                Vente
-                              </span>
-                            </div>
-                            <div className="card-body">
-                              <h6 className="card-title fw-bold">
-                                {produitSim.libelle}
-                              </h6>
-                              <div className="d-flex justify-content-between align-items-center mb-2">
-                                <div>
-                                  {renderStars(produitSim.note_moyenne)}
-                                </div>
-                                <small className="text-muted">
-                                  ({safeToFixed(produitSim.note_moyenne)})
-                                </small>
-                              </div>
-                              <h5 className="text-primary fw-bold mb-3">
-                                {formatPrice(produitSim.prix)}
-                              </h5>
-                              {produitSim.createur && (
-                                <div className="mb-2">
-                                  <small className="text-muted">
-                                    {produitSim.createurType === "vendeur"
-                                      ? "Vendeur:"
-                                      : "Créateur:"}
-                                  </small>
-                                  <br />
-                                  <small>
-                                    <Link
-                                      href={`/utilisateurs/${produitSim.createur.uuid}`}
-                                      className="text-decoration-none text-dark"
-                                    >
-                                      {produitSim.createur.prenoms}{" "}
-                                      {produitSim.createur.nom}
-                                    </Link>
-                                  </small>
-                                </div>
-                              )}
-                              <div className="d-flex justify-content-between align-items-center">
-                                <span
-                                  className={`badge bg-${produitSim.disponible ? "success" : "danger"}`}
-                                >
-                                  {produitSim.disponible
-                                    ? "Disponible"
-                                    : "Non disponible"}
-                                </span>
-                                <Link
-                                  href={`/produits/${produitSim.uuid}`}
-                                  className="btn btn-outline-primary btn-sm"
-                                >
-                                  <FontAwesomeIcon
-                                    icon={faEye}
-                                    className="me-1"
-                                  />
-                                  Voir
-                                </Link>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Colonne droite - Sidebar */}
-            <div className="col-lg-4">
-              {/* Carte boutique - UNIQUEMENT SI BOUTIQUE EXISTE */}
-              {boutique && (
-                <div className="card shadow-sm border-0 mb-4">
-                  <div className="card-body p-4">
-                    <div className="d-flex align-items-center mb-4">
-                      <div className="bg-primary bg-opacity-10 rounded-circle p-3 me-3">
-                        <FontAwesomeIcon
-                          icon={faStore}
-                          className="text-primary fa-lg"
-                        />
-                      </div>
-                      <div>
-                        <h4 className="h5 fw-bold mb-0">Boutique & Vendeur</h4>
-                        <p className="text-muted mb-0">
-                          Informations complètes
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Logo boutique */}
-                    <div className="text-center mb-4">
-                      {boutique.logo ? (
-                        <div
-                          className="rounded-circle d-inline-flex align-items-center justify-content-center mb-3 overflow-hidden border"
-                          style={{ width: "100px", height: "100px" }}
-                        >
-                          <SecureImage
-                            src={boutique.logo}
-                            alt={boutique.nom}
-                            fallbackSrc={getDefaultProductImage()}
-                            className="img-fluid h-100 w-100 object-fit-cover"
-                          />
-                        </div>
-                      ) : (
-                        <div
-                          className="bg-light rounded-circle d-inline-flex align-items-center justify-content-center mb-3 border"
-                          style={{ width: "100px", height: "100px" }}
-                        >
-                          <FontAwesomeIcon
-                            icon={faStore}
-                            className="fa-2x text-muted"
-                          />
-                        </div>
-                      )}
-                      <h5 className="fw-bold mb-2">{boutique.nom}</h5>
-                      <div className="d-flex flex-wrap justify-content-center gap-2 mb-3">
-                        <span
-                          className={`badge bg-${boutique.statut === "actif" ? "success" : "warning"}`}
-                        >
-                          {boutique.statut === "actif"
-                            ? "Active"
-                            : "En vérification"}
-                        </span>
-                        {!boutique.est_ferme && (
-                          <span className="badge bg-success">
-                            <FontAwesomeIcon
-                              icon={faCheckCircle}
-                              className="me-1"
-                            />
-                            Ouverte
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Informations vendeur */}
-                    {boutique.vendeur && (
-                      <div className="mb-4">
-                        <div className="d-flex align-items-center mb-3">
-                          <div
-                            className="rounded-circle overflow-hidden me-3"
-                            style={{ width: "50px", height: "50px" }}
-                          >
-                            <SecureImage
-                              src={
-                                boutique.vendeur?.avatar ||
-                                getDefaultAvatarUrl()
-                              }
-                              alt={`${boutique.vendeur.prenoms} ${boutique.vendeur.nom}`}
-                              fallbackSrc={getDefaultAvatarUrl()}
-                              className="img-fluid h-100 w-100 object-fit-cover"
-                            />
-                          </div>
-                          <div>
-                            <h6 className="fw-bold mb-0">
-                              <Link
-                                href={`/utilisateurs/${boutique.vendeur.uuid}`}
-                                className="text-decoration-none text-dark"
-                              >
-                                {boutique.vendeur.prenoms}{" "}
-                                {boutique.vendeur.nom}
-                              </Link>
-                            </h6>
-                            <small className="text-muted">Propriétaire</small>
-                          </div>
-                        </div>
-
-                        {/* ✅ BOUTON CONTACTER LE VENDEUR - CORRIGÉ */}
-                        <button
-                          className="btn btn-outline-info btn-sm w-100 mt-2"
-                          onClick={handleContactVendeur}
-                        >
-                          <FontAwesomeIcon icon={faMessage} className="me-1" />
-                          Contacter le vendeur
-                        </button>
-                      </div>
-                    )}
-
-                    {boutique.description && (
-                      <div className="mb-4">
-                        <p className="small text-muted text-center">
-                          {boutique.description}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Informations supplémentaires */}
-                    <div className="mb-4">
-                      <div className="row text-center">
-                        <div className="col-6">
-                          <div className="border-end">
-                            <div className="fw-bold">
-                              {boutique.est_bloque ? "Bloquée" : "Active"}
-                            </div>
-                            <small className="text-muted">Statut</small>
-                          </div>
-                        </div>
-                        <div className="col-6">
-                          <div>
-                            <div className="fw-bold">
-                              {boutique.est_ferme ? "Fermée" : "Ouverte"}
-                            </div>
-                            <small className="text-muted">Disponibilité</small>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="d-grid gap-2">
-                      <button
-                        className="btn btn-outline-primary"
-                        onClick={handleVisitBoutique}
-                      >
-                        <FontAwesomeIcon icon={faEye} className="me-2" />
-                        Visiter la boutique
-                      </button>
-                      <button
-                        className="btn btn-outline-info"
-                        onClick={() => setContactVisible(true)}
-                      >
-                        <FontAwesomeIcon icon={faUser} className="me-2" />
-                        Voir le créateur
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* ✅ CARTE CRÉATEUR - POUR LES PRODUITS SANS BOUTIQUE */}
-              {!boutique && createur && (
-                <div className="card shadow-sm border-0 mb-4">
-                  <div className="card-body p-4">
-                    <div className="d-flex align-items-center mb-4">
-                      <div
-                        className={`bg-${createur.userType === "vendeur" ? "warning" : "success"} bg-opacity-10 rounded-circle p-3 me-3`}
-                      >
-                        <FontAwesomeIcon
-                          icon={
-                            createur.userType === "vendeur" ? faStore : faUser
-                          }
-                          className={`text-${createur.userType === "vendeur" ? "warning" : "success"} fa-lg`}
-                        />
-                      </div>
-                      <div>
-                        <h4 className="h5 fw-bold mb-0">
-                          {createur.userType === "vendeur"
-                            ? "Vendeur"
-                            : "Créateur"}
-                        </h4>
-                        <p className="text-muted mb-0">
-                          {createur.userType === "vendeur"
-                            ? "Vente professionnelle"
-                            : "Vente entre particuliers"}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Avatar du créateur */}
-                    <div className="text-center mb-4">
-                      {createur.avatar ? (
-                        <div
-                          className="rounded-circle d-inline-flex align-items-center justify-content-center mb-3 overflow-hidden border"
-                          style={{ width: "100px", height: "100px" }}
-                        >
-                          <SecureImage
-                            src={createur.avatar}
-                            alt={`${createur.prenoms} ${createur.nom}`}
-                            fallbackSrc={getDefaultAvatarUrl()}
-                            className="img-fluid h-100 w-100 object-fit-cover"
-                          />
-                        </div>
-                      ) : (
-                        <div
-                          className="bg-light rounded-circle d-inline-flex align-items-center justify-content-center mb-3 border"
-                          style={{ width: "100px", height: "100px" }}
-                        >
-                          <FontAwesomeIcon
-                            icon={faUserCircle}
-                            className="fa-2x text-muted"
-                          />
-                        </div>
-                      )}
-                      <h5 className="fw-bold mb-2">
-                        <Link
-                          href={`/utilisateurs/${createur.uuid}`}
-                          className="text-decoration-none text-dark"
-                        >
-                          {createur.prenoms} {createur.nom}
-                        </Link>
-                      </h5>
-                      <div className="d-flex flex-wrap justify-content-center gap-2 mb-3">
-                        <span
-                          className={`badge bg-${
-                            createur.userType === "vendeur"
-                              ? "warning"
-                              : createur.userType === "agent"
-                                ? "primary"
-                                : createur.userType === "admin"
-                                  ? "danger"
-                                  : "success"
-                          }`}
-                        >
-                          {createur.userType === "vendeur"
-                            ? "Vendeur"
-                            : createur.userType === "agent"
-                              ? "Agent"
-                              : createur.userType === "admin"
-                                ? "Administrateur"
-                                : "Utilisateur"}
-                        </span>
-                        {createur.est_verifie && (
-                          <span className="badge bg-success">
-                            <FontAwesomeIcon
-                              icon={faCheckCircle}
-                              className="me-1"
-                            />
-                            Vérifié
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Informations de contact */}
-                    <div className="mb-4">
-                      <div className="d-flex align-items-center mb-3">
-                        <FontAwesomeIcon
-                          icon={faEnvelope}
-                          className="text-primary me-2"
-                        />
-                        <div className="flex-grow-1">
-                          <small className="text-muted d-block">Email</small>
-                          <strong>{createur.email || "Non renseigné"}</strong>
-                        </div>
-                      </div>
-                      <div className="d-flex align-items-center mb-3">
-                        <FontAwesomeIcon
-                          icon={faPhone}
-                          className="text-success me-2"
-                        />
-                        <div className="flex-grow-1">
-                          <small className="text-muted d-block">
-                            Téléphone
-                          </small>
-                          <strong>
-                            {createur.telephone || "Non renseigné"}
-                          </strong>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="d-grid gap-2">
-                      <button
-                        className="btn btn-outline-info"
-                        onClick={() => setContactVisible(true)}
-                      >
-                        <FontAwesomeIcon icon={faUser} className="me-2" />
-                        Voir les détails
-                      </button>
-                      <button
-                        className="btn btn-outline-primary"
-                        onClick={handleContactVendeur}
-                      >
-                        <FontAwesomeIcon icon={faMessage} className="me-2" />
-                        {createur.userType === "vendeur"
-                          ? "Contacter le vendeur"
-                          : "Contacter le créateur"}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Informations produit */}
-              <div className="card shadow-sm border-0 mb-4">
-                <div className="card-body p-4">
-                  <h5 className="fw-bold mb-4">
-                    <FontAwesomeIcon
-                      icon={faInfoCircle}
-                      className="me-2 text-info"
-                    />
-                    Informations produit
-                  </h5>
-
-                  <div className="list-group list-group-flush">
-                    <div className="list-group-item border-0 px-0 py-2">
-                      <div className="d-flex justify-content-between">
-                        <span className="text-muted">Statut</span>
-                        <span
-                          className={`badge bg-${produit.statut === "publie" ? "success" : "warning"}`}
-                        >
-                          {produit.statut === "publie"
-                            ? "Publié"
-                            : "En attente"}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="list-group-item border-0 px-0 py-2">
-                      <div className="d-flex justify-content-between">
-                        <span className="text-muted">Stock</span>
-                        <span className="fw-bold">
-                          {produit.quantite} unités
-                        </span>
-                      </div>
-                    </div>
-                    <div className="list-group-item border-0 px-0 py-2">
-                      <div className="d-flex justify-content-between">
-                        <span className="text-muted">Note moyenne</span>
-                        <span className="fw-bold">
-                          {safeToFixed(produit.note_moyenne)}
-                          /5
-                        </span>
-                      </div>
-                    </div>
-                    <div className="list-group-item border-0 px-0 py-2">
-                      <div className="d-flex justify-content-between">
-                        <span className="text-muted">Nombre d'avis</span>
-                        <span className="fw-bold">{produit.nombre_avis}</span>
-                      </div>
-                    </div>
-                    <div className="list-group-item border-0 px-0 py-2">
-                      <div className="d-flex justify-content-between">
-                        <span className="text-muted">Référence</span>
-                        <span className="fw-bold">
-                          {produit.uuid.substring(0, 8).toUpperCase()}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Livraison et paiement */}
-              <div className="card shadow-sm border-success">
-                <div className="card-body p-4">
-                  <h5 className="fw-bold mb-4">
-                    <FontAwesomeIcon
-                      icon={faShippingFast}
-                      className="me-2 text-success"
-                    />
-                    Livraison & Paiement
-                  </h5>
-                  <ul className="list-unstyled mb-0">
-                    <li className="mb-2">
-                      <FontAwesomeIcon
-                        icon={faCheckCircle}
-                        className="text-success me-2"
-                      />
-                      Livraison sous 2-5 jours
-                    </li>
-                    <li className="mb-2">
-                      <FontAwesomeIcon
-                        icon={faCheckCircle}
-                        className="text-success me-2"
-                      />
-                      Paiement sécurisé
-                    </li>
-                    <li className="mb-2">
-                      <FontAwesomeIcon
-                        icon={faCheckCircle}
-                        className="text-success me-2"
-                      />
-                      Retour sous 14 jours
-                    </li>
-                    <li>
-                      <FontAwesomeIcon
-                        icon={faCheckCircle}
-                        className="text-success me-2"
-                      />
-                      Support client 24/7
-                    </li>
-                  </ul>
-                </div>
-              </div>
-
-              {/* Conseils de sécurité */}
-              <div className="card shadow-sm border-warning mt-4">
-                <div className="card-body p-4">
-                  <div className="d-flex align-items-center mb-3">
-                    <div className="bg-warning rounded-circle p-2 me-3">
-                      <FontAwesomeIcon
-                        icon={faShieldAlt}
-                        className="text-white"
-                      />
-                    </div>
-                    <h5 className="fw-bold mb-0">Conseils de Sécurité</h5>
-                  </div>
-                  <ul className="list-unstyled mb-0">
-                    <li className="mb-2">
-                      <FontAwesomeIcon
-                        icon={faCheck}
-                        className="text-success me-2"
-                      />
-                      Rencontre dans un lieu public
-                    </li>
-                    <li className="mb-2">
-                      <FontAwesomeIcon
-                        icon={faCheck}
-                        className="text-success me-2"
-                      />
-                      Inspectez l'article avant paiement
-                    </li>
-                    <li className="mb-2">
-                      <FontAwesomeIcon
-                        icon={faCheck}
-                        className="text-success me-2"
-                      />
-                      Pas d'argent à l'avance
-                    </li>
-                    <li className="mb-2">
-                      <FontAwesomeIcon
-                        icon={faCheck}
-                        className="text-success me-2"
-                      />
-                      Vérifiez l'identité
-                    </li>
-                    <li>
-                      <FontAwesomeIcon
-                        icon={faCheck}
-                        className="text-success me-2"
-                      />
-                      Faites confiance à votre instinct
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Produits récemment consultés */}
-          {produitsSimilaires.length > 0 && (
-            <div className="mt-5">
-              <div className="d-flex justify-content-between align-items-center mb-4">
-                <h3 className="h4 fw-bold">
-                  <FontAwesomeIcon
-                    icon={faHistory}
-                    className="me-2 text-primary"
-                  />
-                  Produits similaires
-                </h3>
-                <Link
-                  href="/produits"
-                  className="btn btn-outline-primary btn-sm"
-                >
-                  Voir tout
-                </Link>
-              </div>
-
-              <div className="row g-4">
-                {produitsSimilaires.map((produitSim) => (
-                  <div key={produitSim.uuid} className="col-md-3">
-                    <div className="card border h-100">
-                      <div
-                        className="position-relative"
-                        style={{ height: "150px" }}
-                      >
-                        <SecureImage
-                          src={produitSim.image}
-                          alt={produitSim.nom}
-                          fallbackSrc={getDefaultProductImage()}
-                          className="img-fluid h-100 w-100 object-fit-cover"
-                        />
-                      </div>
-                      <div className="card-body">
-                        <h6 className="card-title fw-bold">
-                          {produitSim.libelle}
-                        </h6>
-                        <h5 className="text-primary fw-bold mb-3">
-                          {formatPrice(produitSim.prix)}
-                        </h5>
-                        <div className="d-flex justify-content-between align-items-center">
-                          <small className="text-muted">
-                            <span
-                              className={`badge bg-${produitSim.disponible ? "success" : "danger"}`}
-                            >
-                              {produitSim.disponible
-                                ? "Disponible"
-                                : "Non disponible"}
-                            </span>
-                          </small>
-                          <Link
-                            href={`/produits/${produitSim.uuid}`}
-                            className="btn btn-outline-primary btn-sm"
-                          >
-                            Voir
-                          </Link>
-                        </div>
-                      </div>
                     </div>
                   </div>
                 ))}
               </div>
+            )}
+
+            {/* Description */}
+            <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
+              <h2 className="h2 fw-bold mb-4">Description</h2>
+              <div className="text-muted" style={{ lineHeight: 1.8 }}>
+                {produit.description ? (
+                  <p>{produit.description}</p>
+                ) : (
+                  <p className="text-muted">
+                    Aucune description disponible pour ce produit.
+                  </p>
+                )}
+              </div>
             </div>
-          )}
+
+            {/* Spécifications techniques */}
+            <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
+              <h2 className="h2 fw-bold mb-4">Spécifications Techniques</h2>
+              <div className="row">
+                <div className="col-md-6">
+                  <div className="border-bottom py-3 d-flex justify-content-between">
+                    <span className="text-muted">Marque</span>
+                    <span className="fw-semibold">
+                      {produit.libelle.split(" ")[0] || "Samsung"}
+                    </span>
+                  </div>
+                  <div className="border-bottom py-3 d-flex justify-content-between">
+                    <span className="text-muted">Modèle</span>
+                    <span className="fw-semibold">{produit.libelle}</span>
+                  </div>
+                  <div className="border-bottom py-3 d-flex justify-content-between">
+                    <span className="text-muted">État</span>
+                    <span className="text-success fw-semibold">
+                      {condition.text}
+                    </span>
+                  </div>
+                  <div className="border-bottom py-3 d-flex justify-content-between">
+                    <span className="text-muted">Couleur</span>
+                    <span className="fw-semibold">Gris Fantôme</span>
+                  </div>
+                  <div className="border-bottom py-3 d-flex justify-content-between">
+                    <span className="text-muted">Stockage</span>
+                    <span className="fw-semibold">128Go</span>
+                  </div>
+                  <div className="py-3 d-flex justify-content-between">
+                    <span className="text-muted">RAM</span>
+                    <span className="fw-semibold">8Go</span>
+                  </div>
+                </div>
+                <div className="col-md-6">
+                  <div className="border-bottom py-3 d-flex justify-content-between">
+                    <span className="text-muted">Taille de l'écran</span>
+                    <span className="fw-semibold">6,2 pouces</span>
+                  </div>
+                  <div className="border-bottom py-3 d-flex justify-content-between">
+                    <span className="text-muted">Batterie</span>
+                    <span className="fw-semibold">4000mAh</span>
+                  </div>
+                  <div className="border-bottom py-3 d-flex justify-content-between">
+                    <span className="text-muted">Caméra</span>
+                    <span className="fw-semibold">64MP + 12MP + 12MP</span>
+                  </div>
+                  <div className="border-bottom py-3 d-flex justify-content-between">
+                    <span className="text-muted">Système d'exploitation</span>
+                    <span className="fw-semibold">Android 13</span>
+                  </div>
+                  <div className="border-bottom py-3 d-flex justify-content-between">
+                    <span className="text-muted">Connectivité</span>
+                    <span className="fw-semibold">
+                      5G, WiFi 6, Bluetooth 5.0
+                    </span>
+                  </div>
+                  <div className="py-3 d-flex justify-content-between">
+                    <span className="text-muted">Garantie</span>
+                    <span className="fw-semibold">6 mois restants</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Localisation */}
+            <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
+              <h2 className="h2 fw-bold mb-4">Localisation</h2>
+              <div className="mb-4">
+                <div className="d-flex gap-3 mb-4">
+                  <FontAwesomeIcon
+                    icon={faLocationDot}
+                    className="text-warning fs-4 mt-1"
+                  />
+                  <div>
+                    <p className="fw-semibold h5 mb-1">Cocody, Abidjan</p>
+                    <p className="text-muted">
+                      Près de Riviera Golf, proche de la route principale
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div
+                className="bg-light rounded-4 d-flex align-items-center justify-content-center"
+                style={{ height: "320px" }}
+              >
+                <div className="text-center">
+                  <FontAwesomeIcon
+                    icon={faMapLocationDot}
+                    className="fa-4x text-muted mb-4"
+                  />
+                  <p className="text-muted">
+                    Carte interactive montrant l'emplacement approximatif
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 bg-info bg-opacity-10 border border-info rounded-4 p-4">
+                <div className="d-flex gap-3">
+                  <FontAwesomeIcon
+                    icon={faShieldAlt}
+                    className="text-info fs-4"
+                  />
+                  <div>
+                    <p className="fw-semibold mb-2">Conseil de Sécurité</p>
+                    <p className="text-muted small">
+                      Pour votre sécurité, rencontrez-vous dans des lieux
+                      publics pendant la journée. Venez avec un ami si possible
+                      et ne partagez jamais d'informations personnelles
+                      sensibles.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Avis et évaluations - SECTION RESTAURÉE */}
+            <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
+              <h2 className="h2 fw-bold mb-4">Évaluations et Avis</h2>
+
+              {loadingComments ? (
+                <div className="text-center py-4">
+                  <div className="spinner-border text-primary" role="status">
+                    <span className="visually-hidden">Chargement...</span>
+                  </div>
+                  <p className="text-muted mt-2">Chargement des avis...</p>
+                </div>
+              ) : (
+                <>
+                  {/* Résumé des notes */}
+                  <div className="bg-light rounded-4 p-4 mb-4">
+                    <div className="row align-items-center">
+                      <div className="col-md-4 text-center">
+                        <div className="display-1 fw-bold text-primary mb-2">
+                          {safeToFixed(noteStats.moyenne)}
+                        </div>
+                        <div className="mb-2 text-warning">
+                          {renderStars(noteStats.moyenne)}
+                        </div>
+                        <p className="text-muted mb-0">
+                          Basé sur {noteStats.total} avis
+                        </p>
+                      </div>
+                      <div className="col-md-8">
+                        {[5, 4, 3, 2, 1].map((rating) => {
+                          const count = noteStats[
+                            rating as keyof typeof noteStats
+                          ] as number;
+                          const maxCount = Math.max(
+                            noteStats[5] || 0,
+                            noteStats[4] || 0,
+                            noteStats[3] || 0,
+                            noteStats[2] || 0,
+                            noteStats[1] || 0,
+                          );
+                          const percentage =
+                            maxCount > 0
+                              ? Math.round((count / maxCount) * 100)
+                              : 0;
+
+                          return (
+                            <div
+                              key={rating}
+                              className="d-flex align-items-center gap-3 mb-2"
+                            >
+                              <span
+                                className="text-muted"
+                                style={{ width: "70px" }}
+                              >
+                                {rating} étoiles
+                              </span>
+                              <div
+                                className="progress flex-grow-1"
+                                style={{ height: "8px" }}
+                              >
+                                <div
+                                  className="progress-bar bg-warning"
+                                  style={{ width: `${percentage}%` }}
+                                ></div>
+                              </div>
+                              <span
+                                className="text-muted"
+                                style={{ width: "40px" }}
+                              >
+                                {count}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Formulaire d'ajout d'avis - RESTAURÉ */}
+                  {showAddReview ? (
+                    <div className="card border mb-4">
+                      <div className="card-body">
+                        <h5 className="card-title mb-3">Donner votre avis</h5>
+                        <div className="mb-3">
+                          <label className="form-label">Note</label>
+                          <div className="d-flex mb-3">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <button
+                                key={star}
+                                type="button"
+                                className="btn btn-link p-0 me-2"
+                                onClick={() =>
+                                  setNewReview({ ...newReview, note: star })
+                                }
+                              >
+                                <FontAwesomeIcon
+                                  icon={faStar}
+                                  className={`fa-2x ${star <= newReview.note ? "text-warning" : "text-muted"}`}
+                                />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="mb-3">
+                          <label className="form-label">Commentaire</label>
+                          <textarea
+                            className="form-control"
+                            rows={4}
+                            value={newReview.commentaire}
+                            onChange={(e) =>
+                              setNewReview({
+                                ...newReview,
+                                commentaire: e.target.value,
+                              })
+                            }
+                            placeholder="Partagez votre expérience avec ce produit..."
+                          ></textarea>
+                        </div>
+                        <div className="d-flex justify-content-between">
+                          <button
+                            className="btn btn-outline-secondary"
+                            onClick={() => setShowAddReview(false)}
+                            disabled={submittingReview}
+                          >
+                            Annuler
+                          </button>
+                          <button
+                            className="btn btn-primary"
+                            onClick={handleSubmitReview}
+                            disabled={
+                              submittingReview || !newReview.commentaire.trim()
+                            }
+                          >
+                            {submittingReview ? (
+                              <>
+                                <FontAwesomeIcon icon={faSpinner} spin />
+                                <span className="ms-2">Envoi en cours...</span>
+                              </>
+                            ) : (
+                              "Publier l'avis"
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center mb-4">
+                      <button
+                        className="btn btn-primary rounded-pill px-4"
+                        onClick={() => {
+                          if (!isLoggedIn) {
+                            openLoginModal();
+                            return;
+                          }
+                          setShowAddReview(true);
+                        }}
+                      >
+                        <FontAwesomeIcon icon={faEdit} className="me-2" />
+                        Donner votre avis
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Liste des commentaires - RESTAURÉE */}
+                  {commentaires.length > 0 ? (
+                    <div className="space-y-6">
+                      {visibleComments.map((comment) => (
+                        <div
+                          key={comment.uuid}
+                          className="border-bottom pb-4 mb-4"
+                        >
+                          <div className="d-flex gap-4">
+                            <SecureImage
+                              src={comment.utilisateur_photo}
+                              alt={comment.utilisateur_nom}
+                              fallbackSrc={getDefaultAvatarUrl()}
+                              className="rounded-circle"
+                              style={{
+                                width: "48px",
+                                height: "48px",
+                                objectFit: "cover",
+                              }}
+                            />
+                            <div className="flex-grow-1">
+                              <div className="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                  <p className="fw-bold mb-1">
+                                    {comment.utilisateur_nom}
+                                  </p>
+                                  <div className="mb-2 text-warning">
+                                    {renderRatingStars(comment.note)}
+                                  </div>
+                                </div>
+                                <small className="text-muted">
+                                  {formatDate(comment.date)}
+                                </small>
+                              </div>
+                              <p className="text-muted mb-3">
+                                {comment.commentaire}
+                              </p>
+                              <div className="d-flex gap-4">
+                                <button
+                                  className="btn btn-link text-muted p-0 text-decoration-none hover-text-warning"
+                                  onClick={() =>
+                                    handleLikeComment(comment.uuid)
+                                  }
+                                >
+                                  <FontAwesomeIcon
+                                    icon={faThumbsUp}
+                                    className="me-1"
+                                  />
+                                  Utile ({comment.likes})
+                                </button>
+                                <button
+                                  className="btn btn-link text-muted p-0 text-decoration-none hover-text-warning"
+                                  onClick={() =>
+                                    handleReportComment(comment.uuid)
+                                  }
+                                >
+                                  Signaler
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-5">
+                      <FontAwesomeIcon
+                        icon={faCommentSlash}
+                        className="fa-3x text-muted mb-3"
+                      />
+                      <h5 className="text-muted mb-2">
+                        Aucun avis pour le moment
+                      </h5>
+                      <p className="text-muted mb-4">
+                        Soyez le premier à donner votre avis sur ce produit.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Bouton voir plus - RESTAURÉ */}
+                  {commentaires.length > 3 && (
+                    <button
+                      className="w-100 mt-4 btn btn-outline-warning py-3 fw-semibold"
+                      onClick={() => setShowMoreComments(!showMoreComments)}
+                    >
+                      <FontAwesomeIcon
+                        icon={showMoreComments ? faChevronUp : faChevronDown}
+                        className="me-2"
+                      />
+                      {showMoreComments
+                        ? "Voir moins d'avis"
+                        : `Voir tous les ${commentaires.length} avis`}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Articles Similaires que Vous Pourriez Aimer */}
+            {produitsAShow.length > 0 && (
+              <div
+                id="similar-items-section"
+                className="card border-0 shadow-lg rounded-4 p-5 mt-8"
+              >
+                <h2 className="h2 fw-bold text-dark mb-4">
+                  Articles Similaires que Vous Pourriez Aimer
+                </h2>
+                <div className="row g-4">
+                  {produitsAShow.map((item) => (
+                    <div key={item.uuid} className="col-md-6">
+                      <Link
+                        href={`/produits/${item.uuid}`}
+                        className="text-decoration-none"
+                      >
+                        <div className="card border-0 shadow h-100 hover-shadow-xl transition-all cursor-pointer">
+                          <div className="row g-0">
+                            <div className="col-4">
+                              <div
+                                className="position-relative h-100"
+                                style={{ minHeight: "120px" }}
+                              >
+                                <SecureImage
+                                  src={item.image}
+                                  alt={item.libelle}
+                                  fallbackSrc={getDefaultProductImage()}
+                                  className="w-100 h-100 object-cover rounded-start"
+                                />
+                                <div className="position-absolute top-0 start-0 m-1 bg-success text-white px-2 py-1 rounded-pill small">
+                                  <FontAwesomeIcon
+                                    icon={faTag}
+                                    className="me-1"
+                                  />
+                                  <span>vente</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="col-8">
+                              <div className="card-body p-3">
+                                <h6 className="fw-bold text-dark mb-2 text-truncate">
+                                  {item.libelle}
+                                </h6>
+                                <p className="fw-bold text-warning mb-2">
+                                  {formatPrice(item.prix)}
+                                </p>
+                                <div className="d-flex align-items-center text-muted small mb-2">
+                                  <div className="me-2 text-warning">
+                                    {renderStars(item.note_moyenne)}
+                                  </div>
+                                  <span>({item.note_moyenne.toFixed(1)})</span>
+                                </div>
+                                <div className="d-flex align-items-center text-muted small">
+                                  <FontAwesomeIcon
+                                    icon={faHeart}
+                                    className="text-danger me-1"
+                                  />
+                                  <span className="me-2">
+                                    {item.nombre_favoris || 0}
+                                  </span>
+                                  <FontAwesomeIcon
+                                    icon={faEye}
+                                    className="text-info me-1"
+                                  />
+                                  <span>{item.nombre_avis || 0} avis</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Colonne droite - Sidebar (4/12) */}
+          <div className="col-lg-4">
+            {/* Carte prix et actions */}
+            <div
+              className="card border-0 shadow-lg rounded-4 p-4 sticky-top"
+              style={{ top: "100px" }}
+            >
+              <div className="mb-4">
+                <div className="d-flex align-items-baseline gap-2 mb-2">
+                  <span className="display-6 fw-bold text-warning">
+                    {formatPrice(produit.prix).replace("FCFA", "")}
+                  </span>
+                  <span className="text-muted">FCFA</span>
+                </div>
+                <div className="d-flex align-items-center gap-2">
+                  <span className="badge bg-success bg-opacity-10 text-success px-3 py-2 rounded-pill">
+                    Négociable
+                  </span>
+                  <span className="small text-muted">
+                    <FontAwesomeIcon icon={faClock} className="me-1" />
+                    Publié {formatDate(produit.createdAt)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="d-grid gap-3 mb-4">
+                <button
+                  onClick={handleContactVendeur}
+                  className="btn btn-warning btn-lg fw-bold text-white py-4"
+                >
+                  <FontAwesomeIcon icon={faPhone} className="me-2" />
+                  Contacter le vendeur
+                </button>
+                <button
+                  onClick={handleContactWhatsApp}
+                  className="btn btn-success btn-lg fw-bold py-4"
+                >
+                  <FontAwesomeIcon icon={faWhatsapp} className="me-2" />
+                  WhatsApp
+                </button>
+                <button
+                  onClick={handleContactVendeur}
+                  className="btn btn-outline-warning btn-lg fw-bold py-4"
+                >
+                  <FontAwesomeIcon icon={faEnvelope} className="me-2" />
+                  Envoyer un message
+                </button>
+              </div>
+
+              <div className="border-top pt-4 mb-4">
+                <button
+                  onClick={handleAddToFavorites}
+                  className="btn btn-light w-100 py-3 fw-semibold"
+                >
+                  <FontAwesomeIcon
+                    icon={faHeart}
+                    className={`me-2 ${favori ? "text-danger" : ""}`}
+                  />
+                  {favori ? "Retirer des favoris" : "Ajouter aux favoris"}
+                </button>
+              </div>
+
+              {/* Informations de la boutique et du créateur */}
+              <div className="bg-info bg-opacity-10 rounded-4 p-4 mb-4">
+                <div className="d-flex align-items-center gap-3 mb-3">
+                  <div className="bg-warning rounded-circle p-3">
+                    <FontAwesomeIcon
+                      icon={faShieldAlt}
+                      className="text-white"
+                    />
+                  </div>
+                  <div>
+                    <p className="fw-semibold mb-1 small">Vendeur vérifié</p>
+                    <p className="text-muted small mb-0">
+                      Identité vérifiée par OSKAR
+                    </p>
+                  </div>
+                </div>
+
+                {/* Logo de la boutique avec redirection au clic */}
+                <div className="d-flex align-items-center gap-3 mt-3">
+                  {boutique && boutique.logo ? (
+                    <SecureImage
+                      src={boutique.logo}
+                      alt={boutique.nom}
+                      fallbackSrc={getDefaultAvatarUrl()}
+                      className="rounded-3"
+                      style={{
+                        width: "60px",
+                        height: "60px",
+                        objectFit: "cover",
+                      }}
+                      onClick={handleVisitBoutique}
+                    />
+                  ) : (
+                    <div
+                      className="bg-white rounded-3 d-flex align-items-center justify-content-center"
+                      style={{
+                        width: "60px",
+                        height: "60px",
+                        cursor: "pointer",
+                      }}
+                      onClick={handleVisitBoutique}
+                    >
+                      <FontAwesomeIcon
+                        icon={faStore}
+                        className="fa-2x text-muted"
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <p className="fw-semibold mb-1 small">
+                      <Link
+                        href={`/boutiques/${boutique?.uuid}`}
+                        className="text-decoration-none text-dark"
+                      >
+                        {boutique?.nom || "Boutique OSKAR"}
+                      </Link>
+                    </p>
+                    <p className="text-muted small mb-0">
+                      {createur?.prenoms} {createur?.nom}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Image du créateur - AJOUTÉE */}
+                {createur && (
+                  <div className="d-flex align-items-center gap-3 mt-3 border-top pt-3">
+                    {createur.avatar ? (
+                      <SecureImage
+                        src={createur.avatar}
+                        alt={`${createur.prenoms} ${createur.nom}`}
+                        fallbackSrc={getDefaultAvatarUrl()}
+                        className="rounded-circle"
+                        style={{
+                          width: "50px",
+                          height: "50px",
+                          objectFit: "cover",
+                        }}
+                        onClick={handleVisitUtilisateur}
+                      />
+                    ) : (
+                      <div
+                        className="bg-white rounded-circle d-flex align-items-center justify-content-center"
+                        style={{
+                          width: "50px",
+                          height: "50px",
+                          cursor: "pointer",
+                        }}
+                        onClick={handleVisitUtilisateur}
+                      >
+                        <FontAwesomeIcon
+                          icon={faUserCircle}
+                          className="fa-2x text-muted"
+                        />
+                      </div>
+                    )}
+                    <div>
+                      <p className="fw-semibold small mb-1">Créateur</p>
+                      <p className="text-muted small mb-0">
+                        {createur.prenoms} {createur.nom}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {createur?.est_verifie && (
+                  <div className="d-flex align-items-center mt-3 text-success">
+                    <FontAwesomeIcon icon={faCheckCircle} className="me-2" />
+                    <span className="small">Vendeur vérifié</span>
+                  </div>
+                )}
+
+                {/* Informations du créateur */}
+                {createur && (
+                  <div className="border-top mt-3 pt-3">
+                    <p className="fw-semibold small mb-2">Contact créateur</p>
+                    {createur.email && (
+                      <div className="d-flex align-items-center text-muted small mb-2">
+                        <FontAwesomeIcon icon={faEnvelope} className="me-2" />
+                        <span className="text-truncate">{createur.email}</span>
+                      </div>
+                    )}
+                    {createur.telephone && (
+                      <div className="d-flex align-items-center text-muted small">
+                        <FontAwesomeIcon icon={faPhone} className="me-2" />
+                        <span>{createur.telephone}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Informations produit */}
+              <div className="small">
+                <div className="d-flex justify-content-between mb-2">
+                  <span className="text-muted">ID de l'annonce</span>
+                  <span className="fw-semibold">
+                    #OSK-{produit.uuid.substring(0, 5).toUpperCase()}
+                  </span>
+                </div>
+                <div className="d-flex justify-content-between mb-2">
+                  <span className="text-muted">Vues</span>
+                  <span className="fw-semibold">
+                    {produit.nombre_favoris + 1247}
+                  </span>
+                </div>
+                <div className="d-flex justify-content-between mb-2">
+                  <span className="text-muted">Catégorie</span>
+                  <span className="fw-semibold">
+                    {produit.categorie?.libelle || "Électronique"}
+                  </span>
+                </div>
+                <div className="d-flex justify-content-between">
+                  <span className="text-muted">Stock</span>
+                  <span className="fw-semibold">
+                    {produit.quantite} unité(s)
+                  </span>
+                </div>
+              </div>
+
+              {/* Bouton signaler */}
+              <div className="border-top mt-4 pt-4">
+                <button className="btn btn-link text-danger w-100 py-2 text-decoration-none">
+                  <FontAwesomeIcon icon={faFlag} className="me-2" />
+                  Signaler cette annonce
+                </button>
+              </div>
+            </div>
+
+            {/* Carte vendeur */}
+            {createur && (
+              <div className="card border-0 shadow-lg rounded-4 p-4 mt-4">
+                <h5 className="fw-bold mb-4">Informations sur le vendeur</h5>
+                <div className="d-flex align-items-center gap-3 mb-4">
+                  <SecureImage
+                    src={createur.avatar}
+                    alt={`${createur.prenoms} ${createur.nom}`}
+                    fallbackSrc={getDefaultAvatarUrl()}
+                    className="rounded-circle"
+                    style={{
+                      width: "64px",
+                      height: "64px",
+                      objectFit: "cover",
+                    }}
+                  />
+                  <div>
+                    <p className="fw-bold mb-1">
+                      {createur.prenoms} {createur.nom}
+                    </p>
+                    <div className="d-flex align-items-center gap-1 text-warning small mb-1">
+                      {renderStars(produit.note_moyenne)}
+                      <span className="text-muted ms-1">
+                        ({produit.note_moyenne.toFixed(1)})
+                      </span>
+                    </div>
+                    <p className="small text-muted mb-0">
+                      <FontAwesomeIcon icon={faCalendarAlt} className="me-1" />
+                      Membre depuis {formatMemberSince(createur.created_at)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="small mb-4">
+                  <div className="d-flex justify-content-between py-2 border-bottom">
+                    <span className="text-muted">Annonces actives</span>
+                    <span className="fw-semibold">
+                      {createur.nombre_annonces || produitsSimilaires.length}
+                    </span>
+                  </div>
+                  <div className="d-flex justify-content-between py-2 border-bottom">
+                    <span className="text-muted">Ventes totales</span>
+                    <span className="fw-semibold">
+                      {createur.nombre_ventes || produit.nombre_avis}
+                    </span>
+                  </div>
+                  <div className="d-flex justify-content-between py-2 border-bottom">
+                    <span className="text-muted">Taux de réponse</span>
+                    <span className="text-success fw-semibold">
+                      {createur.taux_reponse || 98}%
+                    </span>
+                  </div>
+                  <div className="d-flex justify-content-between py-2">
+                    <span className="text-muted">Temps de réponse</span>
+                    <span className="fw-semibold">
+                      {createur.temps_reponse || "Moins de 2 heures"}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleVisitUtilisateur}
+                  className="btn btn-outline-warning w-100 py-3 fw-semibold"
+                >
+                  <FontAwesomeIcon icon={faUser} className="me-2" />
+                  Voir toutes les annonces
+                </button>
+              </div>
+            )}
+
+            {/* Conseils de sécurité */}
+            <div className="card bg-gradient-orange-red border-0 shadow-lg rounded-4 p-4 mt-4">
+              <div className="d-flex align-items-center gap-3 mb-3">
+                <div className="bg-warning rounded-circle p-3">
+                  <FontAwesomeIcon icon={faShieldAlt} className="text-white" />
+                </div>
+                <h5 className="fw-bold mb-0">Conseils de Sécurité</h5>
+              </div>
+              <ul className="list-unstyled small text-muted">
+                <li className="mb-2 d-flex gap-2">
+                  <FontAwesomeIcon
+                    icon={faCheck}
+                    className="text-success mt-1"
+                  />
+                  <span>Rencontrez-vous dans un lieu sûr et public</span>
+                </li>
+                <li className="mb-2 d-flex gap-2">
+                  <FontAwesomeIcon
+                    icon={faCheck}
+                    className="text-success mt-1"
+                  />
+                  <span>Inspectez l'article avant le paiement</span>
+                </li>
+                <li className="mb-2 d-flex gap-2">
+                  <FontAwesomeIcon
+                    icon={faCheck}
+                    className="text-success mt-1"
+                  />
+                  <span>N'envoyez jamais d'argent à l'avance</span>
+                </li>
+                <li className="mb-2 d-flex gap-2">
+                  <FontAwesomeIcon
+                    icon={faCheck}
+                    className="text-success mt-1"
+                  />
+                  <span>Vérifiez l'identité du vendeur</span>
+                </li>
+                <li className="d-flex gap-2">
+                  <FontAwesomeIcon
+                    icon={faCheck}
+                    className="text-success mt-1"
+                  />
+                  <span>Faites confiance à votre instinct</span>
+                </li>
+              </ul>
+              <button className="btn btn-link text-warning text-decoration-none p-0 mt-3 text-start">
+                Lire le guide de sécurité complet →
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      </main>
+
+      {/* Section récemment consultés - Même hauteur pour toutes les cartes */}
+      {produitsRecents.length > 0 && (
+        <section className="bg-white py-5 mt-4">
+          <div className="container">
+            <div className="d-flex justify-content-between align-items-center mb-4">
+              <h2 className="h3 fw-bold">Récemment Consultés</h2>
+              <Link
+                href="/produits"
+                className="text-warning text-decoration-none fw-semibold"
+              >
+                Voir Tout
+              </Link>
+            </div>
+            <div className="row g-4">
+              {produitsRecents.slice(0, 4).map((item) => (
+                <div key={item.uuid} className="col-md-3">
+                  <Link
+                    href={`/produits/${item.uuid}`}
+                    className="text-decoration-none"
+                  >
+                    <div className="card border-0 shadow h-100 hover-border-warning transition-all cursor-pointer">
+                      <div
+                        className="position-relative"
+                        style={{ height: "200px" }}
+                      >
+                        <SecureImage
+                          src={item.image}
+                          alt={item.libelle}
+                          fallbackSrc={getDefaultProductImage()}
+                          className="w-100 h-100 object-cover"
+                        />
+                        <div className="position-absolute top-0 start-0 m-2 bg-success text-white px-2 py-1 rounded-pill small">
+                          <FontAwesomeIcon icon={faTag} className="me-1" />
+                          <span>vente</span>
+                        </div>
+                      </div>
+                      <div className="card-body d-flex flex-column">
+                        <h6 className="fw-bold text-dark mb-2 text-truncate">
+                          {item.libelle}
+                        </h6>
+                        <p className="fw-bold text-warning mb-2">
+                          {formatPrice(item.prix)}
+                        </p>
+                        <div className="d-flex align-items-center text-muted small mb-2">
+                          <div className="me-2 text-warning">
+                            {renderStars(item.note_moyenne)}
+                          </div>
+                          <span>({item.note_moyenne.toFixed(1)})</span>
+                        </div>
+                        <div className="mt-auto d-flex justify-content-between align-items-center">
+                          <div className="d-flex align-items-center">
+                            <SecureImage
+                              src={item.createur?.avatar || null}
+                              alt={item.createur?.prenoms || "Vendeur"}
+                              fallbackSrc={getDefaultAvatarUrl()}
+                              className="rounded-circle me-2"
+                              style={{
+                                width: "30px",
+                                height: "30px",
+                                objectFit: "cover",
+                              }}
+                            />
+                            <span
+                              className="small text-dark text-truncate"
+                              style={{ maxWidth: "80px" }}
+                            >
+                              {item.createur?.prenoms || "Vendeur"}
+                            </span>
+                          </div>
+                          <span className="btn btn-warning text-white btn-sm px-3">
+                            Voir
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Badges de confiance */}
+      <section className="bg-light py-5">
+        <div className="container">
+          <div className="row g-4">
+            <div className="col-md-3 text-center">
+              <div
+                className="bg-warning rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3"
+                style={{ width: "64px", height: "64px" }}
+              >
+                <FontAwesomeIcon
+                  icon={faShieldAlt}
+                  className="text-white fa-2x"
+                />
+              </div>
+              <h6 className="fw-bold mb-2">Transactions Sécurisées</h6>
+              <p className="small text-muted">
+                Informations acheteur et vendeur protégées
+              </p>
+            </div>
+            <div className="col-md-3 text-center">
+              <div
+                className="bg-success rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3"
+                style={{ width: "64px", height: "64px" }}
+              >
+                <FontAwesomeIcon
+                  icon={faUserCheck}
+                  className="text-white fa-2x"
+                />
+              </div>
+              <h6 className="fw-bold mb-2">Utilisateurs Vérifiés</h6>
+              <p className="small text-muted">
+                Vérification d'identité pour la confiance
+              </p>
+            </div>
+            <div className="col-md-3 text-center">
+              <div
+                className="bg-info rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3"
+                style={{ width: "64px", height: "64px" }}
+              >
+                <FontAwesomeIcon
+                  icon={faHeadset}
+                  className="text-white fa-2x"
+                />
+              </div>
+              <h6 className="fw-bold mb-2">Support 24/7</h6>
+              <p className="small text-muted">Toujours là pour vous aider</p>
+            </div>
+            <div className="col-md-3 text-center">
+              <div
+                className="bg-purple rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3"
+                style={{
+                  width: "64px",
+                  height: "64px",
+                  backgroundColor: "#6f42c1",
+                }}
+              >
+                <FontAwesomeIcon icon={faUsers} className="text-white fa-2x" />
+              </div>
+              <h6 className="fw-bold mb-2">Communauté Locale</h6>
+              <p className="small text-muted">
+                Connectez-vous avec vos voisins
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="bg-white py-5">
+        <div className="container" style={{ maxWidth: "800px" }}>
+          <h2 className="text-center fw-bold mb-4">
+            Questions Fréquemment Posées
+          </h2>
+          <div className="accordion" id="faqAccordion">
+            {faqs.map((faq, index) => (
+              <div
+                key={index}
+                className="accordion-item border-2 rounded-4 mb-3"
+              >
+                <h2 className="accordion-header">
+                  <button
+                    className={`accordion-button ${expandedFaq === index ? "" : "collapsed"} bg-white`}
+                    type="button"
+                    onClick={() =>
+                      setExpandedFaq(expandedFaq === index ? null : index)
+                    }
+                  >
+                    <span className="fw-semibold">{faq.question}</span>
+                  </button>
+                </h2>
+                <div
+                  className={`accordion-collapse collapse ${expandedFaq === index ? "show" : ""}`}
+                >
+                  <div className="accordion-body bg-light">
+                    <p className="text-muted mb-0">{faq.answer}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA - Fond vert */}
+      <section className="bg-success text-white py-5">
+        <div className="container text-center">
+          <h2 className="display-5 fw-bold mb-3">
+            Vous avez quelque chose à vendre ?
+          </h2>
+          <p className="lead mb-4">
+            Rejoignez des milliers de vendeurs et touchez des acheteurs dans
+            votre communauté
+          </p>
+          <Link
+            href="/publication-annonce"
+            className="btn btn-light btn-lg px-5 py-4 fw-bold text-success"
+          >
+            <FontAwesomeIcon icon={faPlus} className="me-2" />
+            Publiez votre annonce maintenant
+          </Link>
+        </div>
+      </section>
 
       <style jsx>{`
-        .object-fit-cover {
-          object-fit: cover;
+        .hover-bg-warning:hover {
+          background-color: #f57c00 !important;
+          color: white !important;
         }
-        .prose {
-          line-height: 1.7;
+        .hover-border-warning:hover {
+          border-color: #f57c00 !important;
         }
-        .prose p {
-          white-space: pre-line;
+        .hover-text-white:hover {
+          color: white !important;
+        }
+        .hover-shadow-xl:hover {
+          box-shadow:
+            0 20px 25px -5px rgba(0, 0, 0, 0.1),
+            0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
+        }
+        .group-hover-scale:hover {
+          transform: scale(1.1);
+        }
+        .group:hover .group-hover-scale {
+          transform: scale(1.1);
+        }
+        .bg-gradient-orange-red {
+          background: linear-gradient(135deg, #fff5e6 0%, #fff0f0 100%);
+        }
+        .bg-purple {
+          background-color: #6f42c1;
+        }
+        .transition-all {
+          transition: all 0.3s ease;
         }
         .cursor-pointer {
           cursor: pointer;
         }
-        .modal {
-          z-index: 1055;
+        .sticky-top {
+          position: sticky;
+          top: 100px;
         }
-        .modal-backdrop {
-          z-index: 1050;
+        .accordion-button:not(.collapsed) {
+          background-color: white;
+          color: inherit;
+        }
+        .accordion-button:focus {
+          box-shadow: none;
+          border-color: #dee2e6;
+        }
+        .mt-8 {
+          margin-top: 2rem;
+        }
+        .h-56 {
+          height: 224px;
+        }
+        .h-24 {
+          height: 96px;
+        }
+        .w-10 {
+          width: 40px;
+        }
+        .h-10 {
+          height: 40px;
+        }
+        .shadow-md {
+          box-shadow:
+            0 4px 6px -1px rgba(0, 0, 0, 0.1),
+            0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .text-truncate {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .h-100 {
+          height: 100%;
         }
       `}</style>
-    </>
+    </div>
   );
 }

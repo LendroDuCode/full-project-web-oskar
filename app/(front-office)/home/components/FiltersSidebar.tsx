@@ -1,4 +1,3 @@
-// FiltersSidebar.tsx
 "use client";
 
 import { useState } from "react";
@@ -88,32 +87,42 @@ const FiltersSidebar: React.FC<FiltersSidebarProps> = ({
   };
 
   return (
-    <aside id="filters-sidebar">
-      <div className="filters-card">
+    <aside className="filters-sidebar">
+      <div className="card shadow-lg border-0 rounded-4 p-4">
         {/* En-tête */}
-        <div className="filters-header">
-          <h2 className="filters-title">Filtres</h2>
-          <button className="filters-clear-btn" onClick={handleClearFilters}>
+        <div className="d-flex justify-content-between align-items-center mb-4">
+          <h5 className="fw-bold text-dark mb-0">Filtres</h5>
+          <button
+            className="btn btn-link text-decoration-none p-0 fw-semibold"
+            style={{ color: colors.oskar.orange }}
+            onClick={handleClearFilters}
+          >
             Tout effacer
           </button>
         </div>
 
         {/* Filtre Catégorie */}
-        <div className="filter-section">
+        <div className="filter-section border-bottom pb-4 mb-4">
           <div
-            className="filter-section-header"
+            className="d-flex justify-content-between align-items-center cursor-pointer mb-3"
             onClick={() => toggleSection("category")}
+            style={{ cursor: "pointer" }}
           >
-            <h3 className="filter-section-title">Catégorie</h3>
+            <h6 className="fw-bold text-dark mb-0">Catégorie</h6>
             <i
-              className={`fa-solid fa-chevron-${expandedSections.category ? "up" : "down"}`}
+              className={`fa-solid fa-chevron-${expandedSections.category ? "up" : "down"} text-muted`}
+              style={{ fontSize: "0.875rem" }}
             />
           </div>
 
           {expandedSections.category && (
-            <div className="filter-section-content">
+            <div className="space-y-2">
               {categories.map((category) => (
-                <label key={category.name} className="filter-checkbox-label">
+                <label
+                  key={category.name}
+                  className="d-flex align-items-center w-100 p-2 rounded cursor-pointer hover-bg-light transition-colors"
+                  style={{ cursor: "pointer" }}
+                >
                   <input
                     type="checkbox"
                     checked={selectedCategories.includes(category.name)}
@@ -129,36 +138,47 @@ const FiltersSidebar: React.FC<FiltersSidebarProps> = ({
                         );
                       }
                     }}
-                    className="filter-checkbox"
+                    className="form-check-input me-3"
+                    style={{ borderColor: colors.oskar.orange }}
                   />
-                  <span className="filter-checkbox-text">{category.name}</span>
-                  <span className="filter-count">({category.count})</span>
+                  <span className="text-muted flex-grow-1">
+                    {category.name}
+                  </span>
+                  <span className="text-muted small">({category.count})</span>
                 </label>
               ))}
-              <button className="filter-see-more">Voir plus</button>
+              <button
+                className="btn btn-link p-0 mt-2 text-decoration-none"
+                style={{ color: colors.oskar.orange }}
+              >
+                Voir plus
+              </button>
             </div>
           )}
         </div>
 
         {/* Filtre Lieu */}
-        <div className="filter-section">
+        <div className="filter-section border-bottom pb-4 mb-4">
           <div
-            className="filter-section-header"
+            className="d-flex justify-content-between align-items-center cursor-pointer mb-3"
             onClick={() => toggleSection("location")}
+            style={{ cursor: "pointer" }}
           >
-            <h3 className="filter-section-title">Lieu</h3>
+            <h6 className="fw-bold text-dark mb-0">Lieu</h6>
             <i
-              className={`fa-solid fa-chevron-${expandedSections.location ? "up" : "down"}`}
+              className={`fa-solid fa-chevron-${expandedSections.location ? "up" : "down"} text-muted`}
+              style={{ fontSize: "0.875rem" }}
             />
           </div>
 
           {expandedSections.location && (
-            <div className="filter-section-content">
-              <div className="mb-3">
+            <div className="space-y-3">
+              <div className="position-relative">
                 <select
                   value={selectedLocation}
                   onChange={(e) => setSelectedLocation(e.target.value)}
-                  className="form-select filter-select"
+                  className="form-select rounded-3 border-2"
+                  style={{ borderColor: colors.oskar.lightGrey }}
                 >
                   <option value="">Toutes les villes</option>
                   {locations.map((location) => (
@@ -169,26 +189,34 @@ const FiltersSidebar: React.FC<FiltersSidebarProps> = ({
                 </select>
               </div>
 
-              <div className="mb-3">
+              <div className="space-y-2">
                 {neighborhoods.map((neighborhood) => (
-                  <label key={neighborhood} className="filter-checkbox-label">
-                    <input type="checkbox" className="filter-checkbox" />
-                    <span className="filter-checkbox-text">{neighborhood}</span>
+                  <label
+                    key={neighborhood}
+                    className="d-flex align-items-center cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      className="form-check-input me-3"
+                      style={{ borderColor: colors.oskar.orange }}
+                    />
+                    <span className="text-muted">{neighborhood}</span>
                   </label>
                 ))}
               </div>
 
-              <div className="distance-filter">
-                <label className="distance-label">Distance (km)</label>
+              <div className="pt-2">
+                <label className="text-muted small mb-2">Distance (km)</label>
                 <input
                   type="range"
                   min="0"
                   max="50"
                   value={distance}
                   onChange={(e) => setDistance(parseInt(e.target.value))}
-                  className="distance-slider"
+                  className="form-range w-100"
+                  style={{ accentColor: colors.oskar.orange }}
                 />
-                <div className="distance-labels">
+                <div className="d-flex justify-content-between text-muted small mt-1">
                   <span>0 km</span>
                   <span>{distance} km</span>
                   <span>50 km</span>
@@ -199,20 +227,22 @@ const FiltersSidebar: React.FC<FiltersSidebarProps> = ({
         </div>
 
         {/* Filtre Prix */}
-        <div className="filter-section">
+        <div className="filter-section border-bottom pb-4 mb-4">
           <div
-            className="filter-section-header"
+            className="d-flex justify-content-between align-items-center cursor-pointer mb-3"
             onClick={() => toggleSection("price")}
+            style={{ cursor: "pointer" }}
           >
-            <h3 className="filter-section-title">Fourchette de prix</h3>
+            <h6 className="fw-bold text-dark mb-0">Fourchette de prix</h6>
             <i
-              className={`fa-solid fa-chevron-${expandedSections.price ? "up" : "down"}`}
+              className={`fa-solid fa-chevron-${expandedSections.price ? "up" : "down"} text-muted`}
+              style={{ fontSize: "0.875rem" }}
             />
           </div>
 
           {expandedSections.price && (
-            <div className="filter-section-content">
-              <div className="price-inputs mb-3">
+            <div className="space-y-3">
+              <div className="d-flex align-items-center gap-2">
                 <input
                   type="number"
                   placeholder="Min"
@@ -220,9 +250,10 @@ const FiltersSidebar: React.FC<FiltersSidebarProps> = ({
                   onChange={(e) =>
                     setPriceRange({ ...priceRange, min: e.target.value })
                   }
-                  className="price-input"
+                  className="form-control rounded-3 border-2"
+                  style={{ borderColor: colors.oskar.lightGrey }}
                 />
-                <span className="price-separator">—</span>
+                <span className="text-muted">—</span>
                 <input
                   type="number"
                   placeholder="Max"
@@ -230,21 +261,26 @@ const FiltersSidebar: React.FC<FiltersSidebarProps> = ({
                   onChange={(e) =>
                     setPriceRange({ ...priceRange, max: e.target.value })
                   }
-                  className="price-input"
+                  className="form-control rounded-3 border-2"
+                  style={{ borderColor: colors.oskar.lightGrey }}
                 />
               </div>
 
-              <div className="price-radios">
+              <div className="space-y-2">
                 {priceRanges.map((range, index) => (
-                  <label key={index} className="filter-radio-label">
+                  <label
+                    key={index}
+                    className="d-flex align-items-center cursor-pointer"
+                  >
                     <input
                       type="radio"
                       name="price"
                       checked={selectedPriceRadio === range}
                       onChange={() => setSelectedPriceRadio(range)}
-                      className="filter-radio"
+                      className="form-check-input me-3"
+                      style={{ borderColor: colors.oskar.orange }}
                     />
-                    <span className="filter-radio-text">{range}</span>
+                    <span className="text-muted">{range}</span>
                   </label>
                 ))}
               </div>
@@ -253,21 +289,27 @@ const FiltersSidebar: React.FC<FiltersSidebarProps> = ({
         </div>
 
         {/* Filtre État */}
-        <div className="filter-section">
+        <div className="filter-section border-bottom pb-4 mb-4">
           <div
-            className="filter-section-header"
+            className="d-flex justify-content-between align-items-center cursor-pointer mb-3"
             onClick={() => toggleSection("condition")}
+            style={{ cursor: "pointer" }}
           >
-            <h3 className="filter-section-title">État</h3>
+            <h6 className="fw-bold text-dark mb-0">État</h6>
             <i
-              className={`fa-solid fa-chevron-${expandedSections.condition ? "up" : "down"}`}
+              className={`fa-solid fa-chevron-${expandedSections.condition ? "up" : "down"} text-muted`}
+              style={{ fontSize: "0.875rem" }}
             />
           </div>
 
           {expandedSections.condition && (
-            <div className="filter-section-content">
+            <div className="space-y-2">
               {conditions.map((condition) => (
-                <label key={condition} className="filter-checkbox-label">
+                <label
+                  key={condition}
+                  className="d-flex align-items-center p-2 rounded cursor-pointer hover-bg-light transition-colors"
+                  style={{ cursor: "pointer" }}
+                >
                   <input
                     type="checkbox"
                     checked={selectedConditions.includes(condition)}
@@ -283,9 +325,10 @@ const FiltersSidebar: React.FC<FiltersSidebarProps> = ({
                         );
                       }
                     }}
-                    className="filter-checkbox"
+                    className="form-check-input me-3"
+                    style={{ borderColor: colors.oskar.orange }}
                   />
-                  <span className="filter-checkbox-text">{condition}</span>
+                  <span className="text-muted">{condition}</span>
                 </label>
               ))}
             </div>
@@ -293,21 +336,27 @@ const FiltersSidebar: React.FC<FiltersSidebarProps> = ({
         </div>
 
         {/* Plus de filtres */}
-        <div className="filter-section">
+        <div className="filter-section mb-4">
           <div
-            className="filter-section-header"
+            className="d-flex justify-content-between align-items-center cursor-pointer mb-3"
             onClick={() => toggleSection("additional")}
+            style={{ cursor: "pointer" }}
           >
-            <h3 className="filter-section-title">Plus de filtres</h3>
+            <h6 className="fw-bold text-dark mb-0">Plus de filtres</h6>
             <i
-              className={`fa-solid fa-chevron-${expandedSections.additional ? "up" : "down"}`}
+              className={`fa-solid fa-chevron-${expandedSections.additional ? "up" : "down"} text-muted`}
+              style={{ fontSize: "0.875rem" }}
             />
           </div>
 
           {expandedSections.additional && (
-            <div className="filter-section-content">
+            <div className="space-y-2">
               {additionalFilters.map((filter) => (
-                <label key={filter} className="filter-checkbox-label">
+                <label
+                  key={filter}
+                  className="d-flex align-items-center p-2 rounded cursor-pointer hover-bg-light transition-colors"
+                  style={{ cursor: "pointer" }}
+                >
                   <input
                     type="checkbox"
                     checked={selectedAdditional.includes(filter)}
@@ -320,9 +369,10 @@ const FiltersSidebar: React.FC<FiltersSidebarProps> = ({
                         );
                       }
                     }}
-                    className="filter-checkbox"
+                    className="form-check-input me-3"
+                    style={{ borderColor: colors.oskar.orange }}
                   />
-                  <span className="filter-checkbox-text">{filter}</span>
+                  <span className="text-muted">{filter}</span>
                 </label>
               ))}
             </div>
@@ -330,258 +380,78 @@ const FiltersSidebar: React.FC<FiltersSidebarProps> = ({
         </div>
 
         {/* Bouton Appliquer */}
-        <button className="filters-apply-btn" onClick={handleApplyFilters}>
+        <button
+          className="btn w-100 py-3 fw-semibold text-white border-0 rounded-3 transition-colors"
+          style={{ backgroundColor: colors.oskar.orange }}
+          onClick={handleApplyFilters}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor =
+              colors.oskar.orangeHover || "#e66900";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = colors.oskar.orange;
+          }}
+        >
           Appliquer les filtres
         </button>
       </div>
 
       <style jsx>{`
-        #filters-sidebar {
-          position: sticky;
-          top: 6rem;
+        .filters-sidebar {
+          width: 320px;
+          flex-shrink: 0;
         }
 
-        .filters-card {
-          background-color: white;
-          border-radius: 16px;
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-          padding: 1.5rem;
-        }
-
-        .filters-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 1.5rem;
-        }
-
-        .filters-title {
-          font-size: 1.25rem;
-          font-weight: 700;
-          color: ${colors.oskar.black};
-          margin: 0;
-        }
-
-        .filters-clear-btn {
-          color: ${colors.oskar.green};
-          font-weight: 600;
-          font-size: 0.875rem;
-          background: none;
-          border: none;
-          padding: 0;
-          cursor: pointer;
-          transition: color 0.3s;
-        }
-
-        .filters-clear-btn:hover {
-          text-decoration: underline;
-        }
-
-        .filter-section {
-          border-bottom: 1px solid ${colors.oskar.lightGrey};
-          padding-bottom: 1.5rem;
-          margin-bottom: 1.5rem;
-        }
-
-        .filter-section:last-child {
-          border-bottom: none;
-          margin-bottom: 0;
-          padding-bottom: 0;
-        }
-
-        .filter-section-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          cursor: pointer;
-          margin-bottom: 0.75rem;
-        }
-
-        .filter-section-title {
-          font-size: 1rem;
-          font-weight: 700;
-          color: ${colors.oskar.black};
-          margin: 0;
-        }
-
-        .filter-section-header i {
-          color: ${colors.oskar.grey};
-          font-size: 0.75rem;
-        }
-
-        .filter-section-content {
-          padding-top: 0.5rem;
-        }
-
-        .filter-checkbox-label {
-          display: flex;
-          align-items: center;
-          padding: 0.5rem;
-          border-radius: 8px;
-          cursor: pointer;
-          transition: background-color 0.3s;
-          margin-bottom: 0.25rem;
-        }
-
-        .filter-checkbox-label:hover {
+        .hover-bg-light:hover {
           background-color: ${colors.oskar.lightGrey};
         }
 
-        .filter-checkbox {
-          width: 1rem;
-          height: 1rem;
-          border-radius: 4px;
-          border: 2px solid ${colors.oskar.grey};
-          margin-right: 0.75rem;
+        .transition-colors {
+          transition: all 0.3s ease;
+        }
+
+        .cursor-pointer {
           cursor: pointer;
         }
 
-        .filter-checkbox:checked {
-          background-color: ${colors.oskar.green};
-          border-color: ${colors.oskar.green};
-        }
-
-        .filter-checkbox-text {
-          color: ${colors.oskar.grey};
-          font-size: 0.875rem;
-          flex: 1;
-        }
-
-        .filter-count {
-          color: ${colors.oskar.grey};
-          font-size: 0.75rem;
-        }
-
-        .filter-see-more {
-          color: ${colors.oskar.green};
-          font-size: 0.875rem;
-          font-weight: 500;
-          background: none;
-          border: none;
-          padding: 0.5rem 0;
-          cursor: pointer;
+        .space-y-2 > * + * {
           margin-top: 0.5rem;
         }
 
-        .filter-see-more:hover {
-          text-decoration: underline;
+        .space-y-3 > * + * {
+          margin-top: 1rem;
         }
 
-        .filter-select {
-          width: 100%;
-          border: 2px solid ${colors.oskar.lightGrey};
-          border-radius: 8px;
-          padding: 0.5rem 1rem;
-          color: ${colors.oskar.black};
-          font-size: 0.875rem;
-          cursor: pointer;
-          transition: border-color 0.3s;
-        }
-
-        .filter-select:focus {
-          outline: none;
-          border-color: ${colors.oskar.green};
-          box-shadow: 0 0 0 0.25rem rgba(76, 175, 80, 0.25);
-        }
-
-        .distance-filter {
-          padding-top: 0.75rem;
-        }
-
-        .distance-label {
-          display: block;
-          color: ${colors.oskar.grey};
-          font-size: 0.875rem;
-          margin-bottom: 0.5rem;
-        }
-
-        .distance-slider {
-          width: 100%;
-          height: 6px;
-          -webkit-appearance: none;
-          background: ${colors.oskar.lightGrey};
-          border-radius: 3px;
-          outline: none;
-        }
-
-        .distance-slider::-webkit-slider-thumb {
-          -webkit-appearance: none;
-          width: 20px;
-          height: 20px;
-          background: ${colors.oskar.green};
-          border-radius: 50%;
-          cursor: pointer;
-        }
-
-        .distance-labels {
-          display: flex;
-          justify-content: space-between;
-          font-size: 0.75rem;
-          color: ${colors.oskar.grey};
-          margin-top: 0.25rem;
-        }
-
-        .price-inputs {
-          display: flex;
-          align-items: center;
+        .gap-2 {
           gap: 0.5rem;
         }
 
-        .price-input {
-          flex: 1;
-          border: 2px solid ${colors.oskar.lightGrey};
-          border-radius: 8px;
-          padding: 0.5rem 0.75rem;
-          color: ${colors.oskar.black};
-          font-size: 0.875rem;
-          transition: border-color 0.3s;
+        .form-check-input:checked {
+          background-color: ${colors.oskar.orange};
+          border-color: ${colors.oskar.orange};
         }
 
-        .price-input:focus {
-          outline: none;
-          border-color: ${colors.oskar.green};
+        .form-check-input:focus {
+          box-shadow: 0 0 0 0.2rem rgba(245, 124, 0, 0.25);
+          border-color: ${colors.oskar.orange};
         }
 
-        .price-separator {
-          color: ${colors.oskar.grey};
-          font-weight: 500;
+        .form-select:focus,
+        .form-control:focus {
+          border-color: ${colors.oskar.orange};
+          box-shadow: 0 0 0 0.2rem rgba(245, 124, 0, 0.25);
         }
 
-        .filter-radio-label {
-          display: flex;
-          align-items: center;
-          padding: 0.5rem 0;
-          cursor: pointer;
+        @media (max-width: 1400px) {
+          .filters-sidebar {
+            width: 300px;
+          }
         }
 
-        .filter-radio {
-          width: 1rem;
-          height: 1rem;
-          margin-right: 0.75rem;
-          cursor: pointer;
-        }
-
-        .filter-radio-text {
-          color: ${colors.oskar.grey};
-          font-size: 0.875rem;
-        }
-
-        .filters-apply-btn {
-          width: 100%;
-          background-color: ${colors.oskar.green};
-          color: white;
-          border: none;
-          border-radius: 8px;
-          padding: 0.75rem;
-          font-weight: 600;
-          font-size: 0.875rem;
-          cursor: pointer;
-          transition: background-color 0.3s;
-          margin-top: 1.5rem;
-        }
-
-        .filters-apply-btn:hover {
-          background-color: ${colors.oskar.green};
+        @media (max-width: 1200px) {
+          .filters-sidebar {
+            width: 280px;
+          }
         }
       `}</style>
     </aside>

@@ -1,8 +1,9 @@
-// app/(dashboard)/vendeur/page.tsx
+// app/(back-office)/dashboard-vendeur/page.tsx
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   // Icônes de base
@@ -49,8 +50,6 @@ import {
   faDownload,
   faUpload,
   faHistory,
-
-  // Icônes monétaires et statistiques
   faCoins,
   faPercent,
   faTags,
@@ -63,12 +62,8 @@ import {
   faAward,
   faTrophy,
   faMedal,
-
-  // Icônes de tendances et flèches alternatives
-  faArrowTrendUp, // Remplace faTrendUp
-  faArrowTrendDown, // Remplace faTrendDown
-
-  // Icônes de navigation et cibles
+  faArrowTrendUp,
+  faArrowTrendDown,
   faCompass,
   faBullseye,
   faFlagCheckered,
@@ -77,13 +72,7 @@ import {
   faCalendarCheck,
   faCalendarDay,
   faCalendarWeek,
-
-  // Icônes de graphiques
   faChartArea,
-  faChartColumn, // Existe déjà comme faChartBar
-  faChartGantt, // Non disponible dans free-solid-svg-icons
-
-  // Icônes de cercles et formes
   faCircleDot,
   faCircleHalfStroke,
   faCircleNodes,
@@ -91,8 +80,6 @@ import {
   faCircleChevronRight,
   faCircleChevronLeft,
   faCircleNotch,
-
-  // Icônes technologiques
   faCloudArrowUp,
   faDatabase,
   faDiagramProject,
@@ -100,12 +87,19 @@ import {
   faSitemap,
   faSquarePollVertical,
   faSquarePollHorizontal,
-
-  // Icônes alternatives pour celles qui n'existent pas
-  faLineChart, // Alternative à faChartGantt
-  faDotCircle, // Alternative à faChartScatter
-  faTurnUp, // Alternative si besoin
-  faTurnDown, // Alternative si besoin
+  faLineChart,
+  faDotCircle,
+  faTurnUp,
+  faTurnDown,
+  faChevronLeft,
+  faChevronRight,
+  faBoxes,
+  faBoxOpen,
+  faRefresh,
+  faTimes,
+  faCheck,
+  faExclamation,
+  faQuestion,
 } from "@fortawesome/free-solid-svg-icons";
 
 import { api } from "@/lib/api-client";
@@ -132,9 +126,6 @@ interface Stats {
   revenusTotaux: number;
   revenusMensuels: number;
   revenusHebdomadaires: number;
-  commandesEnAttente: number;
-  commandesTraitees: number;
-  commandesAnnulees: number;
   avisMoyen: number;
   totalAvis: number;
   totalFavoris: number;
@@ -154,7 +145,7 @@ interface Produit {
   boutique: {
     nom: string;
     uuid: string;
-  } | null; // Correction: boutique peut être null
+  } | null;
   createdAt: string | null;
   note_moyenne: string;
   nombre_avis: number;
@@ -206,24 +197,125 @@ interface Boutique {
   produits_count?: number;
 }
 
-interface RecentActivity {
-  id: string;
-  type: "produit" | "don" | "echange" | "boutique" | "commande" | "avis";
-  action: string;
-  description: string;
-  date: string;
-  status: "success" | "warning" | "danger" | "info" | "primary";
-  icon: any;
+interface Vendeur {
+  uuid: string;
+  nom: string;
+  prenoms: string;
+  avatar: string;
+  email?: string;
 }
 
-// Composant de carte statistique avec animations
+interface ApiResponseProduits {
+  status: string;
+  message: string;
+  data: {
+    produits: Produit[];
+    pagination: {
+      total: number;
+      page: number;
+      limit: number;
+      totalPages: number;
+    };
+    vendeur?: Vendeur;
+  };
+}
+
+interface ApiResponseDons {
+  status: string;
+  data: Don[];
+}
+
+interface ApiResponseEchanges {
+  status: string;
+  data: Echange[];
+}
+
+interface ApiResponseBoutiques {
+  data: Boutique[];
+  total: number;
+}
+
+// Fonction utilitaire pour les images placeholder
+const getPlaceholderImage = (
+  size: number,
+  text?: string,
+  color?: string,
+  bgColor?: string,
+) => {
+  const defaultText = text || size.toString();
+  const defaultColor = color || "ffffff";
+  const defaultBgColor = bgColor || "28a745";
+  return `https://via.placeholder.com/${size}/${defaultBgColor}/${defaultColor}?text=${encodeURIComponent(defaultText)}`;
+};
+
+// Formatage
+const formatPrix = (prix: string | number | null) => {
+  if (prix === null) return "Gratuit";
+  const montant = typeof prix === "string" ? parseFloat(prix) : prix;
+  return new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "XOF",
+    minimumFractionDigits: 0,
+  }).format(montant || 0);
+};
+
+const formatDate = (dateString: string | null) => {
+  if (!dateString) return "Non spécifié";
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "Date invalide";
+
+    return date.toLocaleDateString("fr-FR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "Date invalide";
+  }
+};
+
+// Composant de chargement
+const LoadingSpinner = () => (
+  <div className="container-fluid py-5">
+    <div className="row justify-content-center">
+      <div className="col-md-8 col-lg-6">
+        <div className="card border-0 shadow-lg">
+          <div className="card-body text-center py-5">
+            <div className="position-relative mb-4">
+              <div
+                className="spinner-border text-success"
+                style={{ width: "4rem", height: "4rem" }}
+                role="status"
+              >
+                <span className="visually-hidden">Chargement...</span>
+              </div>
+              <div className="position-absolute top-50 start-50 translate-middle">
+                <FontAwesomeIcon icon={faStore} className="fs-2 text-success" />
+              </div>
+            </div>
+            <h3 className="fw-bold mb-3 gradient-text">
+              Chargement de votre dashboard
+            </h3>
+            <p className="text-muted mb-0">Veuillez patienter...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+// Composant de carte de stat
 const StatCard = ({
   title,
   value,
   icon,
-  color = "primary",
-  change,
+  color = "success",
   subtitle,
+  trend,
+  trendText,
   delay = 0,
 }: {
   title: string;
@@ -237,10 +329,22 @@ const StatCard = ({
     | "info"
     | "secondary"
     | "dark";
-  change?: { value: number; isPositive: boolean };
   subtitle?: string;
+  trend?: "up" | "down" | "neutral";
+  trendText?: string;
   delay?: number;
 }) => {
+  const getTrendIcon = () => {
+    switch (trend) {
+      case "up":
+        return <FontAwesomeIcon icon={faArrowUp} className="text-success" />;
+      case "down":
+        return <FontAwesomeIcon icon={faArrowDown} className="text-danger" />;
+      default:
+        return null;
+    }
+  };
+
   const colorClasses = {
     primary: "bg-primary bg-opacity-10 text-primary border-primary",
     success: "bg-success bg-opacity-10 text-success border-success",
@@ -253,2314 +357,1516 @@ const StatCard = ({
 
   return (
     <div
-      className={`card border border-2 ${colorClasses[color]} border-opacity-25 shadow-lg h-100 animate-fade-in`}
+      className={`card border-0 shadow-sm h-100 hover-lift`}
       style={{
-        animationDelay: `${delay * 100}ms`,
+        animation: `fadeIn 0.5s ease-out ${delay * 100}ms both`,
         transform: "translateY(0)",
         transition: "all 0.3s ease",
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.transform = "translateY(-5px)";
-        e.currentTarget.style.boxShadow = "0 10px 25px rgba(0,0,0,0.15)";
+        e.currentTarget.style.transform = "translateY(-3px)";
+        e.currentTarget.style.boxShadow = "0 5px 20px rgba(0,0,0,0.1)";
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.transform = "translateY(0)";
-        e.currentTarget.style.boxShadow = "0 5px 15px rgba(0,0,0,0.1)";
+        e.currentTarget.style.boxShadow = "0 2px 10px rgba(0,0,0,0.05)";
       }}
     >
-      <div className="card-body position-relative overflow-hidden">
-        {/* Effet de fond décoratif */}
-        <div
-          className={`position-absolute top-0 end-0 ${colorClasses[color].split(" ")[0]} bg-opacity-5`}
-          style={{
-            width: "80px",
-            height: "80px",
-            borderRadius: "50%",
-            transform: "translate(30px, -30px)",
-          }}
-        ></div>
-
+      <div className="card-body p-4">
         <div className="d-flex justify-content-between align-items-start mb-3">
-          <div
-            className={`rounded-circle p-3 ${colorClasses[color]} border border-2 border-opacity-25 shadow-sm`}
-          >
-            <FontAwesomeIcon icon={icon} className="fs-4" />
-          </div>
-          {change && (
-            <div
-              className={`badge d-flex align-items-center animate-pulse ${change.isPositive ? "bg-success" : "bg-danger"}`}
-              style={{ animationDelay: `${delay * 100 + 500}ms` }}
-            >
-              <FontAwesomeIcon
-                icon={change.isPositive ? faArrowUp : faArrowDown}
-                className="me-1"
-              />
-              {Math.abs(change.value)}%
-            </div>
-          )}
-        </div>
-        <h3
-          className="fw-bold mb-1 display-6 animate-count-up"
-          data-value={value}
-        >
-          {value}
-        </h3>
-        <p className="text-muted mb-0 fw-semibold">{title}</p>
-        {subtitle && (
-          <small className="text-muted d-flex align-items-center mt-2">
-            <FontAwesomeIcon icon={faInfoCircle} className="me-1" />
-            {subtitle}
-          </small>
-        )}
-
-        {/* Barre de progression décorative */}
-        <div className="progress mt-3" style={{ height: "4px" }}>
-          <div
-            className={`progress-bar ${colorClasses[color].split(" ")[0]}`}
-            style={{
-              width: "75%",
-              animation: `progressBarFill 2s ease-out ${delay * 100}ms forwards`,
-            }}
-          ></div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Composant de diagramme circulaire avancé
-const AdvancedPieChart = ({
-  title,
-  data,
-  colors,
-  showLegend = true,
-  showValues = true,
-  showPercentage = true,
-  innerRadius = 40,
-  outerRadius = 80,
-  delay = 0,
-}: {
-  title: string;
-  data: { label: string; value: number; description?: string }[];
-  colors: string[];
-  showLegend?: boolean;
-  showValues?: boolean;
-  showPercentage?: boolean;
-  innerRadius?: number;
-  outerRadius?: number;
-  delay?: number;
-}) => {
-  const total = data.reduce((sum, item) => sum + item.value, 0);
-  let accumulated = 0;
-  const centerX = 100;
-  const centerY = 100;
-
-  return (
-    <div
-      className="card border-0 shadow-lg h-100 animate-slide-up"
-      style={{ animationDelay: `${delay * 100}ms` }}
-    >
-      <div className="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
-        <h5 className="mb-0 fw-bold">
-          <FontAwesomeIcon icon={faChartPie} className="me-2 text-primary" />
-          {title}
-        </h5>
-        <div className="dropdown">
-          <button
-            className="btn btn-sm btn-outline-secondary"
-            type="button"
-            data-bs-toggle="dropdown"
-          >
-            <FontAwesomeIcon icon={faEllipsisH} />
-          </button>
-          <ul className="dropdown-menu">
-            <li>
-              <button className="dropdown-item">
-                <FontAwesomeIcon icon={faDownload} className="me-2" />
-                Exporter
-              </button>
-            </li>
-            <li>
-              <button className="dropdown-item">
-                <FontAwesomeIcon icon={faSync} className="me-2" />
-                Actualiser
-              </button>
-            </li>
-          </ul>
-        </div>
-      </div>
-      <div className="card-body">
-        <div className="row align-items-center">
-          <div className={showLegend ? "col-md-7" : "col-12"}>
-            <div className="position-relative" style={{ height: "220px" }}>
-              <svg width="100%" height="100%" viewBox="0 0 200 200">
-                {/* Effets de brillance */}
-                <defs>
-                  <radialGradient id="glow">
-                    <stop offset="0%" stopColor="#fff" stopOpacity="0.3" />
-                    <stop offset="100%" stopColor="#fff" stopOpacity="0" />
-                  </radialGradient>
-                  <filter
-                    id="shadow"
-                    x="-20%"
-                    y="-20%"
-                    width="140%"
-                    height="140%"
-                  >
-                    <feDropShadow
-                      dx="2"
-                      dy="2"
-                      stdDeviation="3"
-                      floodColor="rgba(0,0,0,0.3)"
-                    />
-                  </filter>
-                </defs>
-
-                {/* Secteurs du diagramme */}
-                {data.map((item, index) => {
-                  const percentage = (item.value / total) * 100;
-                  const startAngle = (accumulated / total) * 360;
-                  const endAngle = ((accumulated + item.value) / total) * 360;
-                  accumulated += item.value;
-
-                  const startRad = (startAngle - 90) * (Math.PI / 180);
-                  const endRad = (endAngle - 90) * (Math.PI / 180);
-
-                  const x1 = centerX + outerRadius * Math.cos(startRad);
-                  const y1 = centerY + outerRadius * Math.sin(startRad);
-                  const x2 = centerX + outerRadius * Math.cos(endRad);
-                  const y2 = centerY + outerRadius * Math.sin(endRad);
-
-                  const largeArcFlag = endAngle - startAngle <= 180 ? 0 : 1;
-
-                  const pathData = [
-                    `M ${centerX} ${centerY}`,
-                    `L ${x1} ${y1}`,
-                    `A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} 1 ${x2} ${y2}`,
-                    `L ${centerX} ${centerY}`,
-                  ].join(" ");
-
-                  return (
-                    <g key={index} filter="url(#shadow)">
-                      <path
-                        d={pathData}
-                        fill={colors[index % colors.length]}
-                        stroke="#fff"
-                        strokeWidth="3"
-                        opacity="0.9"
-                        className="animate-sector"
-                        style={{
-                          animationDelay: `${index * 200 + delay * 100}ms`,
-                        }}
-                      >
-                        <title>
-                          {item.label}: {item.value} ({percentage.toFixed(1)}%)
-                          {item.description && `\n${item.description}`}
-                        </title>
-                      </path>
-                    </g>
-                  );
-                })}
-
-                {/* Cercle intérieur avec effet de brillance */}
-                <circle
-                  cx={centerX}
-                  cy={centerY}
-                  r={innerRadius}
-                  fill="url(#glow)"
-                />
-                <circle cx={centerX} cy={centerY} r={innerRadius} fill="#fff" />
-
-                {/* Texte au centre */}
-                <text
-                  x={centerX}
-                  y={centerY - 10}
-                  textAnchor="middle"
-                  className="fw-bold"
-                  fontSize="16"
-                  fill="#2c3e50"
-                >
-                  {showValues && total}
-                </text>
-                <text
-                  x={centerX}
-                  y={centerY + 15}
-                  textAnchor="middle"
-                  fontSize="12"
-                  fill="#7f8c8d"
-                >
-                  Total
-                </text>
-                {showPercentage && (
-                  <text
-                    x={centerX}
-                    y={centerY + 35}
-                    textAnchor="middle"
-                    fontSize="10"
-                    fill="#95a5a6"
-                  >
-                    {data.length} catégories
-                  </text>
-                )}
-              </svg>
-            </div>
-          </div>
-
-          {showLegend && (
-            <div className="col-md-5">
-              <div className="legend mt-3 mt-md-0">
-                {data.map((item, index) => {
-                  const percentage = (item.value / total) * 100;
-                  return (
-                    <div
-                      key={index}
-                      className="d-flex align-items-center mb-3 animate-fade-in"
-                      style={{
-                        animationDelay: `${index * 100 + delay * 100 + 500}ms`,
-                      }}
-                    >
-                      <div
-                        className="rounded me-2 shadow-sm"
-                        style={{
-                          width: "16px",
-                          height: "16px",
-                          backgroundColor: colors[index % colors.length],
-                        }}
-                      ></div>
-                      <div className="flex-grow-1">
-                        <div className="d-flex justify-content-between align-items-center">
-                          <span className="small fw-semibold">
-                            {item.label}
-                          </span>
-                          <div>
-                            {showValues && (
-                              <span className="small fw-bold me-2">
-                                {item.value}
-                              </span>
-                            )}
-                            {showPercentage && (
-                              <span className="small text-muted">
-                                {percentage.toFixed(1)}%
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div
-                          className="progress mt-1"
-                          style={{ height: "6px" }}
-                        >
-                          <div
-                            className="progress-bar"
-                            style={{
-                              width: `${percentage}%`,
-                              backgroundColor: colors[index % colors.length],
-                              animation: `progressBarFill 1.5s ease-out ${index * 100 + delay * 100 + 500}ms forwards`,
-                            }}
-                          ></div>
-                        </div>
-                        {item.description && (
-                          <small className="text-muted d-block mt-1">
-                            {item.description}
-                          </small>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Composant de diagramme à barres animé
-const AnimatedBarChart = ({
-  title,
-  data,
-  color = "primary",
-  unit = "",
-  delay = 0,
-  showGrid = true,
-  showValues = true,
-}: {
-  title: string;
-  data: { label: string; value: number; sublabel?: string }[];
-  color?: string;
-  unit?: string;
-  delay?: number;
-  showGrid?: boolean;
-  showValues?: boolean;
-}) => {
-  const maxValue = Math.max(...data.map((item) => item.value));
-  const chartHeight = 180;
-  const barWidth = 40;
-  const spacing = 20;
-
-  return (
-    <div
-      className="card border-0 shadow-lg h-100 animate-slide-up"
-      style={{ animationDelay: `${delay * 100}ms` }}
-    >
-      <div className="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
-        <h5 className="mb-0 fw-bold">
-          <FontAwesomeIcon icon={faChartColumn} className="me-2 text-primary" />
-          {title}
-        </h5>
-        <div className="dropdown">
-          <button
-            className="btn btn-sm btn-outline-secondary"
-            type="button"
-            data-bs-toggle="dropdown"
-          >
-            <FontAwesomeIcon icon={faFilter} className="me-1" />
-            Filtrer
-          </button>
-          <ul className="dropdown-menu">
-            <li>
-              <button className="dropdown-item">7 derniers jours</button>
-            </li>
-            <li>
-              <button className="dropdown-item">30 derniers jours</button>
-            </li>
-            <li>
-              <button className="dropdown-item">3 derniers mois</button>
-            </li>
-          </ul>
-        </div>
-      </div>
-      <div className="card-body">
-        <div
-          className="position-relative"
-          style={{ height: `${chartHeight}px`, overflow: "hidden" }}
-        >
-          <svg width="100%" height="100%" style={{ overflow: "visible" }}>
-            {/* Grille de fond */}
-            {showGrid && (
-              <g>
-                {[0, 25, 50, 75, 100].map((percent, i) => (
-                  <g key={i}>
-                    <line
-                      x1="0"
-                      y1={`${percent}%`}
-                      x2="100%"
-                      y2={`${percent}%`}
-                      stroke="#e9ecef"
-                      strokeWidth="1"
-                      strokeDasharray="5,5"
-                    />
-                    <text
-                      x="0"
-                      y={`${percent}%`}
-                      dx="-25"
-                      dy="4"
-                      textAnchor="end"
-                      fontSize="10"
-                      fill="#95a5a6"
-                    >
-                      {Math.round((maxValue * percent) / 100)}
-                    </text>
-                  </g>
-                ))}
-              </g>
+          <div>
+            <h6 className="text-uppercase text-muted mb-1 fw-semibold small">
+              {title}
+            </h6>
+            <h2 className="fw-bold mb-0 display-6">{value}</h2>
+            {subtitle && (
+              <p className="text-muted mb-0 small mt-1">{subtitle}</p>
             )}
-
-            {/* Barres */}
-            {data.map((item, index) => {
-              const barHeight = (item.value / maxValue) * (chartHeight - 30);
-              const x = index * (barWidth + spacing) + 50;
-              const y = chartHeight - barHeight;
-
-              return (
-                <g key={index} className="animate-bar">
-                  <defs>
-                    <linearGradient
-                      id={`gradient-${index}`}
-                      x1="0%"
-                      y1="0%"
-                      x2="0%"
-                      y2="100%"
-                    >
-                      <stop
-                        offset="0%"
-                        stopColor={`var(--bs-${color})`}
-                        stopOpacity="0.8"
-                      />
-                      <stop
-                        offset="100%"
-                        stopColor={`var(--bs-${color})`}
-                        stopOpacity="0.4"
-                      />
-                    </linearGradient>
-                  </defs>
-
-                  {/* Barre avec effet 3D */}
-                  <rect
-                    x={x - barWidth / 2}
-                    y={y}
-                    width={barWidth}
-                    height={barHeight}
-                    fill={`url(#gradient-${index})`}
-                    rx="4"
-                    className="animate-bar-grow"
-                    style={{
-                      animationDelay: `${index * 100 + delay * 100}ms`,
-                      transformOrigin: `center bottom`,
-                    }}
-                  >
-                    <title>
-                      {item.label}: {item.value} {unit}
-                      {item.sublabel && `\n${item.sublabel}`}
-                    </title>
-                  </rect>
-
-                  {/* Effet de brillance sur la barre */}
-                  <rect
-                    x={x - barWidth / 2}
-                    y={y}
-                    width={barWidth}
-                    height={barHeight / 3}
-                    fill="#fff"
-                    opacity="0.2"
-                    rx="4 4 0 0"
-                  />
-
-                  {/* Valeur au-dessus de la barre */}
-                  {showValues && (
-                    <text
-                      x={x}
-                      y={y - 10}
-                      textAnchor="middle"
-                      fontSize="11"
-                      fontWeight="bold"
-                      fill={`var(--bs-${color})`}
-                      className="animate-fade-in"
-                      style={{
-                        animationDelay: `${index * 100 + delay * 100 + 300}ms`,
-                      }}
-                    >
-                      {item.value}
-                      {unit}
-                    </text>
-                  )}
-
-                  {/* Label en bas */}
-                  <text
-                    x={x}
-                    y={chartHeight + 15}
-                    textAnchor="middle"
-                    fontSize="11"
-                    fill="#6c757d"
-                    className="animate-fade-in"
-                    style={{
-                      animationDelay: `${index * 100 + delay * 100 + 400}ms`,
-                    }}
-                  >
-                    {item.label}
-                  </text>
-
-                  {/* Sous-label */}
-                  {item.sublabel && (
-                    <text
-                      x={x}
-                      y={chartHeight + 30}
-                      textAnchor="middle"
-                      fontSize="9"
-                      fill="#95a5a6"
-                      className="animate-fade-in"
-                      style={{
-                        animationDelay: `${index * 100 + delay * 100 + 500}ms`,
-                      }}
-                    >
-                      {item.sublabel}
-                    </text>
-                  )}
-                </g>
-              );
-            })}
-          </svg>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Composant de diagramme en radar
-const RadarChart = ({
-  title,
-  data,
-  maxValue = 100,
-  delay = 0,
-}: {
-  title: string;
-  data: { label: string; value: number }[];
-  maxValue?: number;
-  delay?: number;
-}) => {
-  const sides = data.length;
-  const angle = (2 * Math.PI) / sides;
-  const radius = 70;
-  const centerX = 100;
-  const centerY = 100;
-
-  const getPoint = (index: number, value: number) => {
-    const r = (value / maxValue) * radius;
-    const a = angle * index - Math.PI / 2;
-    return {
-      x: centerX + r * Math.cos(a),
-      y: centerY + r * Math.sin(a),
-    };
-  };
-
-  const points = data.map((item, i) => getPoint(i, item.value));
-  const polygonPoints = points.map((p) => `${p.x},${p.y}`).join(" ");
-
-  return (
-    <div
-      className="card border-0 shadow-lg h-100 animate-slide-up"
-      style={{ animationDelay: `${delay * 100}ms` }}
-    >
-      <div className="card-header bg-white border-0 py-3">
-        <h5 className="mb-0 fw-bold">
-          <FontAwesomeIcon icon={faBullseye} className="me-2 text-primary" />
-          {title}
-        </h5>
-      </div>
-      <div className="card-body">
-        <div className="position-relative" style={{ height: "220px" }}>
-          <svg width="100%" height="100%" viewBox="0 0 200 200">
-            {/* Grille */}
-            {[0.25, 0.5, 0.75, 1].map((scale, i) => {
-              const r = radius * scale;
-              const gridPoints = Array.from({ length: sides })
-                .map((_, j) => {
-                  const a = angle * j - Math.PI / 2;
-                  return `${centerX + r * Math.cos(a)},${centerY + r * Math.sin(a)}`;
-                })
-                .join(" ");
-
-              return (
-                <polygon
-                  key={i}
-                  points={gridPoints}
-                  fill="none"
-                  stroke="#e9ecef"
-                  strokeWidth="1"
-                  strokeDasharray="2,2"
-                />
-              );
-            })}
-
-            {/* Axes */}
-            {data.map((_, i) => {
-              const a = angle * i - Math.PI / 2;
-              const x = centerX + radius * Math.cos(a);
-              const y = centerY + radius * Math.sin(a);
-
-              return (
-                <line
-                  key={i}
-                  x1={centerX}
-                  y1={centerY}
-                  x2={x}
-                  y2={y}
-                  stroke="#dee2e6"
-                  strokeWidth="1"
-                />
-              );
-            })}
-
-            {/* Zone de données */}
-            <polygon
-              points={polygonPoints}
-              fill="rgba(13, 110, 253, 0.2)"
-              stroke="#0d6efd"
-              strokeWidth="2"
-              className="animate-radar"
-              style={{ animationDelay: `${delay * 100}ms` }}
-            />
-
-            {/* Points */}
-            {points.map((point, i) => (
-              <g key={i}>
-                <circle
-                  cx={point.x}
-                  cy={point.y}
-                  r="4"
-                  fill="#0d6efd"
-                  stroke="#fff"
-                  strokeWidth="2"
-                  className="animate-point"
-                  style={{ animationDelay: `${i * 100 + delay * 100 + 300}ms` }}
-                />
-              </g>
-            ))}
-
-            {/* Labels */}
-            {data.map((item, i) => {
-              const a = angle * i - Math.PI / 2;
-              const labelX = centerX + (radius + 15) * Math.cos(a);
-              const labelY = centerY + (radius + 15) * Math.sin(a);
-
-              return (
-                <text
-                  key={i}
-                  x={labelX}
-                  y={labelY}
-                  textAnchor="middle"
-                  fontSize="10"
-                  fill="#495057"
-                  dy="3"
-                  className="animate-fade-in"
-                  style={{ animationDelay: `${i * 100 + delay * 100 + 500}ms` }}
-                >
-                  {item.label}
-                </text>
-              );
-            })}
-          </svg>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Composant de ligne de temps
-const TimelineChart = ({
-  title,
-  data,
-  delay = 0,
-}: {
-  title: string;
-  data: { date: string; value: number; label: string }[];
-  delay?: number;
-}) => {
-  const maxValue = Math.max(...data.map((d) => d.value));
-  const minValue = Math.min(...data.map((d) => d.value));
-  const range = maxValue - minValue;
-  const height = 150;
-  const pointRadius = 4;
-
-  const getY = (value: number) => {
-    return height - ((value - minValue) / range) * (height - 30);
-  };
-
-  const points = data.map((item, i) => {
-    const x = (i / (data.length - 1)) * 100;
-    const y = getY(item.value);
-    return {
-      x: `${x}%`,
-      y,
-      value: item.value,
-      label: item.label,
-      date: item.date,
-    };
-  });
-
-  const linePath = points.map((p) => `${p.x} ${p.y}`).join(" L ");
-
-  return (
-    <div
-      className="card border-0 shadow-lg h-100 animate-slide-up"
-      style={{ animationDelay: `${delay * 100}ms` }}
-    >
-      <div className="card-header bg-white border-0 py-3">
-        <h5 className="mb-0 fw-bold">
-          <FontAwesomeIcon icon={faChartLine} className="me-2 text-primary" />
-          {title}
-        </h5>
-      </div>
-      <div className="card-body">
-        <div className="position-relative" style={{ height: `${height}px` }}>
-          <svg width="100%" height="100%" style={{ overflow: "visible" }}>
-            {/* Zone sous la courbe */}
-            <defs>
-              <linearGradient
-                id="areaGradient"
-                x1="0%"
-                y1="0%"
-                x2="0%"
-                y2="100%"
-              >
-                <stop offset="0%" stopColor="#0d6efd" stopOpacity="0.2" />
-                <stop offset="100%" stopColor="#0d6efd" stopOpacity="0" />
-              </linearGradient>
-            </defs>
-
-            {/* Zone remplie */}
-            <path
-              d={`M 0% ${height} L ${linePath} L 100% ${height} Z`}
-              fill="url(#areaGradient)"
-              className="animate-area-fill"
-              style={{ animationDelay: `${delay * 100}ms` }}
-            />
-
-            {/* Ligne */}
-            <path
-              d={`M ${linePath}`}
-              fill="none"
-              stroke="#0d6efd"
-              strokeWidth="2"
-              className="animate-line-draw"
-              style={{ animationDelay: `${delay * 100 + 200}ms` }}
-            />
-
-            {/* Points */}
-            {points.map((point, i) => (
-              <g key={i}>
-                <circle
-                  cx={point.x}
-                  cy={point.y}
-                  r={pointRadius}
-                  fill="#fff"
-                  stroke="#0d6efd"
-                  strokeWidth="2"
-                  className="animate-point"
-                  style={{ animationDelay: `${i * 100 + delay * 100 + 400}ms` }}
-                >
-                  <title>
-                    {point.label}: {point.value}
-                    {point.date && `\n${point.date}`}
-                  </title>
-                </circle>
-                <circle
-                  cx={point.x}
-                  cy={point.y}
-                  r={pointRadius * 2}
-                  fill="#0d6efd"
-                  opacity="0.1"
-                  className="animate-ripple"
-                  style={{ animationDelay: `${i * 100 + delay * 100 + 500}ms` }}
-                />
-              </g>
-            ))}
-          </svg>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Composant d'activité récente avec animations
-const AnimatedRecentActivityCard = ({
-  activities,
-  delay = 0,
-}: {
-  activities: RecentActivity[];
-  delay?: number;
-}) => {
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "success":
-        return faCheckCircle;
-      case "warning":
-        return faExclamationTriangle;
-      case "danger":
-        return faBan;
-      case "info":
-        return faInfoCircle;
-      case "primary":
-        return faBell;
-      default:
-        return faBell;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "success":
-        return "success";
-      case "warning":
-        return "warning";
-      case "danger":
-        return "danger";
-      case "info":
-        return "info";
-      case "primary":
-        return "primary";
-      default:
-        return "secondary";
-    }
-  };
-
-  return (
-    <div
-      className="card border-0 shadow-lg h-100 animate-slide-up"
-      style={{ animationDelay: `${delay * 100}ms` }}
-    >
-      <div className="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
-        <h5 className="mb-0 fw-bold">
-          <FontAwesomeIcon icon={faHistory} className="me-2 text-primary" />
-          Activité récente
-        </h5>
-        <button className="btn btn-sm btn-outline-secondary">
-          <FontAwesomeIcon icon={faSync} />
-        </button>
-      </div>
-      <div className="card-body">
-        <div className="timeline">
-          {activities.map((activity, index) => (
-            <div
-              key={index}
-              className="timeline-item mb-3 animate-slide-left"
-              style={{ animationDelay: `${index * 100 + delay * 100}ms` }}
-            >
-              <div className="d-flex">
-                <div className="timeline-icon me-3">
-                  <div
-                    className={`rounded-circle p-2 bg-${getStatusColor(activity.status)} bg-opacity-10 text-${getStatusColor(activity.status)} shadow-sm`}
-                    style={{
-                      animation: `pulse 2s infinite ${index * 200}ms`,
-                    }}
-                  >
-                    <FontAwesomeIcon
-                      icon={activity.icon || getStatusIcon(activity.status)}
-                    />
-                  </div>
-                </div>
-                <div className="flex-grow-1">
-                  <div className="d-flex justify-content-between align-items-start">
-                    <h6 className="mb-1 fw-semibold">{activity.action}</h6>
-                    <small className="text-muted">
-                      {new Date(activity.date).toLocaleDateString("fr-FR", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </small>
-                  </div>
-                  <p className="mb-0 text-muted small">
-                    {activity.description}
-                  </p>
-                  <span
-                    className={`badge bg-${getStatusColor(activity.status)} bg-opacity-10 text-${getStatusColor(activity.status)} mt-1 animate-fade-in`}
-                    style={{
-                      animationDelay: `${index * 100 + delay * 100 + 200}ms`,
-                    }}
-                  >
-                    <FontAwesomeIcon
-                      icon={getStatusIcon(activity.status)}
-                      className="me-1"
-                    />
-                    {activity.status === "success" && "Succès"}
-                    {activity.status === "warning" && "Attention"}
-                    {activity.status === "danger" && "Erreur"}
-                    {activity.status === "info" && "Information"}
-                    {activity.status === "primary" && "Notification"}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Composant de tableau de produits avec animations
-const AnimatedProductsTable = ({
-  products,
-  delay = 0,
-}: {
-  products: Produit[];
-  delay?: number;
-}) => {
-  const router = useRouter();
-
-  const getStatusBadge = (produit: Produit) => {
-    if (produit.estBloque) {
-      return (
-        <span className="badge bg-danger bg-opacity-10 text-danger animate-pulse">
-          <FontAwesomeIcon icon={faBan} className="me-1" />
-          Bloqué
-        </span>
-      );
-    }
-    if (produit.estPublie) {
-      return (
-        <span className="badge bg-success bg-opacity-10 text-success">
-          <FontAwesomeIcon icon={faGlobe} className="me-1" />
-          Publié
-        </span>
-      );
-    }
-    return (
-      <span className="badge bg-secondary bg-opacity-10 text-secondary">
-        <FontAwesomeIcon icon={faLock} className="me-1" />
-        Non publié
-      </span>
-    );
-  };
-
-  const formatPrice = (price: string) => {
-    const numericPrice = parseFloat(price);
-    return new Intl.NumberFormat("fr-FR", {
-      style: "currency",
-      currency: "XOF",
-      minimumFractionDigits: 0,
-    }).format(numericPrice);
-  };
-
-  return (
-    <div
-      className="card border-0 shadow-lg animate-slide-up"
-      style={{ animationDelay: `${delay * 100}ms` }}
-    >
-      <div className="card-header bg-white border-0 py-3">
-        <div className="d-flex justify-content-between align-items-center">
-          <h5 className="mb-0 fw-bold">
-            <FontAwesomeIcon
-              icon={faShoppingBag}
-              className="me-2 text-primary"
-            />
-            Mes produits récents
-          </h5>
-          <button
-            className="btn btn-sm btn-primary animate-pulse-hover"
-            onClick={() => router.push("/dashboard/produits")}
+          </div>
+          <div
+            className={`rounded-circle p-3 ${colorClasses[color]} d-flex align-items-center justify-content-center`}
+            style={{ width: "60px", height: "60px" }}
           >
-            <FontAwesomeIcon icon={faEye} className="me-1" />
-            Voir tout
-          </button>
+            <FontAwesomeIcon icon={icon} className={`fs-3`} />
+          </div>
         </div>
-      </div>
-      <div className="card-body">
-        <div className="table-responsive">
-          <table className="table table-hover">
-            <thead>
-              <tr>
-                <th>Produit</th>
-                <th>Boutique</th>
-                <th>Prix</th>
-                <th>Stock</th>
-                <th>Statut</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.map((produit, index) => (
-                <tr
-                  key={produit.uuid}
-                  className="animate-slide-right"
-                  style={{
-                    animationDelay: `${index * 50 + delay * 100}ms`,
-                    transform: "translateX(0)",
-                    transition: "all 0.3s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = "translateX(5px)";
-                    e.currentTarget.style.backgroundColor = "#f8f9fa";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "translateX(0)";
-                    e.currentTarget.style.backgroundColor = "";
-                  }}
-                >
-                  <td>
-                    <div className="d-flex align-items-center">
-                      <div className="position-relative me-2">
-                        <img
-                          src={produit.image}
-                          alt={produit.libelle}
-                          className="rounded shadow-sm"
-                          style={{
-                            width: "45px",
-                            height: "45px",
-                            objectFit: "cover",
-                          }}
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src =
-                              "https://via.placeholder.com/45/cccccc/ffffff?text=P";
-                          }}
-                        />
-                        {produit.note_moyenne &&
-                          parseFloat(produit.note_moyenne) >= 4 && (
-                            <div className="position-absolute top-0 start-100 translate-middle badge bg-warning text-dark">
-                              <FontAwesomeIcon
-                                icon={faStar}
-                                className="fs-xxsmall"
-                              />
-                            </div>
-                          )}
-                      </div>
-                      <div>
-                        <div className="fw-semibold">{produit.libelle}</div>
-                        <small className="text-muted">
-                          Note: {produit.note_moyenne || "N/A"} (
-                          {produit.nombre_avis || 0} avis)
-                        </small>
-                      </div>
-                    </div>
-                  </td>
-                  <td>
-                    {/* CORRECTION: Vérification si boutique est null */}
-                    <span className="fw-semibold">
-                      {produit.boutique
-                        ? produit.boutique.nom
-                        : "Sans boutique"}
-                    </span>
-                  </td>
-                  <td className="fw-bold text-success">
-                    {formatPrice(produit.prix)}
-                  </td>
-                  <td>
-                    <div className="d-flex align-items-center">
-                      <span
-                        className={`badge ${produit.quantite > 10 ? "bg-success" : produit.quantite > 0 ? "bg-warning" : "bg-danger"}`}
-                      >
-                        {produit.quantite}
-                      </span>
-                      {produit.nombre_favoris > 0 && (
-                        <small className="ms-2 text-danger">
-                          <FontAwesomeIcon icon={faHeart} className="me-1" />
-                          {produit.nombre_favoris}
-                        </small>
-                      )}
-                    </div>
-                  </td>
-                  <td>{getStatusBadge(produit)}</td>
-                  <td>
-                    <div className="btn-group btn-group-sm">
-                      <button
-                        className="btn btn-outline-primary animate-scale-hover"
-                        title="Voir"
-                        onClick={() =>
-                          router.push(`/dashboard/produits/${produit.uuid}`)
-                        }
-                        style={{ transition: "all 0.2s ease" }}
-                      >
-                        <FontAwesomeIcon icon={faEye} />
-                      </button>
-                      <button
-                        className="btn btn-outline-warning animate-scale-hover"
-                        title="Modifier"
-                        onClick={() =>
-                          router.push(
-                            `/dashboard/produits/${produit.uuid}/edit`,
-                          )
-                        }
-                        style={{ transition: "all 0.2s ease" }}
-                      >
-                        <FontAwesomeIcon icon={faEdit} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {trend && trendText && (
+          <div className="d-flex align-items-center mt-2">
+            {getTrendIcon()}
+            <span
+              className={`fw-semibold ms-1 ${trend === "up" ? "text-success" : trend === "down" ? "text-danger" : "text-muted"}`}
+            >
+              {trendText}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
-// Page principale
-const VendeurDashboard = () => {
+export default function VendeurDashboard() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [boutiques, setBoutiques] = useState<Boutique[]>([]);
   const [produits, setProduits] = useState<Produit[]>([]);
+  const [produitsBloques, setProduitsBloques] = useState<Produit[]>([]);
   const [dons, setDons] = useState<Don[]>([]);
+  const [donsBloques, setDonsBloques] = useState<Don[]>([]);
   const [echanges, setEchanges] = useState<Echange[]>([]);
-  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>(
-    [],
+  const [echangesBloques, setEchangesBloques] = useState<Echange[]>([]);
+  const [vendeur, setVendeur] = useState<Vendeur | null>(null);
+  const [activeSection, setActiveSection] = useState<
+    "produits" | "dons" | "echanges" | "boutiques"
+  >("produits");
+  const [activeTab, setActiveTab] = useState<"tous" | "publies" | "bloques">(
+    "tous",
   );
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [timeRange, setTimeRange] = useState("month");
 
-  // Charger les données
-  useEffect(() => {
-    const fetchDashboardData = async () => {
+  // Charger toutes les données
+  const fetchDashboardData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Charger les boutiques
+      const boutiquesRes = await api.get<ApiResponseBoutiques>(
+        API_ENDPOINTS.BOUTIQUES.LISTE_BOUTIQUES_CREE_PAR_VENDEUR,
+      );
+      const boutiquesData = Array.isArray(boutiquesRes.data)
+        ? boutiquesRes.data
+        : boutiquesRes.data || [];
+      setBoutiques(boutiquesData);
+
+      // Charger les produits
+      const produitsRes = await api.get<ApiResponseProduits>(
+        API_ENDPOINTS.PRODUCTS.VENDEUR_PRODUCTS,
+      );
+      let produitsData = Array.isArray(produitsRes.data)
+        ? produitsRes.data
+        : produitsRes.data?.produits || [];
+
+      produitsData = produitsData.map((produit) => ({
+        ...produit,
+        boutique: produit.boutique || { nom: "Sans boutique", uuid: "" },
+      }));
+      setProduits(produitsData);
+
+      if (produitsRes.data?.vendeur) {
+        setVendeur(produitsRes.data.vendeur);
+      }
+
+      // Charger les produits bloqués
       try {
-        setLoading(true);
-
-        // Charger les boutiques
-        const boutiquesRes = await api.get<{
-          data: Boutique[];
-          total: number;
-        }>(API_ENDPOINTS.BOUTIQUES.LISTE_BOUTIQUES_CREE_PAR_VENDEUR);
-        const boutiquesData = Array.isArray(boutiquesRes.data)
-          ? boutiquesRes.data
-          : boutiquesRes.data || [];
-        setBoutiques(boutiquesData);
-
-        // Charger les produits
-        const produitsRes = await api.get<{
-          data: Produit[];
-          total: number;
-        }>(API_ENDPOINTS.PRODUCTS.VENDEUR_PRODUCTS);
-        let produitsData = Array.isArray(produitsRes.data)
-          ? produitsRes.data
-          : produitsRes.data || [];
-
-        // Normaliser les données pour s'assurer que boutique a une structure correcte
-        produitsData = produitsData.map((produit) => ({
+        const produitsBloquesRes = await api.get<ApiResponseProduits>(
+          "/produits/liste-produits-bloques-vendeur",
+        );
+        let produitsBloquesData = Array.isArray(produitsBloquesRes.data)
+          ? produitsBloquesRes.data
+          : produitsBloquesRes.data?.produits || [];
+        produitsBloquesData = produitsBloquesData.map((produit) => ({
           ...produit,
           boutique: produit.boutique || { nom: "Sans boutique", uuid: "" },
         }));
-
-        setProduits(produitsData);
-
-        // Charger les dons
-        const donsRes = await api.get<{ status: string; data: Don[] }>(
-          API_ENDPOINTS.DONS.VENDEUR_DONS,
-        );
-        const donsData = Array.isArray(donsRes.data)
-          ? donsRes.data
-          : donsRes.data || [];
-        setDons(donsData);
-
-        // Charger les échanges
-        const echangesRes = await api.get<{ status: string; data: Echange[] }>(
-          API_ENDPOINTS.ECHANGES.VENDEUR_ECHANGES,
-        );
-        const echangesData = Array.isArray(echangesRes.data)
-          ? echangesRes.data
-          : echangesRes.data || [];
-        setEchanges(echangesData);
-
-        // Calculer les statistiques
-        const boutiquesBloqueesFermees = boutiquesData.filter(
-          (b) => b.est_bloque || b.est_ferme,
-        ).length;
-        const donsEnAttente = donsData.filter(
-          (d) => !d.estPublie && !d.est_bloque,
-        ).length;
-        const echangesEnAttente = echangesData.filter(
-          (e) => !e.estPublie,
-        ).length;
-
-        const statsData: Stats = {
-          totalBoutiques: boutiquesData.length,
-          boutiquesActives: boutiquesData.filter(
-            (b) => b.statut === "actif" && !b.est_bloque && !b.est_ferme,
-          ).length,
-          boutiquesEnReview: boutiquesData.filter(
-            (b) => b.statut === "en_review",
-          ).length,
-          boutiquesBloquees: boutiquesBloqueesFermees,
-          totalProduits: produitsData.length,
-          produitsPublies: produitsData.filter((p) => p.estPublie).length,
-          produitsNonPublies: produitsData.filter(
-            (p) => !p.estPublie && !p.estBloque,
-          ).length,
-          produitsBloques: produitsData.filter((p) => p.estBloque).length,
-          totalDons: donsData.length,
-          donsPublies: donsData.filter((d) => d.estPublie && !d.est_bloque)
-            .length,
-          donsBloques: donsData.filter((d) => d.est_bloque).length,
-          donsEnAttente: donsEnAttente,
-          totalEchanges: echangesData.length,
-          echangesPublies: echangesData.filter((e) => e.estPublie).length,
-          echangesBloques: 0, // À calculer si disponible
-          echangesEnAttente: echangesEnAttente,
-          revenusTotaux: 2500000,
-          revenusMensuels: 450000,
-          revenusHebdomadaires: 120000,
-          commandesEnAttente: 8,
-          commandesTraitees: 37,
-          commandesAnnulees: 3,
-          avisMoyen: 4.5,
-          totalAvis: 128,
-          totalFavoris: produitsData.reduce(
-            (sum, p) => sum + (p.nombre_favoris || 0),
-            0,
-          ),
-          tauxConversion: 2.8,
-          panierMoyen: 12500,
-        };
-        setStats(statsData);
-
-      const activities: RecentActivity[] = [
-  // Activités des boutiques
-  ...boutiquesData.slice(0, 2).map((boutique) => ({
-    id: boutique.uuid,
-    type: "boutique" as const,
-    action: "Boutique créée",
-    description: `Nouvelle boutique "${boutique.nom}"`,
-    date: boutique.created_at,
-    status: "success" as const,
-    icon: faStore,
-  })),
-
-  // Activités des produits
-  ...produitsData.slice(0, 3).map((produit) => ({
-    id: produit.uuid,
-    type: "produit" as const,
-    action: produit.estPublie ? "Produit publié" : "Produit créé",
-    description: `Produit "${produit.libelle}"`,
-    date: produit.createdAt || new Date().toISOString(),
-    status: (produit.estBloque ? "danger" : "success") as "danger" | "success",
-    icon: produit.estPublie ? faGlobe : faShoppingBag,
-  })),
-
-  // Activités des dons
-  ...donsData.slice(0, 2).map((don) => ({
-    id: don.uuid,
-    type: "don" as const,
-    action: don.estPublie ? "Don publié" : "Don créé",
-    description: `Don "${don.nom}"`,
-    date: don.date_debut,
-    status: (don.est_bloque ? "danger" : "info") as "danger" | "info",
-    icon: faGift,
-  })),
-
-  // Activités des échanges
-  ...echangesData.slice(0, 2).map((echange) => ({
-    id: echange.uuid,
-    type: "echange" as const,
-    action: "Échange proposé",
-    description: `Échange "${echange.nomElementEchange}"`,
-    date: echange.dateProposition,
-    status: "warning" as const,
-    icon: faExchangeAlt,
-  })),
-
-  // Autres activités
-  {
-    id: "1",
-    type: "commande" as const,
-    action: "Nouvelle commande",
-    description: "Commande #ORD-7890 reçue",
-    date: new Date(Date.now() - 3600000).toISOString(),
-    status: "primary" as const,
-    icon: faShoppingCart,
-  },
-  {
-    id: "2",
-    type: "avis" as const,
-    action: "Nouvel avis",
-    description: "Avis 5 étoiles sur votre produit",
-    date: new Date(Date.now() - 7200000).toISOString(),
-    status: "success" as const,
-    icon: faStar,
-  },
-].sort(
-  (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-);
-
-        setRecentActivities(activities.slice(0, 6));
-      } catch (error) {
-        console.error("Erreur lors du chargement du dashboard:", error);
-      } finally {
-        setLoading(false);
+        setProduitsBloques(produitsBloquesData);
+      } catch (err) {
+        console.warn("Erreur chargement produits bloqués:", err);
+        setProduitsBloques([]);
       }
-    };
 
+      // Charger les dons
+      const donsRes = await api.get<ApiResponseDons>(
+        API_ENDPOINTS.DONS.VENDEUR_DONS,
+      );
+      const donsData = Array.isArray(donsRes.data)
+        ? donsRes.data
+        : donsRes.data || [];
+      setDons(donsData);
+
+      // Charger les dons bloqués
+      try {
+        const donsBloquesRes = await api.get<ApiResponseDons>(
+          "/dons/liste-dons-bloques-vendeur",
+        );
+        const donsBloquesData = Array.isArray(donsBloquesRes.data)
+          ? donsBloquesRes.data
+          : donsBloquesRes.data || [];
+        setDonsBloques(donsBloquesData);
+      } catch (err) {
+        console.warn("Erreur chargement dons bloqués:", err);
+        setDonsBloques([]);
+      }
+
+      // Charger les échanges
+      const echangesRes = await api.get<ApiResponseEchanges>(
+        API_ENDPOINTS.ECHANGES.VENDEUR_ECHANGES,
+      );
+      const echangesData = Array.isArray(echangesRes.data)
+        ? echangesRes.data
+        : echangesRes.data || [];
+      setEchanges(echangesData);
+
+      // Charger les échanges bloqués
+      try {
+        const echangesBloquesRes = await api.get<ApiResponseEchanges>(
+          "/echanges/liste-echange-bloque-vendeur",
+        );
+        const echangesBloquesData = Array.isArray(echangesBloquesRes.data)
+          ? echangesBloquesRes.data
+          : echangesBloquesRes.data || [];
+        setEchangesBloques(echangesBloquesData);
+      } catch (err) {
+        console.warn("Erreur chargement échanges bloqués:", err);
+        setEchangesBloques([]);
+      }
+
+      // Calculer les statistiques
+      const statsData: Stats = {
+        totalBoutiques: boutiquesData.length,
+        boutiquesActives: boutiquesData.filter(
+          (b) => b.statut === "actif" && !b.est_bloque && !b.est_ferme,
+        ).length,
+        boutiquesEnReview: boutiquesData.filter((b) => b.statut === "en_review")
+          .length,
+        boutiquesBloquees: boutiquesData.filter(
+          (b) => b.est_bloque || b.est_ferme,
+        ).length,
+        totalProduits: produitsData.length + produitsBloques.length,
+        produitsPublies: produitsData.filter((p) => p.estPublie).length,
+        produitsNonPublies: produitsData.filter(
+          (p) => !p.estPublie && !p.estBloque,
+        ).length,
+        produitsBloques: produitsBloques.length,
+        totalDons: donsData.length + donsBloques.length,
+        donsPublies: donsData.filter((d) => d.estPublie && !d.est_bloque)
+          .length,
+        donsBloques: donsBloques.length,
+        donsEnAttente: donsData.filter((d) => !d.estPublie && !d.est_bloque)
+          .length,
+        totalEchanges: echangesData.length + echangesBloques.length,
+        echangesPublies: echangesData.filter((e) => e.estPublie).length,
+        echangesBloques: echangesBloques.length,
+        echangesEnAttente: echangesData.filter((e) => !e.estPublie).length,
+        revenusTotaux: 2500000,
+        revenusMensuels: 450000,
+        revenusHebdomadaires: 120000,
+        avisMoyen: 4.5,
+        totalAvis: produitsData.reduce(
+          (sum, p) => sum + (p.nombre_avis || 0),
+          0,
+        ),
+        totalFavoris: produitsData.reduce(
+          (sum, p) => sum + (p.nombre_favoris || 0),
+          0,
+        ),
+        tauxConversion: 2.8,
+        panierMoyen: 12500,
+      };
+      setStats(statsData);
+    } catch (err: any) {
+      console.error("Erreur lors du chargement du dashboard:", err);
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          "Erreur lors du chargement des données. Veuillez réessayer.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
     fetchDashboardData();
-  }, [timeRange]);
+  }, [fetchDashboardData]);
 
-  // Données pour les diagrammes
-  const produitStatusData = useMemo(() => {
-    if (!stats) return [];
-    return [
-      {
-        label: "Publiés",
-        value: stats.produitsPublies,
-        description: "Produits visibles en ligne",
-      },
-      {
-        label: "Non publiés",
-        value: stats.produitsNonPublies,
-        description: "En attente de publication",
-      },
-      {
-        label: "Bloqués",
-        value: stats.produitsBloques,
-        description: "Produits désactivés",
-      },
-    ];
-  }, [stats]);
+  // Filtrer les données selon la section et l'onglet actifs
+  const getFilteredData = () => {
+    let data: any[] = [];
 
-  const boutiqueStatusData = useMemo(() => {
-    if (!stats) return [];
-    return [
-      {
-        label: "Actives",
-        value: stats.boutiquesActives,
-        description: "Boutiques en ligne",
-      },
-      {
-        label: "En revue",
-        value: stats.boutiquesEnReview,
-        description: "En attente de validation",
-      },
-      {
-        label: "Bloquées/Fermées",
-        value: stats.boutiquesBloquees,
-        description: "Boutiques désactivées",
-      },
-    ];
-  }, [stats]);
+    switch (activeSection) {
+      case "produits":
+        data = activeTab === "bloques" ? produitsBloques : produits;
+        break;
+      case "dons":
+        data = activeTab === "bloques" ? donsBloques : dons;
+        break;
+      case "echanges":
+        data = activeTab === "bloques" ? echangesBloques : echanges;
+        break;
+      case "boutiques":
+        data = boutiques;
+        break;
+    }
 
-  const donsStatusData = useMemo(() => {
-    if (!stats) return [];
-    return [
-      { label: "Publiés", value: stats.donsPublies },
-      { label: "Bloqués", value: stats.donsBloques },
-      { label: "En attente", value: stats.donsEnAttente },
-    ];
-  }, [stats]);
+    // Appliquer le filtre de recherche
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      data = data.filter((item: any) => {
+        if (activeSection === "boutiques") {
+          return (
+            item.nom?.toLowerCase().includes(searchLower) ||
+            item.description?.toLowerCase().includes(searchLower)
+          );
+        } else {
+          return (
+            item.libelle?.toLowerCase().includes(searchLower) ||
+            item.nom?.toLowerCase().includes(searchLower) ||
+            item.nomElementEchange?.toLowerCase().includes(searchLower) ||
+            item.description?.toLowerCase().includes(searchLower) ||
+            item.message?.toLowerCase().includes(searchLower)
+          );
+        }
+      });
+    }
 
-  const echangesStatusData = useMemo(() => {
-    if (!stats) return [];
-    return [
-      { label: "Publiés", value: stats.echangesPublies },
-      { label: "En attente", value: stats.echangesEnAttente },
-      { label: "Bloqués", value: stats.echangesBloques },
-    ];
-  }, [stats]);
+    return data;
+  };
 
-  const performanceData = [
-    { label: "Taux conversion", value: stats?.tauxConversion || 2.8 },
-    { label: "Panier moyen", value: (stats?.panierMoyen || 0) / 1000 },
-    { label: "Satisfaction", value: (stats?.avisMoyen || 0) * 20 },
-    { label: "Produits favoris", value: (stats?.totalFavoris || 0) / 10 },
-    { label: "Commandes", value: (stats?.commandesTraitees || 0) / 5 },
-    { label: "Revenus", value: (stats?.revenusMensuels || 0) / 50000 },
-  ];
+  const filteredData = getFilteredData();
 
-  const monthlyRevenueData = [
-    { label: "Jan", value: 1200000, sublabel: "+12%" },
-    { label: "Fév", value: 1800000, sublabel: "+25%" },
-    { label: "Mar", value: 1500000, sublabel: "+8%" },
-    { label: "Avr", value: 2200000, sublabel: "+32%" },
-    { label: "Mai", value: 1900000, sublabel: "+18%" },
-    { label: "Jun", value: 2500000, sublabel: "+45%" },
-    { label: "Jul", value: 2800000, sublabel: "+52%" },
-  ];
+  // Fonction pour obtenir les données d'affichage pour chaque élément
+  const getDisplayData = (item: any) => {
+    switch (activeSection) {
+      case "produits":
+        return {
+          uuid: item.uuid,
+          libelle: item.libelle || "Produit",
+          description: item.description || "Pas de description",
+          image: item.image || getPlaceholderImage(60, "P"),
+          prix: item.prix || null,
+          statut: item.statut || "inconnu",
+          estPublie: item.estPublie || false,
+          estBloque: item.estBloque || false,
+          categorie: item.categorie?.libelle || "Non catégorisé",
+          date: item.createdAt || item.updatedAt,
+          boutique: item.boutique?.nom || "Sans boutique",
+          note_moyenne: item.note_moyenne || 0,
+          nombre_avis: item.nombre_avis || 0,
+          nombre_favoris: item.nombre_favoris || 0,
+          quantite: item.quantite || 0,
+        };
+      case "dons":
+        return {
+          uuid: item.uuid,
+          libelle: item.nom || "Don",
+          description: item.description || "Pas de description",
+          image: item.image || getPlaceholderImage(60, "D"),
+          prix: item.prix || null,
+          statut: item.statut || "inconnu",
+          estPublie: item.estPublie || false,
+          estBloque: item.est_bloque || false,
+          categorie: item.categorie || "Non catégorisé",
+          date: item.date_debut || item.createdAt,
+          type_don: item.type_don || "objet",
+          quantite: item.quantite || 1,
+        };
+      case "echanges":
+        return {
+          uuid: item.uuid,
+          libelle: item.nomElementEchange || "Échange",
+          description: item.message || "Pas de description",
+          image: item.image || getPlaceholderImage(60, "E"),
+          prix: item.prix || null,
+          statut: item.statut || "inconnu",
+          estPublie: item.estPublie || false,
+          estBloque: false,
+          categorie: item.categorie || "Non catégorisé",
+          date: item.dateProposition || item.createdAt,
+          objetPropose: item.objetPropose || "",
+          objetDemande: item.objetDemande || "",
+        };
+      case "boutiques":
+        return {
+          uuid: item.uuid,
+          libelle: item.nom || "Boutique",
+          description: item.description || "Pas de description",
+          image: item.logo || getPlaceholderImage(60, "B"),
+          statut: item.statut || "inconnu",
+          estBloque: item.est_bloque || false,
+          estFerme: item.est_ferme || false,
+          date: item.created_at,
+          type_boutique: item.type_boutique?.libelle || "Standard",
+          produits_count: item.produits_count || 0,
+        };
+    }
+  };
 
-  const timelineData = [
-    { date: "01/01", value: 120, label: "Début d'année" },
-    { date: "01/02", value: 180, label: "Pic de vente" },
-    { date: "01/03", value: 150, label: "Stabilisation" },
-    { date: "01/04", value: 220, label: "Promotion" },
-    { date: "01/05", value: 190, label: "Post-promo" },
-    { date: "01/06", value: 250, label: "Record" },
-    { date: "01/07", value: 280, label: "Actuel" },
-  ];
-
-  const categoryData = [
-    { label: "Électronique", value: 35 },
-    { label: "Mode", value: 25 },
-    { label: "Maison", value: 20 },
-    { label: "Sport", value: 15 },
-    { label: "Autres", value: 5 },
-  ];
-
-  if (loading) {
-    return (
-      <div className="d-flex justify-content-center align-items-center min-vh-100 bg-light">
-        <div className="text-center">
-          <div
-            className="spinner-border text-primary"
-            role="status"
-            style={{ width: "3rem", height: "3rem" }}
-          >
-            <span className="visually-hidden">Chargement...</span>
-          </div>
-          <p className="mt-3 text-muted fw-semibold animate-pulse">
-            Chargement du dashboard...
-          </p>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <LoadingSpinner />;
 
   return (
-    <div className="container-fluid px-3 px-md-4 py-3 py-md-4 bg-light">
-      {/* En-tête avec animation */}
-      <div className="row mb-4 animate-fade-in">
-        <div className="col-12">
-          <div className="d-flex justify-content-between align-items-center">
-            <div>
-              <h1 className="h2 fw-bold mb-1 text-success">
-                <FontAwesomeIcon icon={faTachometerAlt} className="me-2" />
-                Dashboard Vendeur
-              </h1>
-              <p className="text-muted mb-0">
-                <FontAwesomeIcon icon={faCalendarAlt} className="me-1" />
-                Aujourd'hui,{" "}
-                {new Date().toLocaleDateString("fr-FR", {
-                  weekday: "long",
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })}
-              </p>
+    <div className="container-fluid py-4">
+      {/* Header principal */}
+      <div className="mb-5">
+        <div
+          className="rounded-4 p-4 shadow-lg mb-4 hero-gradient"
+          style={{
+            background: "linear-gradient(135deg, #28a745 0%, #20c997 100%)",
+            position: "relative",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            className="row align-items-center"
+            style={{ position: "relative", zIndex: 1 }}
+          >
+            <div className="col-md-8">
+              <div className="d-flex align-items-center">
+                {vendeur && (
+                  <div className="position-relative me-4">
+                    <img
+                      src={
+                        vendeur.avatar ||
+                        getPlaceholderImage(
+                          80,
+                          `${vendeur.prenoms?.charAt(0)}${vendeur.nom?.charAt(0)}`,
+                        )
+                      }
+                      alt={`${vendeur.prenoms} ${vendeur.nom}`}
+                      className="rounded-circle border border-4 border-white shadow"
+                      style={{
+                        width: "80px",
+                        height: "80px",
+                        objectFit: "cover",
+                      }}
+                    />
+                    <span
+                      className="position-absolute bottom-0 end-0 bg-success rounded-circle border border-3 border-white d-flex align-items-center justify-content-center"
+                      style={{ width: "20px", height: "20px" }}
+                    >
+                      <FontAwesomeIcon
+                        icon={faCheck}
+                        className="text-white"
+                        style={{ fontSize: "8px" }}
+                      />
+                    </span>
+                  </div>
+                )}
+                <div>
+                  <h1 className="h2 fw-bold text-white mb-1">
+                    <FontAwesomeIcon icon={faTachometerAlt} className="me-2" />
+                    Dashboard Vendeur
+                  </h1>
+                  <p className="text-white mb-2" style={{ opacity: 0.9 }}>
+                    {vendeur
+                      ? `Bonjour ${vendeur.prenoms}, voici le résumé de votre activité`
+                      : "Vue d'ensemble de votre activité"}
+                  </p>
+                  <div className="d-flex flex-wrap gap-2 align-items-center">
+                    <span className="badge bg-white bg-opacity-20 text-white fw-semibold border-0">
+                      <FontAwesomeIcon icon={faStore} className="me-1" />
+                      {stats?.totalBoutiques || 0} boutiques
+                    </span>
+                    <span className="badge bg-white bg-opacity-20 text-white fw-semibold border-0">
+                      <FontAwesomeIcon icon={faShoppingBag} className="me-1" />
+                      {stats?.totalProduits || 0} produits
+                    </span>
+                    <span className="badge bg-white bg-opacity-20 text-white fw-semibold border-0">
+                      <FontAwesomeIcon icon={faGift} className="me-1" />
+                      {stats?.totalDons || 0} dons
+                    </span>
+                    <span className="badge bg-white bg-opacity-20 text-white fw-semibold border-0">
+                      <FontAwesomeIcon icon={faExchangeAlt} className="me-1" />
+                      {stats?.totalEchanges || 0} échanges
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="d-flex gap-2">
-              <div className="dropdown">
+            <div className="col-md-4">
+              <div className="d-flex flex-column flex-md-row gap-2 justify-content-end align-items-start align-items-md-center">
+                <div className="dropdown">
+                  <button
+                    className="btn btn-outline-light d-flex align-items-center gap-2 w-100"
+                    type="button"
+                    data-bs-toggle="dropdown"
+                  >
+                    <FontAwesomeIcon icon={faCalendarWeek} />
+                    <span className="d-none d-md-inline">
+                      {timeRange === "day" && "Aujourd'hui"}
+                      {timeRange === "week" && "Cette semaine"}
+                      {timeRange === "month" && "Ce mois"}
+                      {timeRange === "year" && "Cette année"}
+                    </span>
+                  </button>
+                  <ul className="dropdown-menu">
+                    <li>
+                      <button
+                        className="dropdown-item"
+                        onClick={() => setTimeRange("day")}
+                      >
+                        Aujourd'hui
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        className="dropdown-item"
+                        onClick={() => setTimeRange("week")}
+                      >
+                        Cette semaine
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        className="dropdown-item"
+                        onClick={() => setTimeRange("month")}
+                      >
+                        Ce mois
+                      </button>
+                    </li>
+                    <li>
+                      <button
+                        className="dropdown-item"
+                        onClick={() => setTimeRange("year")}
+                      >
+                        Cette année
+                      </button>
+                    </li>
+                  </ul>
+                </div>
                 <button
-                  className="btn btn-outline-primary d-flex align-items-center gap-2 animate-scale-hover"
-                  type="button"
-                  data-bs-toggle="dropdown"
+                  onClick={fetchDashboardData}
+                  className="btn btn-outline-light d-flex align-items-center justify-content-center gap-2 w-100"
+                  disabled={loading}
+                  title="Rafraîchir"
                 >
-                  <FontAwesomeIcon icon={faCalendarWeek} />
-                  <span className="d-none d-md-inline">
-                    {timeRange === "day" && "Aujourd'hui"}
-                    {timeRange === "week" && "Cette semaine"}
-                    {timeRange === "month" && "Ce mois"}
-                    {timeRange === "year" && "Cette année"}
-                  </span>
+                  <FontAwesomeIcon icon={faSync} spin={loading} />
+                  <span className="d-none d-md-inline">Actualiser</span>
                 </button>
-                <ul className="dropdown-menu">
-                  <li>
-                    <button
-                      className="dropdown-item"
-                      onClick={() => setTimeRange("day")}
-                    >
-                      Aujourd'hui
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      className="dropdown-item"
-                      onClick={() => setTimeRange("week")}
-                    >
-                      Cette semaine
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      className="dropdown-item"
-                      onClick={() => setTimeRange("month")}
-                    >
-                      Ce mois
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      className="dropdown-item"
-                      onClick={() => setTimeRange("year")}
-                    >
-                      Cette année
-                    </button>
-                  </li>
-                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Cartes de statistiques */}
+        <div className="row g-4 mb-4">
+          <div className="col-xl-3 col-lg-4 col-md-6">
+            <StatCard
+              title="Boutiques"
+              value={stats?.totalBoutiques || 0}
+              icon={faStore}
+              color="primary"
+              subtitle={`${stats?.boutiquesActives || 0} actives, ${stats?.boutiquesEnReview || 0} en revue`}
+              trend="up"
+              trendText="+12% ce mois"
+              delay={0}
+            />
+          </div>
+
+          <div className="col-xl-3 col-lg-4 col-md-6">
+            <StatCard
+              title="Produits"
+              value={stats?.totalProduits || 0}
+              icon={faShoppingBag}
+              color="success"
+              subtitle={`${stats?.produitsPublies || 0} publiés, ${stats?.produitsBloques || 0} bloqués`}
+              trend="up"
+              trendText="+8% ce mois"
+              delay={1}
+            />
+          </div>
+
+          <div className="col-xl-3 col-lg-4 col-md-6">
+            <StatCard
+              title="Dons"
+              value={stats?.totalDons || 0}
+              icon={faGift}
+              color="warning"
+              subtitle={`${stats?.donsPublies || 0} publiés, ${stats?.donsBloques || 0} bloqués`}
+              trend="up"
+              trendText="+5% ce mois"
+              delay={2}
+            />
+          </div>
+
+          <div className="col-xl-3 col-lg-4 col-md-6">
+            <StatCard
+              title="Échanges"
+              value={stats?.totalEchanges || 0}
+              icon={faExchangeAlt}
+              color="info"
+              subtitle={`${stats?.echangesPublies || 0} publiés, ${stats?.echangesBloques || 0} bloqués`}
+              trend="up"
+              trendText="+18% ce mois"
+              delay={3}
+            />
+          </div>
+        </div>
+
+        <div className="row g-4 mb-4">
+          <div className="col-xl-3 col-lg-4 col-md-6">
+            <StatCard
+              title="Revenus"
+              value={`${((stats?.revenusTotaux || 0) / 1000000).toFixed(1)}M`}
+              icon={faMoneyBillWave}
+              color="success"
+              subtitle={`${(stats?.revenusMensuels || 0).toLocaleString("fr-FR")} FCFA ce mois`}
+              trend="up"
+              trendText="+25%"
+              delay={4}
+            />
+          </div>
+
+          <div className="col-xl-3 col-lg-4 col-md-6">
+            <StatCard
+              title="Avis"
+              value={stats?.totalAvis || 0}
+              icon={faStar}
+              color="warning"
+              subtitle={`Note moyenne: ${stats?.avisMoyen || 0}/5`}
+              trend="up"
+              trendText="+8%"
+              delay={5}
+            />
+          </div>
+
+          <div className="col-xl-3 col-lg-4 col-md-6">
+            <StatCard
+              title="Favoris"
+              value={stats?.totalFavoris || 0}
+              icon={faHeart}
+              color="danger"
+              subtitle="Ajoutés par les clients"
+              trend="up"
+              trendText="+22%"
+              delay={6}
+            />
+          </div>
+
+          <div className="col-xl-3 col-lg-4 col-md-6">
+            <StatCard
+              title="Conversion"
+              value={`${stats?.tauxConversion || 0}%`}
+              icon={faPercent}
+              color="info"
+              subtitle={`Panier moyen: ${(stats?.panierMoyen || 0).toLocaleString("fr-FR")} FCFA`}
+              trend="up"
+              trendText="+2%"
+              delay={7}
+            />
+          </div>
+        </div>
+
+        {/* Messages d'alerte */}
+        {error && (
+          <div
+            className="alert alert-danger alert-dismissible fade show shadow-sm border-0 mb-4"
+            role="alert"
+          >
+            <div className="d-flex align-items-center">
+              <div className="flex-shrink-0">
+                <FontAwesomeIcon icon={faExclamationTriangle} />
+              </div>
+              <div className="flex-grow-1 ms-3">
+                <h6 className="alert-heading mb-1">Erreur</h6>
+                <p className="mb-0">{error}</p>
               </div>
               <button
-                className="btn btn-primary d-flex align-items-center gap-2 animate-pulse-hover"
-                onClick={() => router.push("/dashboard/produits/create")}
+                type="button"
+                className="btn-close"
+                onClick={() => setError(null)}
+              ></button>
+            </div>
+          </div>
+        )}
+
+        {successMessage && (
+          <div
+            className="alert alert-success alert-dismissible fade show shadow-sm border-0 mb-4"
+            role="alert"
+          >
+            <div className="d-flex align-items-center">
+              <div className="flex-shrink-0">
+                <FontAwesomeIcon icon={faCheckCircle} />
+              </div>
+              <div className="flex-grow-1 ms-3">
+                <h6 className="alert-heading mb-1">Succès</h6>
+                <p className="mb-0">{successMessage}</p>
+              </div>
+              <button
+                type="button"
+                className="btn-close"
+                onClick={() => setSuccessMessage(null)}
+              ></button>
+            </div>
+          </div>
+        )}
+
+        {/* Navigation par sections */}
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-body p-3">
+            <div className="d-flex flex-wrap gap-2">
+              <button
+                className={`btn btn-lg d-flex align-items-center gap-2 ${activeSection === "produits" ? "btn-success" : "btn-outline-success"}`}
+                onClick={() => {
+                  setActiveSection("produits");
+                  setActiveTab("tous");
+                  setSearchTerm("");
+                }}
               >
-                <FontAwesomeIcon icon={faRocket} />
-                <span className="d-none d-md-inline">Lancer une vente</span>
+                <FontAwesomeIcon icon={faShoppingBag} />
+                Produits
+                <span className="badge bg-white text-success ms-1">
+                  {stats?.totalProduits || 0}
+                </span>
+              </button>
+
+              <button
+                className={`btn btn-lg d-flex align-items-center gap-2 ${activeSection === "dons" ? "btn-warning" : "btn-outline-warning"}`}
+                onClick={() => {
+                  setActiveSection("dons");
+                  setActiveTab("tous");
+                  setSearchTerm("");
+                }}
+              >
+                <FontAwesomeIcon icon={faGift} />
+                Dons
+                <span className="badge bg-white text-warning ms-1">
+                  {stats?.totalDons || 0}
+                </span>
+              </button>
+
+              <button
+                className={`btn btn-lg d-flex align-items-center gap-2 ${activeSection === "echanges" ? "btn-info" : "btn-outline-info"}`}
+                onClick={() => {
+                  setActiveSection("echanges");
+                  setActiveTab("tous");
+                  setSearchTerm("");
+                }}
+              >
+                <FontAwesomeIcon icon={faExchangeAlt} />
+                Échanges
+                <span className="badge bg-white text-info ms-1">
+                  {stats?.totalEchanges || 0}
+                </span>
+              </button>
+
+              <button
+                className={`btn btn-lg d-flex align-items-center gap-2 ${activeSection === "boutiques" ? "btn-primary" : "btn-outline-primary"}`}
+                onClick={() => {
+                  setActiveSection("boutiques");
+                  setSearchTerm("");
+                }}
+              >
+                <FontAwesomeIcon icon={faStore} />
+                Boutiques
+                <span className="badge bg-white text-primary ms-1">
+                  {stats?.totalBoutiques || 0}
+                </span>
               </button>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Cartes de statistiques */}
-      <div className="row g-4 mb-4">
-        <div className="col-xl-3 col-lg-6">
-          <StatCard
-            title="Boutiques"
-            value={stats?.totalBoutiques || 0}
-            icon={faStore}
-            color="primary"
-            change={{ value: 12, isPositive: true }}
-            subtitle={`${stats?.boutiquesActives || 0} actives`}
-            delay={0}
-          />
-        </div>
-        <div className="col-xl-3 col-lg-6">
-          <StatCard
-            title="Produits"
-            value={stats?.totalProduits || 0}
-            icon={faShoppingBag}
-            color="success"
-            change={{ value: 8, isPositive: true }}
-            subtitle={`${stats?.produitsPublies || 0} publiés`}
-            delay={1}
-          />
-        </div>
-        <div className="col-xl-3 col-lg-6">
-          <StatCard
-            title="Revenus"
-            value={`${(stats?.revenusTotaux || 0 / 1000000).toFixed(1)}M`}
-            icon={faCoins}
-            color="warning"
-            change={{ value: 25, isPositive: true }}
-            subtitle={`${(stats?.revenusMensuels || 0).toLocaleString("fr-FR")} FCFA ce mois`}
-            delay={2}
-          />
-        </div>
-        <div className="col-xl-3 col-lg-6">
-          <StatCard
-            title="Performance"
-            value={`${stats?.tauxConversion || 0}%`}
-            icon={faExchangeAlt}
-            color="info"
-            change={{ value: 15, isPositive: true }}
-            subtitle={`Panier moyen: ${(stats?.panierMoyen || 0).toLocaleString("fr-FR")} FCFA`}
-            delay={3}
-          />
-        </div>
-      </div>
-
-      {/* Deuxième ligne de statistiques */}
-      <div className="row g-4 mb-4">
-        <div className="col-xl-2 col-md-4 col-6">
-          <StatCard
-            title="Dons"
-            value={stats?.totalDons || 0}
-            icon={faGift}
-            color="secondary"
-            change={{ value: -3, isPositive: false }}
-            subtitle={`${stats?.donsPublies || 0} publiés`}
-            delay={4}
-          />
-        </div>
-        <div className="col-xl-2 col-md-4 col-6">
-          <StatCard
-            title="Échanges"
-            value={stats?.totalEchanges || 0}
-            icon={faExchangeAlt}
-            color="dark"
-            change={{ value: 5, isPositive: true }}
-            subtitle={`${stats?.echangesPublies || 0} publiés`}
-            delay={5}
-          />
-        </div>
-        <div className="col-xl-2 col-md-4 col-6">
-          <StatCard
-            title="Commandes"
-            value={stats?.commandesTraitees || 0}
-            icon={faShoppingCart}
-            color="success"
-            change={{ value: 18, isPositive: true }}
-            subtitle={`${stats?.commandesEnAttente || 0} en attente`}
-            delay={6}
-          />
-        </div>
-        <div className="col-xl-2 col-md-4 col-6">
-          <StatCard
-            title="Avis"
-            value={stats?.totalAvis || 0}
-            icon={faStar}
-            color="warning"
-            change={{ value: 8, isPositive: true }}
-            subtitle={`Note moyenne: ${stats?.avisMoyen || 0}/5`}
-            delay={7}
-          />
-        </div>
-        <div className="col-xl-2 col-md-4 col-6">
-          <StatCard
-            title="Favoris"
-            value={stats?.totalFavoris || 0}
-            icon={faHeart}
-            color="danger"
-            change={{ value: 22, isPositive: true }}
-            subtitle={`Ajoutés par les clients`}
-            delay={8}
-          />
-        </div>
-        <div className="col-xl-2 col-md-4 col-6">
-          <StatCard
-            title="Conversion"
-            value={`${stats?.tauxConversion || 0}%`}
-            icon={faPercent}
-            color="primary"
-            change={{ value: 2, isPositive: true }}
-            subtitle={`Taux de conversion`}
-            delay={9}
-          />
-        </div>
-      </div>
-
-      {/* Graphiques principaux */}
-      <div className="row g-4 mb-4">
-        {/* Revenus mensuels */}
-        <div className="col-xl-8">
-          <AnimatedBarChart
-            title="Revenus mensuels (en milliers de FCFA)"
-            data={monthlyRevenueData}
-            color="success"
-            unit="k"
-            delay={0}
-          />
-        </div>
-
-        {/* Performance radar */}
-        <div className="col-xl-4">
-          <RadarChart
-            title="Performance globale"
-            data={performanceData}
-            maxValue={100}
-            delay={1}
-          />
-        </div>
-      </div>
-
-      {/* Deuxième ligne de graphiques */}
-      <div className="row g-4 mb-4">
-        {/* Évolution des ventes */}
-        <div className="col-xl-4">
-          <TimelineChart
-            title="Évolution des ventes"
-            data={timelineData}
-            delay={2}
-          />
-        </div>
-
-        {/* Statut des produits */}
-        <div className="col-xl-4">
-          <AdvancedPieChart
-            title="Statut des produits"
-            data={produitStatusData}
-            colors={["#28a745", "#6c757d", "#dc3545"]}
-            showValues={true}
-            showPercentage={true}
-            innerRadius={30}
-            delay={3}
-          />
-        </div>
-
-        {/* Catégories de produits */}
-        <div className="col-xl-4">
-          <AdvancedPieChart
-            title="Produits par catégorie"
-            data={categoryData}
-            colors={["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"]}
-            showValues={true}
-            showPercentage={true}
-            innerRadius={40}
-            delay={4}
-          />
-        </div>
-      </div>
-
-      {/* Troisième ligne de graphiques */}
-      <div className="row g-4 mb-4">
-        {/* Statut des boutiques */}
-        <div className="col-xl-4">
-          <AdvancedPieChart
-            title="Statut des boutiques"
-            data={boutiqueStatusData}
-            colors={["#28a745", "#ffc107", "#dc3545"]}
-            showValues={true}
-            showPercentage={true}
-            innerRadius={35}
-            delay={5}
-          />
-        </div>
-
-        {/* Statut des dons */}
-        <div className="col-xl-4">
-          <AdvancedPieChart
-            title="Statut des dons"
-            data={donsStatusData}
-            colors={["#17a2b8", "#6c757d", "#ffc107"]}
-            showValues={true}
-            showPercentage={true}
-            innerRadius={35}
-            delay={6}
-          />
-        </div>
-
-        {/* Statut des échanges */}
-        <div className="col-xl-4">
-          <AdvancedPieChart
-            title="Statut des échanges"
-            data={echangesStatusData}
-            colors={["#20c997", "#6c757d", "#fd7e14"]}
-            showValues={true}
-            showPercentage={true}
-            innerRadius={35}
-            delay={7}
-          />
-        </div>
-      </div>
-
-      {/* Tableau des produits et activités */}
-      <div className="row g-4 mb-4">
-        {/* Produits récents */}
-        <div className="col-xl-8">
-          <AnimatedProductsTable products={produits.slice(0, 6)} delay={8} />
-        </div>
-
-        {/* Activité récente */}
-        <div className="col-xl-4">
-          <AnimatedRecentActivityCard activities={recentActivities} delay={9} />
-        </div>
-      </div>
-
-      {/* Boutiques récentes */}
-      <div className="row g-4">
-        <div className="col-12">
-          <div
-            className="card border-0 shadow-lg animate-slide-up"
-            style={{ animationDelay: "1000ms" }}
-          >
-            <div className="card-header bg-white border-0 py-3">
-              <div className="d-flex justify-content-between align-items-center">
-                <h5 className="mb-0 fw-bold">
-                  <FontAwesomeIcon
-                    icon={faStore}
-                    className="me-2 text-primary"
-                  />
-                  Mes boutiques
-                </h5>
+        {/* Onglets pour produits, dons et échanges */}
+        {activeSection !== "boutiques" && (
+          <div className="card border-0 shadow-sm mb-4">
+            <div className="card-body p-3">
+              <div className="d-flex flex-wrap gap-2">
                 <button
-                  className="btn btn-sm btn-primary animate-pulse-hover"
-                  onClick={() => router.push("/dashboard/boutiques")}
+                  className={`btn ${activeTab === "tous" ? "btn-primary" : "btn-outline-primary"}`}
+                  onClick={() => setActiveTab("tous")}
                 >
-                  <FontAwesomeIcon icon={faEye} className="me-1" />
-                  Voir tout
+                  Tous (
+                  {activeSection === "produits"
+                    ? stats?.totalProduits
+                    : activeSection === "dons"
+                      ? stats?.totalDons
+                      : stats?.totalEchanges}
+                  )
+                </button>
+
+                <button
+                  className={`btn ${activeTab === "publies" ? "btn-success" : "btn-outline-success"}`}
+                  onClick={() => setActiveTab("publies")}
+                >
+                  Publiés (
+                  {activeSection === "produits"
+                    ? stats?.produitsPublies
+                    : activeSection === "dons"
+                      ? stats?.donsPublies
+                      : stats?.echangesPublies}
+                  )
+                </button>
+
+                <button
+                  className={`btn ${activeTab === "bloques" ? "btn-danger" : "btn-outline-danger"}`}
+                  onClick={() => setActiveTab("bloques")}
+                >
+                  Bloqués (
+                  {activeSection === "produits"
+                    ? stats?.produitsBloques
+                    : activeSection === "dons"
+                      ? stats?.donsBloques
+                      : stats?.echangesBloques}
+                  )
                 </button>
               </div>
             </div>
-            <div className="card-body">
-              <div className="row g-3">
-                {boutiques.slice(0, 4).map((boutique, index) => (
-                  <div
-                    key={boutique.uuid}
-                    className="col-lg-3 col-md-6"
-                    style={{ animationDelay: `${index * 200}ms` }}
-                  >
-                    <div
-                      className="card h-100 border-0 shadow-sm-hover position-relative overflow-hidden"
-                      style={{
-                        cursor: "pointer",
-                        animation: `slideUp 0.5s ease-out ${index * 200}ms both`,
-                      }}
-                      onClick={() =>
-                        router.push(`/dashboard/boutiques/${boutique.uuid}`)
-                      }
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform =
-                          "translateY(-8px) scale(1.02)";
-                        e.currentTarget.style.boxShadow =
-                          "0 15px 35px rgba(0,0,0,0.15)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform =
-                          "translateY(0) scale(1)";
-                        e.currentTarget.style.boxShadow =
-                          "0 5px 15px rgba(0,0,0,0.1)";
-                      }}
+          </div>
+        )}
+
+        {/* Barre de recherche */}
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-body">
+            <div className="row g-3 align-items-center">
+              <div className="col-lg-6">
+                <div className="input-group">
+                  <span className="input-group-text bg-white border-end-0">
+                    <FontAwesomeIcon icon={faSearch} className="text-success" />
+                  </span>
+                  <input
+                    type="text"
+                    className="form-control border-start-0"
+                    placeholder={`Rechercher ${activeSection === "produits" ? "un produit" : activeSection === "dons" ? "un don" : activeSection === "echanges" ? "un échange" : "une boutique"}...`}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                  {searchTerm && (
+                    <button
+                      className="btn btn-outline-secondary"
+                      type="button"
+                      onClick={() => setSearchTerm("")}
                     >
-                      {/* Badge de statut */}
-                      <div className="position-absolute top-0 start-0 p-2 z-1">
-                        <div
-                          className={`badge ${
-                            boutique.statut === "actif"
-                              ? "bg-success"
-                              : boutique.statut === "en_review"
-                                ? "bg-warning"
-                                : "bg-secondary"
-                          } shadow-sm`}
-                        >
-                          {boutique.statut === "actif" && "Actif"}
-                          {boutique.statut === "en_review" && "En revue"}
-                          {boutique.statut === "bloque" && "Bloqué"}
-                          {boutique.statut === "ferme" && "Fermé"}
+                      <FontAwesomeIcon icon={faTimes} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="col-lg-6">
+                <div className="d-flex flex-wrap gap-2 justify-content-end">
+                  {activeSection === "produits" && (
+                    <Link
+                      href="/dashboard/produits/create"
+                      className="btn btn-success d-flex align-items-center gap-2"
+                    >
+                      <FontAwesomeIcon icon={faPlus} />
+                      Nouveau produit
+                    </Link>
+                  )}
+
+                  {activeSection === "dons" && (
+                    <Link
+                      href="/dashboard/dons/create"
+                      className="btn btn-warning d-flex align-items-center gap-2"
+                    >
+                      <FontAwesomeIcon icon={faPlus} />
+                      Nouveau don
+                    </Link>
+                  )}
+
+                  {activeSection === "echanges" && (
+                    <Link
+                      href="/dashboard/echanges/create"
+                      className="btn btn-info d-flex align-items-center gap-2"
+                    >
+                      <FontAwesomeIcon icon={faPlus} />
+                      Nouvel échange
+                    </Link>
+                  )}
+
+                  {activeSection === "boutiques" && (
+                    <Link
+                      href="/dashboard/boutiques/create"
+                      className="btn btn-primary d-flex align-items-center gap-2"
+                    >
+                      <FontAwesomeIcon icon={faPlus} />
+                      Nouvelle boutique
+                    </Link>
+                  )}
+
+                  <button
+                    className="btn btn-outline-secondary d-flex align-items-center gap-2"
+                    onClick={() => {
+                      setSelectedItems([]);
+                      setSearchTerm("");
+                    }}
+                  >
+                    <FontAwesomeIcon icon={faFilter} />
+                    Réinitialiser
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Tableau des données */}
+        <div className="card border-0 shadow-sm">
+          <div className="card-body p-0">
+            {filteredData.length === 0 ? (
+              <div className="text-center py-5">
+                <div className="mb-4">
+                  {activeSection === "produits" && (
+                    <FontAwesomeIcon
+                      icon={faBoxOpen}
+                      className="text-muted fs-1"
+                    />
+                  )}
+                  {activeSection === "dons" && (
+                    <FontAwesomeIcon
+                      icon={faGift}
+                      className="text-muted fs-1"
+                    />
+                  )}
+                  {activeSection === "echanges" && (
+                    <FontAwesomeIcon
+                      icon={faExchangeAlt}
+                      className="text-muted fs-1"
+                    />
+                  )}
+                  {activeSection === "boutiques" && (
+                    <FontAwesomeIcon
+                      icon={faStore}
+                      className="text-muted fs-1"
+                    />
+                  )}
+                </div>
+                <h4 className="fw-bold mb-3">Aucun {activeSection} trouvé</h4>
+                <p className="text-muted mb-4">
+                  {searchTerm
+                    ? "Aucun résultat ne correspond à votre recherche."
+                    : activeSection === "produits"
+                      ? "Commencez par créer votre premier produit !"
+                      : activeSection === "dons"
+                        ? "Commencez par créer votre premier don !"
+                        : activeSection === "echanges"
+                          ? "Commencez par créer votre premier échange !"
+                          : "Commencez par créer votre première boutique !"}
+                </p>
+                <Link
+                  href={`/dashboard/${activeSection}/create`}
+                  className={`btn btn-${activeSection === "produits" ? "success" : activeSection === "dons" ? "warning" : activeSection === "echanges" ? "info" : "primary"} btn-lg`}
+                >
+                  <FontAwesomeIcon icon={faPlus} className="me-2" />
+                  Créer un{" "}
+                  {activeSection === "produits"
+                    ? "produit"
+                    : activeSection === "dons"
+                      ? "don"
+                      : activeSection === "echanges"
+                        ? "échange"
+                        : "boutique"}
+                </Link>
+              </div>
+            ) : (
+              <div className="table-responsive">
+                <table className="table table-hover align-middle mb-0">
+                  <thead className="table-light">
+                    <tr>
+                      <th style={{ width: "50px" }} className="ps-4">
+                        <div className="form-check">
+                          <input
+                            type="checkbox"
+                            className="form-check-input"
+                            checked={
+                              selectedItems.length === filteredData.length &&
+                              filteredData.length > 0
+                            }
+                            onChange={() => {
+                              if (
+                                selectedItems.length === filteredData.length
+                              ) {
+                                setSelectedItems([]);
+                              } else {
+                                setSelectedItems(
+                                  filteredData.map((item: any) => item.uuid),
+                                );
+                              }
+                            }}
+                          />
                         </div>
-                      </div>
-
-                      {/* Bannière */}
-                      <div
-                        className="card-img-top"
-                        style={{
-                          height: "120px",
-                          backgroundImage: `linear-gradient(135deg, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.1) 100%), url(${boutique.banniere})`,
-                          backgroundSize: "cover",
-                          backgroundPosition: "center",
-                          position: "relative",
-                        }}
-                      >
-                        {/* Overlay gradient */}
-                        <div
-                          className="position-absolute top-0 start-0 w-100 h-100"
-                          style={{
-                            background:
-                              "linear-gradient(135deg, rgba(13,110,253,0.2) 0%, rgba(0,0,0,0) 100%)",
-                          }}
-                        ></div>
-                      </div>
-
-                      {/* Logo et infos */}
-                      <div className="card-body text-center position-relative">
-                        <div
-                          className="position-relative d-inline-block"
-                          style={{ marginTop: "-50px" }}
+                      </th>
+                      <th style={{ width: "80px" }}>Image</th>
+                      <th>Nom</th>
+                      {activeSection !== "boutiques" && (
+                        <th style={{ width: "120px" }}>Prix/Valeur</th>
+                      )}
+                      <th style={{ width: "100px" }}>Statut</th>
+                      <th style={{ width: "120px" }}>Catégorie</th>
+                      <th style={{ width: "150px" }}>Date</th>
+                      <th style={{ width: "150px" }} className="text-end pe-4">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredData.slice(0, 10).map((item: any) => {
+                      const displayData = getDisplayData(item);
+                      return (
+                        <tr
+                          key={displayData.uuid}
+                          className={
+                            selectedItems.includes(displayData.uuid)
+                              ? "table-active"
+                              : ""
+                          }
                         >
-                          <div className="position-relative">
-                            <img
-                              src={boutique.logo}
-                              alt={boutique.nom}
-                              className="rounded-circle border border-4 border-white shadow-lg"
-                              style={{
-                                width: "80px",
-                                height: "80px",
-                                objectFit: "cover",
-                              }}
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src =
-                                  "https://via.placeholder.com/80/cccccc/ffffff?text=B";
-                              }}
-                            />
-                            {/* Animation autour du logo */}
+                          <td className="ps-4">
+                            <div className="form-check">
+                              <input
+                                type="checkbox"
+                                className="form-check-input"
+                                checked={selectedItems.includes(
+                                  displayData.uuid,
+                                )}
+                                onChange={() => {
+                                  setSelectedItems((prev) =>
+                                    prev.includes(displayData.uuid)
+                                      ? prev.filter(
+                                          (id) => id !== displayData.uuid,
+                                        )
+                                      : [...prev, displayData.uuid],
+                                  );
+                                }}
+                              />
+                            </div>
+                          </td>
+                          <td>
                             <div
-                              className="position-absolute top-0 start-0 w-100 h-100 rounded-circle border border-2 border-primary"
-                              style={{
-                                animation: "pulseRing 2s infinite",
-                              }}
-                            ></div>
-                          </div>
-                        </div>
-                        <h6 className="mt-3 mb-1 fw-bold">{boutique.nom}</h6>
-                        <p className="text-muted small mb-2">
-                          <FontAwesomeIcon icon={faTag} className="me-1" />
-                          {boutique.type_boutique.libelle}
-                        </p>
-                        <div className="d-flex justify-content-center gap-2 mt-2">
-                          {boutique.est_bloque && (
-                            <span className="badge bg-danger animate-pulse">
-                              <FontAwesomeIcon icon={faBan} className="me-1" />
-                              Bloqué
-                            </span>
+                              className="position-relative"
+                              style={{ width: "60px", height: "60px" }}
+                            >
+                              <img
+                                src={displayData.image}
+                                alt={displayData.libelle}
+                                className="rounded-3"
+                                style={{
+                                  width: "100%",
+                                  height: "100%",
+                                  objectFit: "cover",
+                                }}
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src =
+                                    getPlaceholderImage(60, "I");
+                                }}
+                              />
+                            </div>
+                          </td>
+                          <td>
+                            <div className="d-flex flex-column">
+                              <span className="fw-semibold">
+                                {displayData.libelle}
+                              </span>
+                              <small
+                                className="text-muted text-truncate"
+                                style={{ maxWidth: "200px" }}
+                              >
+                                {displayData.description?.substring(0, 60) ||
+                                  "Pas de description"}
+                              </small>
+                              {activeSection === "produits" && (
+                                <small className="text-muted">
+                                  <FontAwesomeIcon
+                                    icon={faStore}
+                                    className="me-1"
+                                  />
+                                  {displayData.boutique}
+                                </small>
+                              )}
+                              {activeSection === "dons" && (
+                                <small className="text-muted">
+                                  <FontAwesomeIcon
+                                    icon={faTag}
+                                    className="me-1"
+                                  />
+                                  {displayData.type_don}
+                                </small>
+                              )}
+                              {activeSection === "echanges" && (
+                                <small className="text-muted">
+                                  <FontAwesomeIcon
+                                    icon={faExchangeAlt}
+                                    className="me-1"
+                                  />
+                                  {displayData.objetPropose} →{" "}
+                                  {displayData.objetDemande}
+                                </small>
+                              )}
+                              {activeSection === "boutiques" && (
+                                <small className="text-muted">
+                                  <FontAwesomeIcon
+                                    icon={faTag}
+                                    className="me-1"
+                                  />
+                                  {displayData.type_boutique}
+                                </small>
+                              )}
+                            </div>
+                          </td>
+                          {activeSection !== "boutiques" && (
+                            <td>
+                              <span className="fw-bold text-success">
+                                {formatPrix(displayData.prix)}
+                              </span>
+                              {activeSection === "produits" && (
+                                <div>
+                                  <small className="text-muted">
+                                    Stock: {displayData.quantite}
+                                  </small>
+                                </div>
+                              )}
+                            </td>
                           )}
-                          {boutique.est_ferme && (
-                            <span className="badge bg-warning">
-                              <FontAwesomeIcon icon={faLock} className="me-1" />
-                              Fermé
+                          <td>
+                            {activeSection === "boutiques" ? (
+                              <>
+                                {displayData.estBloque ||
+                                displayData.estFerme ? (
+                                  <span className="badge bg-danger bg-opacity-10 text-danger border border-danger">
+                                    <FontAwesomeIcon
+                                      icon={faBan}
+                                      className="me-1"
+                                    />
+                                    {displayData.estBloque
+                                      ? "Bloquée"
+                                      : "Fermée"}
+                                  </span>
+                                ) : displayData.statut === "actif" ? (
+                                  <span className="badge bg-success bg-opacity-10 text-success border border-success">
+                                    <FontAwesomeIcon
+                                      icon={faCheckCircle}
+                                      className="me-1"
+                                    />
+                                    Active
+                                  </span>
+                                ) : displayData.statut === "en_review" ? (
+                                  <span className="badge bg-warning bg-opacity-10 text-warning border border-warning">
+                                    <FontAwesomeIcon
+                                      icon={faClock}
+                                      className="me-1"
+                                    />
+                                    En revue
+                                  </span>
+                                ) : (
+                                  <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary">
+                                    <FontAwesomeIcon
+                                      icon={faQuestion}
+                                      className="me-1"
+                                    />
+                                    Inactif
+                                  </span>
+                                )}
+                              </>
+                            ) : displayData.estBloque ? (
+                              <span className="badge bg-danger bg-opacity-10 text-danger border border-danger">
+                                <FontAwesomeIcon
+                                  icon={faBan}
+                                  className="me-1"
+                                />
+                                Bloqué
+                              </span>
+                            ) : displayData.estPublie ? (
+                              <span className="badge bg-success bg-opacity-10 text-success border border-success">
+                                <FontAwesomeIcon
+                                  icon={faCheckCircle}
+                                  className="me-1"
+                                />
+                                Publié
+                              </span>
+                            ) : (
+                              <span className="badge bg-warning bg-opacity-10 text-warning border border-warning">
+                                <FontAwesomeIcon
+                                  icon={faClock}
+                                  className="me-1"
+                                />
+                                Non publié
+                              </span>
+                            )}
+                            {activeSection === "produits" &&
+                              !displayData.estBloque &&
+                              displayData.note_moyenne > 0 && (
+                                <div className="mt-1">
+                                  <small className="text-warning">
+                                    <FontAwesomeIcon
+                                      icon={faStar}
+                                      className="me-1"
+                                    />
+                                    {parseFloat(
+                                      displayData.note_moyenne,
+                                    ).toFixed(1)}
+                                  </small>
+                                </div>
+                              )}
+                          </td>
+                          <td>
+                            <span className="badge bg-info bg-opacity-10 text-info border border-info">
+                              {displayData.categorie}
                             </span>
-                          )}
-                        </div>
-                      </div>
+                          </td>
+                          <td>
+                            <small className="text-muted">
+                              {formatDate(displayData.date)}
+                            </small>
+                          </td>
+                          <td className="text-end pe-4">
+                            <div
+                              className="btn-group btn-group-sm"
+                              role="group"
+                            >
+                              <button
+                                className="btn btn-outline-primary"
+                                title="Voir"
+                                onClick={() =>
+                                  router.push(
+                                    `/dashboard/${activeSection}/${displayData.uuid}`,
+                                  )
+                                }
+                              >
+                                <FontAwesomeIcon icon={faEye} />
+                              </button>
+                              <button
+                                className="btn btn-outline-success"
+                                title="Modifier"
+                                onClick={() =>
+                                  router.push(
+                                    `/dashboard/${activeSection}/${displayData.uuid}/edit`,
+                                  )
+                                }
+                              >
+                                <FontAwesomeIcon icon={faEdit} />
+                              </button>
+                              <button
+                                className="btn btn-outline-danger"
+                                title="Supprimer"
+                                onClick={() => {
+                                  if (
+                                    window.confirm(
+                                      "Êtes-vous sûr de vouloir supprimer cet élément ?",
+                                    )
+                                  ) {
+                                    // Logique de suppression
+                                  }
+                                }}
+                              >
+                                <FontAwesomeIcon icon={faTrash} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
 
-                      {/* Footer avec statistiques */}
-                      <div className="card-footer bg-transparent border-0 py-2">
-                        <div className="d-flex justify-content-around text-center">
-                          <div>
-                            <div className="fw-bold text-primary">
-                              {boutique.produits_count || 0}
-                            </div>
-                            <small className="text-muted">Produits</small>
-                          </div>
-                          <div>
-                            <div className="fw-bold text-success">
-                              {Math.round(Math.random() * 100)}
-                            </div>
-                            <small className="text-muted">Ventes</small>
-                          </div>
-                          <div>
-                            <div className="fw-bold text-warning">
-                              {Math.round(Math.random() * 50)}
-                            </div>
-                            <small className="text-muted">Vues</small>
-                          </div>
-                        </div>
-                      </div>
+          {/* Pagination */}
+          {filteredData.length > 10 && (
+            <div className="card-footer bg-white border-0 py-3">
+              <div className="d-flex justify-content-between align-items-center">
+                <div>
+                  <p className="mb-0 text-muted">
+                    Affichage de <strong>1</strong> à{" "}
+                    <strong>{Math.min(10, filteredData.length)}</strong> sur{" "}
+                    <strong>{filteredData.length}</strong> éléments
+                  </p>
+                </div>
+                <nav>
+                  <ul className="pagination pagination-sm mb-0">
+                    <li className="page-item">
+                      <button className="page-link" aria-label="Précédent">
+                        <FontAwesomeIcon icon={faChevronLeft} />
+                      </button>
+                    </li>
+                    <li className="page-item active">
+                      <button className="page-link">1</button>
+                    </li>
+                    <li className="page-item">
+                      <button className="page-link">2</button>
+                    </li>
+                    <li className="page-item">
+                      <button className="page-link">3</button>
+                    </li>
+                    <li className="page-item">
+                      <button className="page-link" aria-label="Suivant">
+                        <FontAwesomeIcon icon={faChevronRight} />
+                      </button>
+                    </li>
+                  </ul>
+                </nav>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Section informations */}
+        <div className="row g-4 mt-4">
+          <div className="col-md-6">
+            <div className="card border-0 shadow-sm h-100">
+              <div className="card-body">
+                <h5 className="card-title fw-bold mb-3">
+                  <FontAwesomeIcon
+                    icon={faInfoCircle}
+                    className="me-2 text-info"
+                  />
+                  Résumé de vos activités
+                </h5>
+                <div className="list-group list-group-flush">
+                  <div className="list-group-item border-0 px-0 py-2">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span>Boutiques créées</span>
+                      <span className="fw-bold">
+                        {stats?.totalBoutiques || 0}
+                      </span>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Actions rapides */}
-      <div className="row g-4 mt-4">
-        <div className="col-12">
-          <div
-            className="card border-0 shadow-lg animate-slide-up"
-            style={{ animationDelay: "1100ms" }}
-          >
-            <div className="card-header bg-white border-0 py-3">
-              <h5 className="mb-0 fw-bold">
-                <FontAwesomeIcon icon={faBolt} className="me-2 text-warning" />
-                Actions rapides
-              </h5>
-            </div>
-            <div className="card-body">
-              <div className="row g-3">
-                {[
-                  {
-                    icon: faStore,
-                    label: "Nouvelle boutique",
-                    color: "primary",
-                    action: "/dashboard/boutiques/create",
-                    description: "Créez une nouvelle boutique",
-                  },
-                  {
-                    icon: faPlus,
-                    label: "Nouveau produit",
-                    color: "success",
-                    action: "/dashboard/produits/create",
-                    description: "Ajoutez un produit à vendre",
-                  },
-                  {
-                    icon: faGift,
-                    label: "Nouveau don",
-                    color: "warning",
-                    action: "/dashboard/dons/create",
-                    description: "Proposez un don gratuit",
-                  },
-                  {
-                    icon: faExchangeAlt,
-                    label: "Nouvel échange",
-                    color: "info",
-                    action: "/dashboard/echanges/create",
-                    description: "Proposez un échange",
-                  },
-                  {
-                    icon: faChartLine,
-                    label: "Analytiques",
-                    color: "dark",
-                    action: "/dashboard/analytics",
-                    description: "Consultez vos statistiques",
-                  },
-                  {
-                    icon: faUsers,
-                    label: "Clients",
-                    color: "secondary",
-                    action: "/dashboard/clients",
-                    description: "Gérez vos clients",
-                  },
-                ].map((item, index) => (
-                  <div key={index} className="col-xl-2 col-md-4 col-6">
-                    <button
-                      className={`btn btn-outline-${item.color} w-100 d-flex flex-column align-items-center py-3 h-100 animate-scale-hover`}
-                      onClick={() => router.push(item.action)}
-                      style={{
-                        animationDelay: `${index * 100}ms`,
-                        transform: "scale(1)",
-                        transition: "all 0.3s ease",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = "scale(1.05)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = "scale(1)";
-                      }}
-                    >
-                      <div
-                        className={`rounded-circle p-3 bg-${item.color} bg-opacity-10 text-${item.color} mb-2`}
-                      >
-                        <FontAwesomeIcon icon={item.icon} className="fs-3" />
-                      </div>
-                      <span className="fw-semibold">{item.label}</span>
-                      <small className="text-muted mt-1 text-center">
-                        {item.description}
-                      </small>
-                    </button>
+                  <div className="list-group-item border-0 px-0 py-2">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span>Produits créés</span>
+                      <span className="fw-bold">
+                        {stats?.totalProduits || 0}
+                      </span>
+                    </div>
                   </div>
-                ))}
+                  <div className="list-group-item border-0 px-0 py-2">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span>Dons créés</span>
+                      <span className="fw-bold">{stats?.totalDons || 0}</span>
+                    </div>
+                  </div>
+                  <div className="list-group-item border-0 px-0 py-2">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span>Échanges créés</span>
+                      <span className="fw-bold">
+                        {stats?.totalEchanges || 0}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="list-group-item border-0 px-0 py-2">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span>Revenus totaux</span>
+                      <span className="fw-bold text-success">
+                        {formatPrix(stats?.revenusTotaux || 0)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="list-group-item border-0 px-0 py-2">
+                    <div className="d-flex justify-content-between align-items-center">
+                      <span>Contenu bloqué</span>
+                      <span className="fw-bold text-danger">
+                        {(stats?.produitsBloques || 0) +
+                          (stats?.donsBloques || 0) +
+                          (stats?.echangesBloques || 0)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="col-md-6">
+            <div className="card border-0 shadow-sm h-100">
+              <div className="card-body">
+                <h5 className="card-title fw-bold mb-3">
+                  <FontAwesomeIcon
+                    icon={faBolt}
+                    className="me-2 text-warning"
+                  />
+                  Actions rapides
+                </h5>
+                <div className="d-grid gap-2">
+                  {activeSection === "produits" && (
+                    <>
+                      <Link
+                        href="/dashboard/produits/create"
+                        className="btn btn-success btn-lg"
+                      >
+                        <FontAwesomeIcon icon={faPlus} className="me-2" />
+                        Ajouter un produit
+                      </Link>
+                      <button className="btn btn-outline-success btn-lg">
+                        <FontAwesomeIcon icon={faDownload} className="me-2" />
+                        Exporter mes produits
+                      </button>
+                    </>
+                  )}
+                  {activeSection === "dons" && (
+                    <>
+                      <Link
+                        href="/dashboard/dons/create"
+                        className="btn btn-warning btn-lg"
+                      >
+                        <FontAwesomeIcon icon={faPlus} className="me-2" />
+                        Créer un don
+                      </Link>
+                      <button className="btn btn-outline-warning btn-lg">
+                        <FontAwesomeIcon icon={faDownload} className="me-2" />
+                        Exporter mes dons
+                      </button>
+                    </>
+                  )}
+                  {activeSection === "echanges" && (
+                    <>
+                      <Link
+                        href="/dashboard/echanges/create"
+                        className="btn btn-info btn-lg"
+                      >
+                        <FontAwesomeIcon icon={faPlus} className="me-2" />
+                        Proposer un échange
+                      </Link>
+                      <button className="btn btn-outline-info btn-lg">
+                        <FontAwesomeIcon icon={faDownload} className="me-2" />
+                        Exporter mes échanges
+                      </button>
+                    </>
+                  )}
+                  {activeSection === "boutiques" && (
+                    <>
+                      <Link
+                        href="/dashboard/boutiques/create"
+                        className="btn btn-primary btn-lg"
+                      >
+                        <FontAwesomeIcon icon={faPlus} className="me-2" />
+                        Créer une boutique
+                      </Link>
+                      <button className="btn btn-outline-primary btn-lg">
+                        <FontAwesomeIcon icon={faDownload} className="me-2" />
+                        Gérer mes boutiques
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Styles CSS globaux pour les animations */}
       <style jsx global>{`
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(30px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        @keyframes slideLeft {
-          from {
-            opacity: 0;
-            transform: translateX(30px);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
-        }
-
-        @keyframes slideRight {
-          from {
-            opacity: 0;
-            transform: translateX(-30px);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
-        }
-
-        @keyframes countUp {
-          from {
-            opacity: 0;
-            transform: scale(0.8);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-
-        @keyframes pulse {
-          0%,
-          100% {
-            transform: scale(1);
-          }
-          50% {
-            transform: scale(1.05);
-          }
-        }
-
-        @keyframes pulseRing {
-          0% {
-            transform: scale(0.8);
-            opacity: 0.8;
-          }
-          100% {
-            transform: scale(1.2);
-            opacity: 0;
-          }
-        }
-
-        @keyframes progressBarFill {
-          from {
-            width: 0%;
-          }
-          to {
-            width: var(--target-width);
-          }
-        }
-
-        @keyframes barGrow {
-          from {
-            transform: scaleY(0);
-          }
-          to {
-            transform: scaleY(1);
-          }
-        }
-
-        @keyframes sector {
-          from {
-            transform: rotate(0deg) scale(0);
-          }
-          to {
-            transform: rotate(360deg) scale(1);
-          }
-        }
-
-        @keyframes radar {
-          from {
-            stroke-dashoffset: 1000;
-          }
-          to {
-            stroke-dashoffset: 0;
-          }
-        }
-
-        @keyframes lineDraw {
-          from {
-            stroke-dasharray: 1000;
-            stroke-dashoffset: 1000;
-          }
-          to {
-            stroke-dasharray: 1000;
-            stroke-dashoffset: 0;
-          }
-        }
-
-        @keyframes areaFill {
-          from {
-            fill-opacity: 0;
-          }
-          to {
-            fill-opacity: 0.2;
-          }
-        }
-
-        @keyframes ripple {
-          0% {
-            transform: scale(0);
-            opacity: 1;
-          }
-          100% {
-            transform: scale(3);
-            opacity: 0;
-          }
-        }
-
-        @keyframes scaleHover {
-          0%,
-          100% {
-            transform: scale(1);
-          }
-          50% {
-            transform: scale(1.1);
-          }
-        }
-
-        .animate-fade-in {
-          animation: fadeIn 0.5s ease-out;
-          animation-fill-mode: both;
-        }
-
-        .animate-slide-up {
-          animation: slideUp 0.5s ease-out;
-          animation-fill-mode: both;
-        }
-
-        .animate-slide-left {
-          animation: slideLeft 0.5s ease-out;
-          animation-fill-mode: both;
-        }
-
-        .animate-slide-right {
-          animation: slideRight 0.5s ease-out;
-          animation-fill-mode: both;
-        }
-
-        .animate-count-up {
-          animation: countUp 0.8s ease-out;
-          animation-fill-mode: both;
-        }
-
-        .animate-pulse {
-          animation: pulse 2s ease-in-out infinite;
-        }
-
-        .animate-pulse-hover:hover {
-          animation: pulse 0.5s ease-in-out;
-        }
-
-        .animate-scale-hover:hover {
-          animation: scaleHover 0.3s ease-out;
-        }
-
-        .animate-bar {
-          animation: fadeIn 0.5s ease-out;
-          animation-fill-mode: both;
-        }
-
-        .animate-bar-grow {
-          animation: barGrow 0.8s ease-out;
-          animation-fill-mode: both;
-          transform-origin: center bottom;
-        }
-
-        .animate-sector {
-          animation: sector 0.8s ease-out;
-          animation-fill-mode: both;
-          transform-origin: center;
-        }
-
-        .animate-radar {
-          animation: radar 1.5s ease-out;
-          animation-fill-mode: both;
-          stroke-dasharray: 1000;
-          stroke-dashoffset: 1000;
-        }
-
-        .animate-line-draw {
-          animation: lineDraw 2s ease-out;
-          animation-fill-mode: both;
-        }
-
-        .animate-area-fill {
-          animation: areaFill 1s ease-out 0.5s;
-          animation-fill-mode: both;
-        }
-
-        .animate-point {
-          animation: fadeIn 0.5s ease-out;
-          animation-fill-mode: both;
-        }
-
-        .animate-ripple {
-          animation: ripple 1s ease-out infinite;
-        }
-
-        .text-gradient-primary {
-          background: linear-gradient(135deg, #0d6efd 0%, #6610f2 100%);
+        .gradient-text {
+          background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
         }
 
-        .shadow-sm-hover {
+        .hero-gradient {
+          background: linear-gradient(
+            135deg,
+            #28a745 0%,
+            #20c997 100%
+          ) !important;
+        }
+
+        .hover-lift {
           transition: all 0.3s ease;
         }
 
-        .shadow-sm-hover:hover {
-          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15) !important;
-        }
-
-        .timeline-item {
-          position: relative;
-        }
-
-        .timeline-item:not(:last-child):before {
-          content: "";
-          position: absolute;
-          left: 24px;
-          top: 40px;
-          bottom: -20px;
-          width: 2px;
-          background: linear-gradient(to bottom, #dee2e6, transparent);
-        }
-
-        .progress {
-          background-color: rgba(0, 0, 0, 0.1);
-          overflow: hidden;
-        }
-
-        .card {
-          transition: all 0.3s ease;
-          backdrop-filter: blur(10px);
-          background: rgba(255, 255, 255, 0.9);
-        }
-
-        .card:hover {
-          transform: translateY(-5px);
-        }
-
-        .btn-outline-primary {
-          border-width: 2px;
+        .hover-lift:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1) !important;
         }
 
         .badge {
+          font-weight: 500;
+          letter-spacing: 0.3px;
+          padding: 0.35em 0.65em;
+        }
+
+        .card {
+          transition:
+            transform 0.3s ease,
+            box-shadow 0.3s ease;
+          border-radius: 12px;
+          overflow: hidden;
+        }
+
+        .card:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1) !important;
+        }
+
+        .btn-success {
+          background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+          border: none;
           transition: all 0.3s ease;
         }
 
-        .table-hover tbody tr {
+        .btn-success:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+        }
+
+        .btn-warning {
+          background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+          border: none;
+          color: #212529;
           transition: all 0.3s ease;
         }
 
-        .table-hover tbody tr:hover {
-          background-color: rgba(13, 110, 253, 0.05);
+        .btn-warning:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(255, 193, 7, 0.3);
         }
 
-        .bg-light {
-          background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-          min-height: 100vh;
+        .btn-info {
+          background: linear-gradient(135deg, #17a2b8 0%, #0dcaf0 100%);
+          border: none;
+          color: white;
+          transition: all 0.3s ease;
+        }
+
+        .btn-info:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(23, 162, 184, 0.3);
+        }
+
+        .btn-primary {
+          background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);
+          border: none;
+          transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
+        }
+
+        .btn-danger {
+          background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+          border: none;
+          transition: all 0.3s ease;
+        }
+
+        .btn-danger:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+        }
+
+        .table-active {
+          background-color: rgba(40, 167, 69, 0.05) !important;
+        }
+
+        .progress-bar {
+          border-radius: 10px;
+        }
+
+        .list-group-item {
+          border-left: none;
+          border-right: none;
+        }
+
+        .list-group-item:first-child {
+          border-top: none;
+        }
+
+        .list-group-item:last-child {
+          border-bottom: none;
+        }
+
+        .bg-opacity-20 {
+          --bs-bg-opacity: 0.2;
         }
       `}</style>
     </div>
   );
-};
-
-export default VendeurDashboard;
+}
