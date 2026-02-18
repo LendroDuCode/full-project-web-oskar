@@ -1,8 +1,10 @@
+// components/ListingCard.tsx
 "use client";
 
 import { useState } from "react";
 import Link from "next/link";
 import colors from "@/app/shared/constants/colors";
+import { useImageUrl } from "@/app/shared/hooks/useImageUrl";
 
 export interface ListingItem {
   uuid: string;
@@ -40,7 +42,8 @@ const ListingCard: React.FC<ListingCardProps> = ({
   viewMode = "grid",
 }) => {
   const [isFavorite, setIsFavorite] = useState(false);
-  const [imageError, setImageError] = useState(false);
+  // ✅ REMPLACER imageError par le hook useImageUrl
+  const { imageUrl, handleImageError } = useImageUrl(listing.image);
 
   const getTypeConfig = (type: string) => {
     switch (type) {
@@ -107,11 +110,8 @@ const ListingCard: React.FC<ListingCardProps> = ({
     }
   };
 
-  const getImageSrc = () => {
-    if (imageError || !listing.image) return PLACEHOLDER_IMAGE;
-    if (listing.image.startsWith("http")) return listing.image;
-    return `${process.env.NEXT_PUBLIC_API_URL || ""}${listing.image}`;
-  };
+  // ✅ SUPPRIMER l'ancienne fonction getImageSrc
+  // const getImageSrc = () => { ... }
 
   const formatPrice = (price: number | string | null | undefined) => {
     if (price === null || price === undefined) return "Gratuit";
@@ -197,12 +197,13 @@ const ListingCard: React.FC<ListingCardProps> = ({
               className="position-relative h-100"
               style={{ minHeight: "200px" }}
             >
+              {/* ✅ UTILISER imageUrl du hook au lieu de getImageSrc() */}
               <img
-                src={getImageSrc()}
+                src={imageUrl}
                 alt={listing.titre || "Annonce"}
                 className="w-100 h-100 object-fit-cover transition-transform group-hover-scale"
                 style={{ height: "200px", objectFit: "cover" }}
-                onError={() => setImageError(true)}
+                onError={handleImageError}
               />
               <div
                 className="position-absolute top-0 start-0 px-2 py-1 text-white small fw-bold rounded-3 d-flex align-items-center gap-1 m-2"
@@ -324,12 +325,13 @@ const ListingCard: React.FC<ListingCardProps> = ({
         className="position-relative overflow-hidden"
         style={{ height: "224px" }}
       >
+        {/* ✅ UTILISER imageUrl du hook au lieu de getImageSrc() */}
         <img
-          src={getImageSrc()}
+          src={imageUrl}
           alt={listing.titre || "Annonce"}
           className="w-100 h-100 object-fit-cover transition-transform group-hover-scale"
           style={{ transition: "transform 0.3s ease" }}
-          onError={() => setImageError(true)}
+          onError={handleImageError}
         />
 
         {/* Badge type */}

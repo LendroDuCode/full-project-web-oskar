@@ -19,19 +19,38 @@ const nextConfig = {
         port: "3005",
         pathname: "/api/files/**",
       },
+      // ✅ AJOUTER ces patterns pour la production
+      {
+        protocol: "http",
+        hostname: "15.236.142.141",
+        port: "3005",
+        pathname: "/api/files/**",
+      },
+      {
+        protocol: "http",
+        hostname: "15.236.142.141",
+        port: "9000",
+        pathname: "/oskar-bucket/**",
+      },
     ],
-    unoptimized: true,
+    unoptimized: true, // Important pour éviter l'optimisation Next.js
   },
 
   async rewrites() {
+    // En production, utiliser l'URL distante
+    const apiUrl =
+      process.env.NODE_ENV === "production"
+        ? "http://15.236.142.141:3005"
+        : "http://localhost:3005";
+
     return [
       {
         source: "/api/:path*",
-        destination: "http://localhost:3005/:path*",
+        destination: `${apiUrl}/:path*`,
       },
       {
         source: "/categories",
-        destination: "http://localhost:3005/categories",
+        destination: `${apiUrl}/categories`,
         has: [
           {
             type: "header",
@@ -42,7 +61,7 @@ const nextConfig = {
       },
       {
         source: "/categories/:path*",
-        destination: "http://localhost:3005/categories/:path*",
+        destination: `${apiUrl}/categories/:path*`,
         has: [
           {
             type: "header",
@@ -53,7 +72,7 @@ const nextConfig = {
       },
       {
         source: "/annonces/:path*",
-        destination: "http://localhost:3005/annonces/:path*",
+        destination: `${apiUrl}/annonces/:path*`,
         has: [
           {
             type: "header",
@@ -64,7 +83,7 @@ const nextConfig = {
       },
       {
         source: "/annonces",
-        destination: "http://localhost:3005/annonces",
+        destination: `${apiUrl}/annonces`,
         has: [
           {
             type: "header",
