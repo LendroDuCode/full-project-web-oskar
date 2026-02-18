@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import colors from "../../../shared/constants/colors";
 import FiltersSidebar from "./FiltersSidebar";
 import FilterStatsBar from "./FilterStatsBar";
 import ListingsGrid from "./ListingsGrid";
 import Pagination from "./Pagination";
+import colors from "@/app/shared/constants/colors";
 
 const MainContent = () => {
   // États pour les filtres principaux

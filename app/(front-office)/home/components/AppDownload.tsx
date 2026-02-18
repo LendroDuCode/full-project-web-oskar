@@ -1,7 +1,7 @@
 // AppDownload.tsx
 "use client";
 
-import colors from "../../../shared/constants/colors";
+import colors from "@/app/shared/constants/colors";
 
 const AppDownload = () => {
   const handleAppStoreClick = () => {

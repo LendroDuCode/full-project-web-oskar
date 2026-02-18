@@ -18,11 +18,11 @@ import {
   faCheckCircle,
 } from "@fortawesome/free-solid-svg-icons";
 import { faGoogle, faFacebook } from "@fortawesome/free-brands-svg-icons";
-import colors from "../../../shared/constants/colors";
 import { useRouter } from "next/navigation";
 import "./LoginModal.css";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { LoadingSpinner } from "@/app/shared/components/ui/LoadingSpinner";
+import colors from "@/app/shared/constants/colors";
 
 interface LoginModalProps {
   visible: boolean;

@@ -132,6 +132,7 @@ const Header: FC = () => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [forceUpdate, setForceUpdate] = useState(0);
+  const [windowWidth, setWindowWidth] = useState<number>(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const categoriesDropdownRef = useRef<{
@@ -141,6 +142,29 @@ const Header: FC = () => {
   const { isLoggedIn, user, logout, openLoginModal, closeModals } = useAuth();
 
   const headerKey = `header-${isLoggedIn ? "logged-in" : "logged-out"}-${user?.type || "none"}-${user?.uuid?.substring(0, 8) || "none"}-${forceUpdate}`;
+
+  // Détection de la taille d'écran
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+      // Fermer les menus sur passage en desktop
+      if (window.innerWidth >= 992) {
+        setMobileMenuOpen(false);
+      }
+    };
+
+    // Initialiser
+    handleResize();
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Breakpoints personnalisés
+  const isMobile = windowWidth < 576;
+  const isTablet = windowWidth >= 576 && windowWidth < 992;
+  const isDesktop = windowWidth >= 992;
+  const isSmallMobile = windowWidth < 375;
 
   // ÉCOUTER L'ÉVÉNEMENT DE DÉCONNEXION POUR METTRE À JOUR L'ÉTAT
   useEffect(() => {
@@ -707,7 +731,10 @@ const Header: FC = () => {
     const links: NavLink[] = [{ name: "Accueil", href: "/", exact: true }];
 
     if (!loadingCategories && categories.length > 0) {
-      categories.forEach((category: Category) => {
+      // Limiter le nombre de catégories affichées sur mobile
+      const maxCategories = isMobile ? 5 : categories.length;
+
+      categories.slice(0, maxCategories).forEach((category: Category) => {
         const isDuplicate = links.some(
           (link) =>
             link.name === category.libelle ||
@@ -723,8 +750,12 @@ const Header: FC = () => {
           };
 
           if (category.enfants && category.enfants.length > 0) {
-            const uniqueChildren = category.enfants.reduce(
-              (acc: any[], child: Category) => {
+            // Limiter le nombre d'enfants affichés
+            const maxChildren = isMobile ? 3 : category.enfants.length;
+
+            const uniqueChildren = category.enfants
+              .slice(0, maxChildren)
+              .reduce((acc: any[], child: Category) => {
                 const isChildDuplicate = acc.some(
                   (sub) => sub.name === child.libelle,
                 );
@@ -732,9 +763,7 @@ const Header: FC = () => {
                   acc.push(child);
                 }
                 return acc;
-              },
-              [],
-            );
+              }, []);
 
             mainLink.children = uniqueChildren.map((child: Category) => ({
               name: child.libelle,
@@ -773,6 +802,10 @@ const Header: FC = () => {
     navLinksCount: navLinks.length,
     forceUpdate,
     headerKey,
+    windowWidth,
+    isMobile,
+    isTablet,
+    isDesktop,
   });
 
   // RETOUR CONDITIONNEL APRÈS TOUS LES HOOKS
@@ -788,46 +821,62 @@ const Header: FC = () => {
         style={{ zIndex: 1000 }}
         key={headerKey}
       >
-        <div className="container">
+        <div className="container-fluid px-2 px-sm-3 px-md-4 px-lg-5">
           <div className="d-flex align-items-center justify-content-between py-2 py-md-3">
             {/* Logo et Bouton Menu Mobile */}
             <div className="d-flex align-items-center">
-              {/* Bouton Menu Mobile */}
+              {/* Bouton Menu Mobile - visible seulement sur < 992px */}
               <button
-                className="btn btn-link border-0 p-0 me-3 d-lg-none mobile-menu-toggle"
+                className="btn btn-link border-0 p-0 me-2 me-sm-3 d-lg-none mobile-menu-toggle"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 aria-label="Menu"
                 aria-expanded={mobileMenuOpen}
                 type="button"
                 style={{
                   color: colors.oskar.grey,
-                  fontSize: "clamp(1.1rem, 3.5vw, 1.25rem)",
-                  width: "clamp(36px, 9vw, 40px)",
-                  height: "clamp(36px, 9vw, 40px)",
+                  fontSize: isSmallMobile
+                    ? "1rem"
+                    : "clamp(1.1rem, 3.5vw, 1.25rem)",
+                  width: isSmallMobile ? "32px" : "clamp(36px, 9vw, 40px)",
+                  height: isSmallMobile ? "32px" : "clamp(36px, 9vw, 40px)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
+                  padding: 0,
                 }}
               >
                 <i
                   className={`fa-solid ${mobileMenuOpen ? "fa-times" : "fa-bars"}`}
-                  style={{ color: "inherit" }}
+                  style={{ color: "inherit", fontSize: "inherit" }}
                 ></i>
               </button>
 
-              {/* Logo */}
+              {/* Logo - s'adapte à toutes les tailles */}
               <Link
                 href="/"
                 className="d-flex align-items-center text-decoration-none"
                 aria-label="Accueil OSKAR"
               >
                 <div
-                  className="rounded d-flex align-items-center justify-content-center me-2"
+                  className="rounded d-flex align-items-center justify-content-center"
                   style={{
-                    width: "clamp(32px, 8vw, 40px)",
-                    height: "clamp(32px, 8vw, 40px)",
+                    width: isSmallMobile
+                      ? "28px"
+                      : isMobile
+                        ? "32px"
+                        : isTablet
+                          ? "36px"
+                          : "40px",
+                    height: isSmallMobile
+                      ? "28px"
+                      : isMobile
+                        ? "32px"
+                        : isTablet
+                          ? "36px"
+                          : "40px",
                     backgroundColor: colors.oskar.green,
-                    transition: "background-color 0.3s",
+                    transition:
+                      "background-color 0.3s, width 0.2s, height 0.2s",
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.backgroundColor =
@@ -839,741 +888,830 @@ const Header: FC = () => {
                 >
                   <span
                     className="text-white fw-bold"
-                    style={{ fontSize: "clamp(0.9rem, 3.5vw, 1.25rem)" }}
+                    style={{
+                      fontSize: isSmallMobile
+                        ? "0.8rem"
+                        : isMobile
+                          ? "0.9rem"
+                          : isTablet
+                            ? "1rem"
+                            : "1.25rem",
+                    }}
                   >
                     O
                   </span>
                 </div>
                 <span
-                  className="fw-bold d-none d-sm-block"
+                  className="fw-bold ms-1 ms-sm-2"
                   style={{
                     color: colors.oskar.black,
-                    fontSize: "clamp(1.1rem, 4.5vw, 2rem)",
+                    fontSize: isSmallMobile
+                      ? "0.9rem"
+                      : isMobile
+                        ? "1rem"
+                        : isTablet
+                          ? "1.5rem"
+                          : "2rem",
+                    transition: "font-size 0.2s",
                   }}
                 >
                   OSKAR
                 </span>
               </Link>
 
-              {/* Navigation Desktop */}
-              {loadingCategories ? (
-                <div className="d-none d-lg-flex align-items-center ms-4 ms-xl-5">
-                  <div
-                    className="skeleton-loader"
-                    style={{
-                      width: "80px",
-                      height: "20px",
-                      backgroundColor: "#f0f0f0",
-                      borderRadius: "4px",
-                      marginRight: "24px",
-                    }}
-                  ></div>
-                  <div
-                    className="skeleton-loader"
-                    style={{
-                      width: "100px",
-                      height: "20px",
-                      backgroundColor: "#f0f0f0",
-                      borderRadius: "4px",
-                      marginRight: "24px",
-                    }}
-                  ></div>
-                  <div
-                    className="skeleton-loader"
-                    style={{
-                      width: "70px",
-                      height: "20px",
-                      backgroundColor: "#f0f0f0",
-                      borderRadius: "4px",
-                    }}
-                  ></div>
-                </div>
-              ) : (
-                <nav className="d-none d-lg-flex align-items-center ms-4 ms-xl-5 position-relative">
-                  {navLinks.map((link, index) => (
-                    <div
-                      key={`${link.name}-${index}`}
-                      className="position-relative me-2 me-xl-3"
-                      ref={(el) => {
-                        if (link.hasChildren && link.name) {
-                          categoriesDropdownRef.current[link.name] = el;
-                        }
-                      }}
-                    >
-                      <Link
-                        href={link.href}
-                        className="text-decoration-none position-relative d-flex align-items-center"
+              {/* Navigation Desktop - visible seulement sur desktop */}
+              {isDesktop && (
+                <>
+                  {loadingCategories ? (
+                    <div className="d-flex align-items-center ms-4 ms-xl-5">
+                      <div
+                        className="skeleton-loader"
                         style={{
-                          transition: "color 0.3s",
-                          color: getLinkColor(link),
-                          fontWeight: isLinkActive(link) ? "600" : "400",
-                          fontSize: "0.9rem",
-                          whiteSpace: "nowrap",
-                          padding: "0.5rem 0",
+                          width: "80px",
+                          height: "20px",
+                          backgroundColor: "#f0f0f0",
+                          borderRadius: "4px",
+                          marginRight: "24px",
                         }}
-                        onMouseEnter={() => {
-                          if (link.hasChildren) {
-                            setCategoriesDropdownOpen(link.name);
-                          }
+                      ></div>
+                      <div
+                        className="skeleton-loader"
+                        style={{
+                          width: "100px",
+                          height: "20px",
+                          backgroundColor: "#f0f0f0",
+                          borderRadius: "4px",
+                          marginRight: "24px",
                         }}
-                        onMouseLeave={(e) => {
-                          if (
-                            link.hasChildren &&
-                            !categoriesDropdownRef.current[link.name]?.contains(
-                              e.relatedTarget as Node,
-                            )
-                          ) {
-                            setCategoriesDropdownOpen(null);
-                          }
+                      ></div>
+                      <div
+                        className="skeleton-loader"
+                        style={{
+                          width: "70px",
+                          height: "20px",
+                          backgroundColor: "#f0f0f0",
+                          borderRadius: "4px",
                         }}
-                      >
-                        {link.name}
-                        {link.hasChildren && (
-                          <i
-                            className="fa-solid fa-chevron-down ms-1"
-                            style={{ fontSize: "0.7rem" }}
-                          ></i>
-                        )}
-                        {isLinkActive(link) && !link.hasChildren && (
-                          <div
+                      ></div>
+                    </div>
+                  ) : (
+                    <nav className="d-flex align-items-center ms-4 ms-xl-5 position-relative">
+                      {navLinks.map((link, index) => (
+                        <div
+                          key={`${link.name}-${index}`}
+                          className="position-relative me-2 me-xl-3"
+                          ref={(el) => {
+                            if (link.hasChildren && link.name) {
+                              categoriesDropdownRef.current[link.name] = el;
+                            }
+                          }}
+                        >
+                          <Link
+                            href={link.href}
+                            className="text-decoration-none position-relative d-flex align-items-center"
                             style={{
-                              position: "absolute",
-                              bottom: "-6px",
-                              left: "0",
-                              width: "100%",
-                              height: "2px",
-                              backgroundColor: colors.oskar.green,
-                              borderRadius: "2px",
-                            }}
-                          />
-                        )}
-                      </Link>
-
-                      {/* Sous-menu déroulant */}
-                      {link.hasChildren &&
-                        link.children &&
-                        categoriesDropdownOpen === link.name && (
-                          <div
-                            className="dropdown-menu shadow border-0 show position-absolute"
-                            style={{
-                              minWidth: "200px",
-                              marginTop: "0",
-                              top: "100%",
-                              left: "0",
-                              zIndex: 1001,
-                              borderRadius: "8px",
+                              transition: "color 0.3s",
+                              color: getLinkColor(link),
+                              fontWeight: isLinkActive(link) ? "600" : "400",
+                              fontSize:
+                                windowWidth >= 1400 ? "0.95rem" : "0.85rem",
+                              whiteSpace: "nowrap",
                               padding: "0.5rem 0",
                             }}
-                            onMouseEnter={() =>
-                              setCategoriesDropdownOpen(link.name)
-                            }
-                            onMouseLeave={() => setCategoriesDropdownOpen(null)}
+                            onMouseEnter={() => {
+                              if (link.hasChildren) {
+                                setCategoriesDropdownOpen(link.name);
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (
+                                link.hasChildren &&
+                                !categoriesDropdownRef.current[
+                                  link.name
+                                ]?.contains(e.relatedTarget as Node)
+                              ) {
+                                setCategoriesDropdownOpen(null);
+                              }
+                            }}
                           >
-                            {link.children.map((child, childIndex) => (
-                              <Link
-                                key={`${child.name}-${childIndex}`}
-                                href={child.href}
-                                className="dropdown-item py-2 px-3"
+                            {link.name}
+                            {link.hasChildren && (
+                              <i
+                                className="fa-solid fa-chevron-down ms-1"
+                                style={{ fontSize: "0.7rem" }}
+                              ></i>
+                            )}
+                            {isLinkActive(link) && !link.hasChildren && (
+                              <div
                                 style={{
-                                  fontSize: "0.875rem",
-                                  color: colors.oskar.grey,
-                                  transition: "all 0.2s",
+                                  position: "absolute",
+                                  bottom: "-6px",
+                                  left: "0",
+                                  width: "100%",
+                                  height: "2px",
+                                  backgroundColor: colors.oskar.green,
+                                  borderRadius: "2px",
                                 }}
-                                onClick={() => setCategoriesDropdownOpen(null)}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.color =
-                                    colors.oskar.green;
-                                  e.currentTarget.style.backgroundColor =
-                                    "#f8f9fa";
+                              />
+                            )}
+                          </Link>
+
+                          {/* Sous-menu déroulant */}
+                          {link.hasChildren &&
+                            link.children &&
+                            categoriesDropdownOpen === link.name && (
+                              <div
+                                className="dropdown-menu shadow border-0 show position-absolute"
+                                style={{
+                                  minWidth: "200px",
+                                  marginTop: "0",
+                                  top: "100%",
+                                  left: "0",
+                                  zIndex: 1001,
+                                  borderRadius: "8px",
+                                  padding: "0.5rem 0",
                                 }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.color =
-                                    colors.oskar.grey;
-                                  e.currentTarget.style.backgroundColor =
-                                    "transparent";
-                                }}
+                                onMouseEnter={() =>
+                                  setCategoriesDropdownOpen(link.name)
+                                }
+                                onMouseLeave={() =>
+                                  setCategoriesDropdownOpen(null)
+                                }
                               >
-                                {child.name}
-                              </Link>
-                            ))}
-                          </div>
-                        )}
-                    </div>
-                  ))}
-                </nav>
+                                {link.children.map((child, childIndex) => (
+                                  <Link
+                                    key={`${child.name}-${childIndex}`}
+                                    href={child.href}
+                                    className="dropdown-item py-2 px-3"
+                                    style={{
+                                      fontSize: "0.875rem",
+                                      color: colors.oskar.grey,
+                                      transition: "all 0.2s",
+                                    }}
+                                    onClick={() =>
+                                      setCategoriesDropdownOpen(null)
+                                    }
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.color =
+                                        colors.oskar.green;
+                                      e.currentTarget.style.backgroundColor =
+                                        "#f8f9fa";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.color =
+                                        colors.oskar.grey;
+                                      e.currentTarget.style.backgroundColor =
+                                        "transparent";
+                                    }}
+                                  >
+                                    {child.name}
+                                  </Link>
+                                ))}
+                              </div>
+                            )}
+                        </div>
+                      ))}
+                    </nav>
+                  )}
+                </>
               )}
             </div>
 
-            {/* Actions Desktop */}
-            <div className="d-none d-lg-flex align-items-center">
-              {/* Icône Messagerie */}
-              <Link href={isLoggedIn ? getUserMessagesUrl() : "#"}>
-                <button
-                  className="btn btn-link border-0 position-relative me-3"
-                  style={{
-                    transition: "color 0.3s",
-                    fontSize: "1.1rem",
-                    color:
-                      pathname.includes("/messages") ||
-                      pathname.includes("/messagerie")
-                        ? colors.oskar.green
-                        : colors.oskar.grey,
-                    width: "44px",
-                    height: "44px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = colors.oskar.green;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color =
-                      pathname.includes("/messages") ||
-                      pathname.includes("/messagerie")
-                        ? colors.oskar.green
-                        : colors.oskar.grey;
-                  }}
-                  aria-label="Messagerie"
-                  type="button"
-                  onClick={(e) => {
-                    if (!isLoggedIn) {
-                      e.preventDefault();
-                      handleLoginClick();
-                    }
-                  }}
-                >
-                  <i className="fa-solid fa-envelope"></i>
-                  {unreadMessagesCount > 0 && (
-                    <span
-                      className="position-absolute top-0 start-100 translate-middle badge rounded-pill"
-                      style={{
-                        backgroundColor: colors.oskar.orange || "#ff6b35",
-                        color: "white",
-                        fontSize: "0.6rem",
-                        minWidth: "16px",
-                        height: "16px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        padding: "0 4px",
-                        fontWeight: "bold",
-                        transform: "translate(-30%, -25%)",
-                      }}
-                    >
-                      {unreadMessagesCount > 9 ? "9+" : unreadMessagesCount}
-                    </span>
-                  )}
-                </button>
-              </Link>
-
-              {/* Icône Téléphone/Contact */}
-              <Link href="/contact">
-                <button
-                  className="btn btn-link border-0 me-3"
-                  style={{
-                    transition: "color 0.3s",
-                    fontSize: "1.1rem",
-                    color:
-                      pathname === "/contact"
-                        ? colors.oskar.green
-                        : colors.oskar.grey,
-                    width: "44px",
-                    height: "44px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = colors.oskar.green;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color =
-                      pathname === "/contact"
-                        ? colors.oskar.green
-                        : colors.oskar.grey;
-                  }}
-                  aria-label="Contact"
-                  type="button"
-                >
-                  <i className="fa-solid fa-phone"></i>
-                </button>
-              </Link>
-
-              {/* Icône Favoris */}
-              <Link href="/liste-favoris">
-                <button
-                  className="btn btn-link border-0 me-4"
-                  style={{
-                    transition: "color 0.3s",
-                    fontSize: "1.1rem",
-                    color:
-                      pathname === "/liste-favoris"
-                        ? colors.oskar.green
-                        : colors.oskar.grey,
-                    width: "44px",
-                    height: "44px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = colors.oskar.green;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color =
-                      pathname === "/liste-favoris"
-                        ? colors.oskar.green
-                        : colors.oskar.grey;
-                  }}
-                  aria-label="Favoris"
-                  type="button"
-                >
-                  <i className="fa-solid fa-heart"></i>
-                </button>
-              </Link>
-
-              {/* Compte utilisateur */}
-              {isLoggedIn ? (
-                <div
-                  className="dropdown"
-                  ref={dropdownRef}
-                  onClick={(e) => e.stopPropagation()}
-                >
+            {/* Actions Desktop - visible seulement sur desktop */}
+            {isDesktop && (
+              <div className="d-flex align-items-center">
+                {/* Icône Messagerie */}
+                <Link href={isLoggedIn ? getUserMessagesUrl() : "#"}>
                   <button
-                    className="btn btn-link border-0 d-flex align-items-center text-decoration-none p-0"
+                    className="btn btn-link border-0 position-relative me-2 me-xl-3"
                     style={{
-                      color: colors.oskar.grey,
                       transition: "color 0.3s",
-                      background: "none",
+                      fontSize: windowWidth >= 1400 ? "1.2rem" : "1.1rem",
+                      color:
+                        pathname.includes("/messages") ||
+                        pathname.includes("/messagerie")
+                          ? colors.oskar.green
+                          : colors.oskar.grey,
+                      width: windowWidth >= 1400 ? "48px" : "44px",
+                      height: windowWidth >= 1400 ? "48px" : "44px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
                     }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = colors.oskar.green;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color =
+                        pathname.includes("/messages") ||
+                        pathname.includes("/messagerie")
+                          ? colors.oskar.green
+                          : colors.oskar.grey;
+                    }}
+                    aria-label="Messagerie"
                     type="button"
-                    onClick={() => setDropdownOpen(!dropdownOpen)}
+                    onClick={(e) => {
+                      if (!isLoggedIn) {
+                        e.preventDefault();
+                        handleLoginClick();
+                      }
+                    }}
+                  >
+                    <i className="fa-solid fa-envelope"></i>
+                    {unreadMessagesCount > 0 && (
+                      <span
+                        className="position-absolute top-0 start-100 translate-middle badge rounded-pill"
+                        style={{
+                          backgroundColor: colors.oskar.orange || "#ff6b35",
+                          color: "white",
+                          fontSize: windowWidth >= 1400 ? "0.7rem" : "0.6rem",
+                          minWidth: windowWidth >= 1400 ? "18px" : "16px",
+                          height: windowWidth >= 1400 ? "18px" : "16px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: "0 4px",
+                          fontWeight: "bold",
+                          transform: "translate(-30%, -25%)",
+                        }}
+                      >
+                        {unreadMessagesCount > 9 ? "9+" : unreadMessagesCount}
+                      </span>
+                    )}
+                  </button>
+                </Link>
+
+                {/* Icône Téléphone/Contact */}
+                <Link href="/contact">
+                  <button
+                    className="btn btn-link border-0 me-2 me-xl-3"
+                    style={{
+                      transition: "color 0.3s",
+                      fontSize: windowWidth >= 1400 ? "1.2rem" : "1.1rem",
+                      color:
+                        pathname === "/contact"
+                          ? colors.oskar.green
+                          : colors.oskar.grey,
+                      width: windowWidth >= 1400 ? "48px" : "44px",
+                      height: windowWidth >= 1400 ? "48px" : "44px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = colors.oskar.green;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color =
+                        pathname === "/contact"
+                          ? colors.oskar.green
+                          : colors.oskar.grey;
+                    }}
+                    aria-label="Contact"
+                    type="button"
+                  >
+                    <i className="fa-solid fa-phone"></i>
+                  </button>
+                </Link>
+
+                {/* Icône Favoris */}
+                <Link href="/liste-favoris">
+                  <button
+                    className="btn btn-link border-0 me-3 me-xl-4"
+                    style={{
+                      transition: "color 0.3s",
+                      fontSize: windowWidth >= 1400 ? "1.2rem" : "1.1rem",
+                      color:
+                        pathname === "/liste-favoris"
+                          ? colors.oskar.green
+                          : colors.oskar.grey,
+                      width: windowWidth >= 1400 ? "48px" : "44px",
+                      height: windowWidth >= 1400 ? "48px" : "44px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = colors.oskar.green;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color =
+                        pathname === "/liste-favoris"
+                          ? colors.oskar.green
+                          : colors.oskar.grey;
+                    }}
+                    aria-label="Favoris"
+                    type="button"
+                  >
+                    <i className="fa-solid fa-heart"></i>
+                  </button>
+                </Link>
+
+                {/* Compte utilisateur */}
+                {isLoggedIn ? (
+                  <div
+                    className="dropdown"
+                    ref={dropdownRef}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      className="btn btn-link border-0 d-flex align-items-center text-decoration-none p-0"
+                      style={{
+                        color: colors.oskar.grey,
+                        transition: "color 0.3s",
+                        background: "none",
+                      }}
+                      type="button"
+                      onClick={() => setDropdownOpen(!dropdownOpen)}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = colors.oskar.green;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = colors.oskar.grey;
+                      }}
+                      aria-expanded={dropdownOpen}
+                      aria-haspopup="true"
+                    >
+                      {loadingProfile ? (
+                        <div
+                          className="rounded-circle d-flex align-items-center justify-content-center"
+                          style={{
+                            width: windowWidth >= 1400 ? "44px" : "40px",
+                            height: windowWidth >= 1400 ? "44px" : "40px",
+                            backgroundColor: "#f3f4f6",
+                          }}
+                        >
+                          <div
+                            className="spinner-border spinner-border-sm text-success"
+                            role="status"
+                          >
+                            <span className="visually-hidden">
+                              Chargement...
+                            </span>
+                          </div>
+                        </div>
+                      ) : getAvatarToDisplay() ? (
+                        <div
+                          className="rounded-circle overflow-hidden"
+                          style={{
+                            width: windowWidth >= 1400 ? "44px" : "40px",
+                            height: windowWidth >= 1400 ? "44px" : "40px",
+                            border: `2px solid ${colors.oskar.green}`,
+                          }}
+                        >
+                          <img
+                            src={getAvatarToDisplay()}
+                            alt={getUserFullName()}
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                            }}
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                              const parent = e.currentTarget.parentElement;
+                              if (parent) {
+                                parent.innerHTML = `
+                                  <div class="d-flex align-items-center justify-content-center w-100 h-100" style="background-color: ${colors.oskar.green}; color: white; font-size: ${windowWidth >= 1400 ? "1rem" : "0.9rem"}; font-weight: bold;">
+                                    ${getUserInitials()}
+                                  </div>
+                                `;
+                              }
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div
+                          className="rounded-circle d-flex align-items-center justify-content-center"
+                          style={{
+                            width: windowWidth >= 1400 ? "44px" : "40px",
+                            height: windowWidth >= 1400 ? "44px" : "40px",
+                            backgroundColor: colors.oskar.green,
+                            color: "white",
+                            fontSize: windowWidth >= 1400 ? "1rem" : "0.9rem",
+                            fontWeight: "bold",
+                          }}
+                        >
+                          {getUserInitials()}
+                        </div>
+                      )}
+                    </button>
+
+                    {dropdownOpen && (
+                      <div
+                        className="dropdown-menu dropdown-menu-end shadow border-0 show"
+                        style={{
+                          minWidth: windowWidth >= 1400 ? "320px" : "300px",
+                          maxWidth: windowWidth >= 1400 ? "380px" : "350px",
+                          marginTop: "0.5rem",
+                        }}
+                      >
+                        <div className="p-3 border-bottom">
+                          <div className="d-flex align-items-center">
+                            {getAvatarToDisplay() ? (
+                              <div
+                                className="rounded-circle overflow-hidden me-3 flex-shrink-0"
+                                style={{
+                                  width: windowWidth >= 1400 ? "52px" : "48px",
+                                  height: windowWidth >= 1400 ? "52px" : "48px",
+                                  border: `2px solid ${colors.oskar.green}`,
+                                }}
+                              >
+                                <img
+                                  src={getAvatarToDisplay()}
+                                  alt={getUserFullName()}
+                                  style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "cover",
+                                  }}
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = "none";
+                                    const parent =
+                                      e.currentTarget.parentElement;
+                                    if (parent) {
+                                      parent.innerHTML = `
+                                        <div class="d-flex align-items-center justify-content-center w-100 h-100" style="background-color: ${colors.oskar.green}; color: white; font-size: ${windowWidth >= 1400 ? "1.1rem" : "1rem"}; font-weight: bold;">
+                                          ${getUserInitials()}
+                                        </div>
+                                      `;
+                                    }
+                                  }}
+                                />
+                              </div>
+                            ) : (
+                              <div
+                                className="rounded-circle d-flex align-items-center justify-content-center me-3 flex-shrink-0"
+                                style={{
+                                  width: windowWidth >= 1400 ? "52px" : "48px",
+                                  height: windowWidth >= 1400 ? "52px" : "48px",
+                                  backgroundColor: colors.oskar.green,
+                                  color: "white",
+                                  fontSize:
+                                    windowWidth >= 1400 ? "1.1rem" : "1rem",
+                                  fontWeight: "bold",
+                                }}
+                              >
+                                {getUserInitials()}
+                              </div>
+                            )}
+                            <div className="flex-grow-1 min-w-0">
+                              <h6
+                                className="fw-bold mb-0 text-truncate"
+                                style={{
+                                  fontSize:
+                                    windowWidth >= 1400 ? "1rem" : "0.95rem",
+                                }}
+                                title={getUserFullName()}
+                              >
+                                {getUserFullName()}
+                              </h6>
+                              {getEmailToDisplay() && (
+                                <small
+                                  className="text-muted d-block text-truncate"
+                                  style={{
+                                    fontSize:
+                                      windowWidth >= 1400
+                                        ? "0.85rem"
+                                        : "0.8rem",
+                                  }}
+                                  title={getEmailToDisplay()}
+                                >
+                                  {getEmailToDisplay()}
+                                </small>
+                              )}
+                              <small
+                                className="text-muted d-block"
+                                style={{
+                                  fontSize:
+                                    windowWidth >= 1400 ? "0.8rem" : "0.75rem",
+                                }}
+                              >
+                                {getUserTypeToDisplay() === "admin" &&
+                                  "Administrateur"}
+                                {getUserTypeToDisplay() === "agent" && "Agent"}
+                                {getUserTypeToDisplay() === "vendeur" &&
+                                  "Vendeur"}
+                                {getUserTypeToDisplay() === "utilisateur" &&
+                                  "Utilisateur"}
+                                {getRoleToDisplay() &&
+                                  ` • ${getRoleToDisplay()}`}
+                              </small>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="p-2">
+                          <Link
+                            href={getUserDashboard()}
+                            className="dropdown-item d-flex align-items-center py-2 px-3"
+                            onClick={() => setDropdownOpen(false)}
+                            style={{
+                              fontSize:
+                                windowWidth >= 1400 ? "0.95rem" : "0.9rem",
+                            }}
+                          >
+                            <i
+                              className="fa-solid fa-chart-line me-3 text-muted flex-shrink-0"
+                              style={{ width: "20px" }}
+                            ></i>
+                            <span className="flex-grow-1">Dashboard</span>
+                          </Link>
+
+                          <Link
+                            href={getUserProfileUrl()}
+                            className="dropdown-item d-flex align-items-center py-2 px-3"
+                            onClick={() => setDropdownOpen(false)}
+                            style={{
+                              fontSize:
+                                windowWidth >= 1400 ? "0.95rem" : "0.9rem",
+                            }}
+                          >
+                            <i
+                              className="fa-solid fa-user me-3 text-muted flex-shrink-0"
+                              style={{ width: "20px" }}
+                            ></i>
+                            <span className="flex-grow-1">Mon profil</span>
+                          </Link>
+
+                          {isVendeurOrUtilisateur() && (
+                            <Link
+                              href={getUserAnnoncesUrl()}
+                              className="dropdown-item d-flex align-items-center py-2 px-3"
+                              onClick={() => setDropdownOpen(false)}
+                              style={{
+                                fontSize:
+                                  windowWidth >= 1400 ? "0.95rem" : "0.9rem",
+                              }}
+                            >
+                              <i
+                                className="fa-solid fa-newspaper me-3 text-muted flex-shrink-0"
+                                style={{ width: "20px" }}
+                              ></i>
+                              <span className="flex-grow-1">Mes annonces</span>
+                            </Link>
+                          )}
+
+                          <Link
+                            href={getUserMessagesUrl()}
+                            className="dropdown-item d-flex align-items-center py-2 px-3"
+                            onClick={() => setDropdownOpen(false)}
+                            style={{
+                              fontSize:
+                                windowWidth >= 1400 ? "0.95rem" : "0.9rem",
+                            }}
+                          >
+                            <i
+                              className="fa-solid fa-envelope me-3 text-muted flex-shrink-0"
+                              style={{ width: "20px" }}
+                            ></i>
+                            <span className="flex-grow-1">Messages</span>
+                            {unreadMessagesCount > 0 && (
+                              <span
+                                className="badge bg-danger ms-auto flex-shrink-0"
+                                style={{
+                                  fontSize:
+                                    windowWidth >= 1400 ? "0.75rem" : "0.7rem",
+                                  padding: "0.2rem 0.4rem",
+                                  minWidth: "1.5rem",
+                                }}
+                              >
+                                {unreadMessagesCount > 9
+                                  ? "9+"
+                                  : unreadMessagesCount}
+                              </span>
+                            )}
+                          </Link>
+
+                          <div className="dropdown-divider my-2"></div>
+                          <button
+                            className="dropdown-item d-flex align-items-center py-2 px-3 text-danger"
+                            onClick={handleLogout}
+                            type="button"
+                            style={{
+                              fontSize:
+                                windowWidth >= 1400 ? "0.95rem" : "0.9rem",
+                            }}
+                          >
+                            <i
+                              className="fa-solid fa-right-from-bracket me-3 flex-shrink-0"
+                              style={{ width: "20px" }}
+                            ></i>
+                            <span className="flex-grow-1">Déconnexion</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    className="btn btn-link border-0"
+                    style={{
+                      transition: "color 0.3s",
+                      fontSize: windowWidth >= 1400 ? "1.2rem" : "1.1rem",
+                      color: colors.oskar.grey,
+                      width: windowWidth >= 1400 ? "48px" : "44px",
+                      height: windowWidth >= 1400 ? "48px" : "44px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                    aria-label="Se connecter"
+                    onClick={handleLoginClick}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.color = colors.oskar.green;
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.color = colors.oskar.grey;
                     }}
-                    aria-expanded={dropdownOpen}
-                    aria-haspopup="true"
+                    type="button"
                   >
-                    {loadingProfile ? (
-                      <div
-                        className="rounded-circle d-flex align-items-center justify-content-center"
+                    <i className="fa-solid fa-user"></i>
+                  </button>
+                )}
+
+                {/* Bouton Publier */}
+                <button
+                  className="btn d-flex align-items-center ms-3 ms-xl-4"
+                  style={{
+                    backgroundColor:
+                      hoveredButton === "publish"
+                        ? colors.oskar.greenHover
+                        : colors.oskar.green,
+                    color: "white",
+                    padding:
+                      windowWidth >= 1400 ? "0.6rem 1.5rem" : "0.5rem 1.25rem",
+                    fontWeight: 600,
+                    borderRadius: "8px",
+                    border: "none",
+                    transition: "background-color 0.3s, padding 0.2s",
+                    fontSize: windowWidth >= 1400 ? "1rem" : "0.9rem",
+                    whiteSpace: "nowrap",
+                  }}
+                  onMouseEnter={() => setHoveredButton("publish")}
+                  onMouseLeave={() => setHoveredButton(null)}
+                  aria-label="Publier une annonce"
+                  onClick={handlePublishClick}
+                  type="button"
+                >
+                  <i className="fa-solid fa-plus me-2"></i>
+                  <span>Publier</span>
+                </button>
+              </div>
+            )}
+
+            {/* Actions Mobile/Tablette - visible sur < 992px */}
+            {!isDesktop && (
+              <div className="d-flex align-items-center">
+                {/* Icône Messagerie Mobile */}
+                <Link href={isLoggedIn ? getUserMessagesUrl() : "#"}>
+                  <button
+                    className="btn btn-link border-0 position-relative"
+                    style={{
+                      color: colors.oskar.grey,
+                      fontSize: isSmallMobile
+                        ? "1rem"
+                        : isMobile
+                          ? "1.1rem"
+                          : "1.2rem",
+                      width: isSmallMobile
+                        ? "36px"
+                        : isMobile
+                          ? "40px"
+                          : "44px",
+                      height: isSmallMobile
+                        ? "36px"
+                        : isMobile
+                          ? "40px"
+                          : "44px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: 0,
+                    }}
+                    aria-label="Messagerie"
+                    type="button"
+                    onClick={(e) => {
+                      if (!isLoggedIn) {
+                        e.preventDefault();
+                        handleLoginClick();
+                      }
+                    }}
+                  >
+                    <i className="fa-solid fa-envelope"></i>
+                    {unreadMessagesCount > 0 && (
+                      <span
+                        className="position-absolute top-0 start-100 translate-middle badge rounded-pill"
                         style={{
-                          width: "40px",
-                          height: "40px",
-                          backgroundColor: "#f3f4f6",
-                        }}
-                      >
-                        <div
-                          className="spinner-border spinner-border-sm text-success"
-                          role="status"
-                        >
-                          <span className="visually-hidden">Chargement...</span>
-                        </div>
-                      </div>
-                    ) : getAvatarToDisplay() ? (
-                      <div
-                        className="rounded-circle overflow-hidden"
-                        style={{
-                          width: "40px",
-                          height: "40px",
-                          border: `2px solid ${colors.oskar.green}`,
-                        }}
-                      >
-                        <img
-                          src={getAvatarToDisplay()}
-                          alt={getUserFullName()}
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                          }}
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                            const parent = e.currentTarget.parentElement;
-                            if (parent) {
-                              parent.innerHTML = `
-                                <div class="d-flex align-items-center justify-content-center w-100 h-100" style="background-color: ${colors.oskar.green}; color: white; font-size: 0.9rem; font-weight: bold;">
-                                  ${getUserInitials()}
-                                </div>
-                              `;
-                            }
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <div
-                        className="rounded-circle d-flex align-items-center justify-content-center"
-                        style={{
-                          width: "40px",
-                          height: "40px",
-                          backgroundColor: colors.oskar.green,
+                          backgroundColor: colors.oskar.orange || "#ff6b35",
                           color: "white",
-                          fontSize: "0.9rem",
-                          fontWeight: "bold",
+                          fontSize: isSmallMobile ? "0.45rem" : "0.5rem",
+                          minWidth: isSmallMobile ? "12px" : "14px",
+                          height: isSmallMobile ? "12px" : "14px",
+                          transform: "translate(-30%, -25%)",
                         }}
                       >
-                        {getUserInitials()}
-                      </div>
+                        {unreadMessagesCount > 9 ? "9+" : unreadMessagesCount}
+                      </span>
                     )}
                   </button>
+                </Link>
 
-                  {dropdownOpen && (
-                    <div
-                      className="dropdown-menu dropdown-menu-end shadow border-0 show"
+                {/* Icône Favoris Mobile - caché sur très petit écran */}
+                {!isSmallMobile && (
+                  <Link href="/liste-favoris">
+                    <button
+                      className="btn btn-link border-0"
                       style={{
-                        minWidth: "300px",
-                        maxWidth: "350px",
-                        marginTop: "0.5rem",
+                        color: colors.oskar.grey,
+                        fontSize: isMobile ? "1.1rem" : "1.2rem",
+                        width: isMobile ? "40px" : "44px",
+                        height: isMobile ? "40px" : "44px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: 0,
                       }}
+                      aria-label="Favoris"
+                      type="button"
                     >
-                      <div className="p-3 border-bottom">
-                        <div className="d-flex align-items-center">
-                          {getAvatarToDisplay() ? (
-                            <div
-                              className="rounded-circle overflow-hidden me-3 flex-shrink-0"
-                              style={{
-                                width: "48px",
-                                height: "48px",
-                                border: `2px solid ${colors.oskar.green}`,
-                              }}
-                            >
-                              <img
-                                src={getAvatarToDisplay()}
-                                alt={getUserFullName()}
-                                style={{
-                                  width: "100%",
-                                  height: "100%",
-                                  objectFit: "cover",
-                                }}
-                                onError={(e) => {
-                                  e.currentTarget.style.display = "none";
-                                  const parent = e.currentTarget.parentElement;
-                                  if (parent) {
-                                    parent.innerHTML = `
-                                      <div class="d-flex align-items-center justify-content-center w-100 h-100" style="background-color: ${colors.oskar.green}; color: white; font-size: 1rem; font-weight: bold;">
-                                        ${getUserInitials()}
-                                      </div>
-                                    `;
-                                  }
-                                }}
-                              />
-                            </div>
-                          ) : (
-                            <div
-                              className="rounded-circle d-flex align-items-center justify-content-center me-3 flex-shrink-0"
-                              style={{
-                                width: "48px",
-                                height: "48px",
-                                backgroundColor: colors.oskar.green,
-                                color: "white",
-                                fontSize: "1rem",
-                                fontWeight: "bold",
-                              }}
-                            >
-                              {getUserInitials()}
-                            </div>
-                          )}
-                          <div className="flex-grow-1 min-w-0">
-                            <h6
-                              className="fw-bold mb-0 text-truncate"
-                              style={{ fontSize: "0.95rem" }}
-                              title={getUserFullName()}
-                            >
-                              {getUserFullName()}
-                            </h6>
-                            {getEmailToDisplay() && (
-                              <small
-                                className="text-muted d-block text-truncate"
-                                style={{ fontSize: "0.8rem" }}
-                                title={getEmailToDisplay()}
-                              >
-                                {getEmailToDisplay()}
-                              </small>
-                            )}
-                            <small
-                              className="text-muted d-block"
-                              style={{ fontSize: "0.75rem" }}
-                            >
-                              {getUserTypeToDisplay() === "admin" &&
-                                "Administrateur"}
-                              {getUserTypeToDisplay() === "agent" && "Agent"}
-                              {getUserTypeToDisplay() === "vendeur" &&
-                                "Vendeur"}
-                              {getUserTypeToDisplay() === "utilisateur" &&
-                                "Utilisateur"}
-                              {getRoleToDisplay() && ` • ${getRoleToDisplay()}`}
-                            </small>
-                          </div>
-                        </div>
-                      </div>
+                      <i className="fa-solid fa-heart"></i>
+                    </button>
+                  </Link>
+                )}
 
-                      <div className="p-2">
-                        <Link
-                          href={getUserDashboard()}
-                          className="dropdown-item d-flex align-items-center py-2 px-3"
-                          onClick={() => setDropdownOpen(false)}
-                          style={{ fontSize: "0.9rem" }}
-                        >
-                          <i
-                            className="fa-solid fa-chart-line me-3 text-muted flex-shrink-0"
-                            style={{ width: "20px" }}
-                          ></i>
-                          <span className="flex-grow-1">Dashboard</span>
-                        </Link>
-
-                        <Link
-                          href={getUserProfileUrl()}
-                          className="dropdown-item d-flex align-items-center py-2 px-3"
-                          onClick={() => setDropdownOpen(false)}
-                          style={{ fontSize: "0.9rem" }}
-                        >
-                          <i
-                            className="fa-solid fa-user me-3 text-muted flex-shrink-0"
-                            style={{ width: "20px" }}
-                          ></i>
-                          <span className="flex-grow-1">Mon profil</span>
-                        </Link>
-
-                        {isVendeurOrUtilisateur() && (
-                          <Link
-                            href={getUserAnnoncesUrl()}
-                            className="dropdown-item d-flex align-items-center py-2 px-3"
-                            onClick={() => setDropdownOpen(false)}
-                            style={{ fontSize: "0.9rem" }}
-                          >
-                            <i
-                              className="fa-solid fa-newspaper me-3 text-muted flex-shrink-0"
-                              style={{ width: "20px" }}
-                            ></i>
-                            <span className="flex-grow-1">Mes annonces</span>
-                          </Link>
-                        )}
-
-                        <Link
-                          href={getUserMessagesUrl()}
-                          className="dropdown-item d-flex align-items-center py-2 px-3"
-                          onClick={() => setDropdownOpen(false)}
-                          style={{ fontSize: "0.9rem" }}
-                        >
-                          <i
-                            className="fa-solid fa-envelope me-3 text-muted flex-shrink-0"
-                            style={{ width: "20px" }}
-                          ></i>
-                          <span className="flex-grow-1">Messages</span>
-                          {unreadMessagesCount > 0 && (
-                            <span
-                              className="badge bg-danger ms-auto flex-shrink-0"
-                              style={{
-                                fontSize: "0.7rem",
-                                padding: "0.2rem 0.4rem",
-                                minWidth: "1.5rem",
-                              }}
-                            >
-                              {unreadMessagesCount > 9
-                                ? "9+"
-                                : unreadMessagesCount}
-                            </span>
-                          )}
-                        </Link>
-
-                        <div className="dropdown-divider my-2"></div>
-                        <button
-                          className="dropdown-item d-flex align-items-center py-2 px-3 text-danger"
-                          onClick={handleLogout}
-                          type="button"
-                          style={{ fontSize: "0.9rem" }}
-                        >
-                          <i
-                            className="fa-solid fa-right-from-bracket me-3 flex-shrink-0"
-                            style={{ width: "20px" }}
-                          ></i>
-                          <span className="flex-grow-1">Déconnexion</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <button
-                  className="btn btn-link border-0"
-                  style={{
-                    transition: "color 0.3s",
-                    fontSize: "1.1rem",
-                    color: colors.oskar.grey,
-                    width: "44px",
-                    height: "44px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                  aria-label="Se connecter"
-                  onClick={handleLoginClick}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = colors.oskar.green;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = colors.oskar.grey;
-                  }}
-                  type="button"
-                >
-                  <i className="fa-solid fa-user"></i>
-                </button>
-              )}
-
-              {/* Bouton Publier */}
-              <button
-                className="btn d-flex align-items-center ms-4"
-                style={{
-                  backgroundColor:
-                    hoveredButton === "publish"
-                      ? colors.oskar.greenHover
-                      : colors.oskar.green,
-                  color: "white",
-                  padding: "0.5rem 1.25rem",
-                  fontWeight: 600,
-                  borderRadius: "8px",
-                  border: "none",
-                  transition: "background-color 0.3s",
-                  fontSize: "0.9rem",
-                  whiteSpace: "nowrap",
-                }}
-                onMouseEnter={() => setHoveredButton("publish")}
-                onMouseLeave={() => setHoveredButton(null)}
-                aria-label="Publier une annonce"
-                onClick={handlePublishClick}
-                type="button"
-              >
-                <i className="fa-solid fa-plus me-2"></i>
-                <span>Publier</span>
-              </button>
-            </div>
-
-            {/* Actions Mobile */}
-            <div className="d-flex d-lg-none align-items-center">
-              {/* Icône Messagerie Mobile */}
-              <Link href={isLoggedIn ? getUserMessagesUrl() : "#"}>
-                <button
-                  className="btn btn-link border-0 me-2 position-relative"
-                  style={{
-                    color: colors.oskar.grey,
-                    fontSize: "1.1rem",
-                    width: "44px",
-                    height: "44px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                  aria-label="Messagerie"
-                  type="button"
-                  onClick={(e) => {
-                    if (!isLoggedIn) {
-                      e.preventDefault();
-                      handleLoginClick();
-                    }
-                  }}
-                >
-                  <i className="fa-solid fa-envelope"></i>
-                  {unreadMessagesCount > 0 && (
-                    <span
-                      className="position-absolute top-0 start-100 translate-middle badge rounded-pill"
+                {/* Icône Téléphone/Contact Mobile - caché sur très petit écran */}
+                {!isSmallMobile && (
+                  <Link href="/contact">
+                    <button
+                      className="btn btn-link border-0"
                       style={{
-                        backgroundColor: colors.oskar.orange || "#ff6b35",
-                        color: "white",
-                        fontSize: "0.5rem",
-                        minWidth: "14px",
-                        height: "14px",
-                        transform: "translate(-30%, -25%)",
+                        color: colors.oskar.grey,
+                        fontSize: isMobile ? "1.1rem" : "1.2rem",
+                        width: isMobile ? "40px" : "44px",
+                        height: isMobile ? "40px" : "44px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: 0,
                       }}
+                      aria-label="Contact"
+                      type="button"
                     >
-                      {unreadMessagesCount > 9 ? "9+" : unreadMessagesCount}
-                    </span>
-                  )}
-                </button>
-              </Link>
+                      <i className="fa-solid fa-phone"></i>
+                    </button>
+                  </Link>
+                )}
 
-              {/* Icône Favoris Mobile */}
-              <Link href="/liste-favoris">
+                {/* Bouton Publier Mobile */}
                 <button
-                  className="btn btn-link border-0 me-2"
+                  className="btn ms-1"
                   style={{
-                    color: colors.oskar.grey,
-                    fontSize: "1.1rem",
-                    width: "44px",
-                    height: "44px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
+                    backgroundColor: colors.oskar.green,
+                    color: "white",
+                    padding: isSmallMobile
+                      ? "0.3rem 0.5rem"
+                      : isMobile
+                        ? "0.4rem 0.8rem"
+                        : "0.5rem 1rem",
+                    borderRadius: "6px",
+                    fontSize: isSmallMobile
+                      ? "0.7rem"
+                      : isMobile
+                        ? "0.8rem"
+                        : "0.9rem",
+                    border: "none",
+                    minWidth: "auto",
+                    whiteSpace: "nowrap",
                   }}
-                  aria-label="Favoris"
+                  onClick={handlePublishClick}
+                  aria-label="Publier"
                   type="button"
                 >
-                  <i className="fa-solid fa-heart"></i>
+                  <i className="fa-solid fa-plus"></i>
+                  <span className="ms-1 d-none d-sm-inline">Publier</span>
                 </button>
-              </Link>
-
-              {/* Icône Téléphone/Contact Mobile */}
-              <Link href="/contact">
-                <button
-                  className="btn btn-link border-0 me-2"
-                  style={{
-                    color: colors.oskar.grey,
-                    fontSize: "1.1rem",
-                    width: "44px",
-                    height: "44px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                  aria-label="Contact"
-                  type="button"
-                >
-                  <i className="fa-solid fa-phone"></i>
-                </button>
-              </Link>
-
-              {/* Bouton Publier Mobile */}
-              <button
-                className="btn ms-1"
-                style={{
-                  backgroundColor: colors.oskar.green,
-                  color: "white",
-                  padding: "0.4rem 0.8rem",
-                  borderRadius: "6px",
-                  fontSize: "0.8rem",
-                  border: "none",
-                  minWidth: "auto",
-                  whiteSpace: "nowrap",
-                }}
-                onClick={handlePublishClick}
-                aria-label="Publier"
-                type="button"
-              >
-                <i className="fa-solid fa-plus"></i>
-                <span className="ms-1 d-none d-sm-inline">Publier</span>
-              </button>
-            </div>
+              </div>
+            )}
           </div>
 
-          {/* Navigation Mobile */}
-          {!loadingCategories && (
-            <div className="d-lg-none border-top">
-              <div className="scrollable-nav py-2">
+          {/* Barre de navigation mobile défilante - visible sur tablette et mobile */}
+          {!isDesktop && !loadingCategories && categories.length > 0 && (
+            <div className="border-top">
+              <div className="scrollable-nav py-2 px-1">
                 <div
                   className="d-flex overflow-auto hide-scrollbar"
                   style={{
                     scrollbarWidth: "none",
                     msOverflowStyle: "none",
+                    gap: isSmallMobile ? "4px" : "8px",
                   }}
                 >
                   {navLinks.map((link, index) => (
                     <Link
                       key={`${link.name}-${index}-mobile`}
                       href={link.href}
-                      className={`text-decoration-none px-3 py-1 ${isLinkActive(link) ? "fw-semibold" : ""}`}
+                      className={`text-decoration-none px-2 px-sm-3 py-1 ${isLinkActive(link) ? "fw-semibold" : ""}`}
                       style={{
                         color: isLinkActive(link)
                           ? colors.oskar.green
@@ -1582,8 +1720,14 @@ const Header: FC = () => {
                         borderBottom: isLinkActive(link)
                           ? `2px solid ${colors.oskar.green}`
                           : "2px solid transparent",
-                        fontSize: "0.85rem",
-                        padding: "0.25rem 0.75rem",
+                        fontSize: isSmallMobile
+                          ? "0.75rem"
+                          : isMobile
+                            ? "0.8rem"
+                            : "0.85rem",
+                        padding: isSmallMobile
+                          ? "0.2rem 0.5rem"
+                          : "0.25rem 0.75rem",
                       }}
                     >
                       {link.name}
@@ -1596,8 +1740,8 @@ const Header: FC = () => {
         </div>
       </header>
 
-      {/* Menu Mobile */}
-      {mobileMenuOpen && (
+      {/* Menu Mobile Plein Écran */}
+      {mobileMenuOpen && !isDesktop && (
         <div className="d-lg-none">
           <div
             className="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50"
@@ -1609,7 +1753,8 @@ const Header: FC = () => {
             ref={mobileMenuRef}
             className="position-fixed top-0 start-0 h-100 bg-white shadow-lg"
             style={{
-              width: "min(85%, 320px)",
+              width: isSmallMobile ? "90%" : isMobile ? "85%" : "70%",
+              maxWidth: "320px",
               zIndex: 1000,
               overflowY: "auto",
             }}
@@ -1619,16 +1764,24 @@ const Header: FC = () => {
                 <div
                   className="rounded d-flex align-items-center justify-content-center me-3"
                   style={{
-                    width: "40px",
-                    height: "40px",
+                    width: isSmallMobile ? "32px" : "40px",
+                    height: isSmallMobile ? "32px" : "40px",
                     backgroundColor: colors.oskar.green,
                   }}
                 >
-                  <span className="text-white fw-bold fs-5">O</span>
+                  <span
+                    className="text-white fw-bold"
+                    style={{ fontSize: isSmallMobile ? "0.9rem" : "1.2rem" }}
+                  >
+                    O
+                  </span>
                 </div>
                 <span
-                  className="fs-5 fw-bold"
-                  style={{ color: colors.oskar.black }}
+                  className="fw-bold"
+                  style={{
+                    color: colors.oskar.black,
+                    fontSize: isSmallMobile ? "1.1rem" : "1.3rem",
+                  }}
                 >
                   OSKAR
                 </span>
@@ -1640,8 +1793,11 @@ const Header: FC = () => {
                 type="button"
               >
                 <i
-                  className="fa-solid fa-times fs-4"
-                  style={{ color: colors.oskar.grey }}
+                  className="fa-solid fa-times"
+                  style={{
+                    color: colors.oskar.grey,
+                    fontSize: isSmallMobile ? "1.2rem" : "1.5rem",
+                  }}
                 ></i>
               </button>
             </div>
@@ -1651,7 +1807,7 @@ const Header: FC = () => {
                 <div key={`${link.name}-${index}-mobile-menu`}>
                   <Link
                     href={link.href}
-                    className={`d-flex align-items-center justify-content-between py-3 px-3 text-decoration-none`}
+                    className={`d-flex align-items-center justify-content-between py-2 py-sm-3 px-3 text-decoration-none`}
                     onClick={() => setMobileMenuOpen(false)}
                     style={{
                       color: isLinkActive(link)
@@ -1660,13 +1816,17 @@ const Header: FC = () => {
                       borderLeft: isLinkActive(link)
                         ? `4px solid ${colors.oskar.green}`
                         : "4px solid transparent",
+                      fontSize: isSmallMobile ? "0.85rem" : "0.95rem",
                     }}
                   >
                     <span className={isLinkActive(link) ? "fw-semibold" : ""}>
                       {link.name}
                     </span>
                     {link.hasChildren && (
-                      <i className="fa-solid fa-chevron-down text-muted"></i>
+                      <i
+                        className="fa-solid fa-chevron-down text-muted"
+                        style={{ fontSize: "0.8rem" }}
+                      ></i>
                     )}
                   </Link>
 
@@ -1680,10 +1840,13 @@ const Header: FC = () => {
                           onClick={() => setMobileMenuOpen(false)}
                           style={{
                             color: colors.oskar.grey,
-                            fontSize: "0.9rem",
+                            fontSize: isSmallMobile ? "0.8rem" : "0.9rem",
                           }}
                         >
-                          <i className="fa-solid fa-angle-right me-2"></i>
+                          <i
+                            className="fa-solid fa-angle-right me-2"
+                            style={{ fontSize: "0.7rem" }}
+                          ></i>
                           {child.name}
                         </Link>
                       ))}
@@ -1695,54 +1858,83 @@ const Header: FC = () => {
               {isLoggedIn && (
                 <div className="mt-4 border-top pt-3">
                   <div className="px-3 mb-2">
-                    <small className="text-muted">Mon compte</small>
+                    <small
+                      className="text-muted"
+                      style={{ fontSize: isSmallMobile ? "0.7rem" : "0.8rem" }}
+                    >
+                      Mon compte
+                    </small>
                   </div>
 
                   <Link
                     href={getUserDashboard()}
-                    className="d-flex align-items-center py-3 px-3 text-decoration-none"
+                    className="d-flex align-items-center py-2 py-sm-3 px-3 text-decoration-none"
                     onClick={() => setMobileMenuOpen(false)}
-                    style={{ color: colors.oskar.grey }}
+                    style={{
+                      color: colors.oskar.grey,
+                      fontSize: isSmallMobile ? "0.85rem" : "0.95rem",
+                    }}
                   >
-                    <i className="fa-solid fa-chart-line me-3"></i>
+                    <i
+                      className="fa-solid fa-chart-line me-3"
+                      style={{ width: "20px" }}
+                    ></i>
                     <span>Dashboard</span>
                   </Link>
 
                   <Link
                     href={getUserProfileUrl()}
-                    className="d-flex align-items-center py-3 px-3 text-decoration-none"
+                    className="d-flex align-items-center py-2 py-sm-3 px-3 text-decoration-none"
                     onClick={() => setMobileMenuOpen(false)}
-                    style={{ color: colors.oskar.grey }}
+                    style={{
+                      color: colors.oskar.grey,
+                      fontSize: isSmallMobile ? "0.85rem" : "0.95rem",
+                    }}
                   >
-                    <i className="fa-solid fa-user me-3"></i>
+                    <i
+                      className="fa-solid fa-user me-3"
+                      style={{ width: "20px" }}
+                    ></i>
                     <span>Mon profil</span>
                   </Link>
 
                   {isVendeurOrUtilisateur() && (
                     <Link
                       href={getUserAnnoncesUrl()}
-                      className="d-flex align-items-center py-3 px-3 text-decoration-none"
+                      className="d-flex align-items-center py-2 py-sm-3 px-3 text-decoration-none"
                       onClick={() => setMobileMenuOpen(false)}
-                      style={{ color: colors.oskar.grey }}
+                      style={{
+                        color: colors.oskar.grey,
+                        fontSize: isSmallMobile ? "0.85rem" : "0.95rem",
+                      }}
                     >
-                      <i className="fa-solid fa-newspaper me-3"></i>
+                      <i
+                        className="fa-solid fa-newspaper me-3"
+                        style={{ width: "20px" }}
+                      ></i>
                       <span>Mes annonces</span>
                     </Link>
                   )}
 
                   <Link
                     href={getUserMessagesUrl()}
-                    className="d-flex align-items-center py-3 px-3 text-decoration-none position-relative"
+                    className="d-flex align-items-center py-2 py-sm-3 px-3 text-decoration-none position-relative"
                     onClick={() => setMobileMenuOpen(false)}
-                    style={{ color: colors.oskar.grey }}
+                    style={{
+                      color: colors.oskar.grey,
+                      fontSize: isSmallMobile ? "0.85rem" : "0.95rem",
+                    }}
                   >
-                    <i className="fa-solid fa-envelope me-3"></i>
+                    <i
+                      className="fa-solid fa-envelope me-3"
+                      style={{ width: "20px" }}
+                    ></i>
                     <span>Messages</span>
                     {unreadMessagesCount > 0 && (
                       <span
                         className="position-absolute end-3 badge bg-danger"
                         style={{
-                          fontSize: "0.7rem",
+                          fontSize: isSmallMobile ? "0.6rem" : "0.7rem",
                           padding: "0.2rem 0.4rem",
                         }}
                       >
@@ -1752,14 +1944,18 @@ const Header: FC = () => {
                   </Link>
 
                   <button
-                    className="d-flex align-items-center py-3 px-3 w-100 text-start border-0 bg-transparent text-danger"
+                    className="d-flex align-items-center py-2 py-sm-3 px-3 w-100 text-start border-0 bg-transparent text-danger"
                     onClick={() => {
                       handleLogout();
                       setMobileMenuOpen(false);
                     }}
                     type="button"
+                    style={{ fontSize: isSmallMobile ? "0.85rem" : "0.95rem" }}
                   >
-                    <i className="fa-solid fa-right-from-bracket me-3"></i>
+                    <i
+                      className="fa-solid fa-right-from-bracket me-3"
+                      style={{ width: "20px" }}
+                    ></i>
                     <span>Déconnexion</span>
                   </button>
                 </div>
@@ -1767,13 +1963,15 @@ const Header: FC = () => {
 
               <div className="p-3 mt-3">
                 <button
-                  className="btn w-100 py-3"
+                  className="btn w-100"
                   style={{
                     backgroundColor: colors.oskar.green,
                     color: "white",
                     borderRadius: "8px",
                     border: "none",
                     fontWeight: 600,
+                    padding: isSmallMobile ? "0.6rem" : "0.8rem",
+                    fontSize: isSmallMobile ? "0.85rem" : "0.95rem",
                   }}
                   onClick={() => {
                     handlePublishClick();
@@ -1838,6 +2036,24 @@ const Header: FC = () => {
           }
           100% {
             opacity: 0.6;
+          }
+        }
+
+        /* Optimisations pour les très petits écrans */
+        @media (max-width: 375px) {
+          .btn-link {
+            min-width: auto !important;
+          }
+          .container-fluid {
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+          }
+        }
+
+        /* Optimisations pour les écrans moyens */
+        @media (min-width: 1400px) {
+          .container-fluid {
+            max-width: 1400px;
           }
         }
       `}</style>

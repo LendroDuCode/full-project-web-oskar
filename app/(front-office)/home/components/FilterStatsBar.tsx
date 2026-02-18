@@ -1,8 +1,8 @@
 // components/FilterStatsBar.tsx - Version sans le compteur
 "use client";
 
+import colors from "@/app/shared/constants/colors";
 import { useState, useEffect } from "react";
-import colors from "../../../shared/constants/colors";
 
 interface FilterType {
   id: string;

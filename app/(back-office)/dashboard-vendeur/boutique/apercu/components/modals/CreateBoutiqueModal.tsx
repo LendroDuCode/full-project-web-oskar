@@ -15,6 +15,7 @@ import {
   faShoppingBag,
   faBox,
   faTag,
+  faExclamationTriangle,
 } from "@fortawesome/free-solid-svg-icons";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
@@ -59,6 +60,7 @@ const CreateBoutiqueModal = ({
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [bannierePreview, setBannierePreview] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [apiError, setApiError] = useState<string | null>(null);
 
   const handleFileChange = (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -83,6 +85,7 @@ const CreateBoutiqueModal = ({
       }
 
       setErrors({ ...errors, [type]: "" });
+      setApiError(null); // Effacer l'erreur API lors d'une nouvelle action
 
       if (type === "logo") {
         setFormData({ ...formData, logo: file });
@@ -98,29 +101,25 @@ const CreateBoutiqueModal = ({
     try {
       setLoadingTypes(true);
       setErrors({ ...errors, types: "" });
+      setApiError(null);
 
-      // Sans type générique pour plus de flexibilité
       const response = await api.get(API_ENDPOINTS.TYPES_BOUTIQUE.LIST);
 
       console.log("📦 Réponse types boutique:", response);
 
       let typesData: TypeBoutique[] = [];
 
-      // Cas 1: Réponse est directement un tableau
       if (Array.isArray(response)) {
         typesData = response;
-      }
-      // Cas 2: Réponse est un objet avec propriété data (qui peut être un tableau ou objet)
-      else if (response && typeof response === "object" && "data" in response) {
+      } else if (
+        response &&
+        typeof response === "object" &&
+        "data" in response
+      ) {
         const data = response.data;
-
-        // Si data est un tableau
         if (Array.isArray(data)) {
           typesData = data;
-        }
-        // Si data est un objet qui contient un tableau
-        else if (data && typeof data === "object") {
-          // Chercher une propriété qui est un tableau
+        } else if (data && typeof data === "object") {
           const arrayKey = Object.keys(data).find((key) =>
             Array.isArray(data[key]),
           );
@@ -128,10 +127,7 @@ const CreateBoutiqueModal = ({
             typesData = data[arrayKey];
           }
         }
-      }
-      // Cas 3: Réponse est un objet (chercher un tableau dans l'objet)
-      else if (response && typeof response === "object") {
-        // Chercher la première propriété qui est un tableau
+      } else if (response && typeof response === "object") {
         const arrayKey = Object.keys(response).find((key) =>
           Array.isArray(response[key]),
         );
@@ -140,7 +136,6 @@ const CreateBoutiqueModal = ({
         }
       }
 
-      // Valider que tous les éléments sont bien du bon type
       typesData = typesData.filter(
         (item) =>
           item &&
@@ -174,6 +169,7 @@ const CreateBoutiqueModal = ({
     if (show) {
       fetchTypesBoutique();
       setErrors({});
+      setApiError(null);
     }
   }, [show]);
 
@@ -184,6 +180,8 @@ const CreateBoutiqueModal = ({
       newErrors.nom = "Le nom de la boutique est requis";
     } else if (formData.nom.length < 3) {
       newErrors.nom = "Le nom doit contenir au moins 3 caractères";
+    } else if (formData.nom.length > 100) {
+      newErrors.nom = "Le nom ne doit pas dépasser 100 caractères";
     }
 
     if (!formData.type_boutique_uuid) {
@@ -196,18 +194,26 @@ const CreateBoutiqueModal = ({
     }
 
     setErrors(newErrors);
+    setApiError(null); // Effacer l'erreur API lors de la validation
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setApiError(null);
 
     if (!validateForm()) {
       return;
     }
 
-    await onCreate(formData);
-    resetForm();
+    try {
+      await onCreate(formData);
+      // Ne pas reset ici car la fonction parent le fera après succès
+    } catch (error: any) {
+      // L'erreur est déjà gérée dans le parent, mais on peut l'afficher ici aussi
+      console.error("Erreur dans handleSubmit:", error);
+      // Le parent va setter l'erreur, on n'a pas besoin de faire quoi que ce soit ici
+    }
   };
 
   const handleClose = () => {
@@ -228,6 +234,7 @@ const CreateBoutiqueModal = ({
     setLogoPreview(null);
     setBannierePreview(null);
     setErrors({});
+    setApiError(null);
   };
 
   const removeImage = (type: "logo" | "banniere") => {
@@ -239,6 +246,7 @@ const CreateBoutiqueModal = ({
       setBannierePreview(null);
     }
     setErrors({ ...errors, [type]: "" });
+    setApiError(null);
   };
 
   const getTypeIcon = (type: TypeBoutique) => {
@@ -294,6 +302,31 @@ const CreateBoutiqueModal = ({
           </div>
 
           <form onSubmit={handleSubmit} className="modal-body p-0">
+            {/* Message d'erreur API */}
+            {apiError && (
+              <div
+                className="alert alert-danger border-0 mx-4 mt-4 mb-0 d-flex align-items-center"
+                role="alert"
+              >
+                <FontAwesomeIcon
+                  icon={faExclamationTriangle}
+                  className="me-3 fs-4"
+                />
+                <div>
+                  <strong className="d-block">
+                    Erreur lors de la création
+                  </strong>
+                  <span>{apiError}</span>
+                </div>
+                <button
+                  type="button"
+                  className="btn-close ms-auto"
+                  onClick={() => setApiError(null)}
+                  aria-label="Close"
+                ></button>
+              </div>
+            )}
+
             <div className="p-4 border-bottom">
               <h6 className="fw-bold mb-3 text-success d-flex align-items-center gap-2">
                 <FontAwesomeIcon icon={faInfoCircle} />
@@ -317,6 +350,7 @@ const CreateBoutiqueModal = ({
                       onChange={(e) => {
                         setFormData({ ...formData, nom: e.target.value });
                         if (errors.nom) setErrors({ ...errors, nom: "" });
+                        setApiError(null); // Effacer l'erreur API quand l'utilisateur modifie le champ
                       }}
                       required
                       disabled={loading}
@@ -348,6 +382,7 @@ const CreateBoutiqueModal = ({
                           type_boutique_uuid: e.target.value,
                         });
                         if (errors.type) setErrors({ ...errors, type: "" });
+                        setApiError(null);
                       }}
                       required
                       disabled={loading || loadingTypes}
@@ -423,6 +458,7 @@ const CreateBoutiqueModal = ({
                         });
                         if (errors.description)
                           setErrors({ ...errors, description: "" });
+                        setApiError(null);
                       }}
                       disabled={loading}
                       maxLength={500}
@@ -676,12 +712,13 @@ const CreateBoutiqueModal = ({
                     rows={3}
                     placeholder="Décrivez votre politique de retour et d'échange..."
                     value={formData.politique_retour}
-                    onChange={(e) =>
+                    onChange={(e) => {
                       setFormData({
                         ...formData,
                         politique_retour: e.target.value,
-                      })
-                    }
+                      });
+                      setApiError(null);
+                    }}
                     disabled={loading}
                     maxLength={1000}
                   />
@@ -704,12 +741,13 @@ const CreateBoutiqueModal = ({
                     rows={3}
                     placeholder="Décrivez les conditions générales d'utilisation..."
                     value={formData.conditions_utilisation}
-                    onChange={(e) =>
+                    onChange={(e) => {
                       setFormData({
                         ...formData,
                         conditions_utilisation: e.target.value,
-                      })
-                    }
+                      });
+                      setApiError(null);
+                    }}
                     disabled={loading}
                     maxLength={1000}
                   />

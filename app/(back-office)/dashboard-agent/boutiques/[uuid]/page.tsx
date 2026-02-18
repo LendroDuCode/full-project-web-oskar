@@ -166,9 +166,6 @@ const BoutiqueDetail: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
 
-  // CORRECTION : Retirer les backticks incorrects
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
-
   useEffect(() => {
     const fetchData = async () => {
       const pathSegments = window.location.pathname.split("/");
@@ -190,20 +187,38 @@ const BoutiqueDetail: React.FC = () => {
     try {
       setLoading(true);
       setRefreshLoading(true);
-      const response = await fetch(
-        `${API_BASE_URL}${API_ENDPOINTS.BOUTIQUES.DETAIL(boutiqueId)}`,
-      );
+
+      const endpoint = API_ENDPOINTS.BOUTIQUES.DETAIL(boutiqueId);
+      console.log("📡 Appel API:", endpoint);
+
+      const response = await fetch(endpoint, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
 
       if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`);
+        if (response.status === 404) {
+          throw new Error("Boutique non trouvée");
+        } else if (response.status === 401) {
+          throw new Error("Non autorisé - Veuillez vous reconnecter");
+        } else if (response.status === 403) {
+          throw new Error("Accès interdit");
+        } else {
+          throw new Error(`Erreur HTTP: ${response.status}`);
+        }
       }
 
       const data = await response.json();
-      setBoutique(data);
+      const boutiqueData = data.data || data;
+      setBoutique(boutiqueData);
       setError(null);
+
+      console.log("✅ Boutique chargée:", boutiqueData.nom);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Une erreur est survenue");
-      console.error("Erreur lors du chargement:", err);
+      console.error("❌ Erreur lors du chargement:", err);
     } finally {
       setLoading(false);
       setRefreshLoading(false);
@@ -373,7 +388,6 @@ const BoutiqueDetail: React.FC = () => {
     }
   };
 
-  // CORRECTION PRINCIPALE : Mettre à jour la liste des produits après suppression
   const removeProductFromList = (productUuid: string) => {
     if (boutique) {
       setBoutique({
@@ -383,18 +397,14 @@ const BoutiqueDetail: React.FC = () => {
     }
   };
 
-  // Fonction utilitaire pour gérer les réponses API
   const handleApiResponse = async (
     response: Response,
   ): Promise<ApiResponse> => {
-    // Vérifier si la réponse est vide
     const contentLength = response.headers.get("content-length");
     if (contentLength === "0" || response.status === 204) {
-      // Si la réponse est vide, retourner un succès par défaut
       return { success: true, message: "Opération réussie" };
     }
 
-    // Essayer de parser le JSON
     try {
       const text = await response.text();
       if (!text || text.trim() === "") {
@@ -402,7 +412,6 @@ const BoutiqueDetail: React.FC = () => {
       }
       return JSON.parse(text);
     } catch (err) {
-      // Si le parsing échoue, vérifier si c'est une réponse de succès
       if (response.ok) {
         return { success: true, message: "Opération réussie" };
       }
@@ -417,7 +426,7 @@ const BoutiqueDetail: React.FC = () => {
       setActionLoading(productUuid);
 
       const response = await fetch(
-        `${API_BASE_URL}${API_ENDPOINTS.PRODUCTS.DELETE(productUuid)}`,
+        `${API_ENDPOINTS.PRODUCTS.DELETE(productUuid)}`,
         {
           method: "DELETE",
           headers: {
@@ -431,16 +440,11 @@ const BoutiqueDetail: React.FC = () => {
         throw new Error(errorData.message || `Erreur HTTP: ${response.status}`);
       }
 
-      // CORRECTION ICI : Utiliser notre fonction utilitaire pour gérer la réponse
       const result = await handleApiResponse(response);
 
       if (result.success) {
         showAlert("success", "Produit supprimé avec succès");
-
-        // Retirer immédiatement le produit de la liste
         removeProductFromList(productUuid);
-
-        // Retirer aussi de la sélection
         setSelectedProducts((prev) =>
           prev.filter((uuid) => uuid !== productUuid),
         );
@@ -465,7 +469,7 @@ const BoutiqueDetail: React.FC = () => {
       const endpoint =
         API_ENDPOINTS.PRODUCTS.RESTORE?.(productUuid) ||
         `/produits/${productUuid}/restore`;
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      const response = await fetch(endpoint, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -476,12 +480,10 @@ const BoutiqueDetail: React.FC = () => {
         throw new Error(`Erreur HTTP: ${response.status}`);
       }
 
-      // Utiliser notre fonction utilitaire
       const result = await handleApiResponse(response);
 
       if (result.success) {
         showAlert("success", "Produit restauré avec succès");
-        // Recharger les données pour avoir l'état à jour
         if (id) {
           await fetchBoutiqueData(id);
         }
@@ -506,7 +508,7 @@ const BoutiqueDetail: React.FC = () => {
       const endpoint =
         API_ENDPOINTS.PRODUCTS.PUBLISH?.(productUuid) ||
         `/produits/${productUuid}/publish`;
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      const response = await fetch(endpoint, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -518,7 +520,6 @@ const BoutiqueDetail: React.FC = () => {
         throw new Error(`Erreur HTTP: ${response.status}`);
       }
 
-      // Utiliser notre fonction utilitaire
       const result = await handleApiResponse(response);
 
       if (result.success) {
@@ -547,7 +548,7 @@ const BoutiqueDetail: React.FC = () => {
       const endpoint =
         API_ENDPOINTS.PRODUCTS.UNPUBLISH?.(productUuid) ||
         `/produits/${productUuid}/unpublish`;
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      const response = await fetch(endpoint, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -559,7 +560,6 @@ const BoutiqueDetail: React.FC = () => {
         throw new Error(`Erreur HTTP: ${response.status}`);
       }
 
-      // Utiliser notre fonction utilitaire
       const result = await handleApiResponse(response);
 
       if (result.success) {
@@ -588,7 +588,7 @@ const BoutiqueDetail: React.FC = () => {
       const endpoint =
         API_ENDPOINTS.PRODUCTS.BLOCK?.(productUuid) ||
         `/produits/${productUuid}/block`;
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      const response = await fetch(endpoint, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -600,7 +600,6 @@ const BoutiqueDetail: React.FC = () => {
         throw new Error(`Erreur HTTP: ${response.status}`);
       }
 
-      // Utiliser notre fonction utilitaire
       const result = await handleApiResponse(response);
 
       if (result.success) {
@@ -629,7 +628,7 @@ const BoutiqueDetail: React.FC = () => {
       const endpoint =
         API_ENDPOINTS.PRODUCTS.UNBLOCK?.(productUuid) ||
         `/produits/${productUuid}/unblock`;
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      const response = await fetch(endpoint, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -641,7 +640,6 @@ const BoutiqueDetail: React.FC = () => {
         throw new Error(`Erreur HTTP: ${response.status}`);
       }
 
-      // Utiliser notre fonction utilitaire
       const result = await handleApiResponse(response);
 
       if (result.success) {
@@ -671,7 +669,6 @@ const BoutiqueDetail: React.FC = () => {
       `Êtes-vous sûr de vouloir supprimer ${selectedProducts.length} produit(s) ? Cette action est irréversible.`,
       async () => {
         try {
-          // Supprimer chaque produit individuellement
           for (const productUuid of selectedProducts) {
             await handleDeleteProduct(productUuid);
           }
@@ -767,10 +764,8 @@ const BoutiqueDetail: React.FC = () => {
   const getFilteredProducts = () => {
     if (!boutique) return [];
 
-    // Ne montrer que les produits non supprimés
     let filtered = [...boutique.produits].filter((p) => !p.is_deleted);
 
-    // Filter by search term
     if (searchProduct) {
       filtered = filtered.filter(
         (p) =>
@@ -780,7 +775,6 @@ const BoutiqueDetail: React.FC = () => {
       );
     }
 
-    // Sort products
     switch (productSort) {
       case "nom":
         filtered.sort((a, b) => a.libelle.localeCompare(b.libelle));
@@ -813,7 +807,6 @@ const BoutiqueDetail: React.FC = () => {
     return filtered;
   };
 
-  // Pagination functions
   const getCurrentPageProducts = () => {
     const filteredProducts = getFilteredProducts();
     const indexOfLastItem = currentPage * itemsPerPage;
@@ -871,41 +864,55 @@ const BoutiqueDetail: React.FC = () => {
     );
   };
 
-  // Rendre l'état de chargement
   const renderLoadingState = () => {
     return (
-      <Container fluid className="py-5">
-        <Row className="justify-content-center">
-          <Col xs={12} className="text-center">
-            <Spinner animation="border" variant="primary" className="mb-3" />
-            <h4 className="text-muted">
-              Chargement des détails de la boutique...
-            </h4>
-          </Col>
-        </Row>
+      <Container
+        fluid
+        className="min-vh-100 d-flex align-items-center justify-content-center bg-light"
+      >
+        <div className="text-center">
+          <div
+            className="spinner-border text-primary mb-3"
+            role="status"
+            style={{ width: "3rem", height: "3rem" }}
+          >
+            <span className="visually-hidden">Chargement...</span>
+          </div>
+          <h4 className="text-muted">
+            Chargement des détails de la boutique...
+          </h4>
+        </div>
       </Container>
     );
   };
 
-  // Rendre l'état d'erreur
   const renderErrorState = () => {
     return (
-      <Container fluid className="py-5">
-        <Row className="justify-content-center">
+      <Container
+        fluid
+        className="min-vh-100 d-flex align-items-center justify-content-center bg-light"
+      >
+        <Row className="justify-content-center w-100">
           <Col md={8} lg={6}>
             <Alert
               variant="danger"
-              className="text-center shadow-sm border-0 rounded-3"
+              className="text-center shadow-lg border-0 rounded-4 p-5"
             >
-              <FaTimesCircle className="display-4 text-danger mb-3" />
-              <Alert.Heading className="h3">Erreur de chargement</Alert.Heading>
-              <p className="mb-4">{error}</p>
+              <FaTimesCircle className="display-1 text-danger mb-4" />
+              <Alert.Heading className="h2 mb-3">
+                Erreur de chargement
+              </Alert.Heading>
+              <p className="mb-4 fs-5">{error}</p>
               <ButtonToolbar className="justify-content-center gap-3">
-                <Button variant="outline-danger" onClick={() => router.back()}>
+                <Button
+                  variant="outline-danger"
+                  size="lg"
+                  onClick={() => router.back()}
+                >
                   <FaArrowLeft className="me-2" />
                   Retour
                 </Button>
-                <Button variant="primary" onClick={handleRefresh}>
+                <Button variant="primary" size="lg" onClick={handleRefresh}>
                   <FaSync className="me-2" />
                   Réessayer
                 </Button>
@@ -917,22 +924,30 @@ const BoutiqueDetail: React.FC = () => {
     );
   };
 
-  // Rendre l'état de boutique non trouvée
   const renderNotFoundState = () => {
     return (
-      <Container fluid className="py-5">
-        <Row className="justify-content-center">
+      <Container
+        fluid
+        className="min-vh-100 d-flex align-items-center justify-content-center bg-light"
+      >
+        <Row className="justify-content-center w-100">
           <Col md={8} lg={6}>
             <Alert
               variant="warning"
-              className="text-center shadow-sm border-0 rounded-3"
+              className="text-center shadow-lg border-0 rounded-4 p-5"
             >
-              <FaStore className="display-4 text-warning mb-3" />
-              <Alert.Heading className="h3">Boutique non trouvée</Alert.Heading>
-              <p className="mb-4">
+              <FaStore className="display-1 text-warning mb-4" />
+              <Alert.Heading className="h2 mb-3">
+                Boutique non trouvée
+              </Alert.Heading>
+              <p className="mb-4 fs-5">
                 La boutique demandée n'existe pas ou a été supprimée.
               </p>
-              <Button variant="outline-warning" onClick={() => router.back()}>
+              <Button
+                variant="outline-warning"
+                size="lg"
+                onClick={() => router.back()}
+              >
                 <FaArrowLeft className="me-2" />
                 Retour à la liste
               </Button>
@@ -943,15 +958,14 @@ const BoutiqueDetail: React.FC = () => {
     );
   };
 
-  // Rendre le contenu principal
   const renderContent = () => {
     const stats = calculateStats();
     const filteredProducts = getFilteredProducts();
     const currentProducts = getCurrentPageProducts();
 
     return (
-      <Container fluid className="py-4 px-3 px-md-4">
-        {/* Alert */}
+      <>
+        {/* Alertes flottantes */}
         {alert && (
           <div
             className="position-fixed top-0 end-0 p-3"
@@ -961,231 +975,248 @@ const BoutiqueDetail: React.FC = () => {
               variant={alert.type}
               onClose={() => setAlert(null)}
               dismissible
-              className="shadow-lg"
+              className="shadow-lg border-0"
+              style={{ minWidth: "300px" }}
             >
-              {alert.type === "success" && <FaCheckCircle className="me-2" />}
-              {alert.type === "error" && <FaTimesCircle className="me-2" />}
-              {alert.type === "warning" && (
-                <FaExclamationTriangle className="me-2" />
-              )}
-              {alert.message}
+              <div className="d-flex align-items-center">
+                {alert.type === "success" && (
+                  <FaCheckCircle className="me-2 fs-4" />
+                )}
+                {alert.type === "error" && (
+                  <FaTimesCircle className="me-2 fs-4" />
+                )}
+                {alert.type === "warning" && (
+                  <FaExclamationTriangle className="me-2 fs-4" />
+                )}
+                <div>
+                  <strong className="d-block mb-1">
+                    {alert.type === "success" && "Succès"}
+                    {alert.type === "error" && "Erreur"}
+                    {alert.type === "warning" && "Attention"}
+                  </strong>
+                  <span>{alert.message}</span>
+                </div>
+              </div>
             </Alert>
           </div>
         )}
 
-        {/* Confirmation Modal */}
+        {/* Modal de confirmation */}
         <Modal
           show={showConfirmModal}
           onHide={() => setShowConfirmModal(false)}
           centered
+          className="modal-confirm"
         >
-          <Modal.Header closeButton>
-            <Modal.Title>
-              <FaExclamationTriangle className="text-warning me-2" />
+          <Modal.Header closeButton className="border-0 pb-0">
+            <Modal.Title className="d-flex align-items-center text-warning">
+              <FaExclamationTriangle className="me-2" />
               {confirmAction?.title || "Confirmation"}
             </Modal.Title>
           </Modal.Header>
-          <Modal.Body>
-            <p>{confirmAction?.message}</p>
+          <Modal.Body className="px-4 py-3">
+            <p className="fs-5 mb-0">{confirmAction?.message}</p>
           </Modal.Body>
-          <Modal.Footer>
+          <Modal.Footer className="border-0 pt-0">
             <Button
               variant="secondary"
               onClick={() => setShowConfirmModal(false)}
+              className="px-4"
             >
               Annuler
             </Button>
-            <Button variant="danger" onClick={() => confirmAction?.action()}>
+            <Button
+              variant="danger"
+              onClick={() => confirmAction?.action()}
+              className="px-4"
+            >
               Confirmer
             </Button>
           </Modal.Footer>
         </Modal>
 
-        {/* Breadcrumb Navigation */}
-        <Breadcrumb className="mb-4">
-          <Breadcrumb.Item
-            href="#"
-            onClick={(e) => {
-              e.preventDefault();
-              router.back();
-            }}
-            className="text-decoration-none"
-          >
-            <FaChevronLeft className="me-1 align-baseline" />
-            Boutiques
-          </Breadcrumb.Item>
-          <Breadcrumb.Item active className="fw-semibold">
-            {boutique!.nom}
-          </Breadcrumb.Item>
-        </Breadcrumb>
+        {/* Contenu principal */}
+        <Container fluid className="px-4 py-3 bg-light min-vh-100">
+          {/* Breadcrumb */}
+          <Breadcrumb className="mb-4 bg-white p-3 rounded-3 shadow-sm">
+            <Breadcrumb.Item
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                router.back();
+              }}
+              className="text-decoration-none"
+            >
+              <FaChevronLeft className="me-2" />
+              Boutiques
+            </Breadcrumb.Item>
+            <Breadcrumb.Item active className="fw-semibold">
+              {boutique?.nom}
+            </Breadcrumb.Item>
+          </Breadcrumb>
 
-        {/* Main Header */}
-        <Row className="align-items-center mb-4">
-          <Col>
-            <div className="d-flex align-items-center gap-3">
-              <div className="bg-primary bg-opacity-10 p-3 rounded-circle">
-                <FaStore className="text-primary fs-2" />
-              </div>
-              <div>
-                <h1 className="h2 mb-1 fw-bold">{boutique!.nom}</h1>
-                <div className="d-flex align-items-center gap-3">
-                  <span className="text-muted">
-                    <FaTags className="me-1" />
-                    {boutique!.type_boutique.libelle}
-                  </span>
-                  <span className="text-muted">
-                    <FaBoxOpen className="me-1" />
-                    {
-                      boutique!.produits.filter((p) => !p.is_deleted).length
-                    }{" "}
-                    produits
-                  </span>
-                </div>
-              </div>
-            </div>
-          </Col>
-          <Col xs="auto">
-            <ButtonToolbar className="gap-2">
-              <OverlayTrigger
-                placement="bottom"
-                overlay={<Tooltip>Actualiser</Tooltip>}
-              >
-                <Button
-                  variant="outline-secondary"
-                  size="sm"
-                  onClick={handleRefresh}
-                  disabled={refreshLoading}
-                >
-                  <FaSync className={refreshLoading ? "fa-spin" : ""} />
-                </Button>
-              </OverlayTrigger>
-              <Button
-                variant="outline-primary"
-                size="sm"
-                className="d-flex align-items-center"
-                onClick={() =>
-                  router.push(
-                    `/dashboard-agent/boutiques/edit/${boutique!.uuid}`,
-                  )
-                }
-              >
-                <FaPencilAlt className="me-2" />
-                Modifier
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                className="d-flex align-items-center"
-                onClick={() =>
-                  router.push(
-                    `/dashboard-agent/produits/create?boutique=${boutique!.uuid}`,
-                  )
-                }
-              >
-                <FaPlusCircle className="me-2" />
-                Nouveau produit
-              </Button>
-            </ButtonToolbar>
-          </Col>
-        </Row>
-
-        {/* Boutique Status Bar */}
-        <Row className="mb-4">
-          <Col>
-            <Card className="border-0 shadow-sm">
-              <Card.Body className="p-3">
-                <Row className="align-items-center">
-                  <Col md={8}>
-                    <div className="d-flex flex-wrap align-items-center gap-3">
-                      {getBoutiqueStatusBadge(boutique!.statut)}
-                      {boutique!.est_bloque && (
-                        <Badge
-                          bg="danger"
-                          className="px-3 py-2 d-flex align-items-center"
-                        >
-                          <FaLock className="me-2" />
-                          Bloqué
-                        </Badge>
-                      )}
-                      {boutique!.est_ferme && (
-                        <Badge
-                          bg="secondary"
-                          className="px-3 py-2 d-flex align-items-center"
-                        >
-                          <FaDoorClosed className="me-2" />
-                          Fermé
-                        </Badge>
-                      )}
-                      <span className="text-muted">
-                        <FaCalendar className="me-1" />
+          {/* Header */}
+          <div className="bg-white rounded-4 shadow-sm p-4 mb-4">
+            <Row className="align-items-center">
+              <Col>
+                <div className="d-flex align-items-center gap-4">
+                  <div className="bg-primary bg-opacity-10 p-4 rounded-3">
+                    <FaStore className="text-primary fs-1" />
+                  </div>
+                  <div>
+                    <h1 className="display-6 fw-bold mb-2">{boutique!.nom}</h1>
+                    <div className="d-flex flex-wrap gap-3">
+                      <span className="text-muted d-flex align-items-center">
+                        <FaTags className="me-2 text-primary" />
+                        {boutique!.type_boutique.libelle}
+                      </span>
+                      <span className="text-muted d-flex align-items-center">
+                        <FaBoxOpen className="me-2 text-success" />
+                        {
+                          boutique!.produits.filter((p) => !p.is_deleted).length
+                        }{" "}
+                        produits
+                      </span>
+                      <span className="text-muted d-flex align-items-center">
+                        <FaCalendar className="me-2 text-info" />
                         Créée le{" "}
                         {new Date(boutique!.created_at).toLocaleDateString(
                           "fr-FR",
                         )}
                       </span>
                     </div>
-                  </Col>
-                  <Col md={4} className="text-md-end">
+                  </div>
+                </div>
+              </Col>
+              <Col xs="auto">
+                <ButtonToolbar className="gap-2">
+                  <OverlayTrigger
+                    placement="bottom"
+                    overlay={<Tooltip>Actualiser</Tooltip>}
+                  >
                     <Button
-                      variant="link"
-                      className="text-decoration-none"
-                      onClick={() => router.back()}
+                      variant="outline-secondary"
+                      onClick={handleRefresh}
+                      disabled={refreshLoading}
+                      className="rounded-3"
                     >
-                      <FaArrowLeft className="me-2" />
-                      Retour à la liste
+                      <FaSync className={refreshLoading ? "fa-spin" : ""} />
                     </Button>
-                  </Col>
-                </Row>
-              </Card.Body>
-            </Card>
-          </Col>
-        </Row>
+                  </OverlayTrigger>
+                  <Button
+                    variant="outline-primary"
+                    className="d-flex align-items-center rounded-3"
+                    onClick={() =>
+                      router.push(
+                        `/dashboard-agent/boutiques/edit/${boutique!.uuid}`,
+                      )
+                    }
+                  >
+                    <FaPencilAlt className="me-2" />
+                    Modifier
+                  </Button>
+                  <Button
+                    variant="primary"
+                    className="d-flex align-items-center rounded-3"
+                    onClick={() =>
+                      router.push(
+                        `/dashboard-agent/produits/create?boutique=${boutique!.uuid}`,
+                      )
+                    }
+                  >
+                    <FaPlusCircle className="me-2" />
+                    Nouveau produit
+                  </Button>
+                </ButtonToolbar>
+              </Col>
+            </Row>
+          </div>
 
-        {/* Main Content */}
-        <Row className="g-4">
-          {/* Left Column - Boutique Info */}
-          <Col lg={8}>
-            {/* Boutique Header Card */}
-            <Card className="border-0 shadow-sm mb-4">
-              <Card.Body className="p-0">
-                {/* Banner */}
+          {/* Status Bar */}
+          <div className="bg-white rounded-4 shadow-sm p-3 mb-4">
+            <Row className="align-items-center">
+              <Col md={8}>
+                <div className="d-flex flex-wrap align-items-center gap-3">
+                  {getBoutiqueStatusBadge(boutique!.statut)}
+                  {boutique!.est_bloque && (
+                    <Badge
+                      bg="danger"
+                      className="px-4 py-2 d-flex align-items-center rounded-pill"
+                    >
+                      <FaLock className="me-2" />
+                      Bloqué
+                    </Badge>
+                  )}
+                  {boutique!.est_ferme && (
+                    <Badge
+                      bg="secondary"
+                      className="px-4 py-2 d-flex align-items-center rounded-pill"
+                    >
+                      <FaDoorClosed className="me-2" />
+                      Fermé
+                    </Badge>
+                  )}
+                </div>
+              </Col>
+              <Col md={4} className="text-md-end">
+                <Button
+                  variant="link"
+                  className="text-decoration-none"
+                  onClick={() => router.back()}
+                >
+                  <FaArrowLeft className="me-2" />
+                  Retour à la liste
+                </Button>
+              </Col>
+            </Row>
+          </div>
+
+          <Row className="g-4">
+            {/* Colonne principale */}
+            <Col lg={8}>
+              {/* Banner et Logo */}
+              <Card className="border-0 shadow-sm rounded-4 overflow-hidden mb-4">
                 <div
                   className="position-relative"
                   style={{
-                    height: "200px",
-                    backgroundImage: `url(${boutique!.banniere || "https://via.placeholder.com/1200x300/6c757d/ffffff?text=Bannière+Boutique"})`,
+                    height: "250px",
+                    backgroundImage: `url(${boutique!.banniere || "https://via.placeholder.com/1200x400/0d6efd/ffffff?text=Bannière+de+la+boutique"})`,
                     backgroundSize: "cover",
                     backgroundPosition: "center",
-                    borderTopLeftRadius: "0.375rem",
-                    borderTopRightRadius: "0.375rem",
                   }}
                 >
                   <div className="position-absolute top-0 end-0 m-3">
-                    <Badge bg="light" text="dark" className="px-3 py-2">
-                      <FaShareAlt className="me-2" />
-                      Partager
-                    </Badge>
+                    <OverlayTrigger
+                      placement="bottom"
+                      overlay={<Tooltip>Partager</Tooltip>}
+                    >
+                      <Badge
+                        bg="light"
+                        text="dark"
+                        className="px-4 py-3 rounded-pill shadow-sm"
+                      >
+                        <FaShareAlt className="me-2" />
+                        Partager
+                      </Badge>
+                    </OverlayTrigger>
                   </div>
                 </div>
-
-                {/* Logo and Basic Info */}
-                <div className="p-4">
-                  <Row className="align-items-center">
+                <Card.Body className="p-4">
+                  <Row className="align-items-end">
                     <Col xs="auto">
                       <div
-                        className="rounded-3 border border-4 border-white shadow"
+                        className="rounded-4 border border-4 border-white shadow-lg bg-white"
                         style={{
-                          width: "120px",
-                          height: "120px",
-                          marginTop: "-60px",
-                          backgroundColor: "#fff",
+                          width: "140px",
+                          height: "140px",
+                          marginTop: "-80px",
                         }}
                       >
                         {boutique!.logo ? (
                           <img
                             src={boutique!.logo}
                             alt={`Logo ${boutique!.nom}`}
-                            className="w-100 h-100 rounded-2 object-fit-cover"
+                            className="w-100 h-100 rounded-3 object-fit-cover"
                             onError={(e) => {
                               const target = e.target as HTMLImageElement;
                               target.onerror = null;
@@ -1193,12 +1224,12 @@ const BoutiqueDetail: React.FC = () => {
                               const parent = target.parentElement;
                               if (parent) {
                                 parent.innerHTML =
-                                  '<div class="w-100 h-100 d-flex align-items-center justify-content-center bg-light rounded-2"><FaStore className="text-muted fs-1" /></div>';
+                                  '<div class="w-100 h-100 d-flex align-items-center justify-content-center bg-light rounded-3"><FaStore className="text-muted fs-1" /></div>';
                               }
                             }}
                           />
                         ) : (
-                          <div className="w-100 h-100 d-flex align-items-center justify-content-center bg-light rounded-2">
+                          <div className="w-100 h-100 d-flex align-items-center justify-content-center bg-light rounded-3">
                             <FaStore className="text-muted fs-1" />
                           </div>
                         )}
@@ -1207,8 +1238,8 @@ const BoutiqueDetail: React.FC = () => {
                     <Col>
                       <div className="d-flex justify-content-between align-items-start">
                         <div>
-                          <h2 className="h3 mb-2">{boutique!.nom}</h2>
-                          <p className="text-muted mb-0">
+                          <h2 className="h3 fw-bold mb-2">{boutique!.nom}</h2>
+                          <p className="text-muted mb-0 fs-5">
                             {boutique!.description}
                           </p>
                         </div>
@@ -1219,6 +1250,7 @@ const BoutiqueDetail: React.FC = () => {
                           <Button
                             variant="outline-secondary"
                             size="sm"
+                            className="rounded-circle"
                             onClick={() => {
                               navigator.clipboard.writeText(
                                 window.location.href,
@@ -1233,14 +1265,16 @@ const BoutiqueDetail: React.FC = () => {
                           </Button>
                         </OverlayTrigger>
                       </div>
-                      <div className="mt-3 d-flex flex-wrap gap-3">
-                        <span className="text-muted">
-                          <FaLink className="me-2" />
-                          <code>{boutique!.slug}</code>
+                      <div className="mt-3 d-flex flex-wrap gap-4">
+                        <span className="text-muted d-flex align-items-center">
+                          <FaLink className="me-2 text-primary" />
+                          <code className="bg-light p-2 rounded">
+                            {boutique!.slug}
+                          </code>
                         </span>
-                        <span className="text-muted">
-                          <FaCalendarCheck className="me-2" />
-                          Dernière mise à jour:{" "}
+                        <span className="text-muted d-flex align-items-center">
+                          <FaCalendarCheck className="me-2 text-success" />
+                          Mise à jour:{" "}
                           {new Date(boutique!.updated_at).toLocaleDateString(
                             "fr-FR",
                           )}
@@ -1248,442 +1282,445 @@ const BoutiqueDetail: React.FC = () => {
                       </div>
                     </Col>
                   </Row>
-                </div>
-              </Card.Body>
-            </Card>
+                </Card.Body>
+              </Card>
 
-            {/* Stats Cards */}
-            {stats && (
-              <Row className="mb-4 g-3">
-                <Col md={6} lg={3}>
-                  <Card className="border-0 shadow-sm h-100 bg-primary bg-opacity-5">
-                    <Card.Body className="p-3">
-                      <div className="d-flex justify-content-between align-items-center">
-                        <div>
-                          <h6 className="text-uppercase text-muted small mb-1">
-                            Total Produits
-                          </h6>
-                          <h3 className="mb-0 fw-bold">
-                            {stats.totalProduits}
-                          </h3>
+              {/* Statistiques */}
+              {stats && (
+                <Row className="g-3 mb-4">
+                  <Col md={6} lg={3}>
+                    <Card className="border-0 shadow-sm rounded-4 h-100 bg-gradient-primary">
+                      <Card.Body className="p-3">
+                        <div className="d-flex justify-content-between align-items-center">
+                          <div>
+                            <h6 className="text-uppercase text-muted small mb-2">
+                              Total Produits
+                            </h6>
+                            <h2 className="mb-0 fw-bold">
+                              {stats.totalProduits}
+                            </h2>
+                          </div>
+                          <div className="bg-primary bg-opacity-10 p-3 rounded-3">
+                            <FaBoxOpen className="text-primary fs-2" />
+                          </div>
                         </div>
-                        <div className="bg-primary bg-opacity-10 p-3 rounded-circle">
-                          <FaBoxOpen className="text-primary fs-4" />
+                        <ProgressBar
+                          now={
+                            (stats.produitsActifs / stats.totalProduits) * 100
+                          }
+                          variant="primary"
+                          className="mt-3 rounded-pill"
+                          style={{ height: "6px" }}
+                        />
+                        <small className="text-muted mt-2 d-block">
+                          {stats.produitsActifs} produits actifs
+                        </small>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                  <Col md={6} lg={3}>
+                    <Card className="border-0 shadow-sm rounded-4 h-100 bg-gradient-success">
+                      <Card.Body className="p-3">
+                        <div className="d-flex justify-content-between align-items-center">
+                          <div>
+                            <h6 className="text-uppercase text-muted small mb-2">
+                              En Stock
+                            </h6>
+                            <h2 className="mb-0 fw-bold">
+                              {stats.produitsEnStock}
+                            </h2>
+                          </div>
+                          <div className="bg-success bg-opacity-10 p-3 rounded-3">
+                            <FaWarehouse className="text-success fs-2" />
+                          </div>
                         </div>
-                      </div>
-                      <ProgressBar
-                        now={(stats.produitsActifs / stats.totalProduits) * 100}
-                        variant="primary"
-                        className="mt-2"
-                        style={{ height: "4px" }}
-                      />
-                      <small className="text-muted mt-2 d-block">
-                        {stats.produitsActifs} produits actifs
-                      </small>
-                    </Card.Body>
-                  </Card>
-                </Col>
-                <Col md={6} lg={3}>
-                  <Card className="border-0 shadow-sm h-100 bg-success bg-opacity-5">
-                    <Card.Body className="p-3">
-                      <div className="d-flex justify-content-between align-items-center">
-                        <div>
-                          <h6 className="text-uppercase text-muted small mb-1">
-                            En Stock
-                          </h6>
-                          <h3 className="mb-0 fw-bold">
-                            {stats.produitsEnStock}
-                          </h3>
+                        <ProgressBar
+                          now={
+                            (stats.produitsEnStock / stats.totalProduits) * 100
+                          }
+                          variant="success"
+                          className="mt-3 rounded-pill"
+                          style={{ height: "6px" }}
+                        />
+                        <small className="text-muted mt-2 d-block">
+                          {(
+                            (stats.produitsEnStock / stats.totalProduits) *
+                            100
+                          ).toFixed(0)}
+                          % du stock
+                        </small>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                  <Col md={6} lg={3}>
+                    <Card className="border-0 shadow-sm rounded-4 h-100 bg-gradient-info">
+                      <Card.Body className="p-3">
+                        <div className="d-flex justify-content-between align-items-center">
+                          <div>
+                            <h6 className="text-uppercase text-muted small mb-2">
+                              Valeur Stock
+                            </h6>
+                            <h2 className="mb-0 fw-bold">
+                              {formatPrice(stats.totalValeurStock.toString())}
+                            </h2>
+                          </div>
+                          <div className="bg-info bg-opacity-10 p-3 rounded-3">
+                            <FaMoneyBillWave className="text-info fs-2" />
+                          </div>
                         </div>
-                        <div className="bg-success bg-opacity-10 p-3 rounded-circle">
-                          <FaWarehouse className="text-success fs-4" />
-                        </div>
-                      </div>
-                      <ProgressBar
-                        now={
-                          (stats.produitsEnStock / stats.totalProduits) * 100
-                        }
-                        variant="success"
-                        className="mt-2"
-                        style={{ height: "4px" }}
-                      />
-                      <small className="text-muted mt-2 d-block">
-                        {(
-                          (stats.produitsEnStock / stats.totalProduits) *
-                          100
-                        ).toFixed(0)}
-                        % du stock
-                      </small>
-                    </Card.Body>
-                  </Card>
-                </Col>
-                <Col md={6} lg={3}>
-                  <Card className="border-0 shadow-sm h-100 bg-info bg-opacity-5">
-                    <Card.Body className="p-3">
-                      <div className="d-flex justify-content-between align-items-center">
-                        <div>
-                          <h6 className="text-uppercase text-muted small mb-1">
-                            Valeur Stock
-                          </h6>
-                          <h3 className="mb-0 fw-bold">
-                            {formatPrice(stats.totalValeurStock.toString())}
-                          </h3>
-                        </div>
-                        <div className="bg-info bg-opacity-10 p-3 rounded-circle">
-                          <FaMoneyBillWave className="text-info fs-4" />
-                        </div>
-                      </div>
-                      <div className="mt-2">
-                        <small className="text-muted">
+                        <small className="text-muted mt-3 d-block">
                           Valeur totale des produits
                         </small>
-                      </div>
-                    </Card.Body>
-                  </Card>
-                </Col>
-                <Col md={6} lg={3}>
-                  <Card className="border-0 shadow-sm h-100 bg-warning bg-opacity-5">
-                    <Card.Body className="p-3">
-                      <div className="d-flex justify-content-between align-items-center">
-                        <div>
-                          <h6 className="text-uppercase text-muted small mb-1">
-                            Note Moyenne
-                          </h6>
-                          <h3 className="mb-0 fw-bold">
-                            {stats.noteMoyenne}
-                            <small className="fs-6 text-muted">/5</small>
-                          </h3>
-                        </div>
-                        <div className="bg-warning bg-opacity-10 p-3 rounded-circle">
-                          <FaStar className="text-warning fs-4" />
-                        </div>
-                      </div>
-                      <div className="mt-2">
-                        <div className="d-flex">
-                          {[...Array(5)].map((_, i) => (
-                            <FaStar
-                              key={i}
-                              className={`${i < Math.floor(parseFloat(stats.noteMoyenne)) ? "text-warning" : "text-muted"} me-1`}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </Card.Body>
-                  </Card>
-                </Col>
-              </Row>
-            )}
-
-            {/* Products Section */}
-            <Card className="border-0 shadow-sm">
-              <Card.Header className="bg-white border-bottom py-3">
-                <Row className="align-items-center">
-                  <Col>
-                    <h5 className="mb-0 d-flex align-items-center">
-                      <FaBoxOpen className="text-primary me-3" />
-                      Produits de la boutique
-                      <Badge bg="primary" pill className="ms-2">
-                        {filteredProducts.length}
-                      </Badge>
-                    </h5>
+                      </Card.Body>
+                    </Card>
                   </Col>
-                  <Col xs="auto">
-                    {selectedProducts.length > 0 && (
-                      <ButtonGroup size="sm" className="me-2">
-                        <Button
-                          variant="outline-danger"
-                          className="d-flex align-items-center"
-                          onClick={handleDeleteSelected}
-                          disabled={actionLoading !== null}
-                        >
-                          {actionLoading ? (
-                            <Spinner
-                              animation="border"
-                              size="sm"
-                              className="me-2"
-                            />
-                          ) : (
-                            <FaTrash className="me-2" />
-                          )}
-                          Supprimer ({selectedProducts.length})
-                        </Button>
-                        <Button
-                          variant="outline-success"
-                          className="d-flex align-items-center"
-                          onClick={handleRestoreSelected}
-                          disabled={actionLoading !== null}
-                        >
-                          {actionLoading ? (
-                            <Spinner
-                              animation="border"
-                              size="sm"
-                              className="me-2"
-                            />
-                          ) : (
-                            <FaUndo className="me-2" />
-                          )}
-                          Restaurer ({selectedProducts.length})
-                        </Button>
-                        <Button
-                          variant="outline-primary"
-                          className="d-flex align-items-center"
-                          onClick={handlePublishSelected}
-                          disabled={actionLoading !== null}
-                        >
-                          {actionLoading ? (
-                            <Spinner
-                              animation="border"
-                              size="sm"
-                              className="me-2"
-                            />
-                          ) : (
-                            <FaEye className="me-2" />
-                          )}
-                          Publier ({selectedProducts.length})
-                        </Button>
-                      </ButtonGroup>
-                    )}
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      className="d-flex align-items-center"
-                      onClick={() =>
-                        router.push(
-                          `/dashboard-agent/produits/create?boutique=${boutique!.uuid}`,
-                        )
-                      }
-                    >
-                      <FaPlusCircle className="me-2" />
-                      Nouveau produit
-                    </Button>
+                  <Col md={6} lg={3}>
+                    <Card className="border-0 shadow-sm rounded-4 h-100 bg-gradient-warning">
+                      <Card.Body className="p-3">
+                        <div className="d-flex justify-content-between align-items-center">
+                          <div>
+                            <h6 className="text-uppercase text-muted small mb-2">
+                              Note Moyenne
+                            </h6>
+                            <h2 className="mb-0 fw-bold">
+                              {stats.noteMoyenne}
+                              <small className="fs-6 text-muted ms-1">/5</small>
+                            </h2>
+                          </div>
+                          <div className="bg-warning bg-opacity-10 p-3 rounded-3">
+                            <FaStar className="text-warning fs-2" />
+                          </div>
+                        </div>
+                        <div className="mt-3">
+                          <div className="d-flex gap-1">
+                            {[...Array(5)].map((_, i) => (
+                              <FaStar
+                                key={i}
+                                className={`${i < Math.floor(parseFloat(stats.noteMoyenne)) ? "text-warning" : "text-muted"} fs-5`}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      </Card.Body>
+                    </Card>
                   </Col>
                 </Row>
-              </Card.Header>
+              )}
 
-              {/* Products Filters */}
-              <Card.Body className="p-0">
-                <div className="p-3 bg-light">
-                  <Row className="g-2">
-                    <Col md={6}>
-                      <InputGroup size="sm">
-                        <InputGroup.Text className="bg-white">
-                          <FaSearch />
-                        </InputGroup.Text>
-                        <Form.Control
-                          placeholder="Rechercher un produit..."
-                          value={searchProduct}
-                          onChange={(e) => {
-                            setSearchProduct(e.target.value);
-                            setCurrentPage(1); // Reset to first page on search
-                          }}
-                        />
-                        {searchProduct && (
-                          <Button
-                            variant="outline-secondary"
-                            onClick={() => setSearchProduct("")}
-                          >
-                            <FaTimes />
-                          </Button>
-                        )}
-                      </InputGroup>
+              {/* Produits */}
+              <Card className="border-0 shadow-sm rounded-4">
+                <Card.Header className="bg-white border-0 rounded-top-4 p-4">
+                  <Row className="align-items-center">
+                    <Col>
+                      <h4 className="mb-0 d-flex align-items-center">
+                        <FaBoxOpen className="text-primary me-3" />
+                        Produits de la boutique
+                        <Badge bg="primary" pill className="ms-3 px-3 py-2">
+                          {filteredProducts.length}
+                        </Badge>
+                      </h4>
                     </Col>
-                    <Col md={6}>
-                      <InputGroup size="sm">
-                        <InputGroup.Text className="bg-white">
-                          <FaFilter /> Trier par
-                        </InputGroup.Text>
-                        <Form.Select
-                          value={productSort}
-                          onChange={(e) => {
-                            setProductSort(e.target.value);
-                            setCurrentPage(1); // Reset to first page on sort
-                          }}
-                        >
-                          <option value="nom">Nom (A-Z)</option>
-                          <option value="prix-croissant">
-                            Prix (Croissant)
-                          </option>
-                          <option value="prix-decroissant">
-                            Prix (Décroissant)
-                          </option>
-                          <option value="stock">Stock</option>
-                          <option value="note">Note</option>
-                          <option value="date">Date récente</option>
-                        </Form.Select>
-                      </InputGroup>
+                    <Col xs="auto">
+                      {selectedProducts.length > 0 && (
+                        <ButtonGroup size="sm" className="me-3">
+                          <Button
+                            variant="outline-danger"
+                            className="d-flex align-items-center rounded-start-3"
+                            onClick={handleDeleteSelected}
+                            disabled={actionLoading !== null}
+                          >
+                            {actionLoading ? (
+                              <Spinner
+                                animation="border"
+                                size="sm"
+                                className="me-2"
+                              />
+                            ) : (
+                              <FaTrash className="me-2" />
+                            )}
+                            Supprimer ({selectedProducts.length})
+                          </Button>
+                          <Button
+                            variant="outline-success"
+                            className="d-flex align-items-center"
+                            onClick={handleRestoreSelected}
+                            disabled={actionLoading !== null}
+                          >
+                            {actionLoading ? (
+                              <Spinner
+                                animation="border"
+                                size="sm"
+                                className="me-2"
+                              />
+                            ) : (
+                              <FaUndo className="me-2" />
+                            )}
+                            Restaurer ({selectedProducts.length})
+                          </Button>
+                          <Button
+                            variant="outline-primary"
+                            className="d-flex align-items-center rounded-end-3"
+                            onClick={handlePublishSelected}
+                            disabled={actionLoading !== null}
+                          >
+                            {actionLoading ? (
+                              <Spinner
+                                animation="border"
+                                size="sm"
+                                className="me-2"
+                              />
+                            ) : (
+                              <FaEye className="me-2" />
+                            )}
+                            Publier ({selectedProducts.length})
+                          </Button>
+                        </ButtonGroup>
+                      )}
+                      <Button
+                        variant="primary"
+                        className="d-flex align-items-center rounded-3 px-4"
+                        onClick={() =>
+                          router.push(
+                            `/dashboard-agent/produits/create?boutique=${boutique!.uuid}`,
+                          )
+                        }
+                      >
+                        <FaPlusCircle className="me-2" />
+                        Nouveau produit
+                      </Button>
                     </Col>
                   </Row>
-                </div>
+                </Card.Header>
 
-                {/* Products Table */}
-                {filteredProducts.length === 0 ? (
-                  <div className="text-center py-5">
-                    <FaBoxOpen
-                      className="text-muted mb-3"
-                      style={{ fontSize: "4rem", opacity: 0.5 }}
-                    />
-                    <h5 className="text-muted mb-2">Aucun produit trouvé</h5>
-                    <p className="text-muted mb-4">
-                      {searchProduct
-                        ? "Aucun produit ne correspond à votre recherche."
-                        : "Cette boutique n'a pas encore de produits."}
-                    </p>
-                    <Button
-                      variant="primary"
-                      className="px-4"
-                      onClick={() =>
-                        router.push(
-                          `/dashboard-agent/produits/create?boutique=${boutique!.uuid}`,
-                        )
-                      }
-                    >
-                      <FaPlusCircle className="me-2" />
-                      Ajouter un produit
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    <div className="table-responsive">
-                      <Table hover className="align-middle mb-0">
-                        <thead className="table-light">
-                          <tr>
-                            <th style={{ width: "50px" }} className="ps-4">
-                              <div className="d-flex align-items-center">
-                                <Form.Check
-                                  type="checkbox"
-                                  checked={
-                                    selectedProducts.length ===
-                                      currentProducts.length &&
-                                    currentProducts.length > 0
-                                  }
-                                  onChange={handleSelectAllCurrentPage}
-                                  className="form-check-sm me-2"
-                                />
-                                <OverlayTrigger
-                                  placement="top"
-                                  overlay={<Tooltip>Sélectionner tout</Tooltip>}
-                                >
-                                  <Button
-                                    variant="link"
-                                    size="sm"
-                                    className="p-0"
-                                    onClick={handleSelectAll}
-                                  >
-                                    <FaChevronDown />
-                                  </Button>
-                                </OverlayTrigger>
-                              </div>
-                            </th>
-                            <th className="py-3">Produit</th>
-                            <th className="py-3">Prix</th>
-                            <th className="py-3">Stock</th>
-                            <th className="py-3">Statut</th>
-                            <th className="py-3">Notes</th>
-                            <th className="py-3 text-end pe-4">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {currentProducts.map((produit) => (
-                            <tr
-                              key={produit.uuid}
-                              className={
-                                selectedProducts.includes(produit.uuid)
-                                  ? "table-active"
-                                  : ""
-                              }
+                {/* Filtres */}
+                <Card.Body className="p-0">
+                  <div className="p-4 bg-light border-bottom">
+                    <Row className="g-3">
+                      <Col md={6}>
+                        <InputGroup className="shadow-sm">
+                          <InputGroup.Text className="bg-white border-end-0">
+                            <FaSearch className="text-muted" />
+                          </InputGroup.Text>
+                          <Form.Control
+                            placeholder="Rechercher un produit..."
+                            value={searchProduct}
+                            onChange={(e) => {
+                              setSearchProduct(e.target.value);
+                              setCurrentPage(1);
+                            }}
+                            className="border-start-0"
+                          />
+                          {searchProduct && (
+                            <Button
+                              variant="outline-secondary"
+                              onClick={() => setSearchProduct("")}
+                              className="border-start-0"
                             >
-                              <td className="ps-4">
-                                <Form.Check
-                                  type="checkbox"
-                                  checked={selectedProducts.includes(
-                                    produit.uuid,
-                                  )}
-                                  onChange={() =>
-                                    handleProductSelect(produit.uuid)
-                                  }
-                                  className="form-check-sm"
-                                  disabled={actionLoading === produit.uuid}
-                                />
-                              </td>
-                              <td>
+                              <FaTimes />
+                            </Button>
+                          )}
+                        </InputGroup>
+                      </Col>
+                      <Col md={6}>
+                        <InputGroup className="shadow-sm">
+                          <InputGroup.Text className="bg-white border-end-0">
+                            <FaFilter className="text-muted" />
+                          </InputGroup.Text>
+                          <Form.Select
+                            value={productSort}
+                            onChange={(e) => {
+                              setProductSort(e.target.value);
+                              setCurrentPage(1);
+                            }}
+                            className="border-start-0"
+                          >
+                            <option value="nom">Trier par nom (A-Z)</option>
+                            <option value="prix-croissant">
+                              Prix (Croissant)
+                            </option>
+                            <option value="prix-decroissant">
+                              Prix (Décroissant)
+                            </option>
+                            <option value="stock">Stock</option>
+                            <option value="note">Note</option>
+                            <option value="date">Date récente</option>
+                          </Form.Select>
+                        </InputGroup>
+                      </Col>
+                    </Row>
+                  </div>
+
+                  {/* Tableau des produits */}
+                  {filteredProducts.length === 0 ? (
+                    <div className="text-center py-5">
+                      <div className="bg-light rounded-circle p-4 d-inline-flex mb-4">
+                        <FaBoxOpen
+                          className="text-muted"
+                          style={{ fontSize: "4rem" }}
+                        />
+                      </div>
+                      <h5 className="text-muted mb-3">Aucun produit trouvé</h5>
+                      <p className="text-muted mb-4">
+                        {searchProduct
+                          ? "Aucun produit ne correspond à votre recherche."
+                          : "Cette boutique n'a pas encore de produits."}
+                      </p>
+                      <Button
+                        variant="primary"
+                        size="lg"
+                        className="px-5 rounded-3"
+                        onClick={() =>
+                          router.push(
+                            `/dashboard-agent/produits/create?boutique=${boutique!.uuid}`,
+                          )
+                        }
+                      >
+                        <FaPlusCircle className="me-2" />
+                        Ajouter un produit
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="table-responsive">
+                        <Table hover className="align-middle mb-0">
+                          <thead className="bg-light">
+                            <tr>
+                              <th className="ps-4" style={{ width: "60px" }}>
                                 <div className="d-flex align-items-center">
-                                  <div
-                                    className="rounded-2 border position-relative me-3"
-                                    style={{
-                                      width: "50px",
-                                      height: "50px",
-                                      flexShrink: 0,
-                                    }}
+                                  <Form.Check
+                                    type="checkbox"
+                                    checked={
+                                      selectedProducts.length ===
+                                        currentProducts.length &&
+                                      currentProducts.length > 0
+                                    }
+                                    onChange={handleSelectAllCurrentPage}
+                                    className="form-check-lg me-2"
+                                  />
+                                  <OverlayTrigger
+                                    placement="top"
+                                    overlay={
+                                      <Tooltip>Sélectionner tout</Tooltip>
+                                    }
                                   >
-                                    {produit.image ? (
-                                      <img
-                                        src={produit.image}
-                                        alt={produit.libelle}
-                                        className="w-100 h-100 object-fit-cover rounded-2"
-                                        onError={(e) => {
-                                          const target =
-                                            e.target as HTMLImageElement;
-                                          target.onerror = null;
-                                          target.style.display = "none";
-                                          const parent = target.parentElement;
-                                          if (parent) {
-                                            parent.innerHTML =
-                                              '<div class="w-100 h-100 d-flex align-items-center justify-content-center bg-light rounded-2"><FaBox className="text-muted" /></div>';
-                                          }
-                                        }}
-                                      />
-                                    ) : (
-                                      <div className="w-100 h-100 d-flex align-items-center justify-content-center bg-light rounded-2">
-                                        <FaBox className="text-muted" />
-                                      </div>
+                                    <Button
+                                      variant="link"
+                                      size="sm"
+                                      className="p-0"
+                                      onClick={handleSelectAll}
+                                    >
+                                      <FaChevronDown />
+                                    </Button>
+                                  </OverlayTrigger>
+                                </div>
+                              </th>
+                              <th className="py-3">Produit</th>
+                              <th className="py-3">Prix</th>
+                              <th className="py-3">Stock</th>
+                              <th className="py-3">Statut</th>
+                              <th className="py-3">Notes</th>
+                              <th className="py-3 text-end pe-4">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {currentProducts.map((produit) => (
+                              <tr
+                                key={produit.uuid}
+                                className={
+                                  selectedProducts.includes(produit.uuid)
+                                    ? "table-active"
+                                    : ""
+                                }
+                              >
+                                <td className="ps-4">
+                                  <Form.Check
+                                    type="checkbox"
+                                    checked={selectedProducts.includes(
+                                      produit.uuid,
                                     )}
-                                  </div>
-                                  <div>
-                                    <div className="fw-semibold mb-1">
-                                      {produit.libelle}
-                                    </div>
-                                    <div className="d-flex align-items-center gap-2">
-                                      <Badge
-                                        bg="light"
-                                        text="dark"
-                                        className="border"
-                                      >
-                                        <FaTags className="me-1" />
-                                        {produit.categorie?.libelle ||
-                                          "Non catégorisé"}
-                                      </Badge>
-                                      {produit.description && (
-                                        <OverlayTrigger
-                                          placement="top"
-                                          overlay={
-                                            <Tooltip>
-                                              {produit.description}
-                                            </Tooltip>
-                                          }
-                                        >
-                                          <small className="text-muted cursor-pointer">
-                                            <FaInfoCircle />
-                                          </small>
-                                        </OverlayTrigger>
+                                    onChange={() =>
+                                      handleProductSelect(produit.uuid)
+                                    }
+                                    className="form-check-lg"
+                                    disabled={actionLoading === produit.uuid}
+                                  />
+                                </td>
+                                <td>
+                                  <div className="d-flex align-items-center">
+                                    <div
+                                      className="rounded-3 border bg-light me-3 d-flex align-items-center justify-content-center"
+                                      style={{
+                                        width: "60px",
+                                        height: "60px",
+                                        flexShrink: 0,
+                                      }}
+                                    >
+                                      {produit.image ? (
+                                        <img
+                                          src={produit.image}
+                                          alt={produit.libelle}
+                                          className="w-100 h-100 object-fit-cover rounded-3"
+                                          onError={(e) => {
+                                            const target =
+                                              e.target as HTMLImageElement;
+                                            target.onerror = null;
+                                            target.style.display = "none";
+                                            const parent = target.parentElement;
+                                            if (parent) {
+                                              parent.innerHTML =
+                                                '<div class="w-100 h-100 d-flex align-items-center justify-content-center"><FaBox className="text-muted fs-4" /></div>';
+                                            }
+                                          }}
+                                        />
+                                      ) : (
+                                        <FaBox className="text-muted fs-4" />
                                       )}
                                     </div>
+                                    <div>
+                                      <div className="fw-semibold fs-6 mb-1">
+                                        {produit.libelle}
+                                      </div>
+                                      <div className="d-flex align-items-center gap-2">
+                                        <Badge
+                                          bg="light"
+                                          text="dark"
+                                          className="border rounded-pill px-3 py-2"
+                                        >
+                                          <FaTags className="me-2" />
+                                          {produit.categorie?.libelle ||
+                                            "Non catégorisé"}
+                                        </Badge>
+                                        {produit.description && (
+                                          <OverlayTrigger
+                                            placement="top"
+                                            overlay={
+                                              <Tooltip>
+                                                {produit.description}
+                                              </Tooltip>
+                                            }
+                                          >
+                                            <span className="text-muted cursor-pointer">
+                                              <FaInfoCircle />
+                                            </span>
+                                          </OverlayTrigger>
+                                        )}
+                                      </div>
+                                    </div>
                                   </div>
-                                </div>
-                              </td>
-                              <td>
-                                <div className="fw-bold text-primary">
-                                  {formatPrice(produit.prix)}
-                                </div>
-                              </td>
-                              <td>
-                                <div className="d-flex align-items-center">
+                                </td>
+                                <td>
+                                  <div className="fw-bold text-primary fs-6">
+                                    {formatPrice(produit.prix)}
+                                  </div>
+                                </td>
+                                <td>
                                   <Badge
                                     bg={
                                       produit.quantite > 0
                                         ? "success"
                                         : "danger"
                                     }
-                                    className="d-flex align-items-center px-3"
+                                    className="d-flex align-items-center px-3 py-2 rounded-pill"
                                   >
                                     {produit.quantite > 0 ? (
                                       <FaCheckCircle className="me-2" />
@@ -1692,111 +1729,217 @@ const BoutiqueDetail: React.FC = () => {
                                     )}
                                     {produit.quantite}
                                   </Badge>
-                                </div>
-                              </td>
-                              <td>{getStatusBadge(produit)}</td>
-                              <td>
-                                <div className="d-flex flex-column">
-                                  <div className="d-flex align-items-center mb-1">
-                                    <FaStar className="text-warning me-2" />
-                                    <span className="fw-semibold">
-                                      {produit.note_moyenne || "0.0"}
-                                    </span>
-                                    <span className="text-muted small ms-2">
-                                      ({produit.nombre_avis} avis)
-                                    </span>
+                                </td>
+                                <td>{getStatusBadge(produit)}</td>
+                                <td>
+                                  <div className="d-flex flex-column">
+                                    <div className="d-flex align-items-center mb-2">
+                                      <FaStar className="text-warning me-2" />
+                                      <span className="fw-semibold">
+                                        {produit.note_moyenne || "0.0"}
+                                      </span>
+                                      <span className="text-muted small ms-2">
+                                        ({produit.nombre_avis} avis)
+                                      </span>
+                                    </div>
+                                    <div className="d-flex align-items-center">
+                                      <FaHeart className="text-danger me-2" />
+                                      <span className="text-muted small">
+                                        {produit.nombre_favoris} favoris
+                                      </span>
+                                    </div>
                                   </div>
-                                  <div className="d-flex align-items-center">
-                                    <FaHeart className="text-danger me-2" />
-                                    <span className="text-muted small">
-                                      {produit.nombre_favoris} favoris
-                                    </span>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="text-end pe-4">
-                                <div className="d-flex justify-content-end gap-1">
-                                  {/* Toutes les actions pour les produits non supprimés */}
-                                  <OverlayTrigger
-                                    placement="top"
-                                    overlay={<Tooltip>Voir détails</Tooltip>}
-                                  >
-                                    <Button
-                                      variant="outline-primary"
-                                      size="sm"
-                                      onClick={() =>
-                                        router.push(
-                                          `/dashboard-agent/annonces/produit/${produit.uuid}`,
-                                        )
-                                      }
-                                      disabled={actionLoading === produit.uuid}
-                                    >
-                                      <FaEye />
-                                    </Button>
-                                  </OverlayTrigger>
-                                  <OverlayTrigger
-                                    placement="top"
-                                    overlay={<Tooltip>Modifier</Tooltip>}
-                                  >
-                                    <Button
-                                      variant="outline-warning"
-                                      size="sm"
-                                      onClick={() =>
-                                        router.push(
-                                          `/dashboard-agent/produits/edit/${produit.uuid}`,
-                                        )
-                                      }
-                                      disabled={actionLoading === produit.uuid}
-                                    >
-                                      <FaPencilAlt />
-                                    </Button>
-                                  </OverlayTrigger>
-                                  {produit.estBloque ? (
+                                </td>
+                                <td className="text-end pe-4">
+                                  <div className="d-flex justify-content-end gap-2">
                                     <OverlayTrigger
                                       placement="top"
-                                      overlay={<Tooltip>Débloquer</Tooltip>}
+                                      overlay={<Tooltip>Voir détails</Tooltip>}
                                     >
                                       <Button
-                                        variant="outline-info"
+                                        variant="outline-primary"
                                         size="sm"
+                                        className="rounded-circle"
                                         onClick={() =>
-                                          showConfirmation(
-                                            "Débloquer le produit",
-                                            `Êtes-vous sûr de vouloir débloquer "${produit.libelle}" ?`,
-                                            () =>
-                                              handleUnblockProduct(
-                                                produit.uuid,
-                                              ),
+                                          router.push(
+                                            `/dashboard-agent/annonces/produit/${produit.uuid}`,
                                           )
                                         }
                                         disabled={
                                           actionLoading === produit.uuid
                                         }
                                       >
-                                        {actionLoading === produit.uuid ? (
-                                          <Spinner
-                                            animation="border"
-                                            size="sm"
-                                          />
-                                        ) : (
-                                          <FaLockOpen />
-                                        )}
+                                        <FaEye />
                                       </Button>
                                     </OverlayTrigger>
-                                  ) : (
                                     <OverlayTrigger
                                       placement="top"
-                                      overlay={<Tooltip>Bloquer</Tooltip>}
+                                      overlay={<Tooltip>Modifier</Tooltip>}
+                                    >
+                                      <Button
+                                        variant="outline-warning"
+                                        size="sm"
+                                        className="rounded-circle"
+                                        onClick={() =>
+                                          router.push(
+                                            `/dashboard-agent/produits/edit/${produit.uuid}`,
+                                          )
+                                        }
+                                        disabled={
+                                          actionLoading === produit.uuid
+                                        }
+                                      >
+                                        <FaPencilAlt />
+                                      </Button>
+                                    </OverlayTrigger>
+                                    {produit.estBloque ? (
+                                      <OverlayTrigger
+                                        placement="top"
+                                        overlay={<Tooltip>Débloquer</Tooltip>}
+                                      >
+                                        <Button
+                                          variant="outline-info"
+                                          size="sm"
+                                          className="rounded-circle"
+                                          onClick={() =>
+                                            showConfirmation(
+                                              "Débloquer le produit",
+                                              `Êtes-vous sûr de vouloir débloquer "${produit.libelle}" ?`,
+                                              () =>
+                                                handleUnblockProduct(
+                                                  produit.uuid,
+                                                ),
+                                            )
+                                          }
+                                          disabled={
+                                            actionLoading === produit.uuid
+                                          }
+                                        >
+                                          {actionLoading === produit.uuid ? (
+                                            <Spinner
+                                              animation="border"
+                                              size="sm"
+                                            />
+                                          ) : (
+                                            <FaLockOpen />
+                                          )}
+                                        </Button>
+                                      </OverlayTrigger>
+                                    ) : (
+                                      <OverlayTrigger
+                                        placement="top"
+                                        overlay={<Tooltip>Bloquer</Tooltip>}
+                                      >
+                                        <Button
+                                          variant="outline-danger"
+                                          size="sm"
+                                          className="rounded-circle"
+                                          onClick={() =>
+                                            showConfirmation(
+                                              "Bloquer le produit",
+                                              `Êtes-vous sûr de vouloir bloquer "${produit.libelle}" ?`,
+                                              () =>
+                                                handleBlockProduct(
+                                                  produit.uuid,
+                                                ),
+                                            )
+                                          }
+                                          disabled={
+                                            actionLoading === produit.uuid
+                                          }
+                                        >
+                                          {actionLoading === produit.uuid ? (
+                                            <Spinner
+                                              animation="border"
+                                              size="sm"
+                                            />
+                                          ) : (
+                                            <FaLock />
+                                          )}
+                                        </Button>
+                                      </OverlayTrigger>
+                                    )}
+                                    {produit.estPublie ? (
+                                      <OverlayTrigger
+                                        placement="top"
+                                        overlay={<Tooltip>Dépublier</Tooltip>}
+                                      >
+                                        <Button
+                                          variant="outline-secondary"
+                                          size="sm"
+                                          className="rounded-circle"
+                                          onClick={() =>
+                                            showConfirmation(
+                                              "Dépublier le produit",
+                                              `Êtes-vous sûr de vouloir dépublié "${produit.libelle}" ?`,
+                                              () =>
+                                                handleUnpublishProduct(
+                                                  produit.uuid,
+                                                ),
+                                            )
+                                          }
+                                          disabled={
+                                            actionLoading === produit.uuid
+                                          }
+                                        >
+                                          {actionLoading === produit.uuid ? (
+                                            <Spinner
+                                              animation="border"
+                                              size="sm"
+                                            />
+                                          ) : (
+                                            <FaEyeSlash />
+                                          )}
+                                        </Button>
+                                      </OverlayTrigger>
+                                    ) : (
+                                      <OverlayTrigger
+                                        placement="top"
+                                        overlay={<Tooltip>Publier</Tooltip>}
+                                      >
+                                        <Button
+                                          variant="outline-success"
+                                          size="sm"
+                                          className="rounded-circle"
+                                          onClick={() =>
+                                            showConfirmation(
+                                              "Publier le produit",
+                                              `Êtes-vous sûr de vouloir publier "${produit.libelle}" ?`,
+                                              () =>
+                                                handlePublishProduct(
+                                                  produit.uuid,
+                                                ),
+                                            )
+                                          }
+                                          disabled={
+                                            actionLoading === produit.uuid
+                                          }
+                                        >
+                                          {actionLoading === produit.uuid ? (
+                                            <Spinner
+                                              animation="border"
+                                              size="sm"
+                                            />
+                                          ) : (
+                                            <FaEye />
+                                          )}
+                                        </Button>
+                                      </OverlayTrigger>
+                                    )}
+                                    <OverlayTrigger
+                                      placement="top"
+                                      overlay={<Tooltip>Supprimer</Tooltip>}
                                     >
                                       <Button
                                         variant="outline-danger"
                                         size="sm"
+                                        className="rounded-circle"
                                         onClick={() =>
                                           showConfirmation(
-                                            "Bloquer le produit",
-                                            `Êtes-vous sûr de vouloir bloquer "${produit.libelle}" ?`,
+                                            "Supprimer le produit",
+                                            `Êtes-vous sûr de vouloir supprimer définitivement "${produit.libelle}" ? Cette action est irréversible.`,
                                             () =>
-                                              handleBlockProduct(produit.uuid),
+                                              handleDeleteProduct(produit.uuid),
                                           )
                                         }
                                         disabled={
@@ -1809,347 +1952,243 @@ const BoutiqueDetail: React.FC = () => {
                                             size="sm"
                                           />
                                         ) : (
-                                          <FaLock />
+                                          <FaTrash />
                                         )}
                                       </Button>
                                     </OverlayTrigger>
-                                  )}
-                                  {produit.estPublie ? (
-                                    <OverlayTrigger
-                                      placement="top"
-                                      overlay={<Tooltip>Dépublier</Tooltip>}
-                                    >
-                                      <Button
-                                        variant="outline-secondary"
-                                        size="sm"
-                                        onClick={() =>
-                                          showConfirmation(
-                                            "Dépublier le produit",
-                                            `Êtes-vous sûr de vouloir dépublié "${produit.libelle}" ?`,
-                                            () =>
-                                              handleUnpublishProduct(
-                                                produit.uuid,
-                                              ),
-                                          )
-                                        }
-                                        disabled={
-                                          actionLoading === produit.uuid
-                                        }
-                                      >
-                                        {actionLoading === produit.uuid ? (
-                                          <Spinner
-                                            animation="border"
-                                            size="sm"
-                                          />
-                                        ) : (
-                                          <FaEyeSlash />
-                                        )}
-                                      </Button>
-                                    </OverlayTrigger>
-                                  ) : (
-                                    <OverlayTrigger
-                                      placement="top"
-                                      overlay={<Tooltip>Publier</Tooltip>}
-                                    >
-                                      <Button
-                                        variant="outline-success"
-                                        size="sm"
-                                        onClick={() =>
-                                          showConfirmation(
-                                            "Publier le produit",
-                                            `Êtes-vous sûr de vouloir publier "${produit.libelle}" ?`,
-                                            () =>
-                                              handlePublishProduct(
-                                                produit.uuid,
-                                              ),
-                                          )
-                                        }
-                                        disabled={
-                                          actionLoading === produit.uuid
-                                        }
-                                      >
-                                        {actionLoading === produit.uuid ? (
-                                          <Spinner
-                                            animation="border"
-                                            size="sm"
-                                          />
-                                        ) : (
-                                          <FaEye />
-                                        )}
-                                      </Button>
-                                    </OverlayTrigger>
-                                  )}
-                                  <OverlayTrigger
-                                    placement="top"
-                                    overlay={<Tooltip>Supprimer</Tooltip>}
-                                  >
-                                    <Button
-                                      variant="outline-danger"
-                                      size="sm"
-                                      onClick={() =>
-                                        showConfirmation(
-                                          "Supprimer le produit",
-                                          `Êtes-vous sûr de vouloir supprimer définitivement "${produit.libelle}" ? Cette action est irréversible.`,
-                                          () =>
-                                            handleDeleteProduct(produit.uuid),
-                                        )
-                                      }
-                                      disabled={actionLoading === produit.uuid}
-                                    >
-                                      {actionLoading === produit.uuid ? (
-                                        <Spinner animation="border" size="sm" />
-                                      ) : (
-                                        <FaTrash />
-                                      )}
-                                    </Button>
-                                  </OverlayTrigger>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </Table>
-                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </Table>
+                      </div>
 
-                    {/* Pagination */}
-                    {totalPages > 1 && (
-                      <Card.Footer className="bg-white border-top py-3">
-                        <Row className="align-items-center">
-                          <Col>
-                            <div className="text-muted">
-                              Affichage de{" "}
-                              {Math.min(
-                                (currentPage - 1) * itemsPerPage + 1,
-                                filteredProducts.length,
-                              )}{" "}
-                              à{" "}
-                              {Math.min(
-                                currentPage * itemsPerPage,
-                                filteredProducts.length,
-                              )}{" "}
-                              sur {filteredProducts.length} produit(s)
-                              {selectedProducts.length > 0 && (
-                                <span className="text-primary fw-semibold ms-2">
-                                  ({selectedProducts.length} sélectionné(s))
-                                </span>
-                              )}
-                            </div>
-                          </Col>
-                          <Col xs="auto">{renderPagination()}</Col>
-                          <Col xs="auto" className="text-end">
-                            <div className="d-flex align-items-center">
-                              <span className="text-muted me-2">
-                                Produits par page:
-                              </span>
+                      {/* Pagination */}
+                      {totalPages > 1 && (
+                        <Card.Footer className="bg-white border-0 p-4">
+                          <Row className="align-items-center">
+                            <Col>
+                              <div className="text-muted">
+                                Affichage{" "}
+                                {Math.min(
+                                  (currentPage - 1) * itemsPerPage + 1,
+                                  filteredProducts.length,
+                                )}{" "}
+                                à{" "}
+                                {Math.min(
+                                  currentPage * itemsPerPage,
+                                  filteredProducts.length,
+                                )}{" "}
+                                sur {filteredProducts.length} produit(s)
+                                {selectedProducts.length > 0 && (
+                                  <span className="text-primary fw-semibold ms-3">
+                                    ({selectedProducts.length} sélectionné(s))
+                                  </span>
+                                )}
+                              </div>
+                            </Col>
+                            <Col xs="auto">{renderPagination()}</Col>
+                            <Col xs="auto">
                               <Form.Select
                                 size="sm"
                                 value={itemsPerPage}
-                                onChange={(e) => {
-                                  setCurrentPage(1);
-                                }}
-                                style={{ width: "auto" }}
+                                onChange={() => setCurrentPage(1)}
+                                className="rounded-3 border-0 bg-light"
+                                style={{ width: "80px" }}
                               >
                                 <option value="5">5</option>
                                 <option value="10">10</option>
                                 <option value="25">25</option>
                                 <option value="50">50</option>
                               </Form.Select>
-                            </div>
-                          </Col>
-                        </Row>
-                      </Card.Footer>
-                    )}
-                  </>
-                )}
-              </Card.Body>
-
-              {/* Table Footer - Only show if no pagination */}
-              {filteredProducts.length > 0 && totalPages <= 1 && (
-                <Card.Footer className="bg-white border-top py-3">
-                  <Row className="align-items-center">
-                    <Col>
-                      <div className="text-muted">
-                        Affichage de 1 à {filteredProducts.length} sur{" "}
-                        {filteredProducts.length} produit(s)
-                        {selectedProducts.length > 0 && (
-                          <span className="text-primary fw-semibold ms-2">
-                            ({selectedProducts.length} sélectionné(s))
-                          </span>
-                        )}
-                      </div>
-                    </Col>
-                    <Col xs="auto">
-                      <Button
-                        variant="link"
-                        size="sm"
-                        className="text-decoration-none"
-                        onClick={handleRefresh}
-                        disabled={refreshLoading}
-                      >
-                        <FaSync
-                          className={`me-2 ${refreshLoading ? "fa-spin" : ""}`}
-                        />
-                        Actualiser la liste
-                      </Button>
-                    </Col>
-                  </Row>
-                </Card.Footer>
-              )}
-            </Card>
-          </Col>
-
-          {/* Right Column - Sidebar */}
-          <Col lg={4}>
-            {/* Boutique Type Card */}
-            <Card className="border-0 shadow-sm mb-4">
-              <Card.Header className="bg-white border-bottom py-3">
-                <h6 className="mb-0 d-flex align-items-center">
-                  <FaTags className="me-3 text-primary" />
-                  Type de boutique
-                </h6>
-              </Card.Header>
-              <Card.Body className="p-4 text-center">
-                <div
-                  className="rounded-3 overflow-hidden mx-auto mb-3"
-                  style={{ width: "100px", height: "100px" }}
-                >
-                  {boutique!.type_boutique.image ? (
-                    <img
-                      src={boutique!.type_boutique.image}
-                      alt={boutique!.type_boutique.libelle}
-                      className="w-100 h-100 object-fit-cover"
-                    />
-                  ) : (
-                    <div className="w-100 h-100 d-flex align-items-center justify-content-center bg-light">
-                      <FaTags className="text-muted fs-1" />
-                    </div>
+                            </Col>
+                          </Row>
+                        </Card.Footer>
+                      )}
+                    </>
                   )}
-                </div>
-                <h5 className="mb-2">{boutique!.type_boutique.libelle}</h5>
-                <Badge bg="info" className="px-3 py-2">
-                  {boutique!.type_boutique.code}
-                </Badge>
-                <div className="mt-3 text-muted small">
-                  <FaCheckCircle className="me-2 text-success" />
-                  Boutique active et vérifiée
-                </div>
-              </Card.Body>
-            </Card>
+                </Card.Body>
+              </Card>
+            </Col>
 
-            {/* Quick Actions */}
-            <Card className="border-0 shadow-sm mb-4">
-              <Card.Header className="bg-white border-bottom py-3">
-                <h6 className="mb-0 d-flex align-items-center">
-                  <FaShieldAlt className="me-3 text-primary" />
-                  Actions rapides
-                </h6>
-              </Card.Header>
-              <Card.Body className="p-3">
-                <div className="d-grid gap-2">
-                  <Button
-                    variant="outline-primary"
-                    className="text-start d-flex align-items-center"
-                    onClick={() =>
-                      router.push(
-                        `/dashboard-agent/boutiques/statistiques/${boutique!.uuid}`,
-                      )
-                    }
+            {/* Sidebar */}
+            <Col lg={4}>
+              {/* Type de boutique */}
+              <Card className="border-0 shadow-sm rounded-4 mb-4">
+                <Card.Header className="bg-white border-0 rounded-top-4 p-4">
+                  <h5 className="mb-0 d-flex align-items-center">
+                    <FaTags className="text-primary me-3" />
+                    Type de boutique
+                  </h5>
+                </Card.Header>
+                <Card.Body className="p-4 text-center">
+                  <div
+                    className="rounded-4 overflow-hidden mx-auto mb-4 shadow-sm"
+                    style={{ width: "120px", height: "120px" }}
                   >
-                    <FaChartBar className="me-3" />
-                    Voir les statistiques
-                  </Button>
-                  <Button
-                    variant="outline-success"
-                    className="text-start d-flex align-items-center"
-                    onClick={() =>
-                      router.push(
-                        `/dashboard-agent/vendeurs/${boutique!.vendeurUuid}`,
-                      )
-                    }
-                  >
-                    <FaUsers className="me-3" />
-                    Gérer le vendeur
-                  </Button>
-                  <Button
-                    variant="outline-warning"
-                    className="text-start d-flex align-items-center"
-                    onClick={() =>
-                      router.push(
-                        `/dashboard-agent/boutiques/horaires/${boutique!.uuid}`,
-                      )
-                    }
-                  >
-                    <FaClock className="me-3" />
-                    Modifier les horaires
-                  </Button>
-                  <Button
-                    variant="outline-info"
-                    className="text-start d-flex align-items-center"
-                    onClick={() => router.push(`/dashboard-agent/categories`)}
-                  >
-                    <FaLayerGroup className="me-3" />
-                    Catégories de produits
-                  </Button>
-                </div>
-              </Card.Body>
-            </Card>
+                    {boutique!.type_boutique.image ? (
+                      <img
+                        src={boutique!.type_boutique.image}
+                        alt={boutique!.type_boutique.libelle}
+                        className="w-100 h-100 object-fit-cover"
+                      />
+                    ) : (
+                      <div className="w-100 h-100 d-flex align-items-center justify-content-center bg-light">
+                        <FaTags className="text-muted fs-1" />
+                      </div>
+                    )}
+                  </div>
+                  <h4 className="mb-2">{boutique!.type_boutique.libelle}</h4>
+                  <Badge bg="info" className="px-4 py-2 rounded-pill">
+                    {boutique!.type_boutique.code}
+                  </Badge>
+                  <div className="mt-4 text-muted d-flex align-items-center justify-content-center">
+                    <FaCheckCircle className="me-2 text-success" />
+                    Boutique active et vérifiée
+                  </div>
+                </Card.Body>
+              </Card>
 
-            {/* Recent Activity */}
-            <Card className="border-0 shadow-sm">
-              <Card.Header className="bg-white border-bottom py-3">
-                <h6 className="mb-0 d-flex align-items-center">
-                  <FaClock className="me-3 text-primary" />
-                  Activité récente
-                </h6>
-              </Card.Header>
-              <Card.Body className="p-3">
-                <div className="timeline">
-                  <div className="timeline-item mb-3">
-                    <div className="timeline-badge bg-primary"></div>
-                    <div className="timeline-content">
-                      <small className="text-muted d-block mb-1">
-                        {new Date(boutique!.updated_at).toLocaleString("fr-FR")}
-                      </small>
-                      <p className="mb-0">
-                        Dernière mise à jour de la boutique
-                      </p>
+              {/* Actions rapides */}
+              <Card className="border-0 shadow-sm rounded-4 mb-4">
+                <Card.Header className="bg-white border-0 rounded-top-4 p-4">
+                  <h5 className="mb-0 d-flex align-items-center">
+                    <FaShieldAlt className="text-primary me-3" />
+                    Actions rapides
+                  </h5>
+                </Card.Header>
+                <Card.Body className="p-3">
+                  <div className="d-grid gap-2">
+                    <Button
+                      variant="outline-primary"
+                      className="text-start d-flex align-items-center p-3 rounded-3"
+                      onClick={() =>
+                        router.push(
+                          `/dashboard-agent/boutiques/statistiques/${boutique!.uuid}`,
+                        )
+                      }
+                    >
+                      <FaChartBar className="me-3 fs-5" />
+                      <div>
+                        <div className="fw-semibold">Voir les statistiques</div>
+                        <small className="text-muted">
+                          Analyses et rapports
+                        </small>
+                      </div>
+                    </Button>
+                    <Button
+                      variant="outline-success"
+                      className="text-start d-flex align-items-center p-3 rounded-3"
+                      onClick={() =>
+                        router.push(
+                          `/dashboard-agent/vendeurs/${boutique!.vendeurUuid}`,
+                        )
+                      }
+                    >
+                      <FaUsers className="me-3 fs-5" />
+                      <div>
+                        <div className="fw-semibold">Gérer le vendeur</div>
+                        <small className="text-muted">
+                          Informations du vendeur
+                        </small>
+                      </div>
+                    </Button>
+                    <Button
+                      variant="outline-warning"
+                      className="text-start d-flex align-items-center p-3 rounded-3"
+                      onClick={() =>
+                        router.push(
+                          `/dashboard-agent/boutiques/horaires/${boutique!.uuid}`,
+                        )
+                      }
+                    >
+                      <FaClock className="me-3 fs-5" />
+                      <div>
+                        <div className="fw-semibold">Modifier les horaires</div>
+                        <small className="text-muted">
+                          Jours et heures d'ouverture
+                        </small>
+                      </div>
+                    </Button>
+                    <Button
+                      variant="outline-info"
+                      className="text-start d-flex align-items-center p-3 rounded-3"
+                      onClick={() => router.push(`/dashboard-agent/categories`)}
+                    >
+                      <FaLayerGroup className="me-3 fs-5" />
+                      <div>
+                        <div className="fw-semibold">
+                          Catégories de produits
+                        </div>
+                        <small className="text-muted">
+                          Gestion des catégories
+                        </small>
+                      </div>
+                    </Button>
+                  </div>
+                </Card.Body>
+              </Card>
+
+              {/* Activité récente */}
+              <Card className="border-0 shadow-sm rounded-4">
+                <Card.Header className="bg-white border-0 rounded-top-4 p-4">
+                  <h5 className="mb-0 d-flex align-items-center">
+                    <FaClock className="text-primary me-3" />
+                    Activité récente
+                  </h5>
+                </Card.Header>
+                <Card.Body className="p-4">
+                  <div className="timeline">
+                    <div className="timeline-item mb-4">
+                      <div className="timeline-badge bg-primary"></div>
+                      <div className="timeline-content">
+                        <small className="text-muted d-block mb-2">
+                          {new Date(boutique!.updated_at).toLocaleString(
+                            "fr-FR",
+                          )}
+                        </small>
+                        <p className="mb-0 fw-semibold">
+                          Dernière mise à jour de la boutique
+                        </p>
+                      </div>
+                    </div>
+                    <div className="timeline-item mb-4">
+                      <div className="timeline-badge bg-success"></div>
+                      <div className="timeline-content">
+                        <small className="text-muted d-block mb-2">
+                          Aujourd'hui
+                        </small>
+                        <p className="mb-0 fw-semibold">
+                          {filteredProducts.length} produits disponibles
+                        </p>
+                      </div>
+                    </div>
+                    <div className="timeline-item">
+                      <div className="timeline-badge bg-info"></div>
+                      <div className="timeline-content">
+                        <small className="text-muted d-block mb-2">
+                          {new Date().toLocaleDateString("fr-FR")}
+                        </small>
+                        <p className="mb-0 fw-semibold">
+                          Dernière visite:{" "}
+                          {new Date().toLocaleTimeString("fr-FR")}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                  <div className="timeline-item mb-3">
-                    <div className="timeline-badge bg-success"></div>
-                    <div className="timeline-content">
-                      <small className="text-muted d-block mb-1">
-                        Aujourd'hui
-                      </small>
-                      <p className="mb-0">
-                        {filteredProducts.length} produits disponibles
-                      </p>
-                    </div>
-                  </div>
-                  <div className="timeline-item">
-                    <div className="timeline-badge bg-info"></div>
-                    <div className="timeline-content">
-                      <small className="text-muted d-block mb-1">
-                        {new Date().toLocaleDateString("fr-FR")}
-                      </small>
-                      <p className="mb-0">
-                        Dernière visite:{" "}
-                        {new Date().toLocaleTimeString("fr-FR")}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </Card.Body>
-              <Card.Footer className="bg-light py-2 text-center">
-                <small className="text-muted">
-                  <FaInfoCircle className="me-2" />
-                  Dernière actualisation:{" "}
-                  {new Date().toLocaleTimeString("fr-FR")}
-                </small>
-              </Card.Footer>
-            </Card>
-          </Col>
-        </Row>
+                </Card.Body>
+                <Card.Footer className="bg-light border-0 rounded-bottom-4 p-3 text-center">
+                  <small className="text-muted d-flex align-items-center justify-content-center">
+                    <FaInfoCircle className="me-2" />
+                    Dernière actualisation:{" "}
+                    {new Date().toLocaleTimeString("fr-FR")}
+                  </small>
+                </Card.Footer>
+              </Card>
+            </Col>
+          </Row>
+        </Container>
 
         <style jsx>{`
           .timeline {
@@ -2163,20 +2202,20 @@ const BoutiqueDetail: React.FC = () => {
             top: 0;
             bottom: 0;
             width: 2px;
-            background-color: #dee2e6;
+            background: linear-gradient(to bottom, #0d6efd, #20c997, #0dcaf0);
           }
           .timeline-item {
             position: relative;
-            margin-bottom: 20px;
           }
           .timeline-badge {
             position: absolute;
             left: -30px;
             top: 0;
-            width: 16px;
-            height: 16px;
+            width: 20px;
+            height: 20px;
             border-radius: 50%;
             border: 3px solid white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
           }
           .timeline-content {
             margin-left: 20px;
@@ -2198,12 +2237,33 @@ const BoutiqueDetail: React.FC = () => {
           .cursor-pointer {
             cursor: pointer;
           }
+          .form-check-lg .form-check-input {
+            width: 1.3rem;
+            height: 1.3rem;
+            margin-top: 0.15rem;
+          }
+          .bg-gradient-primary {
+            background: linear-gradient(135deg, #f8f9ff 0%, #e7f1ff 100%);
+          }
+          .bg-gradient-success {
+            background: linear-gradient(135deg, #f8fff9 0%, #e3f9e5 100%);
+          }
+          .bg-gradient-info {
+            background: linear-gradient(135deg, #f8fcff 0%, #e1f3fe 100%);
+          }
+          .bg-gradient-warning {
+            background: linear-gradient(135deg, #fff9f0 0%, #ffeed9 100%);
+          }
+          .modal-confirm .modal-content {
+            border-radius: 20px;
+            border: none;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+          }
         `}</style>
-      </Container>
+      </>
     );
   };
 
-  // Retour principal avec conditions
   if (loading) {
     return renderLoadingState();
   }

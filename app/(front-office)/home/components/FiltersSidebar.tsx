@@ -1,7 +1,7 @@
 "use client";
 
+import colors from "@/app/shared/constants/colors";
 import { useState } from "react";
-import colors from "../../../shared/constants/colors";
 
 interface FiltersSidebarProps {
   filters: any;

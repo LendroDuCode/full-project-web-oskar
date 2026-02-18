@@ -1,3 +1,4 @@
+// app/annonces/components/FilterBar.tsx
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -65,7 +66,7 @@ export default function FilterBar({
 
   return (
     <section
-      className={`bg-white border-bottom border-light px-4 py-3 ${className}`}
+      className={`bg-white border-bottom border-light px-4 py-3 rounded-3 shadow-sm ${className}`}
       style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.04)" }}
     >
       <div className="container-fluid">

@@ -1,3 +1,4 @@
+// app/(front-office)/produits/[uuid]/page.tsx
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -17,13 +18,15 @@ import {
   faPhone,
   faMessage,
   faUserCheck,
+  faHeart,
   faHeadset,
   faUsers,
   faCommentDots,
   faShareAlt,
   faCertificate,
   faStar,
-  faHeart,
+  faHeart as FaHeartSolid,
+  faHeart as FaHeartRegular,
   faShoppingBag,
   faCheckCircle,
   faTimesCircle,
@@ -65,7 +68,9 @@ import {
   faDollarSign,
   faGift,
   faExchangeAlt,
+  faReply,
 } from "@fortawesome/free-solid-svg-icons";
+import { faHeart as faHeartRegularIcon } from "@fortawesome/free-regular-svg-icons";
 
 // ============================================
 // TYPES
@@ -297,6 +302,7 @@ interface Boutique {
   conditions_utilisation?: string | null;
 }
 
+// Interface pour le commentaire API
 interface CommentaireAPI {
   is_deleted: boolean;
   deleted_at: string | null;
@@ -311,12 +317,27 @@ interface CommentaireAPI {
   donUuid: string | null;
   echangeUuid: string | null;
   utilisateurUuid: string;
+  auteur?: {
+    type: string;
+    uuid: string;
+    nom: string;
+    prenoms: string;
+    avatar: string | null;
+    email: string;
+  };
   utilisateur?: {
     uuid: string;
     nom: string;
     prenoms: string;
     avatar: string | null;
   };
+  entite?: {
+    type: string;
+    uuid: string;
+    libelle: string;
+    description: string;
+  };
+  nombre_reponses?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -346,10 +367,12 @@ interface CommentairesResponse {
 interface Commentaire {
   uuid: string;
   utilisateur_nom: string;
+  utilisateur_prenoms?: string;
   utilisateur_photo: string | null;
   note: number;
   commentaire: string;
   date: string;
+  createdAt?: string;
   likes: number;
   is_helpful: boolean;
 }
@@ -386,38 +409,60 @@ const SecureImage = ({
     | ((event: React.SyntheticEvent<HTMLImageElement, Event>) => void)
     | null;
 }) => {
-  const [currentSrc, setCurrentSrc] = useState(src);
+  const [currentSrc, setCurrentSrc] = useState<string>(() => {
+    if (src && src !== "null" && src !== "undefined" && src.trim() !== "") {
+      return src;
+    }
+    return fallbackSrc;
+  });
+
   const [loading, setLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
-    setCurrentSrc(src);
-    setLoading(true);
-    setHasError(false);
-  }, [src]);
+    if (src && src !== "null" && src !== "undefined" && src.trim() !== "") {
+      setCurrentSrc(src);
+      setLoading(true);
+      setHasError(false);
+      setRetryCount(0);
+    } else {
+      setCurrentSrc(fallbackSrc);
+      setLoading(false);
+    }
+  }, [src, fallbackSrc]);
 
   const handleError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-    console.error(`Erreur chargement image ${src}:`, e);
+    if (currentSrc === fallbackSrc || currentSrc.includes("default")) {
+      return;
+    }
 
     if (!hasError) {
       setHasError(true);
 
-      const url = src;
-
-      if (!url) {
-        return;
+      if (src && src.includes("15.236.142.141:9000/oskar-bucket/")) {
+        try {
+          const key = src.replace(
+            "http://15.236.142.141:9000/oskar-bucket/",
+            "",
+          );
+          const encodedKey = encodeURIComponent(key);
+          const proxyUrl = `http://localhost:3005/api/files/${encodedKey}`;
+          setCurrentSrc(proxyUrl);
+          return;
+        } catch (err) {
+          console.debug("Erreur conversion proxy:", err);
+        }
       }
 
-      if (url.includes("15.236.142.141:9000/oskar-bucket/")) {
-        const key = url.replace("http://15.236.142.141:9000/oskar-bucket/", "");
-        const encodedKey = encodeURIComponent(key);
-        const proxyUrl = `http://localhost:3005/api/files/${encodedKey}`;
-        setCurrentSrc(proxyUrl);
-        return;
-      }
-
-      if (fallbackSrc && currentSrc !== fallbackSrc) {
+      if (retryCount >= 2) {
         setCurrentSrc(fallbackSrc);
+      } else {
+        setRetryCount((prev) => prev + 1);
+        setTimeout(() => {
+          setCurrentSrc(src || fallbackSrc);
+          setHasError(false);
+        }, 1000);
       }
     }
 
@@ -429,6 +474,7 @@ const SecureImage = ({
   const handleLoad = () => {
     setLoading(false);
     setHasError(false);
+    setRetryCount(0);
   };
 
   return (
@@ -437,7 +483,7 @@ const SecureImage = ({
       onClick={onClick}
       style={{ cursor: onClick ? "pointer" : "default" }}
     >
-      {loading && !hasError && (
+      {loading && !hasError && currentSrc !== fallbackSrc && (
         <div className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-light">
           <div
             className="spinner-border spinner-border-sm text-primary"
@@ -448,9 +494,10 @@ const SecureImage = ({
         </div>
       )}
       <img
-        src={currentSrc || fallbackSrc}
+        key={currentSrc}
+        src={currentSrc}
         alt={alt}
-        className={`${className} ${loading && !hasError ? "opacity-0" : "opacity-100"}`}
+        className={`${className} ${loading && !hasError && currentSrc !== fallbackSrc ? "opacity-0" : "opacity-100"}`}
         onError={handleError}
         onLoad={handleLoad}
         loading="lazy"
@@ -506,11 +553,52 @@ export default function ProduitDetailPage() {
     commentaire: "",
   });
   const [submittingReview, setSubmittingReview] = useState(false);
+  const [toast, setToast] = useState<{
+    show: boolean;
+    type: "success" | "error" | "info";
+    message: string;
+  } | null>(null);
 
-  // États pour les galeries
   const [selectedThumbnail, setSelectedThumbnail] = useState(0);
   const [contactVisible, setContactVisible] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
+
+  // Stockage local des favoris
+  const [favorisLocaux, setFavorisLocaux] = useState<Set<string>>(new Set());
+
+  // Timer pour le toast
+  useEffect(() => {
+    if (toast?.show) {
+      const timer = setTimeout(() => {
+        setToast(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  // Charger les favoris depuis localStorage au démarrage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const storedFavoris = localStorage.getItem("oskar_favoris");
+      if (storedFavoris) {
+        try {
+          setFavorisLocaux(new Set(JSON.parse(storedFavoris)));
+        } catch (e) {
+          console.error("Erreur lors du chargement des favoris:", e);
+        }
+      }
+    }
+  }, []);
+
+  // Sauvegarder les favoris dans localStorage
+  const sauvegarderFavoris = useCallback((nouveauxFavoris: Set<string>) => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(
+        "oskar_favoris",
+        JSON.stringify([...nouveauxFavoris]),
+      );
+    }
+  }, []);
 
   // FAQ
   const faqs = [
@@ -552,49 +640,11 @@ export default function ProduitDetailPage() {
     return `${API_CONFIG.BASE_URL || "http://localhost:3005"}/images/default-product.png`;
   };
 
-  const convertMinioUrlToProxy = (minioUrl: string): string => {
-    if (!minioUrl) return getDefaultProductImage();
-
-    if (minioUrl.includes("localhost:3005/api/files/")) {
-      return minioUrl;
-    }
-
-    if (minioUrl.includes("15.236.142.141:9000/oskar-bucket/")) {
-      const key = minioUrl.replace(
-        "http://15.236.142.141:9000/oskar-bucket/",
-        "",
-      );
-      const encodedKey = encodeURIComponent(key);
-      return `http://localhost:3005/api/files/${encodedKey}`;
-    }
-
-    if (
-      minioUrl.includes("boutiques/") ||
-      minioUrl.includes("produits/") ||
-      minioUrl.includes("categories/") ||
-      minioUrl.includes("utilisateurs/") ||
-      minioUrl.includes("vendeurs/")
-    ) {
-      const encodedKey = encodeURIComponent(minioUrl);
-      return `http://localhost:3005/api/files/${encodedKey}`;
-    }
-
-    return minioUrl;
-  };
-
   const normalizeImageUrl = (
     url: string | null,
     key: string | null = null,
   ): string => {
-    if (key) {
-      if (!key.startsWith("http://") && !key.startsWith("https://")) {
-        const encodedKey = encodeURIComponent(key);
-        const proxyUrl = `http://localhost:3005/api/files/${encodedKey}`;
-        return proxyUrl;
-      }
-    }
-
-    if (!url || url.trim() === "") {
+    if (!url || url === "null" || url === "undefined" || url.trim() === "") {
       return getDefaultProductImage();
     }
 
@@ -608,7 +658,17 @@ export default function ProduitDetailPage() {
     }
 
     if (cleanUrl.includes("15.236.142.141:9000/oskar-bucket/")) {
-      return convertMinioUrlToProxy(cleanUrl);
+      try {
+        const key = cleanUrl.replace(
+          "http://15.236.142.141:9000/oskar-bucket/",
+          "",
+        );
+        const encodedKey = encodeURIComponent(key);
+        return `http://localhost:3005/api/files/${encodedKey}`;
+      } catch (err) {
+        console.debug("Erreur conversion MinIO:", err);
+        return getDefaultProductImage();
+      }
     }
 
     if (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://")) {
@@ -657,6 +717,65 @@ export default function ProduitDetailPage() {
       });
     } catch {
       return "mars 2023";
+    }
+  };
+
+  // ✅ FONCTION FORMATDATE CORRIGÉE - GESTION DES FUSEAUX HORAIRES
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "Date inconnue";
+
+    try {
+      // Créer la date en UTC pour éviter les décalages
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return "Date inconnue";
+      }
+
+      // Obtenir la date UTC
+      const utcYear = date.getUTCFullYear();
+      const utcMonth = date.getUTCMonth();
+      const utcDay = date.getUTCDate();
+      const utcHours = date.getUTCHours();
+      const utcMinutes = date.getUTCMinutes();
+
+      // Obtenir la date locale actuelle
+      const now = new Date();
+
+      // Créer des dates UTC pour la comparaison
+      const todayUTC = new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+      );
+
+      const commentDateUTC = new Date(Date.UTC(utcYear, utcMonth, utcDay));
+
+      // Calculer la différence en jours UTC
+      const diffTime = todayUTC.getTime() - commentDateUTC.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+      // Formatage de l'heure en UTC
+      const timeStr = date.toLocaleTimeString("fr-FR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "UTC", // Forcer l'affichage en UTC
+      });
+
+      if (diffDays === 0) {
+        return `Aujourd'hui à ${timeStr}`;
+      } else if (diffDays === 1) {
+        return `Hier à ${timeStr}`;
+      } else if (diffDays < 7) {
+        return `Il y a ${diffDays} jours`;
+      } else {
+        // Pour les dates plus anciennes, afficher la date locale
+        return date.toLocaleDateString("fr-FR", {
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+          timeZone: "UTC",
+        });
+      }
+    } catch {
+      return "Date inconnue";
     }
   };
 
@@ -872,21 +991,38 @@ export default function ProduitDetailPage() {
     };
   };
 
+  // ✅ FONCTION TRANSFORM COMMENTAIRE AMÉLIORÉE
   const transformCommentaireData = (
     apiCommentaire: CommentaireAPI,
   ): Commentaire => {
+    // Récupérer l'auteur (peut être dans auteur ou utilisateur selon la structure API)
+    const auteur = apiCommentaire.auteur || apiCommentaire.utilisateur || null;
+
+    let nomComplet = "Utilisateur";
+    let prenom = "";
+    let nom = "";
+
+    if (auteur) {
+      prenom = auteur.prenoms || "";
+      nom = auteur.nom || "";
+      nomComplet = `${prenom} ${nom}`.trim() || "Utilisateur";
+    }
+
+    // Construire l'URL de l'avatar
+    let avatarUrl = null;
+    if (auteur?.avatar) {
+      avatarUrl = normalizeImageUrl(auteur.avatar);
+    }
+
     return {
       uuid: apiCommentaire.uuid,
-      utilisateur_nom: apiCommentaire.utilisateur
-        ? `${apiCommentaire.utilisateur.prenoms || ""} ${apiCommentaire.utilisateur.nom || ""}`.trim() ||
-          "Utilisateur"
-        : "Utilisateur",
-      utilisateur_photo: apiCommentaire.utilisateur?.avatar
-        ? normalizeImageUrl(apiCommentaire.utilisateur.avatar)
-        : getDefaultAvatarUrl(),
+      utilisateur_nom: nomComplet,
+      utilisateur_prenoms: prenom,
+      utilisateur_photo: avatarUrl,
       note: apiCommentaire.note || 0,
       commentaire: apiCommentaire.contenu,
       date: apiCommentaire.createdAt,
+      createdAt: apiCommentaire.createdAt,
       likes: 0,
       is_helpful: false,
     };
@@ -895,9 +1031,6 @@ export default function ProduitDetailPage() {
   // ============================================
   // CHARGEMENT DES DONNÉES
   // ============================================
-  // app/(front-office)/produits/[uuid]/page.tsx
-  // Lignes 880-944 - Correction de la fonction fetchProduitsRecents
-
   const fetchProduitsRecents = useCallback(async () => {
     try {
       setLoadingRecents(true);
@@ -914,9 +1047,7 @@ export default function ProduitDetailPage() {
       const response = await api.get<any[]>(randomEndpoint);
 
       if (response && Array.isArray(response)) {
-        // Filtrer pour ne pas inclure le produit courant
         const filtered = response.filter((item) => item.uuid !== uuid);
-        // Mélanger et prendre les 4 premiers
         const shuffled = filtered.sort(() => 0.5 - Math.random());
         const selected = shuffled.slice(0, 4);
 
@@ -949,48 +1080,85 @@ export default function ProduitDetailPage() {
     } finally {
       setLoadingRecents(false);
     }
-  }, [uuid, normalizeImageUrl, transformCreateurInfo]);
+  }, [uuid]);
+
+  // ✅ FONCTION FETCH COMMENTAIRES AMÉLIORÉE
   const fetchCommentaires = useCallback(
     async (produitUuid: string) => {
       if (!produitUuid || commentairesFetched) return;
 
       try {
         setLoadingComments(true);
+        console.log("📥 Chargement des commentaires pour:", produitUuid);
 
         const response = await api.get<CommentairesResponse>(
           API_ENDPOINTS.COMMENTAIRES.BY_PRODUIT(produitUuid),
         );
+
+        console.log("✅ Réponse commentaires:", response);
 
         if (response && response.commentaires) {
           const commentairesData = response.commentaires.map(
             transformCommentaireData,
           );
 
+          // Trier par date (plus récent d'abord)
           commentairesData.sort(
             (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
           );
 
+          console.log(`📝 ${commentairesData.length} commentaires chargés`);
           setCommentaires(commentairesData);
 
-          const safeNoteMoyenne = response.stats?.noteMoyenne || 0;
-          const safeDistributionNotes = response.stats?.distributionNotes || {
-            1: 0,
-            2: 0,
-            3: 0,
-            4: 0,
-            5: 0,
-          };
+          // Mettre à jour les stats
+          if (response.stats) {
+            setCommentairesStats({
+              nombreCommentaires: response.stats.nombreCommentaires || 0,
+              nombreNotes: response.stats.nombreNotes || 0,
+              noteMoyenne: response.stats.noteMoyenne || 0,
+              distributionNotes: response.stats.distributionNotes || {
+                1: 0,
+                2: 0,
+                3: 0,
+                4: 0,
+                5: 0,
+              },
+            });
+          } else {
+            // Calculer les stats manuellement si non fournies
+            const totalNotes = commentairesData.reduce(
+              (sum, c) => sum + c.note,
+              0,
+            );
+            const moyenne =
+              commentairesData.length > 0
+                ? totalNotes / commentairesData.length
+                : 0;
 
-          setCommentairesStats({
-            nombreCommentaires: response.stats?.nombreCommentaires || 0,
-            nombreNotes: response.stats?.nombreNotes || 0,
-            noteMoyenne: safeNoteMoyenne,
-            distributionNotes: safeDistributionNotes,
-          });
+            const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+            commentairesData.forEach((c) => {
+              const note = Math.round(c.note);
+              if (note >= 1 && note <= 5) {
+                distribution[note as keyof typeof distribution]++;
+              }
+            });
+
+            setCommentairesStats({
+              nombreCommentaires: commentairesData.length,
+              nombreNotes: commentairesData.length,
+              noteMoyenne: moyenne,
+              distributionNotes: distribution,
+            });
+          }
+
+          setCommentairesFetched(true);
+        } else {
+          console.log("ℹ️ Aucun commentaire trouvé");
+          setCommentaires([]);
           setCommentairesFetched(true);
         }
       } catch (err: any) {
-        console.warn("Erreur chargement commentaires API:", err);
+        console.warn("⚠️ Erreur chargement commentaires:", err);
         const produitNoteMoyenne = getSafeNoteMoyenne(produit);
 
         setCommentairesStats({
@@ -1005,7 +1173,7 @@ export default function ProduitDetailPage() {
         setLoadingComments(false);
       }
     },
-    [produit, commentairesFetched],
+    [produit],
   );
 
   const fetchProduitDetails = useCallback(async () => {
@@ -1030,9 +1198,11 @@ export default function ProduitDetailPage() {
 
       setProduit(produitData);
       setProduitsSimilaires(similairesData);
-      setFavori(response.produit.is_favoris || false);
 
-      // Gestion du créateur
+      // Vérifier si le produit est dans les favoris locaux
+      const estFavori = favorisLocaux.has(uuid);
+      setFavori(estFavori);
+
       if (response.produit.createur) {
         const createurData = transformCreateurInfo(response.produit.createur);
         createurData.userType = response.produit.createurType || "utilisateur";
@@ -1072,16 +1242,13 @@ export default function ProduitDetailPage() {
         }
       }
 
-      // Gestion de la boutique
       if (response.produit.boutique) {
         const boutiqueData = transformBoutiqueData(response.produit.boutique);
         setBoutique(boutiqueData);
       }
 
-      // Gestion des images - Générer plusieurs images à partir des produits similaires et récents
       const imageUrls: string[] = [produitData.image];
 
-      // Ajouter des images des produits similaires
       response.similaires.slice(0, 4).forEach((similaire) => {
         const imgUrl = normalizeImageUrl(similaire.image, similaire.image_key);
         if (imgUrl && !imageUrls.includes(imgUrl)) {
@@ -1089,7 +1256,6 @@ export default function ProduitDetailPage() {
         }
       });
 
-      // Si pas assez d'images, ajouter des placeholders
       while (imageUrls.length < 5) {
         imageUrls.push(getDefaultProductImage());
       }
@@ -1097,10 +1263,7 @@ export default function ProduitDetailPage() {
       setImages(imageUrls.slice(0, 5));
       setImagePrincipale(imageUrls[0]);
 
-      // Charger les commentaires
       fetchCommentaires(produitData.uuid);
-
-      // Charger les produits récents
       fetchProduitsRecents();
     } catch (err: any) {
       console.error("Erreur détail produit:", err);
@@ -1122,7 +1285,7 @@ export default function ProduitDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [uuid, fetchCommentaires, fetchProduitsRecents]);
+  }, [uuid, fetchCommentaires, fetchProduitsRecents, favorisLocaux]);
 
   useEffect(() => {
     if (uuid && loading && !produit) {
@@ -1138,37 +1301,6 @@ export default function ProduitDetailPage() {
       return "0 FCFA";
     }
     return price.toLocaleString("fr-FR") + " FCFA";
-  };
-
-  const formatDate = (dateString: string) => {
-    if (!dateString) return "Date inconnue";
-
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) {
-        return "Date inconnue";
-      }
-
-      const now = new Date();
-      const diffTime = Math.abs(now.getTime() - date.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-      if (diffDays === 0) {
-        return "Aujourd'hui";
-      } else if (diffDays === 1) {
-        return "Hier";
-      } else if (diffDays < 7) {
-        return `Il y a ${diffDays} jours`;
-      } else {
-        return date.toLocaleDateString("fr-FR", {
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-        });
-      }
-    } catch {
-      return "Date inconnue";
-    }
   };
 
   const renderStars = (rating: number | null | undefined) => {
@@ -1252,6 +1384,10 @@ export default function ProduitDetailPage() {
   // ============================================
   // FONCTIONS D'ACTIONS
   // ============================================
+  const showToast = (type: "success" | "error" | "info", message: string) => {
+    setToast({ show: true, type, message });
+  };
+
   const handleContactWhatsApp = () => {
     if (!createur) return;
 
@@ -1301,11 +1437,11 @@ export default function ProduitDetailPage() {
     navigator.clipboard
       .writeText(contactInfo)
       .then(() => {
-        alert("Informations de contact copiées dans le presse-papier !");
+        showToast("success", "Informations de contact copiées !");
       })
       .catch((err) => {
         console.error("Erreur lors de la copie:", err);
-        alert("Impossible de copier les informations.");
+        showToast("error", "Impossible de copier les informations.");
       });
   };
 
@@ -1316,7 +1452,7 @@ export default function ProduitDetailPage() {
     }
 
     if (!createur) {
-      alert("Informations du vendeur non disponibles");
+      showToast("error", "Informations du vendeur non disponibles");
       return;
     }
 
@@ -1351,6 +1487,7 @@ export default function ProduitDetailPage() {
     router.push(`${dashboardPath}/messages?${params.toString()}`);
   };
 
+  // ✅ FONCTION CORRIGÉE POUR LES FAVORIS
   const handleAddToFavorites = async () => {
     if (!produit) return;
 
@@ -1360,26 +1497,44 @@ export default function ProduitDetailPage() {
     }
 
     try {
+      console.log(`🔄 ${favori ? "Retrait" : "Ajout"} aux favoris...`);
+
       if (favori) {
-        await api.delete(API_ENDPOINTS.FAVORIS.REMOVE(produit.uuid));
+        const nouveauxFavoris = new Set(favorisLocaux);
+        nouveauxFavoris.delete(produit.uuid);
+        setFavorisLocaux(nouveauxFavoris);
+        sauvegarderFavoris(nouveauxFavoris);
         setFavori(false);
-        alert("Produit retiré des favoris");
+        showToast("success", "Produit retiré des favoris");
       } else {
-        await api.post(
+        const response = await api.post(
           API_ENDPOINTS.PRODUCTS.AJOUTER_PRODUIT_FAVORIS(produit.uuid),
           {},
         );
+        console.log("✅ Réponse favoris:", response);
+
+        const nouveauxFavoris = new Set(favorisLocaux);
+        nouveauxFavoris.add(produit.uuid);
+        setFavorisLocaux(nouveauxFavoris);
+        sauvegarderFavoris(nouveauxFavoris);
         setFavori(true);
-        alert("Produit ajouté aux favoris");
+        showToast("success", "Produit ajouté aux favoris");
       }
     } catch (err: any) {
-      console.error("Erreur mise à jour favoris:", err);
+      console.error("❌ Erreur détaillée mise à jour favoris:", err);
+
+      let errorMessage = "Une erreur est survenue. Veuillez réessayer.";
+
       if (err.response?.status === 401) {
-        alert("Votre session a expiré. Veuillez vous reconnecter.");
+        errorMessage = "Votre session a expiré. Veuillez vous reconnecter.";
         openLoginModal();
-      } else {
-        alert("Une erreur est survenue. Veuillez réessayer.");
+      } else if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.message) {
+        errorMessage = err.message;
       }
+
+      showToast("error", errorMessage);
     }
   };
 
@@ -1405,12 +1560,12 @@ export default function ProduitDetailPage() {
     navigator.clipboard
       .writeText(window.location.href)
       .then(() => {
-        alert("Lien copié dans le presse-papier !");
+        showToast("success", "Lien copié dans le presse-papier !");
         setShowShareMenu(false);
       })
       .catch((err) => {
         console.error("Erreur copie lien:", err);
-        alert("Impossible de copier le lien.");
+        showToast("error", "Impossible de copier le lien.");
       });
   };
 
@@ -1424,15 +1579,10 @@ export default function ProduitDetailPage() {
             : comment,
         ),
       );
+      showToast("success", "Merci pour votre retour !");
     } catch (err) {
       console.error("Erreur lors du like:", err);
-      setCommentaires((prev) =>
-        prev.map((comment) =>
-          comment.uuid === commentUuid
-            ? { ...comment, likes: comment.likes + 1 }
-            : comment,
-        ),
-      );
+      showToast("error", "Impossible d'aimer le commentaire");
     }
   };
 
@@ -1440,10 +1590,13 @@ export default function ProduitDetailPage() {
     if (window.confirm("Signaler ce commentaire comme inapproprié ?")) {
       try {
         await api.post(API_ENDPOINTS.COMMENTAIRES.REPORT(commentUuid), {});
-        alert("Commentaire signalé. Notre équipe le vérifiera sous 24h.");
+        showToast(
+          "success",
+          "Commentaire signalé. Notre équipe le vérifiera sous 24h.",
+        );
       } catch (err) {
         console.error("Erreur signalement:", err);
-        alert("Une erreur est survenue lors du signalement.");
+        showToast("error", "Une erreur est survenue lors du signalement.");
       }
     }
   };
@@ -1457,7 +1610,7 @@ export default function ProduitDetailPage() {
     }
 
     if (!newReview.commentaire.trim()) {
-      alert("Veuillez saisir un commentaire.");
+      showToast("error", "Veuillez saisir un commentaire.");
       return;
     }
 
@@ -1473,6 +1626,8 @@ export default function ProduitDetailPage() {
         },
       );
 
+      // Réinitialiser commentairesFetched pour forcer un rechargement
+      setCommentairesFetched(false);
       await fetchCommentaires(produit.uuid);
 
       setNewReview({
@@ -1481,20 +1636,18 @@ export default function ProduitDetailPage() {
       });
       setShowAddReview(false);
 
-      alert(
-        "Votre avis a été ajouté avec succès ! Merci pour votre contribution.",
-      );
-
+      showToast("success", "Votre avis a été ajouté avec succès !");
       await fetchProduitDetails();
     } catch (err: any) {
       console.error("Erreur ajout avis:", err);
       if (err.response?.status === 401) {
-        alert("Votre session a expiré. Veuillez vous reconnecter.");
+        showToast(
+          "error",
+          "Votre session a expiré. Veuillez vous reconnecter.",
+        );
         openLoginModal();
       } else {
-        alert(
-          "Une erreur est survenue lors de l'ajout de votre avis. Veuillez réessayer.",
-        );
+        showToast("error", "Une erreur est survenue. Veuillez réessayer.");
       }
     } finally {
       setSubmittingReview(false);
@@ -1595,7 +1748,6 @@ export default function ProduitDetailPage() {
 
   const boutiqueStatut = boutique ? getStatutBadge(boutique.statut) : null;
 
-  // Déterminer les produits à afficher dans la section "Articles Similaires"
   const produitsAShow =
     produitsSimilaires.length > 0
       ? produitsSimilaires.slice(0, 4)
@@ -1603,6 +1755,35 @@ export default function ProduitDetailPage() {
 
   return (
     <div className="bg-light min-vh-100">
+      {/* Toast notifications */}
+      {toast?.show && (
+        <div
+          className="position-fixed top-0 end-0 m-4 p-3 text-white rounded-3 shadow-lg"
+          style={{
+            zIndex: 9999,
+            backgroundColor:
+              toast.type === "success"
+                ? "#10b981"
+                : toast.type === "error"
+                  ? "#ef4444"
+                  : "#3b82f6",
+            minWidth: "300px",
+            animation: "slideIn 0.3s ease",
+          }}
+        >
+          <div className="d-flex align-items-center">
+            <i
+              className={`fas fa-${toast.type === "success" ? "check-circle" : toast.type === "error" ? "exclamation-circle" : "info-circle"} me-3 fs-4`}
+            ></i>
+            <span className="flex-grow-1">{toast.message}</span>
+            <button
+              className="btn-close btn-close-white"
+              onClick={() => setToast(null)}
+            ></button>
+          </div>
+        </div>
+      )}
+
       {/* Breadcrumb */}
       <section className="bg-white border-bottom py-3">
         <div className="container">
@@ -1656,8 +1837,9 @@ export default function ProduitDetailPage() {
                   className="position-absolute top-0 end-0 m-3 btn btn-light rounded-circle p-3 shadow-lg hover-bg-warning hover-text-white transition-all"
                   style={{ width: "50px", height: "50px" }}
                 >
-                  <i
-                    className={`fa-${favori ? "solid" : "regular"} fa-heart`}
+                  <FontAwesomeIcon
+                    icon={favori ? FaHeartSolid : faHeartRegularIcon}
+                    className={favori ? "text-danger" : ""}
                   />
                 </button>
                 <div className="position-absolute top-0 start-0 m-3 bg-success text-white px-4 py-2 rounded-pill fw-semibold d-flex align-items-center gap-2">
@@ -1696,7 +1878,7 @@ export default function ProduitDetailPage() {
               </div>
             </div>
 
-            {/* Miniatures - Mêmes images au-dessus de l'image principale */}
+            {/* Miniatures */}
             {images.length > 1 && (
               <div className="row g-4 mb-4">
                 {images.map((img, index) => (
@@ -1854,7 +2036,7 @@ export default function ProduitDetailPage() {
               </div>
             </div>
 
-            {/* Avis et évaluations - SECTION RESTAURÉE */}
+            {/* Avis et évaluations - SECTION AMÉLIORÉE */}
             <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
               <h2 className="h2 fw-bold mb-4">Évaluations et Avis</h2>
 
@@ -1931,7 +2113,6 @@ export default function ProduitDetailPage() {
                     </div>
                   </div>
 
-                  {/* Formulaire d'ajout d'avis - RESTAURÉ */}
                   {showAddReview ? (
                     <div className="card border mb-4">
                       <div className="card-body">
@@ -2016,7 +2197,7 @@ export default function ProduitDetailPage() {
                     </div>
                   )}
 
-                  {/* Liste des commentaires - RESTAURÉE */}
+                  {/* ✅ LISTE DES COMMENTAIRES AMÉLIORÉE */}
                   {commentaires.length > 0 ? (
                     <div className="space-y-6">
                       {visibleComments.map((comment) => (
@@ -2025,40 +2206,69 @@ export default function ProduitDetailPage() {
                           className="border-bottom pb-4 mb-4"
                         >
                           <div className="d-flex gap-4">
-                            <SecureImage
-                              src={comment.utilisateur_photo}
-                              alt={comment.utilisateur_nom}
-                              fallbackSrc={getDefaultAvatarUrl()}
-                              className="rounded-circle"
-                              style={{
-                                width: "48px",
-                                height: "48px",
-                                objectFit: "cover",
-                              }}
-                            />
+                            {/* Avatar de l'utilisateur */}
+                            <div className="flex-shrink-0">
+                              {comment.utilisateur_photo ? (
+                                <SecureImage
+                                  src={comment.utilisateur_photo}
+                                  alt={comment.utilisateur_nom}
+                                  fallbackSrc={getDefaultAvatarUrl()}
+                                  className="rounded-circle"
+                                  style={{
+                                    width: "56px",
+                                    height: "56px",
+                                    objectFit: "cover",
+                                    border: "2px solid #f0f0f0",
+                                  }}
+                                />
+                              ) : (
+                                <div
+                                  className="bg-light rounded-circle d-flex align-items-center justify-content-center"
+                                  style={{
+                                    width: "56px",
+                                    height: "56px",
+                                    border: "2px solid #f0f0f0",
+                                  }}
+                                >
+                                  <FontAwesomeIcon
+                                    icon={faUserCircle}
+                                    className="text-muted fs-2"
+                                  />
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Contenu du commentaire */}
                             <div className="flex-grow-1">
                               <div className="d-flex justify-content-between align-items-start mb-2">
                                 <div>
-                                  <p className="fw-bold mb-1">
+                                  <h6 className="fw-bold mb-1">
                                     {comment.utilisateur_nom}
-                                  </p>
-                                  <div className="mb-2 text-warning">
+                                  </h6>
+                                  <div className="mb-2">
                                     {renderRatingStars(comment.note)}
                                   </div>
                                 </div>
                                 <small className="text-muted">
+                                  <FontAwesomeIcon
+                                    icon={faClock}
+                                    className="me-1"
+                                  />
                                   {formatDate(comment.date)}
                                 </small>
                               </div>
-                              <p className="text-muted mb-3">
+
+                              <p className="text-muted mb-3 bg-light p-3 rounded-3">
                                 {comment.commentaire}
                               </p>
-                              <div className="d-flex gap-4">
+
+                              <div className="d-flex gap-3">
                                 <button
-                                  className="btn btn-link text-muted p-0 text-decoration-none hover-text-warning"
+                                  className="btn btn-link text-muted p-0 text-decoration-none hover-text-primary"
                                   onClick={() =>
                                     handleLikeComment(comment.uuid)
                                   }
+                                  style={{ fontSize: "0.9rem" }}
                                 >
                                   <FontAwesomeIcon
                                     icon={faThumbsUp}
@@ -2067,12 +2277,34 @@ export default function ProduitDetailPage() {
                                   Utile ({comment.likes})
                                 </button>
                                 <button
-                                  className="btn btn-link text-muted p-0 text-decoration-none hover-text-warning"
+                                  className="btn btn-link text-muted p-0 text-decoration-none hover-text-danger"
                                   onClick={() =>
                                     handleReportComment(comment.uuid)
                                   }
+                                  style={{ fontSize: "0.9rem" }}
                                 >
+                                  <FontAwesomeIcon
+                                    icon={faFlag}
+                                    className="me-1"
+                                  />
                                   Signaler
+                                </button>
+                                <button
+                                  className="btn btn-link text-muted p-0 text-decoration-none hover-text-warning"
+                                  onClick={() => {
+                                    if (!isLoggedIn) {
+                                      openLoginModal();
+                                      return;
+                                    }
+                                    // Fonction pour répondre au commentaire (à implémenter)
+                                  }}
+                                  style={{ fontSize: "0.9rem" }}
+                                >
+                                  <FontAwesomeIcon
+                                    icon={faReply}
+                                    className="me-1"
+                                  />
+                                  Répondre
                                 </button>
                               </div>
                             </div>
@@ -2095,7 +2327,7 @@ export default function ProduitDetailPage() {
                     </div>
                   )}
 
-                  {/* Bouton voir plus - RESTAURÉ */}
+                  {/* Bouton voir plus */}
                   {commentaires.length > 3 && (
                     <button
                       className="w-100 mt-4 btn btn-outline-warning py-3 fw-semibold"
@@ -2114,7 +2346,7 @@ export default function ProduitDetailPage() {
               )}
             </div>
 
-            {/* Articles Similaires que Vous Pourriez Aimer */}
+            {/* Articles Similaires */}
             {produitsAShow.length > 0 && (
               <div
                 id="similar-items-section"
@@ -2247,7 +2479,7 @@ export default function ProduitDetailPage() {
                   className="btn btn-light w-100 py-3 fw-semibold"
                 >
                   <FontAwesomeIcon
-                    icon={faHeart}
+                    icon={favori ? FaHeartSolid : faHeartRegularIcon}
                     className={`me-2 ${favori ? "text-danger" : ""}`}
                   />
                   {favori ? "Retirer des favoris" : "Ajouter aux favoris"}
@@ -2271,9 +2503,8 @@ export default function ProduitDetailPage() {
                   </div>
                 </div>
 
-                {/* Logo de la boutique avec redirection au clic */}
-                <div className="d-flex align-items-center gap-3 mt-3">
-                  {boutique && boutique.logo ? (
+                {boutique && boutique.logo ? (
+                  <div className="d-flex align-items-center gap-3 mt-3">
                     <SecureImage
                       src={boutique.logo}
                       alt={boutique.nom}
@@ -2286,76 +2517,60 @@ export default function ProduitDetailPage() {
                       }}
                       onClick={handleVisitBoutique}
                     />
-                  ) : (
-                    <div
-                      className="bg-white rounded-3 d-flex align-items-center justify-content-center"
-                      style={{
-                        width: "60px",
-                        height: "60px",
-                        cursor: "pointer",
-                      }}
-                      onClick={handleVisitBoutique}
-                    >
-                      <FontAwesomeIcon
-                        icon={faStore}
-                        className="fa-2x text-muted"
-                      />
-                    </div>
-                  )}
-                  <div>
-                    <p className="fw-semibold mb-1 small">
-                      <Link
-                        href={`/boutiques/${boutique?.uuid}`}
-                        className="text-decoration-none text-dark"
-                      >
-                        {boutique?.nom || "Boutique OSKAR"}
-                      </Link>
-                    </p>
-                    <p className="text-muted small mb-0">
-                      {createur?.prenoms} {createur?.nom}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Image du créateur - AJOUTÉE */}
-                {createur && (
-                  <div className="d-flex align-items-center gap-3 mt-3 border-top pt-3">
-                    {createur.avatar ? (
-                      <SecureImage
-                        src={createur.avatar}
-                        alt={`${createur.prenoms} ${createur.nom}`}
-                        fallbackSrc={getDefaultAvatarUrl()}
-                        className="rounded-circle"
-                        style={{
-                          width: "50px",
-                          height: "50px",
-                          objectFit: "cover",
-                        }}
-                        onClick={handleVisitUtilisateur}
-                      />
-                    ) : (
-                      <div
-                        className="bg-white rounded-circle d-flex align-items-center justify-content-center"
-                        style={{
-                          width: "50px",
-                          height: "50px",
-                          cursor: "pointer",
-                        }}
-                        onClick={handleVisitUtilisateur}
-                      >
-                        <FontAwesomeIcon
-                          icon={faUserCircle}
-                          className="fa-2x text-muted"
-                        />
-                      </div>
-                    )}
                     <div>
-                      <p className="fw-semibold small mb-1">Créateur</p>
+                      <p className="fw-semibold mb-1 small">
+                        <Link
+                          href={`/boutiques/${boutique?.uuid}`}
+                          className="text-decoration-none text-dark"
+                        >
+                          {boutique?.nom || "Boutique OSKAR"}
+                        </Link>
+                      </p>
                       <p className="text-muted small mb-0">
-                        {createur.prenoms} {createur.nom}
+                        {createur?.prenoms} {createur?.nom}
                       </p>
                     </div>
                   </div>
+                ) : (
+                  createur && (
+                    <div className="d-flex align-items-center gap-3 mt-3">
+                      {createur.avatar ? (
+                        <SecureImage
+                          src={createur.avatar}
+                          alt={`${createur.prenoms} ${createur.nom}`}
+                          fallbackSrc={getDefaultAvatarUrl()}
+                          className="rounded-circle"
+                          style={{
+                            width: "50px",
+                            height: "50px",
+                            objectFit: "cover",
+                          }}
+                          onClick={handleVisitUtilisateur}
+                        />
+                      ) : (
+                        <div
+                          className="bg-white rounded-circle d-flex align-items-center justify-content-center"
+                          style={{
+                            width: "50px",
+                            height: "50px",
+                            cursor: "pointer",
+                          }}
+                          onClick={handleVisitUtilisateur}
+                        >
+                          <FontAwesomeIcon
+                            icon={faUserCircle}
+                            className="fa-2x text-muted"
+                          />
+                        </div>
+                      )}
+                      <div>
+                        <p className="fw-semibold small mb-1">Créateur</p>
+                        <p className="text-muted small mb-0">
+                          {createur.prenoms} {createur.nom}
+                        </p>
+                      </div>
+                    </div>
+                  )
                 )}
 
                 {createur?.est_verifie && (
@@ -2365,7 +2580,6 @@ export default function ProduitDetailPage() {
                   </div>
                 )}
 
-                {/* Informations du créateur */}
                 {createur && (
                   <div className="border-top mt-3 pt-3">
                     <p className="fw-semibold small mb-2">Contact créateur</p>
@@ -2545,7 +2759,7 @@ export default function ProduitDetailPage() {
         </div>
       </main>
 
-      {/* Section récemment consultés - Même hauteur pour toutes les cartes */}
+      {/* Section récemment consultés */}
       {produitsRecents.length > 0 && (
         <section className="bg-white py-5 mt-4">
           <div className="container">
@@ -2731,7 +2945,7 @@ export default function ProduitDetailPage() {
         </div>
       </section>
 
-      {/* CTA - Fond vert */}
+      {/* CTA */}
       <section className="bg-success text-white py-5">
         <div className="container text-center">
           <h2 className="display-5 fw-bold mb-3">
@@ -2824,6 +3038,16 @@ export default function ProduitDetailPage() {
         }
         .h-100 {
           height: 100%;
+        }
+        @keyframes slideIn {
+          from {
+            transform: translateX(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
         }
       `}</style>
     </div>

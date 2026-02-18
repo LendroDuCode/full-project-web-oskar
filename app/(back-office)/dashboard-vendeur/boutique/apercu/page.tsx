@@ -29,6 +29,7 @@ import {
   faTags,
   faStore as faStoreSolid,
   faSpinner,
+  faBug,
 } from "@fortawesome/free-solid-svg-icons";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
@@ -95,6 +96,8 @@ export default function ListeBoutiquesVendeur() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [authLoading, setAuthLoading] = useState(true);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
+  const [showDebug, setShowDebug] = useState(false);
 
   // États pour les modales
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -168,6 +171,107 @@ export default function ListeBoutiquesVendeur() {
     }
   }, []);
 
+  // Fonction de débogage pour vérifier l'API manuellement
+  const checkApiResponse = async () => {
+    try {
+      setDebugInfo({ status: "loading", message: "Vérification en cours..." });
+
+      const token = localStorage.getItem("oskar_token");
+      if (!token) {
+        setDebugInfo({ status: "error", message: "Token non trouvé" });
+        return;
+      }
+
+      const url = API_ENDPOINTS.BOUTIQUES.LISTE_BOUTIQUES_CREE_PAR_VENDEUR;
+      console.log("🔍 Vérification manuelle de l'API:", url);
+
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      const responseText = await response.text();
+      console.log("📄 Réponse brute:", responseText);
+
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        setDebugInfo({
+          status: "error",
+          message: "La réponse n'est pas du JSON valide",
+          rawResponse: responseText.substring(0, 500),
+        });
+        return;
+      }
+
+      console.log("📊 Données parsées:", data);
+
+      setDebugInfo({
+        status: "success",
+        statusCode: response.status,
+        data: data,
+        structure: {
+          isArray: Array.isArray(data),
+          hasDataProperty: data && typeof data === "object" && "data" in data,
+          dataIsArray: data.data ? Array.isArray(data.data) : false,
+          keys: data ? Object.keys(data) : [],
+        },
+      });
+
+      // Essayer d'extraire les boutiques automatiquement
+      let boutiquesData: Boutique[] = [];
+
+      if (Array.isArray(data)) {
+        boutiquesData = data;
+        console.log(
+          "✅ Réponse est un tableau direct avec",
+          data.length,
+          "éléments",
+        );
+      } else if (data && Array.isArray(data.data)) {
+        boutiquesData = data.data;
+        console.log(
+          "✅ Réponse a une propriété data qui est un tableau avec",
+          data.data.length,
+          "éléments",
+        );
+      } else if (data && data.data && Array.isArray(data.data.data)) {
+        boutiquesData = data.data.data;
+        console.log(
+          "✅ Réponse a une structure data.data avec",
+          data.data.data.length,
+          "éléments",
+        );
+      } else if (data && data.success && Array.isArray(data.data)) {
+        boutiquesData = data.data;
+        console.log(
+          "✅ Réponse a success:true et data est un tableau avec",
+          data.data.length,
+          "éléments",
+        );
+      }
+
+      if (boutiquesData.length > 0) {
+        console.log("🏪 Boutiques trouvées:", boutiquesData);
+        setBoutiques(boutiquesData);
+        setSuccessMessage(`${boutiquesData.length} boutique(s) trouvée(s) !`);
+        setTimeout(() => setSuccessMessage(null), 3000);
+      } else {
+        console.log("ℹ️ Aucune boutique trouvée dans la réponse");
+      }
+    } catch (error: any) {
+      console.error("❌ Erreur lors de la vérification:", error);
+      setDebugInfo({
+        status: "error",
+        message: error.message,
+        stack: error.stack,
+      });
+    }
+  };
+
   // Charger les boutiques
   const fetchBoutiques = useCallback(async () => {
     // Vérifier d'abord l'authentification
@@ -181,26 +285,107 @@ export default function ListeBoutiquesVendeur() {
       setError(null);
       console.log("📥 Chargement des boutiques...");
 
-      const response = await api.get<PaginatedResponse>(
-        API_ENDPOINTS.BOUTIQUES.LISTE_BOUTIQUES_CREE_PAR_VENDEUR,
-      );
+      const token = localStorage.getItem("oskar_token");
+      console.log("🔑 Token présent:", !!token);
 
-      console.log("✅ Boutiques chargées:", {
-        count: response.data?.length || 0,
-        total: response.total,
+      const url = API_ENDPOINTS.BOUTIQUES.LISTE_BOUTIQUES_CREE_PAR_VENDEUR;
+      console.log("🌐 URL appelée:", url);
+
+      const response = await api.get<any>(url);
+
+      console.log("📦 Réponse brute:", response);
+
+      // Analyser la structure de la réponse
+      console.log("🔍 Structure de la réponse:", {
+        type: typeof response,
+        isArray: Array.isArray(response),
+        hasData: response && typeof response === "object" && "data" in response,
+        keys:
+          response && typeof response === "object" ? Object.keys(response) : [],
       });
 
-      setBoutiques(response.data || []);
-      setPagination({
-        page: response.page || 1,
-        limit: response.limit || 10,
-        total: response.total || 0,
-        pages: response.totalPages || 1,
-      });
+      let boutiquesData: Boutique[] = [];
+      let paginationData = {
+        page: 1,
+        limit: 10,
+        total: 0,
+        pages: 1,
+      };
+
+      // Cas 1: La réponse est directement un tableau
+      if (Array.isArray(response)) {
+        console.log("✅ Cas 1: Réponse est un tableau direct");
+        boutiquesData = response;
+        paginationData.total = response.length;
+        paginationData.pages = Math.ceil(
+          response.length / paginationData.limit,
+        );
+      }
+      // Cas 2: La réponse a une propriété 'data' qui est un tableau
+      else if (response && typeof response === "object" && "data" in response) {
+        if (Array.isArray(response.data)) {
+          console.log("✅ Cas 2: response.data est un tableau");
+          boutiquesData = response.data;
+          paginationData = {
+            page: response.page || 1,
+            limit: response.limit || 10,
+            total: response.total || response.data.length,
+            pages:
+              response.totalPages ||
+              Math.ceil(response.data.length / (response.limit || 10)),
+          };
+        }
+        // Cas 3: response.data a une propriété qui est un tableau
+        else if (response.data && typeof response.data === "object") {
+          const possibleArrays = [
+            "data",
+            "items",
+            "results",
+            "boutiques",
+            "list",
+          ];
+          for (const key of possibleArrays) {
+            if (Array.isArray(response.data[key])) {
+              console.log(`✅ Cas 3: response.data.${key} est un tableau`);
+              boutiquesData = response.data[key];
+              paginationData = {
+                page: response.data.page || response.page || 1,
+                limit: response.data.limit || response.limit || 10,
+                total:
+                  response.data.total ||
+                  response.total ||
+                  response.data[key].length,
+                pages: response.data.totalPages || response.totalPages || 1,
+              };
+              break;
+            }
+          }
+        }
+      }
+      // Cas 4: La réponse a une propriété 'success' et 'data'
+      else if (response && response.success && Array.isArray(response.data)) {
+        console.log(
+          "✅ Cas 4: response.success et response.data est un tableau",
+        );
+        boutiquesData = response.data;
+        paginationData.total = response.data.length;
+        paginationData.pages = Math.ceil(
+          response.data.length / paginationData.limit,
+        );
+      }
+
+      console.log(`📊 ${boutiquesData.length} boutique(s) trouvée(s)`);
+
+      if (boutiquesData.length > 0) {
+        console.log("🏪 Première boutique:", boutiquesData[0]);
+      }
+
+      setBoutiques(boutiquesData);
+      setPagination(paginationData);
 
       // Extraire les types de boutique uniques pour les filtres
-      if (response.data && response.data.length > 0) {
-        const types = response.data.reduce((acc: TypeBoutique[], boutique) => {
+      if (boutiquesData.length > 0) {
+        const types = boutiquesData.reduce((acc: TypeBoutique[], boutique) => {
           if (
             boutique.type_boutique &&
             !acc.find((t) => t.uuid === boutique.type_boutique.uuid)
@@ -210,11 +395,19 @@ export default function ListeBoutiquesVendeur() {
           return acc;
         }, []);
         setUniqueTypes(types);
+        console.log(
+          `🏷️ ${types.length} type(s) de boutique unique(s) trouvé(s)`,
+        );
       } else {
         setUniqueTypes([]);
       }
     } catch (err: any) {
       console.error("❌ Erreur lors du chargement des boutiques:", err);
+      console.error("📝 Détails de l'erreur:", {
+        status: err.status,
+        message: err.message,
+        response: err.response,
+      });
 
       // Vérifier si c'est une erreur d'authentification
       if (
@@ -228,7 +421,6 @@ export default function ListeBoutiquesVendeur() {
         setIsAuthenticated(false);
         clearAuthToken();
 
-        // Rediriger vers la page de connexion
         setTimeout(() => {
           router.push("/login");
         }, 2000);
@@ -451,8 +643,17 @@ export default function ListeBoutiquesVendeur() {
       );
 
       console.log("✅ Boutique créée avec succès:", response);
-      handleSuccess("Boutique créée avec succès !");
+
+      // Fermer la modale
       setShowCreateModal(false);
+
+      // Afficher le message de succès
+      setSuccessMessage("Boutique créée avec succès !");
+
+      // Recharger les boutiques après un court délai
+      setTimeout(() => {
+        fetchBoutiques();
+      }, 500);
     } catch (err: any) {
       console.error("❌ Erreur création boutique:", err);
 
@@ -467,7 +668,6 @@ export default function ListeBoutiquesVendeur() {
         setIsAuthenticated(false);
         clearAuthToken();
 
-        // Rediriger vers la page de connexion
         setTimeout(() => {
           router.push("/login");
         }, 2000);
@@ -859,6 +1059,15 @@ export default function ListeBoutiquesVendeur() {
                 </button>
 
                 <button
+                  onClick={checkApiResponse}
+                  className="btn btn-outline-info d-flex align-items-center gap-2"
+                  disabled={loading}
+                >
+                  <FontAwesomeIcon icon={faBug} />
+                  <span className="d-none d-md-inline">Debug API</span>
+                </button>
+
+                <button
                   onClick={handleExport}
                   className="btn btn-outline-primary d-flex align-items-center gap-2"
                   disabled={boutiques.length === 0 || loading}
@@ -877,6 +1086,34 @@ export default function ListeBoutiquesVendeur() {
                 </button>
               </div>
             </div>
+
+            {/* Panneau de débogage */}
+            {showDebug && debugInfo && (
+              <div className="card border-info mb-4">
+                <div className="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                  <span>
+                    <FontAwesomeIcon icon={faBug} className="me-2" />
+                    Informations de débogage
+                  </span>
+                  <button
+                    className="btn-close btn-close-white"
+                    onClick={() => setShowDebug(false)}
+                  />
+                </div>
+                <div className="card-body">
+                  <pre
+                    className="bg-light p-3 rounded"
+                    style={{
+                      fontSize: "0.8rem",
+                      maxHeight: "300px",
+                      overflow: "auto",
+                    }}
+                  >
+                    {JSON.stringify(debugInfo, null, 2)}
+                  </pre>
+                </div>
+              </div>
+            )}
 
             {/* Messages d'alerte */}
             {error && (
@@ -1162,14 +1399,23 @@ export default function ListeBoutiquesVendeur() {
                           : "Aucune boutique ne correspond à vos critères de recherche."}
                       </p>
                       {boutiques.length === 0 && (
-                        <button
-                          onClick={handleOpenCreateModal}
-                          className="btn btn-primary mt-3"
-                          disabled={!isAuthenticated}
-                        >
-                          <FontAwesomeIcon icon={faPlus} className="me-2" />
-                          Créer ma première boutique
-                        </button>
+                        <div className="mt-3">
+                          <button
+                            onClick={handleOpenCreateModal}
+                            className="btn btn-primary me-2"
+                            disabled={!isAuthenticated}
+                          >
+                            <FontAwesomeIcon icon={faPlus} className="me-2" />
+                            Créer ma première boutique
+                          </button>
+                          <button
+                            onClick={checkApiResponse}
+                            className="btn btn-outline-info"
+                          >
+                            <FontAwesomeIcon icon={faBug} className="me-2" />
+                            Vérifier l'API
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1182,6 +1428,13 @@ export default function ListeBoutiquesVendeur() {
                           <small className="text-muted">
                             {filteredBoutiques.length} boutique(s) trouvée(s)
                           </small>
+                          <button
+                            onClick={() => setShowDebug(!showDebug)}
+                            className="btn btn-sm btn-outline-info"
+                          >
+                            <FontAwesomeIcon icon={faBug} className="me-1" />
+                            Debug
+                          </button>
                         </div>
                         <div className="dropdown">
                           <button
@@ -1226,6 +1479,25 @@ export default function ListeBoutiquesVendeur() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Panneau de débogage (si activé) */}
+                    {showDebug && debugInfo && (
+                      <div className="p-4 border-bottom bg-light">
+                        <h6 className="fw-bold mb-2">
+                          <FontAwesomeIcon
+                            icon={faBug}
+                            className="me-2 text-info"
+                          />
+                          Informations de débogage
+                        </h6>
+                        <pre
+                          className="small"
+                          style={{ maxHeight: "200px", overflow: "auto" }}
+                        >
+                          {JSON.stringify(debugInfo, null, 2)}
+                        </pre>
+                      </div>
+                    )}
 
                     {/* Tableau */}
                     <div className="table-responsive">

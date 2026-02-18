@@ -1,7 +1,7 @@
 // app/(front-office)/home/components/HeroSearch.tsx
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import colors from "../../../shared/constants/colors";
 import { useRouter } from "next/navigation";
 import { useSearch } from "../contexts/SearchContext";
@@ -22,7 +22,7 @@ interface Category {
   type: string;
   description?: string;
   image?: string;
-  enfants?: Category[];
+  enfants?: SubCategory[];
   path?: string | null;
   is_deleted?: boolean;
   deleted_at?: string | null;
@@ -35,15 +35,18 @@ interface SubCategory {
   slug: string;
   type: string;
   description?: string;
-  image?: string;
+  image?: string | null;
   path?: string | null;
   depth?: number;
-  parent?: Category;
+  parent?: {
+    uuid: string;
+    libelle: string;
+    slug: string;
+  };
   counts?: {
     produits: number;
     dons: number;
     echanges: number;
-    annonces: number;
     total: number;
   };
 }
@@ -52,6 +55,11 @@ interface CategoryWithSubs {
   category: Category;
   subCategories: SubCategory[];
 }
+
+// Fonction pour nettoyer le slug (enlever le timestamp)
+const cleanSlug = (slug: string): string => {
+  return slug.replace(/-\d+$/, "");
+};
 
 const HeroSearch: React.FC<HeroSearchProps> = ({
   initialQuery = "",
@@ -86,6 +94,7 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
     CategoryWithSubs[]
   >([]);
   const [loadingSubs, setLoadingSubs] = useState(true);
+  const [allCategories, setAllCategories] = useState<Category[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const suggestedSearches = [
@@ -95,16 +104,6 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
     "Robe de soirée",
     "Roman policier",
     "Climatiseur portable",
-  ];
-
-  const categories = [
-    { value: "", label: "Toutes les catégories" },
-    { value: "electronique", label: "Électronique" },
-    { value: "mode", label: "Mode" },
-    { value: "maison", label: "Maison" },
-    { value: "vehicules", label: "Véhicules" },
-    { value: "education", label: "Éducation" },
-    { value: "services", label: "Services" },
   ];
 
   const locations = [
@@ -125,6 +124,30 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
   ];
 
   // ============================================
+  // CHARGEMENT DE TOUTES LES CATÉGORIES
+  // ============================================
+  useEffect(() => {
+    const fetchAllCategories = async () => {
+      try {
+        console.log("🟡 HeroSearch - Chargement des catégories...");
+        const response = await api.get(API_ENDPOINTS.CATEGORIES.LIST);
+
+        // Filtrer les catégories actives
+        const activeCategories = response.filter(
+          (c: Category) => !c.is_deleted && c.deleted_at === null,
+        );
+
+        setAllCategories(activeCategories);
+        console.log(`✅ ${activeCategories.length} catégories chargées`);
+      } catch (error) {
+        console.error("🔴 HeroSearch - Erreur chargement catégories:", error);
+      }
+    };
+
+    fetchAllCategories();
+  }, []);
+
+  // ============================================
   // CHARGEMENT DES SOUS-CATÉGORIES DYNAMIQUES
   // ============================================
   useEffect(() => {
@@ -138,32 +161,58 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
           (c: Category) => !c.is_deleted && c.deleted_at === null,
         );
 
-        const mainCategories = activeCategories
-          .filter((c: Category) => !c.path || c.path === null || c.path === "")
-          .slice(0, 4);
+        // Prendre toutes les catégories principales (sans path) qui ont des enfants
+        const mainCategoriesWithChildren = activeCategories.filter(
+          (c: Category) => {
+            // Garder seulement les catégories principales qui ont des enfants actifs
+            const isMain = !c.path || c.path === null || c.path === "";
+            if (!isMain) return false;
+
+            // Vérifier si elle a des enfants actifs
+            const hasActiveChildren =
+              c.enfants &&
+              c.enfants.length > 0 &&
+              c.enfants.some(
+                (enfant: any) =>
+                  !enfant.is_deleted && enfant.deleted_at === null,
+              );
+
+            return hasActiveChildren;
+          },
+        );
+
+        console.log(
+          `✅ ${mainCategoriesWithChildren.length} catégories avec sous-catégories trouvées`,
+        );
 
         const categoriesData: CategoryWithSubs[] = [];
 
-        for (const category of mainCategories) {
+        for (const category of mainCategoriesWithChildren) {
           try {
-            const endpoint = API_ENDPOINTS.CATEGORIES.LISTE_SOUS_CATEGORIE(
-              category.uuid,
-            );
-            console.log(`🟡 Fetching subcategories for: ${category.libelle}`);
-
-            const response = await api.get(endpoint);
-
+            // Utiliser les enfants déjà fournis par l'API
             let subCategories: SubCategory[] = [];
 
-            if (response.success && Array.isArray(response.data)) {
-              subCategories = response.data;
-            } else if (Array.isArray(response)) {
-              subCategories = response;
+            if (category.enfants && category.enfants.length > 0) {
+              // Filtrer les enfants actifs
+              subCategories = category.enfants.filter(
+                (enfant: any) =>
+                  !enfant.is_deleted && enfant.deleted_at === null,
+              );
+
+              // Ajouter les informations du parent pour chaque sous-catégorie
+              subCategories = subCategories.map((sub: any) => ({
+                ...sub,
+                parent: {
+                  uuid: category.uuid,
+                  libelle: category.libelle,
+                  slug: category.slug,
+                },
+              }));
             }
 
             categoriesData.push({
               category,
-              subCategories: subCategories.slice(0, 2),
+              subCategories, // Garder toutes les sous-catégories
             });
 
             console.log(
@@ -174,10 +223,6 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
               `🔴 Error fetching subcategories for ${category.libelle}:`,
               error,
             );
-            categoriesData.push({
-              category,
-              subCategories: [],
-            });
           }
         }
 
@@ -224,6 +269,9 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
     }
   }, [isMobile]);
 
+  // ============================================
+  // FONCTION DE RECHERCHE AVEC FILTRES
+  // ============================================
   const handleSearch = () => {
     const query = searchQuery.trim();
 
@@ -231,13 +279,21 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
       onSearch(query);
     } else {
       const params = new URLSearchParams();
+
+      // Ajouter tous les filtres aux paramètres d'URL
       if (query) params.append("q", query);
       if (selectedCategory) params.append("categorie", selectedCategory);
-      if (selectedSousCategorie)
+      if (selectedSousCategorie) {
         params.append("sous_categorie", selectedSousCategorie);
+        // Ajouter aussi le libellé pour l'affichage
+        if (selectedSousCategorieLibelle) {
+          params.append("sous_categorie_libelle", selectedSousCategorieLibelle);
+        }
+      }
       if (selectedLocation) params.append("localisation", selectedLocation);
       if (maxPrice) params.append("prix_max", maxPrice);
 
+      // Navigation vers la page de recherche avec tous les filtres
       router.push(`/recherche?${params.toString()}`);
     }
 
@@ -246,35 +302,51 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
       query,
       selectedCategory,
       selectedSousCategorie,
+      selectedSousCategorieLibelle,
       selectedLocation,
       maxPrice,
     });
   };
 
-  const handleSubCategoryClick = (
-    subCategory: SubCategory,
-    categoryName: string,
-  ) => {
-    setSearchQuery(subCategory.libelle);
-    setSelectedSousCategorie(subCategory.uuid);
-    setSelectedSousCategorieLibelle(subCategory.libelle);
-    setActiveTag(subCategory.libelle);
+  // ============================================
+  // GESTIONNAIRE DE CLIC SUR SOUS-CATÉGORIE
+  // ============================================
+  const handleSubCategoryClick = useCallback(
+    (subCategory: SubCategory, categoryName: string) => {
+      // Mettre à jour tous les filtres dans le contexte
+      setSearchQuery(subCategory.libelle);
+      setSelectedSousCategorie(subCategory.uuid);
+      setSelectedSousCategorieLibelle(subCategory.libelle);
+      setActiveTag(subCategory.libelle);
 
-    let categoryValue = "";
-    if (categoryName.includes("Électronique")) categoryValue = "electronique";
-    else if (categoryName.includes("Vêtements")) categoryValue = "mode";
-    else if (categoryName.includes("Éducation")) categoryValue = "education";
-    else if (categoryName.includes("Services")) categoryValue = "services";
-    else if (categoryName.includes("Maison")) categoryValue = "maison";
-    else if (categoryName.includes("Véhicules")) categoryValue = "vehicules";
+      // Déterminer la valeur de catégorie basée sur le nom
+      let categoryValue = "";
+      if (categoryName.includes("Électronique")) categoryValue = "electronique";
+      else if (categoryName.includes("Vêtements")) categoryValue = "mode";
+      else if (categoryName.includes("Éducation")) categoryValue = "education";
+      else if (categoryName.includes("Services")) categoryValue = "services";
+      else if (categoryName.includes("Maison")) categoryValue = "maison";
+      else if (categoryName.includes("Véhicules")) categoryValue = "vehicules";
+      else if (categoryName.includes("Don")) categoryValue = "don-echange";
+      else if (categoryName.includes("Autres")) categoryValue = "autres";
 
-    if (categoryValue) {
-      setSelectedCategory(categoryValue);
-    }
+      if (categoryValue) {
+        setSelectedCategory(categoryValue);
+      }
 
-    handleSearch();
-    setShowSuggestions(false);
-  };
+      // Effectuer la recherche
+      handleSearch();
+      setShowSuggestions(false);
+    },
+    [
+      setSearchQuery,
+      setSelectedSousCategorie,
+      setSelectedSousCategorieLibelle,
+      setActiveTag,
+      setSelectedCategory,
+      handleSearch,
+    ],
+  );
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
@@ -335,6 +407,8 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
         return "fa-book";
       case "Services de proximité":
         return "fa-hand-holding-heart";
+      case "Autres":
+        return "fa-tag";
       default:
         return "fa-tag";
     }
@@ -352,6 +426,8 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
         return "#9C27B0";
       case "Services de proximité":
         return "#FF5722";
+      case "Autres":
+        return "#607D8B";
       default:
         return colors.oskar.grey;
     }
@@ -582,122 +658,7 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
           {!compactMode && !isMobile && (
             <div className="mt-3 mb-4">
               <div className="d-flex flex-wrap justify-content-center align-items-stretch gap-3">
-                {/* CATÉGORIE - CORRIGÉ */}
-                <div
-                  className="position-relative"
-                  style={{ minWidth: "220px", flex: "0 1 auto" }}
-                >
-                  <div className="position-relative">
-                    <select
-                      className="form-select"
-                      style={{
-                        width: "100%",
-                        padding: "0.75rem 2.5rem 0.75rem 2.5rem",
-                        borderColor: selectedCategory
-                          ? colors.oskar.green
-                          : colors.oskar.lightGrey,
-                        fontSize: "0.95rem",
-                        backgroundColor: "white",
-                        color: selectedCategory
-                          ? colors.oskar.black
-                          : "#6c757d",
-                        appearance: "none",
-                        cursor: "pointer",
-                        borderWidth: "1.5px",
-                        transition: "all 0.2s",
-                        borderRadius: "10px",
-                        fontWeight: selectedCategory ? "500" : "400",
-                        height: "54px",
-                        lineHeight: "1.5",
-                      }}
-                      value={selectedCategory}
-                      onChange={(e) => {
-                        setSelectedCategory(e.target.value);
-                        setSelectedSousCategorie("");
-                        setSelectedSousCategorieLibelle("");
-                      }}
-                    >
-                      {categories.map((cat) => (
-                        <option key={cat.value} value={cat.value}>
-                          {cat.label}
-                        </option>
-                      ))}
-                    </select>
-
-                    {/* Icône gauche - Catégorie */}
-                    <div
-                      className="position-absolute top-50 start-0 translate-middle-y"
-                      style={{
-                        color: selectedCategory
-                          ? colors.oskar.green
-                          : colors.oskar.grey,
-                        left: "15px",
-                        pointerEvents: "none",
-                        zIndex: 2,
-                      }}
-                    >
-                      <i className="fa-solid fa-tag"></i>
-                    </div>
-
-                    {/* Icône droite - Flèche */}
-                    <div
-                      className="position-absolute top-50 end-0 translate-middle-y pe-3"
-                      style={{
-                        color: colors.oskar.green,
-                        pointerEvents: "none",
-                        zIndex: 2,
-                        right: "10px",
-                      }}
-                    >
-                      <i className="fa-solid fa-chevron-down"></i>
-                    </div>
-
-                    {/* Texte sélectionné pour l'affichage (optionnel) */}
-                    {selectedCategory && (
-                      <div
-                        className="position-absolute top-50 start-0 translate-middle-y"
-                        style={{
-                          left: "45px",
-                          pointerEvents: "none",
-                          zIndex: 2,
-                          color: colors.oskar.black,
-                          fontSize: "0.95rem",
-                          fontWeight: "500",
-                          maxWidth: "120px",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {categories.find((c) => c.value === selectedCategory)
-                          ?.label || ""}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Label flottant - CORRIGÉ */}
-                  <span
-                    className="position-absolute px-2"
-                    style={{
-                      top: "-10px",
-                      left: "15px",
-                      fontSize: "0.7rem",
-                      color: selectedCategory
-                        ? colors.oskar.green
-                        : colors.oskar.grey,
-                      backgroundColor: "white",
-                      padding: "0 6px",
-                      fontWeight: 600,
-                      letterSpacing: "0.3px",
-                      zIndex: 3,
-                      lineHeight: "1",
-                    }}
-                  >
-                    CATÉGORIE
-                  </span>
-                </div>
-
-                {/* LOCALISATION - CORRIGÉ */}
+                {/* LOCALISATION */}
                 <div
                   className="position-relative"
                   style={{ minWidth: "220px", flex: "0 1 auto" }}
@@ -735,7 +696,7 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
                       ))}
                     </select>
 
-                    {/* Icône gauche - Localisation */}
+                    {/* Icône gauche */}
                     <div
                       className="position-absolute top-50 start-0 translate-middle-y"
                       style={{
@@ -750,7 +711,7 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
                       <i className="fa-solid fa-location-dot"></i>
                     </div>
 
-                    {/* Icône droite - Flèche */}
+                    {/* Icône droite */}
                     <div
                       className="position-absolute top-50 end-0 translate-middle-y pe-3"
                       style={{
@@ -807,7 +768,7 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
                   </span>
                 </div>
 
-                {/* PRIX MAX - CORRIGÉ */}
+                {/* PRIX MAX */}
                 <div
                   className="position-relative"
                   style={{ minWidth: "220px", flex: "0 1 auto" }}
@@ -843,7 +804,7 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
                       ))}
                     </select>
 
-                    {/* Icône gauche - Prix */}
+                    {/* Icône gauche */}
                     <div
                       className="position-absolute top-50 start-0 translate-middle-y"
                       style={{
@@ -858,7 +819,7 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
                       <i className="fa-solid fa-coins"></i>
                     </div>
 
-                    {/* Icône droite - Flèche */}
+                    {/* Icône droite */}
                     <div
                       className="position-absolute top-50 end-0 translate-middle-y pe-3"
                       style={{
@@ -956,83 +917,13 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
             </div>
           )}
 
-          {/* FILTRES RAPIDES - MOBILE - CORRIGÉ */}
+          {/* FILTRES RAPIDES - MOBILE */}
           {!compactMode && isMobile && (
             <div className="mb-4">
               <div
                 className="d-flex gap-2 overflow-auto pb-2"
                 style={{ scrollbarWidth: "none" }}
               >
-                {/* Catégorie - Mobile */}
-                <div
-                  className="position-relative flex-shrink-0"
-                  style={{ minWidth: "160px" }}
-                >
-                  <div className="position-relative">
-                    <select
-                      className="form-select"
-                      style={{
-                        width: "100%",
-                        padding: "0.7rem 2.2rem 0.7rem 2.2rem",
-                        borderColor: selectedCategory
-                          ? colors.oskar.green
-                          : colors.oskar.lightGrey,
-                        fontSize: "0.85rem",
-                        backgroundColor: "white",
-                        color: selectedCategory
-                          ? colors.oskar.black
-                          : "#6c757d",
-                        appearance: "none",
-                        cursor: "pointer",
-                        borderWidth: "1.5px",
-                        height: "48px",
-                        borderRadius: "10px",
-                        fontWeight: selectedCategory ? "500" : "400",
-                      }}
-                      value={selectedCategory}
-                      onChange={(e) => {
-                        setSelectedCategory(e.target.value);
-                        setSelectedSousCategorie("");
-                        setSelectedSousCategorieLibelle("");
-                      }}
-                    >
-                      {categories.map((cat) => (
-                        <option key={cat.value} value={cat.value}>
-                          {cat.label}
-                        </option>
-                      ))}
-                    </select>
-
-                    {/* Icône gauche */}
-                    <div
-                      className="position-absolute top-50 start-0 translate-middle-y"
-                      style={{
-                        color: selectedCategory
-                          ? colors.oskar.green
-                          : colors.oskar.grey,
-                        left: "12px",
-                        pointerEvents: "none",
-                        zIndex: 2,
-                      }}
-                    >
-                      <i className="fa-solid fa-tag"></i>
-                    </div>
-
-                    {/* Icône droite */}
-                    <div
-                      className="position-absolute top-50 end-0 translate-middle-y"
-                      style={{
-                        color: colors.oskar.green,
-                        pointerEvents: "none",
-                        zIndex: 2,
-                        right: "12px",
-                      }}
-                    >
-                      <i className="fa-solid fa-chevron-down"></i>
-                    </div>
-                  </div>
-                </div>
-
                 {/* Localisation - Mobile */}
                 <div
                   className="position-relative flex-shrink-0"
@@ -1187,45 +1078,41 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
             </div>
           )}
 
-          {/* SOUS-CATÉGORIES DYNAMIQUES */}
-          {showPopularSearches && (
-            <div className="mt-4 mt-md-5">
-              <h3
-                className="text-center mb-3"
-                style={{
-                  color: colors.oskar.grey,
-                  fontSize: isMobile ? "0.9375rem" : "1rem",
-                  fontWeight: 600,
-                  marginBottom: isMobile ? "1rem" : "1.5rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                }}
-              >
-                <i
-                  className="fa-solid fa-tags me-2"
-                  style={{ color: colors.oskar.green }}
-                ></i>
-                Sous-catégories populaires
-              </h3>
-
-              {loadingSubs ? (
-                <div className="d-flex justify-content-center align-items-center gap-2">
-                  <div
-                    className="spinner-border spinner-border-sm"
+          {/* SOUS-CATÉGORIES POPULAIRES - TOUTES SUR LA MÊME LIGNE */}
+          {showPopularSearches &&
+            !loadingSubs &&
+            categoriesWithSubs.length > 0 && (
+              <div className="mt-4 mt-md-5">
+                <h3
+                  className="text-center mb-4"
+                  style={{
+                    color: colors.oskar.grey,
+                    fontSize: isMobile ? "0.9375rem" : "1rem",
+                    fontWeight: 600,
+                    letterSpacing: "0.5px",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  <i
+                    className="fa-solid fa-tags me-2"
                     style={{ color: colors.oskar.green }}
-                    role="status"
-                  >
-                    <span className="visually-hidden">Chargement...</span>
-                  </div>
-                  <span className="text-muted small">
-                    Chargement des sous-catégories...
-                  </span>
-                </div>
-              ) : (
-                <div className="row g-4">
+                  ></i>
+                  Sous-catégories populaires
+                </h3>
+
+                {/* Conteneur avec Flexbox pour alignement horizontal */}
+                <div className="d-flex flex-wrap justify-content-center gap-4">
                   {categoriesWithSubs.map((item) => (
-                    <div key={item.category.uuid} className="col-md-3 col-6">
-                      <div className="text-center mb-2">
+                    <div
+                      key={item.category.uuid}
+                      className="text-center"
+                      style={{
+                        minWidth: isMobile ? "120px" : "150px",
+                        flex: "0 1 auto",
+                      }}
+                    >
+                      {/* Badge de catégorie */}
+                      <div className="mb-3">
                         <span
                           className="badge px-3 py-2"
                           style={{
@@ -1236,11 +1123,6 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
                             fontSize: "0.8rem",
                             fontWeight: 600,
                             borderRadius: "20px",
-                            display: "inline-block",
-                            maxWidth: "100%",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            whiteSpace: "nowrap",
                             border: `1px solid ${getCategoryColor(item.category.type)}30`,
                           }}
                         >
@@ -1250,117 +1132,98 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
                           {item.category.libelle}
                         </span>
                       </div>
-                      <div
-                        className="d-flex flex-wrap justify-content-center"
-                        style={{ gap: "0.5rem" }}
-                      >
-                        {item.subCategories.length > 0 ? (
-                          item.subCategories.map((sub) => (
-                            <button
-                              key={sub.uuid}
-                              onClick={() =>
-                                handleSubCategoryClick(
-                                  sub,
-                                  item.category.libelle,
-                                )
+
+                      {/* SOUS-CATÉGORIES SUR LA MÊME LIGNE - MODIFICATION ICI */}
+                      <div className="d-flex flex-wrap justify-content-center gap-2">
+                        {item.subCategories.map((sub) => (
+                          <button
+                            key={sub.uuid}
+                            onClick={() =>
+                              handleSubCategoryClick(sub, item.category.libelle)
+                            }
+                            className="btn rounded-pill d-flex align-items-center justify-content-center"
+                            style={{
+                              backgroundColor:
+                                selectedSousCategorie === sub.uuid
+                                  ? getCategoryColor(item.category.type)
+                                  : "white",
+                              color:
+                                selectedSousCategorie === sub.uuid
+                                  ? "white"
+                                  : colors.oskar.grey,
+                              fontSize: isMobile ? "0.75rem" : "0.8125rem",
+                              padding: isMobile
+                                ? "0.4rem 1rem"
+                                : "0.5rem 1.25rem",
+                              transition:
+                                "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                              border:
+                                selectedSousCategorie === sub.uuid
+                                  ? "none"
+                                  : `1px solid ${colors.oskar.lightGrey}`,
+                              whiteSpace: "nowrap",
+                              boxShadow:
+                                selectedSousCategorie === sub.uuid
+                                  ? `0 4px 12px ${getCategoryColor(item.category.type)}40`
+                                  : "0 2px 4px rgba(0,0,0,0.02)",
+                              fontWeight:
+                                selectedSousCategorie === sub.uuid
+                                  ? "600"
+                                  : "400",
+                            }}
+                            onMouseEnter={(e) => {
+                              if (selectedSousCategorie !== sub.uuid) {
+                                e.currentTarget.style.backgroundColor =
+                                  getCategoryColor(item.category.type) + "10";
+                                e.currentTarget.style.color = getCategoryColor(
+                                  item.category.type,
+                                );
+                                e.currentTarget.style.borderColor =
+                                  getCategoryColor(item.category.type);
+                                e.currentTarget.style.transform =
+                                  "translateY(-2px)";
                               }
-                              className="btn rounded-pill d-flex align-items-center"
-                              style={{
-                                backgroundColor:
-                                  selectedSousCategorie === sub.uuid
-                                    ? getCategoryColor(item.category.type)
-                                    : "white",
-                                color:
-                                  selectedSousCategorie === sub.uuid
-                                    ? "white"
-                                    : colors.oskar.grey,
-                                fontSize: isMobile ? "0.75rem" : "0.8125rem",
-                                padding: isMobile
-                                  ? "0.4rem 0.75rem"
-                                  : "0.5rem 0.875rem",
-                                transition:
-                                  "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                                border:
-                                  selectedSousCategorie === sub.uuid
-                                    ? "none"
-                                    : `1px solid ${colors.oskar.lightGrey}`,
-                                gap: "0.35rem",
-                                whiteSpace: "nowrap",
-                                boxShadow:
-                                  selectedSousCategorie === sub.uuid
-                                    ? `0 4px 12px ${getCategoryColor(item.category.type)}40`
-                                    : "0 2px 4px rgba(0,0,0,0.02)",
-                                fontWeight:
-                                  selectedSousCategorie === sub.uuid
-                                    ? "600"
-                                    : "400",
-                              }}
-                              onMouseEnter={(e) => {
-                                if (selectedSousCategorie !== sub.uuid) {
-                                  e.currentTarget.style.backgroundColor =
-                                    getCategoryColor(item.category.type) + "10";
-                                  e.currentTarget.style.color =
-                                    getCategoryColor(item.category.type);
-                                  e.currentTarget.style.borderColor =
-                                    getCategoryColor(item.category.type);
-                                  e.currentTarget.style.transform =
-                                    "translateY(-2px)";
-                                }
-                              }}
-                              onMouseLeave={(e) => {
-                                if (selectedSousCategorie !== sub.uuid) {
-                                  e.currentTarget.style.backgroundColor =
-                                    "white";
-                                  e.currentTarget.style.color =
-                                    colors.oskar.grey;
-                                  e.currentTarget.style.borderColor =
-                                    colors.oskar.lightGrey;
-                                  e.currentTarget.style.transform =
-                                    "translateY(0)";
-                                }
-                              }}
-                              aria-label={`Rechercher ${sub.libelle}`}
-                              type="button"
-                            >
-                              <i
-                                className="fa-solid fa-tag"
-                                style={{ fontSize: "0.7rem" }}
-                              ></i>
-                              {sub.libelle}
-                              {sub.counts && sub.counts.total > 0 && (
-                                <span
-                                  className="badge ms-1"
-                                  style={{
-                                    backgroundColor:
-                                      selectedSousCategorie === sub.uuid
-                                        ? "rgba(255,255,255,0.3)"
-                                        : getCategoryColor(item.category.type) +
-                                          "20",
-                                    color:
-                                      selectedSousCategorie === sub.uuid
-                                        ? "white"
-                                        : getCategoryColor(item.category.type),
-                                    fontSize: "0.6rem",
-                                    padding: "0.2rem 0.4rem",
-                                    borderRadius: "10px",
-                                    fontWeight: "600",
-                                  }}
-                                >
-                                  {sub.counts.total}
-                                </span>
-                              )}
-                            </button>
-                          ))
-                        ) : (
-                          <span className="text-muted small">
-                            Aucune sous-catégorie
-                          </span>
-                        )}
+                            }}
+                            onMouseLeave={(e) => {
+                              if (selectedSousCategorie !== sub.uuid) {
+                                e.currentTarget.style.backgroundColor = "white";
+                                e.currentTarget.style.color = colors.oskar.grey;
+                                e.currentTarget.style.borderColor =
+                                  colors.oskar.lightGrey;
+                                e.currentTarget.style.transform =
+                                  "translateY(0)";
+                              }
+                            }}
+                            aria-label={`Rechercher ${sub.libelle}`}
+                            type="button"
+                          >
+                            <i
+                              className="fa-solid fa-tag me-1"
+                              style={{ fontSize: "0.7rem" }}
+                            ></i>
+                            {sub.libelle}
+                          </button>
+                        ))}
                       </div>
                     </div>
                   ))}
                 </div>
-              )}
+              </div>
+            )}
+
+          {/* Message si chargement */}
+          {loadingSubs && showPopularSearches && (
+            <div className="d-flex justify-content-center align-items-center gap-2 mt-4">
+              <div
+                className="spinner-border spinner-border-sm"
+                style={{ color: colors.oskar.green }}
+                role="status"
+              >
+                <span className="visually-hidden">Chargement...</span>
+              </div>
+              <span className="text-muted small">
+                Chargement des sous-catégories...
+              </span>
             </div>
           )}
 
@@ -1406,10 +1269,7 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
                           color: colors.oskar.green,
                         }}
                       ></i>
-                      {
-                        categories.find((c) => c.value === selectedCategory)
-                          ?.label
-                      }
+                      {selectedCategory}
                     </span>
                   )}
                   {selectedSousCategorieLibelle && (
@@ -1485,7 +1345,7 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
           box-shadow: 0 0 0 0.25rem rgba(76, 175, 80, 0.25) !important;
         }
 
-        /* Styles pour les selects - CORRIGÉ */
+        /* Styles pour les selects */
         #hero-search select {
           -webkit-appearance: none;
           -moz-appearance: none;
@@ -1528,7 +1388,7 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
           font-size: 0.95rem;
         }
 
-        /* Labels flottants - CORRIGÉ */
+        /* Labels flottants */
         #hero-search .position-relative span.position-absolute {
           background-color: white;
           padding: 0 6px;
@@ -1572,6 +1432,10 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
           #hero-search .d-flex.gap-2 {
             gap: 0.75rem !important;
           }
+
+          #hero-search .gap-4 {
+            gap: 1rem !important;
+          }
         }
 
         /* Ajustements desktop */
@@ -1586,6 +1450,10 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
 
           #hero-search .position-relative:hover {
             transform: translateY(-1px);
+          }
+
+          #hero-search .gap-4 {
+            gap: 2rem !important;
           }
         }
       `}</style>

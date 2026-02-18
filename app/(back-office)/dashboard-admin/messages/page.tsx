@@ -67,6 +67,11 @@ import {
   faBuilding,
   faBell,
   faEnvelopeCircleCheck,
+  faVolumeUp,
+  faEnvelopeOpenText,
+  faList,
+  faExclamationTriangle,
+  faCheckDouble,
 } from "@fortawesome/free-solid-svg-icons";
 
 // Import des services et hooks
@@ -147,6 +152,32 @@ interface ContactConversation extends UtilisateurBase {
   totalMessages?: number;
 }
 
+// Type pour les notifications toast
+interface ToastNotification {
+  id: string;
+  type:
+    | "success"
+    | "error"
+    | "info"
+    | "warning"
+    | "new-message"
+    | "message-read";
+  title: string;
+  message: string;
+  duration?: number;
+  read?: boolean;
+  messageId?: string;
+  expediteur?: string;
+  destinataire?: {
+    nom?: string;
+    email: string;
+  };
+  details?: {
+    sujet?: string;
+    date?: string;
+  };
+}
+
 // ============================================
 // COMPOSANT PRINCIPAL AVEC SUSPENSE
 // ============================================
@@ -185,6 +216,10 @@ function MessagesContent() {
   const [contacts, setContacts] = useState<ContactConversation[]>([]);
   const [adminProfile, setAdminProfile] = useState<SuperAdmin | null>(null);
 
+  // États pour les notifications toast
+  const [toasts, setToasts] = useState<ToastNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
   // États pour le chargement
   const [loading, setLoading] = useState({
     initial: true,
@@ -218,6 +253,10 @@ function MessagesContent() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
+  // État pour la modale de confirmation de suppression
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [messageToDelete, setMessageToDelete] = useState<Message | null>(null);
+
   // État pour le formulaire d'envoi de message
   const [newMessage, setNewMessage] = useState({
     destinataireEmail: "",
@@ -243,119 +282,352 @@ function MessagesContent() {
     "contacts",
   );
 
-  // ✅ REF pour éviter les boucles infinies
+  // ✅ REF pour éviter les boucles infinies et gérer les intervalles
   const isInitialLoad = useRef(true);
   const isFetchingContacts = useRef(false);
   const prevMessagesRecusLength = useRef(0);
   const prevMessagesEnvoyesLength = useRef(0);
   const hasLoadedInitialData = useRef(false);
+  const pollingInterval = useRef<NodeJS.Timeout | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const toastContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // État pour la suppression
+  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(
+    null,
+  );
+
+  // Initialisation de l'audio pour les notifications sonores
+  useEffect(() => {
+    audioRef.current = new Audio("/sounds/notification.mp3");
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
 
   // ============================================
-  // FONCTIONS UTILITAIRES
+  // FONCTIONS DE NOTIFICATION TOAST
   // ============================================
-  const detectUserTypeFromEmail = (
-    email: string,
-  ): "super_admin" | "admin" | "agent" | "vendeur" | "utilisateur" => {
-    const emailLower = email.toLowerCase();
-    if (emailLower.includes("superadmin") || emailLower.includes("@sonec.com"))
-      return "super_admin";
-    if (emailLower.includes("admin")) return "admin";
-    if (emailLower.includes("agent") || emailLower.includes("@agent.com"))
-      return "agent";
-    if (
-      emailLower.includes("vendeur") ||
-      emailLower.includes("@sonecafrica.com")
-    )
-      return "vendeur";
-    if (emailLower.includes("boutique") || emailLower.includes("shop"))
-      return "vendeur";
-    return "utilisateur";
-  };
+  const showToast = useCallback(
+    (
+      type: ToastNotification["type"],
+      title: string,
+      message: string,
+      options?: {
+        duration?: number;
+        messageId?: string;
+        expediteur?: string;
+        destinataire?: { nom?: string; email: string };
+        details?: { sujet?: string; date?: string };
+        read?: boolean;
+      },
+    ) => {
+      const id = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-  const getUserTypeIcon = (userType: string) => {
-    switch (userType) {
-      case "super_admin":
-        return faUserShield;
-      case "admin":
-        return faUserShield;
-      case "agent":
-        return faUserTie;
-      case "vendeur":
-        return faStore;
-      case "utilisateur":
-        return faUser;
-      default:
-        return faUser;
-    }
-  };
+      setToasts((prev) => [
+        ...prev,
+        {
+          id,
+          type,
+          title,
+          message,
+          duration: options?.duration || 5000,
+          messageId: options?.messageId,
+          expediteur: options?.expediteur,
+          destinataire: options?.destinataire,
+          details: options?.details,
+          read: options?.read || false,
+        },
+      ]);
 
-  const getUserTypeColor = (userType: string) => {
-    switch (userType) {
-      case "super_admin":
-        return "purple";
-      case "admin":
-        return "info";
-      case "agent":
-        return "primary";
-      case "vendeur":
-        return "warning";
-      case "utilisateur":
-        return "success";
-      default:
-        return "secondary";
-    }
-  };
+      // Jouer un son pour les nouveaux messages
+      if (type === "new-message") {
+        if (audioRef.current) {
+          audioRef.current.play().catch((err) => {
+            console.log("🔇 Impossible de jouer le son de notification:", err);
+          });
+        }
+      }
 
-  const getUserTypeLabel = (userType: string) => {
-    switch (userType) {
-      case "super_admin":
-        return "Super Admin";
-      case "admin":
-        return "Admin";
-      case "agent":
-        return "Agent";
-      case "vendeur":
-        return "Vendeur";
-      case "utilisateur":
-        return "Utilisateur";
-      default:
-        return "Inconnu";
-    }
-  };
+      // Auto-suppression après durée
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, options?.duration || 5000);
+    },
+    [],
+  );
 
-  const formatLastMessageDate = (dateString?: string) => {
-    if (!dateString) return "Jamais";
+  const removeToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  // ============================================
+  // ✅ FONCTION DE MARQUAGE COMME LU (CORRIGÉE)
+  // ============================================
+  const handleMarkAsRead = useCallback(
+    async (messageId: string) => {
+      try {
+        // ✅ CORRECTION: MARK_READ est une fonction
+        await api.put(API_ENDPOINTS.MESSAGERIE.MARK_READ(messageId));
+
+        // Mettre à jour l'état local
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.uuid === messageId
+              ? { ...msg, estLu: true, dateLecture: new Date().toISOString() }
+              : msg,
+          ),
+        );
+
+        // Mettre à jour le message sélectionné si c'est celui-ci
+        if (selectedMessage?.uuid === messageId) {
+          setSelectedMessage((prev) =>
+            prev
+              ? { ...prev, estLu: true, dateLecture: new Date().toISOString() }
+              : null,
+          );
+        }
+
+        // Mettre à jour le compteur
+        setUnreadCount((prev) => Math.max(0, prev - 1));
+
+        // Afficher une notification de lecture
+        showToast(
+          "message-read",
+          "📖 Message marqué comme lu",
+          "Le message a été marqué comme lu avec succès",
+          { duration: 3000, messageId },
+        );
+      } catch (err) {
+        console.error("❌ Erreur lors du marquage comme lu:", err);
+
+        // Afficher une notification d'erreur
+        showToast(
+          "error",
+          "❌ Erreur",
+          "Impossible de marquer le message comme lu",
+          { duration: 3000 },
+        );
+      }
+    },
+    [selectedMessage, showToast],
+  );
+
+  // ============================================
+  // ✅ FONCTION DE MARQUAGE COMME NON LU
+  // ============================================
+  const handleMarkAsUnread = useCallback(
+    async (messageId: string) => {
+      try {
+        // ✅ Utilisation de MARK_UNREAD
+        await api.patch(API_ENDPOINTS.MESSAGERIE.MARK_UNREAD(messageId));
+
+        // Mettre à jour l'état local
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.uuid === messageId
+              ? { ...msg, estLu: false, dateLecture: null }
+              : msg,
+          ),
+        );
+
+        // Mettre à jour le message sélectionné si c'est celui-ci
+        if (selectedMessage?.uuid === messageId) {
+          setSelectedMessage((prev) =>
+            prev ? { ...prev, estLu: false, dateLecture: null } : null,
+          );
+        }
+
+        // Mettre à jour le compteur
+        setUnreadCount((prev) => prev + 1);
+
+        // Afficher une notification
+        showToast(
+          "info",
+          "📬 Message marqué comme non lu",
+          "Le message a été marqué comme non lu",
+          { duration: 3000, messageId },
+        );
+      } catch (err) {
+        console.error("❌ Erreur lors du marquage comme non lu:", err);
+        showToast(
+          "error",
+          "❌ Erreur",
+          "Impossible de marquer le message comme non lu",
+          { duration: 3000 },
+        );
+      }
+    },
+    [selectedMessage, showToast],
+  );
+
+  // ============================================
+  // ✅ FONCTION DE SUPPRESSION DE MESSAGE AVEC MODALE
+  // ============================================
+  const openDeleteModal = useCallback((message: Message) => {
+    setMessageToDelete(message);
+    setShowDeleteModal(true);
+  }, []);
+
+  const closeDeleteModal = useCallback(() => {
+    setShowDeleteModal(false);
+    setMessageToDelete(null);
+  }, []);
+
+  const confirmDeleteMessage = useCallback(async () => {
+    if (!messageToDelete) return;
+
+    setDeletingMessageId(messageToDelete.uuid);
+    setShowDeleteModal(false);
+
     try {
-      const date = new Date(dateString);
-      const now = new Date();
-      const diffMs = now.getTime() - date.getTime();
-      const diffDays = Math.floor(diffMs / 86400000);
+      // ✅ Utilisation de DELETE
+      await api.delete(API_ENDPOINTS.MESSAGERIE.DELETE(messageToDelete.uuid));
 
-      if (diffDays === 0)
-        return `Aujourd'hui à ${date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`;
-      if (diffDays === 1) return "Hier";
-      if (diffDays < 7) return `Il y a ${diffDays} jours`;
-      return date.toLocaleDateString("fr-FR");
-    } catch {
-      return "Date inconnue";
-    }
-  };
+      // Mettre à jour les listes de messages
+      setMessages((prev) =>
+        prev.filter((msg) => msg.uuid !== messageToDelete.uuid),
+      );
+      setMessagesEnvoyes((prev) =>
+        prev.filter((msg) => msg.uuid !== messageToDelete.uuid),
+      );
 
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return "Date inconnue";
-      return date.toLocaleDateString("fr-FR", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
+      // Si le message supprimé était sélectionné, fermer les détails
+      if (selectedMessage?.uuid === messageToDelete.uuid) {
+        setSelectedMessage(null);
+      }
+
+      // Afficher une notification de succès
+      showToast(
+        "success",
+        "🗑️ Message supprimé",
+        `Le message "${messageToDelete.sujet.substring(0, 50)}${messageToDelete.sujet.length > 50 ? "..." : ""}" a été supprimé avec succès`,
+        {
+          duration: 4000,
+          details: {
+            sujet: messageToDelete.sujet,
+            date: new Date(messageToDelete.envoyeLe).toLocaleDateString(
+              "fr-FR",
+            ),
+          },
+        },
+      );
+    } catch (err) {
+      console.error("❌ Erreur lors de la suppression du message:", err);
+      showToast("error", "❌ Erreur", "Impossible de supprimer le message", {
+        duration: 4000,
       });
-    } catch {
-      return "Date inconnue";
+    } finally {
+      setDeletingMessageId(null);
+      setMessageToDelete(null);
     }
-  };
+  }, [messageToDelete, selectedMessage, showToast]);
+
+  // ============================================
+  // ✅ POLLING POUR LES NOUVEAUX MESSAGES
+  // ============================================
+  const checkNewMessages = useCallback(async () => {
+    if (!adminProfile) return;
+
+    try {
+      const response = await api.get<MessageReceived[] | Message[]>(
+        API_ENDPOINTS.MESSAGERIE.RECEIVED,
+      );
+
+      if (Array.isArray(response)) {
+        const transformedMessages = response
+          .map((item: any) => {
+            if (!item) return null;
+            const message = item.message || item;
+            return {
+              uuid: message.uuid || `msg-${Date.now()}`,
+              sujet: message.sujet || "Sans sujet",
+              contenu: message.contenu || "",
+              expediteurNom: message.expediteurNom || "Expéditeur inconnu",
+              expediteurEmail: message.expediteurEmail || "",
+              expediteurUuid: message.expediteurUuid,
+              destinataireEmail:
+                message.destinataireEmail || adminProfile.email,
+              destinataireUuid: message.destinataireUuid || adminProfile.uuid,
+              type: (message.type || "notification").toUpperCase(),
+              estEnvoye: false,
+              envoyeLe:
+                message.envoyeLe ||
+                item.dateReception ||
+                new Date().toISOString(),
+              estLu: message.estLu || item.estLu || false,
+              dateLecture: message.dateLecture || item.dateLecture || null,
+            } as Message;
+          })
+          .filter((item): item is Message => item !== null);
+
+        // Vérifier les nouveaux messages non lus
+        const existingIds = new Set(messages.map((m) => m.uuid));
+        const newMessages = transformedMessages.filter(
+          (msg) => !existingIds.has(msg.uuid) && !msg.estLu,
+        );
+
+        if (newMessages.length > 0) {
+          // Mettre à jour l'état des messages
+          setMessages((prev) => [...newMessages, ...prev]);
+
+          // Afficher une notification pour chaque nouveau message
+          newMessages.forEach((msg) => {
+            showToast(
+              "new-message",
+              `📨 Nouveau message de ${msg.expediteurNom}`,
+              msg.sujet,
+              {
+                duration: 7000,
+                messageId: msg.uuid,
+                expediteur: msg.expediteurEmail,
+                details: {
+                  sujet: msg.sujet,
+                  date: new Date(msg.envoyeLe).toLocaleDateString("fr-FR"),
+                },
+              },
+            );
+          });
+
+          // Mettre à jour le compteur
+          setUnreadCount((prev) => prev + newMessages.length);
+        }
+      }
+    } catch (err) {
+      console.error(
+        "❌ Erreur lors de la vérification des nouveaux messages:",
+        err,
+      );
+    }
+  }, [adminProfile, messages, showToast]);
+
+  // Démarrer le polling
+  useEffect(() => {
+    if (!adminProfile) return;
+
+    // Vérifier immédiatement
+    checkNewMessages();
+
+    // Vérifier toutes les 30 secondes
+    pollingInterval.current = setInterval(checkNewMessages, 30000);
+
+    return () => {
+      if (pollingInterval.current) {
+        clearInterval(pollingInterval.current);
+      }
+    };
+  }, [adminProfile, checkNewMessages]);
+
+  // ============================================
+  // ✅ MISE À JOUR DU COMPTEUR DE NON LUS
+  // ============================================
+  useEffect(() => {
+    const unread = messages.filter((m) => !m.estLu).length;
+    setUnreadCount(unread);
+  }, [messages]);
 
   // ============================================
   // ✅ CHARGEMENT DU PROFIL ADMIN - SANS DÉPENDANCES
@@ -511,6 +783,17 @@ function MessagesContent() {
             .filter((item): item is Message => item !== null);
 
           setMessages(transformedMessages);
+
+          // Afficher une notification pour les messages non lus
+          const unreadMessages = transformedMessages.filter((m) => !m.estLu);
+          if (unreadMessages.length > 0) {
+            showToast(
+              "info",
+              `📬 ${unreadMessages.length} message(s) non lu(s)`,
+              "Vous avez des messages en attente de lecture",
+              { duration: 5000 },
+            );
+          }
         } else {
           setMessages([]);
         }
@@ -521,7 +804,7 @@ function MessagesContent() {
         setLoading((prev) => ({ ...prev, messages: false }));
       }
     },
-    [],
+    [showToast],
   );
 
   const fetchMessagesEnvoyes = useCallback(
@@ -714,8 +997,22 @@ function MessagesContent() {
 
         hasLoadedInitialData.current = true;
         isInitialLoad.current = false;
+
+        // Afficher une notification de bienvenue
+        showToast(
+          "success",
+          "✅ Messagerie chargée",
+          "Votre messagerie est prête",
+          { duration: 3000 },
+        );
       } catch (err) {
         console.error("❌ Erreur chargement initial:", err);
+        showToast(
+          "error",
+          "❌ Erreur de chargement",
+          "Impossible de charger la messagerie",
+          { duration: 5000 },
+        );
       } finally {
         if (isMounted) {
           setLoading((prev) => ({ ...prev, initial: false }));
@@ -958,6 +1255,131 @@ function MessagesContent() {
   ]);
 
   // ============================================
+  // ✅ FONCTIONS UTILITAIRES
+  // ============================================
+  const detectUserTypeFromEmail = (
+    email: string,
+  ): "super_admin" | "admin" | "agent" | "vendeur" | "utilisateur" => {
+    const emailLower = email.toLowerCase();
+    if (emailLower.includes("superadmin") || emailLower.includes("@sonec.com"))
+      return "super_admin";
+    if (emailLower.includes("admin")) return "admin";
+    if (emailLower.includes("agent") || emailLower.includes("@agent.com"))
+      return "agent";
+    if (
+      emailLower.includes("vendeur") ||
+      emailLower.includes("@sonecafrica.com")
+    )
+      return "vendeur";
+    if (emailLower.includes("boutique") || emailLower.includes("shop"))
+      return "vendeur";
+    return "utilisateur";
+  };
+
+  const getUserTypeIcon = (userType: string) => {
+    switch (userType) {
+      case "super_admin":
+        return faUserShield;
+      case "admin":
+        return faUserShield;
+      case "agent":
+        return faUserTie;
+      case "vendeur":
+        return faStore;
+      case "utilisateur":
+        return faUser;
+      default:
+        return faUser;
+    }
+  };
+
+  const getUserTypeColor = (userType: string) => {
+    switch (userType) {
+      case "super_admin":
+        return "purple";
+      case "admin":
+        return "info";
+      case "agent":
+        return "primary";
+      case "vendeur":
+        return "warning";
+      case "utilisateur":
+        return "success";
+      default:
+        return "secondary";
+    }
+  };
+
+  const getUserTypeLabel = (userType: string) => {
+    switch (userType) {
+      case "super_admin":
+        return "Super Admin";
+      case "admin":
+        return "Admin";
+      case "agent":
+        return "Agent";
+      case "vendeur":
+        return "Vendeur";
+      case "utilisateur":
+        return "Utilisateur";
+      default:
+        return "Inconnu";
+    }
+  };
+
+  const formatLastMessageDate = (dateString?: string) => {
+    if (!dateString) return "Jamais";
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffDays = Math.floor(diffMs / 86400000);
+
+      if (diffDays === 0)
+        return `Aujourd'hui à ${date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`;
+      if (diffDays === 1) return "Hier";
+      if (diffDays < 7) return `Il y a ${diffDays} jours`;
+      return date.toLocaleDateString("fr-FR");
+    } catch {
+      return "Date inconnue";
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "Date inconnue";
+      return date.toLocaleDateString("fr-FR", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return "Date inconnue";
+    }
+  };
+
+  const formatRelativeTime = (date: Date) => {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return "à l'instant";
+    if (diffMins < 60) return `il y a ${diffMins} min`;
+    if (diffHours < 24) return `il y a ${diffHours} h`;
+    if (diffDays < 7) return `il y a ${diffDays} j`;
+    return date.toLocaleDateString("fr-FR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  };
+
+  // ============================================
   // ✅ ACTIONS - AVEC MESSAGE ORIGINAL EN LECTURE SEULE
   // ============================================
   const handleSendMessage = async () => {
@@ -985,7 +1407,7 @@ function MessagesContent() {
       });
 
       const sentMessage: Message = {
-        uuid: `temp-${Date.now()}`,
+        uuid: response.uuid || `temp-${Date.now()}`,
         sujet: newMessage.sujet,
         contenu: newMessage.contenu,
         expediteurNom: newMessage.expediteurNom,
@@ -1001,7 +1423,37 @@ function MessagesContent() {
       };
 
       setMessagesEnvoyes((prev) => [sentMessage, ...prev]);
-      setSuccessMessage("Message envoyé avec succès !");
+
+      // Trouver le destinataire dans les contacts pour obtenir son nom
+      const destinataireContact = allUsers.find(
+        (user) => user.email === newMessage.destinataireEmail,
+      );
+
+      // Afficher une notification de succès avec les détails du destinataire
+      showToast(
+        "success",
+        "✅ Message envoyé avec succès !",
+        `Votre message a été envoyé à ${destinataireContact?.prenoms || ""} ${destinataireContact?.nom || ""} <${newMessage.destinataireEmail}>`,
+        {
+          duration: 6000,
+          destinataire: {
+            nom: destinataireContact
+              ? `${destinataireContact.prenoms} ${destinataireContact.nom}`.trim()
+              : undefined,
+            email: newMessage.destinataireEmail,
+          },
+          details: {
+            sujet: newMessage.sujet,
+            date: new Date().toLocaleDateString("fr-FR", {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+          },
+        },
+      );
 
       // ✅ Réinitialiser le message original
       setReplyToMessage(null);
@@ -1026,23 +1478,19 @@ function MessagesContent() {
       setApiError(
         err.response?.data?.message || "Erreur lors de l'envoi du message",
       );
+
+      showToast(
+        "error",
+        "❌ Erreur d'envoi",
+        err.response?.data?.message || "Impossible d'envoyer le message",
+        { duration: 5000 },
+      );
     } finally {
       setLoading((prev) => ({ ...prev, envoi: false }));
       setTimeout(() => {
         setSuccessMessage(null);
         setApiError(null);
       }, 5000);
-    }
-  };
-
-  const handleMarkAsRead = async (messageId: string) => {
-    setMessages((prev) =>
-      prev.map((msg) =>
-        msg.uuid === messageId ? { ...msg, estLu: true } : msg,
-      ),
-    );
-    if (selectedMessage?.uuid === messageId) {
-      setSelectedMessage((prev) => (prev ? { ...prev, estLu: true } : null));
     }
   };
 
@@ -1118,6 +1566,10 @@ function MessagesContent() {
         adminProfile.email,
         adminProfile.uuid,
       );
+
+      showToast("info", "🔄 Actualisation", "Vos messages ont été actualisés", {
+        duration: 2000,
+      });
     }
   };
 
@@ -1149,6 +1601,417 @@ function MessagesContent() {
 
   return (
     <>
+      {/* Container des notifications toast */}
+      <div
+        ref={toastContainerRef}
+        className="position-fixed top-0 end-0 p-3"
+        style={{ zIndex: 9999, maxWidth: "450px" }}
+      >
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className={`toast show mb-3 border-0 shadow-lg animate__animated animate__fadeInRight`}
+            role="alert"
+            style={{
+              minWidth: "350px",
+              maxWidth: "450px",
+              borderRadius: "16px",
+              overflow: "hidden",
+              border: "none",
+              boxShadow:
+                "0 12px 28px rgba(0,0,0,0.12), 0 4px 10px rgba(0,0,0,0.08)",
+              background: "white",
+            }}
+          >
+            {/* Barre de couleur selon le type */}
+            <div
+              style={{
+                height: "6px",
+                width: "100%",
+                background:
+                  toast.type === "success"
+                    ? "linear-gradient(90deg, #10b981, #34d399)"
+                    : toast.type === "error"
+                      ? "linear-gradient(90deg, #ef4444, #f87171)"
+                      : toast.type === "warning"
+                        ? "linear-gradient(90deg, #f59e0b, #fbbf24)"
+                        : toast.type === "new-message"
+                          ? "linear-gradient(90deg, #3b82f6, #60a5fa)"
+                          : toast.type === "message-read"
+                            ? "linear-gradient(90deg, #8b5cf6, #a78bfa)"
+                            : "linear-gradient(90deg, #6b7280, #9ca3af)",
+              }}
+            />
+
+            <div className="toast-body p-3">
+              <div className="d-flex">
+                {/* Icône */}
+                <div
+                  className="rounded-circle d-flex align-items-center justify-content-center me-3 flex-shrink-0"
+                  style={{
+                    width: "48px",
+                    height: "48px",
+                    background:
+                      toast.type === "success"
+                        ? "rgba(16, 185, 129, 0.15)"
+                        : toast.type === "error"
+                          ? "rgba(239, 68, 68, 0.15)"
+                          : toast.type === "warning"
+                            ? "rgba(245, 158, 11, 0.15)"
+                            : toast.type === "new-message"
+                              ? "rgba(59, 130, 246, 0.15)"
+                              : toast.type === "message-read"
+                                ? "rgba(139, 92, 246, 0.15)"
+                                : "rgba(107, 114, 128, 0.15)",
+                  }}
+                >
+                  <FontAwesomeIcon
+                    icon={
+                      toast.type === "success"
+                        ? faCheckCircle
+                        : toast.type === "error"
+                          ? faTimesCircle
+                          : toast.type === "warning"
+                            ? faExclamationTriangle
+                            : toast.type === "new-message"
+                              ? faEnvelope
+                              : toast.type === "message-read"
+                                ? faEnvelopeOpenText
+                                : faInfoCircle
+                    }
+                    style={{
+                      fontSize: "1.5rem",
+                      color:
+                        toast.type === "success"
+                          ? "#10b981"
+                          : toast.type === "error"
+                            ? "#ef4444"
+                            : toast.type === "warning"
+                              ? "#f59e0b"
+                              : toast.type === "new-message"
+                                ? "#3b82f6"
+                                : toast.type === "message-read"
+                                  ? "#8b5cf6"
+                                  : "#6b7280",
+                    }}
+                  />
+                </div>
+
+                {/* Contenu */}
+                <div className="flex-grow-1">
+                  <div className="d-flex justify-content-between align-items-start">
+                    <h6
+                      className="fw-bold mb-1"
+                      style={{ fontSize: "1rem", color: "#1f2937" }}
+                    >
+                      {toast.title}
+                    </h6>
+                    <button
+                      type="button"
+                      className="btn-close btn-sm"
+                      onClick={() => removeToast(toast.id)}
+                      aria-label="Fermer"
+                    ></button>
+                  </div>
+
+                  <p
+                    className="mb-1"
+                    style={{ fontSize: "0.9rem", color: "#4b5563" }}
+                  >
+                    {toast.message}
+                  </p>
+
+                  {/* Informations supplémentaires pour l'envoi de message */}
+                  {toast.type === "success" && toast.destinataire && (
+                    <div
+                      className="mt-2 p-2 rounded-3"
+                      style={{
+                        background: "#f3f4f6",
+                        borderLeft: "4px solid #10b981",
+                      }}
+                    >
+                      <div className="d-flex align-items-center gap-2 mb-1">
+                        <FontAwesomeIcon
+                          icon={faUser}
+                          style={{ fontSize: "0.7rem", color: "#6b7280" }}
+                        />
+                        <small className="text-muted">Destinataire:</small>
+                        <small className="fw-semibold text-dark">
+                          {toast.destinataire.nom || toast.destinataire.email}
+                        </small>
+                      </div>
+                      {toast.details?.sujet && (
+                        <div className="d-flex align-items-center gap-2">
+                          <FontAwesomeIcon
+                            icon={faEnvelope}
+                            style={{ fontSize: "0.7rem", color: "#6b7280" }}
+                          />
+                          <small className="text-muted">Sujet:</small>
+                          <small
+                            className="text-dark text-truncate"
+                            style={{ maxWidth: "180px" }}
+                          >
+                            {toast.details.sujet}
+                          </small>
+                        </div>
+                      )}
+                      {toast.details?.date && (
+                        <div className="d-flex align-items-center gap-2 mt-1">
+                          <FontAwesomeIcon
+                            icon={faClock}
+                            style={{ fontSize: "0.7rem", color: "#6b7280" }}
+                          />
+                          <small className="text-muted">Envoyé le:</small>
+                          <small className="text-dark">
+                            {toast.details.date}
+                          </small>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Informations pour les nouveaux messages */}
+                  {toast.type === "new-message" && toast.expediteur && (
+                    <div
+                      className="mt-2 p-2 rounded-3"
+                      style={{
+                        background: "#eff6ff",
+                        borderLeft: "4px solid #3b82f6",
+                      }}
+                    >
+                      <div className="d-flex align-items-center gap-2 mb-1">
+                        <FontAwesomeIcon
+                          icon={faUser}
+                          style={{ fontSize: "0.7rem", color: "#3b82f6" }}
+                        />
+                        <small className="text-muted">Expéditeur:</small>
+                        <small className="fw-semibold text-primary">
+                          {toast.expediteur}
+                        </small>
+                      </div>
+                      {toast.details?.sujet && (
+                        <div className="d-flex align-items-center gap-2">
+                          <FontAwesomeIcon
+                            icon={faEnvelope}
+                            style={{ fontSize: "0.7rem", color: "#3b82f6" }}
+                          />
+                          <small className="text-muted">Sujet:</small>
+                          <small className="text-primary">
+                            {toast.details.sujet}
+                          </small>
+                        </div>
+                      )}
+                      {toast.messageId && (
+                        <button
+                          className="btn btn-sm btn-outline-primary w-100 mt-2"
+                          onClick={() => {
+                            const message = messages.find(
+                              (m) => m.uuid === toast.messageId,
+                            );
+                            if (message) {
+                              setSelectedMessage(message);
+                              setActiveTab("received");
+                              removeToast(toast.id);
+                            }
+                          }}
+                          style={{ fontSize: "0.8rem" }}
+                        >
+                          <FontAwesomeIcon icon={faEye} className="me-2" />
+                          Voir le message
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Informations pour la suppression */}
+                  {toast.type === "success" &&
+                    toast.message?.includes("supprimé") &&
+                    toast.details?.sujet && (
+                      <div
+                        className="mt-2 p-2 rounded-3"
+                        style={{
+                          background: "#f3f4f6",
+                          borderLeft: "4px solid #ef4444",
+                        }}
+                      >
+                        <small className="text-muted d-block text-truncate">
+                          Sujet: {toast.details.sujet}
+                        </small>
+                        {toast.details.date && (
+                          <small className="text-muted d-block">
+                            Date: {toast.details.date}
+                          </small>
+                        )}
+                      </div>
+                    )}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Modale de confirmation de suppression */}
+      {showDeleteModal && messageToDelete && (
+        <div
+          className="modal fade show"
+          style={{ display: "block", backgroundColor: "rgba(0,0,0,0.5)" }}
+          onClick={closeDeleteModal}
+        >
+          <div
+            className="modal-dialog modal-dialog-centered"
+            style={{ maxWidth: "450px" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="modal-content border-0 shadow-lg"
+              style={{ borderRadius: "20px", overflow: "hidden" }}
+            >
+              {/* Barre de couleur rouge */}
+              <div
+                style={{
+                  height: "8px",
+                  width: "100%",
+                  background: "linear-gradient(90deg, #ef4444, #f87171)",
+                }}
+              />
+
+              <div className="modal-body p-4 text-center">
+                <div
+                  className="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-4"
+                  style={{
+                    width: "80px",
+                    height: "80px",
+                    background: "rgba(239, 68, 68, 0.15)",
+                    color: "#ef4444",
+                  }}
+                >
+                  <FontAwesomeIcon
+                    icon={faExclamationTriangle}
+                    style={{ fontSize: "2.5rem" }}
+                  />
+                </div>
+
+                <h4 className="fw-bold mb-3" style={{ color: "#1f2937" }}>
+                  Confirmer la suppression
+                </h4>
+
+                <p className="text-muted mb-4" style={{ fontSize: "0.95rem" }}>
+                  Êtes-vous sûr de vouloir supprimer ce message ?
+                </p>
+
+                {/* Aperçu du message */}
+                <div
+                  className="p-3 mb-4 rounded-3 text-start"
+                  style={{
+                    background: "#f8fafc",
+                    border: "1px solid #e9ecef",
+                  }}
+                >
+                  <div className="d-flex align-items-center gap-2 mb-2">
+                    <FontAwesomeIcon
+                      icon={faEnvelope}
+                      style={{ fontSize: "0.9rem", color: "#6b7280" }}
+                    />
+                    <span
+                      className="fw-semibold text-dark"
+                      style={{ fontSize: "0.9rem" }}
+                    >
+                      {messageToDelete.sujet}
+                    </span>
+                  </div>
+
+                  <div className="d-flex align-items-center gap-2 mb-2">
+                    <FontAwesomeIcon
+                      icon={faUser}
+                      style={{ fontSize: "0.8rem", color: "#6b7280" }}
+                    />
+                    <small className="text-muted">
+                      De: {messageToDelete.expediteurNom} (
+                      {messageToDelete.expediteurEmail})
+                    </small>
+                  </div>
+
+                  <div className="d-flex align-items-center gap-2">
+                    <FontAwesomeIcon
+                      icon={faClock}
+                      style={{ fontSize: "0.8rem", color: "#6b7280" }}
+                    />
+                    <small className="text-muted">
+                      {new Date(messageToDelete.envoyeLe).toLocaleDateString(
+                        "fr-FR",
+                        {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        },
+                      )}
+                    </small>
+                  </div>
+
+                  {messageToDelete.contenu && (
+                    <div
+                      className="mt-2 p-2 rounded-2"
+                      style={{
+                        background: "#fff",
+                        borderLeft: "3px solid #ef4444",
+                      }}
+                    >
+                      <small
+                        className="text-muted"
+                        style={{ fontSize: "0.8rem" }}
+                      >
+                        {messageToDelete.contenu.length > 100
+                          ? `${messageToDelete.contenu.substring(0, 100)}...`
+                          : messageToDelete.contenu}
+                      </small>
+                    </div>
+                  )}
+                </div>
+
+                <div className="d-flex gap-3">
+                  <button
+                    className="btn btn-outline-secondary flex-grow-1 py-2"
+                    onClick={closeDeleteModal}
+                    style={{
+                      borderRadius: "12px",
+                      fontSize: "0.95rem",
+                      fontWeight: "500",
+                      border: "2px solid #e9ecef",
+                    }}
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    className="btn btn-danger flex-grow-1 py-2"
+                    onClick={confirmDeleteMessage}
+                    style={{
+                      borderRadius: "12px",
+                      fontSize: "0.95rem",
+                      fontWeight: "500",
+                      background: "linear-gradient(90deg, #ef4444, #dc2626)",
+                      border: "none",
+                    }}
+                  >
+                    <FontAwesomeIcon icon={faTrash} className="me-2" />
+                    Supprimer
+                  </button>
+                </div>
+
+                <small
+                  className="text-muted d-block mt-3"
+                  style={{ fontSize: "0.75rem" }}
+                >
+                  Cette action est irréversible.
+                </small>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="container-fluid px-3 py-3">
         {/* Header avec titre et actions */}
         <div className="d-flex justify-content-between align-items-center mb-4">
@@ -1162,6 +2025,11 @@ function MessagesContent() {
                 className="me-3 text-primary"
               />
               Messagerie Administrateur
+              {unreadCount > 0 && (
+                <span className="badge bg-danger ms-3 px-3 py-2">
+                  {unreadCount} nouveau(x)
+                </span>
+              )}
             </h1>
             <p className="text-muted mb-0" style={{ fontSize: "0.9rem" }}>
               {contacts.length > 0
@@ -1177,7 +2045,7 @@ function MessagesContent() {
           </div>
           <div className="d-flex gap-3">
             <button
-              className="btn btn-outline-primary d-flex align-items-center gap-2"
+              className="btn btn-outline-primary d-flex align-items-center gap-2 position-relative"
               onClick={() => {
                 setReplyToMessage(null);
                 setActiveTab("contacts");
@@ -1220,7 +2088,7 @@ function MessagesContent() {
               icon={faInbox}
               color="info"
               subtitle={`${stats.unreadMessages} non lus`}
-              trend="neutral"
+              trend={stats.unreadMessages > 0 ? "up" : "neutral"}
               isLoading={loading.messages}
             />
           </div>
@@ -1575,7 +2443,9 @@ function MessagesContent() {
                               {filteredContacts.map((contact, index) => (
                                 <tr
                                   key={`${contact.userType}-${contact.uuid}`}
-                                  className="align-middle"
+                                  className={`align-middle ${
+                                    contact.unreadCount ? "table-warning" : ""
+                                  }`}
                                 >
                                   <td className="py-2 px-3">
                                     <div className="form-check">
@@ -1621,10 +2491,15 @@ function MessagesContent() {
                                         style={{ minWidth: 0 }}
                                       >
                                         <div
-                                          className="fw-bold text-dark text-truncate"
+                                          className="fw-bold text-dark text-truncate d-flex align-items-center"
                                           style={{ fontSize: "0.85rem" }}
                                         >
                                           {contact.email}
+                                          {contact.unreadCount ? (
+                                            <span className="badge bg-danger ms-2">
+                                              {contact.unreadCount}
+                                            </span>
+                                          ) : null}
                                         </div>
                                         <div className="d-flex align-items-center gap-2 flex-wrap">
                                           <small
@@ -1685,11 +2560,6 @@ function MessagesContent() {
                                                 </small>
                                               </>
                                             )}
-                                          {contact.unreadCount ? (
-                                            <span className="badge bg-danger ms-1">
-                                              {contact.unreadCount}
-                                            </span>
-                                          ) : null}
                                         </div>
                                       </div>
                                     </div>
@@ -1874,17 +2744,36 @@ function MessagesContent() {
                                   &lt;{replyToMessage.expediteurEmail}&gt;
                                 </span>
                               </div>
-                              <small className="text-muted">
-                                {new Date(
-                                  replyToMessage.envoyeLe,
-                                ).toLocaleDateString("fr-FR", {
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                  year: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
-                              </small>
+                              <div className="d-flex align-items-center">
+                                {replyToMessage.estLu ? (
+                                  <span className="badge bg-success bg-opacity-10 text-success me-2">
+                                    <FontAwesomeIcon
+                                      icon={faCheckCircle}
+                                      className="me-1"
+                                    />
+                                    Lu
+                                  </span>
+                                ) : (
+                                  <span className="badge bg-warning bg-opacity-10 text-warning me-2">
+                                    <FontAwesomeIcon
+                                      icon={faClock}
+                                      className="me-1"
+                                    />
+                                    Non lu
+                                  </span>
+                                )}
+                                <small className="text-muted">
+                                  {new Date(
+                                    replyToMessage.envoyeLe,
+                                  ).toLocaleDateString("fr-FR", {
+                                    day: "2-digit",
+                                    month: "2-digit",
+                                    year: "numeric",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </small>
+                              </div>
                             </div>
                             <div className="mt-2">
                               <div className="fw-semibold mb-1 text-dark">
@@ -2175,7 +3064,10 @@ function MessagesContent() {
                                 if (!msg.estLu) handleMarkAsRead(msg.uuid);
                               }}
                               onReply={() => handleReply(message)}
+                              onDelete={openDeleteModal}
+                              onMarkAsUnread={handleMarkAsUnread}
                               showSeparator={showSeparator}
+                              isDeleting={deletingMessageId === message.uuid}
                             />
                           ))
                         )}
@@ -2218,12 +3110,40 @@ function MessagesContent() {
                               >
                                 {selectedMessage.sujet}
                               </h6>
-                              <span
-                                className={`badge bg-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : "primary"} bg-opacity-10 text-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : "primary"} border border-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : "primary"} border-opacity-25 px-2 py-1`}
-                                style={{ fontSize: "0.7rem" }}
-                              >
-                                {selectedMessage.type.toUpperCase()}
-                              </span>
+                              <div className="d-flex align-items-center gap-2">
+                                {selectedMessage.estLu ? (
+                                  <span
+                                    className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 d-inline-flex align-items-center gap-1 px-2 py-1"
+                                    title={`Lu le ${selectedMessage.dateLecture ? new Date(selectedMessage.dateLecture).toLocaleString("fr-FR") : ""}`}
+                                  >
+                                    <FontAwesomeIcon
+                                      icon={faCheckCircle}
+                                      className="fs-12"
+                                    />
+                                    <span className="fw-medium">Lu</span>
+                                  </span>
+                                ) : (
+                                  <span
+                                    className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 d-inline-flex align-items-center gap-1 px-2 py-1"
+                                    onClick={() =>
+                                      handleMarkAsRead(selectedMessage.uuid)
+                                    }
+                                    style={{ cursor: "pointer" }}
+                                  >
+                                    <FontAwesomeIcon
+                                      icon={faClock}
+                                      className="fs-12"
+                                    />
+                                    <span className="fw-medium">Non lu</span>
+                                  </span>
+                                )}
+                                <span
+                                  className={`badge bg-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : "primary"} bg-opacity-10 text-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : "primary"} border border-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : "primary"} border-opacity-25 px-2 py-1`}
+                                  style={{ fontSize: "0.7rem" }}
+                                >
+                                  {selectedMessage.type.toUpperCase()}
+                                </span>
+                              </div>
                             </div>
                             <div className="bg-light rounded-3 p-3 mb-2">
                               <div className="d-flex align-items-center gap-3 mb-2">
@@ -2267,6 +3187,28 @@ function MessagesContent() {
                                   })}
                                 </small>
                               </div>
+                              {selectedMessage.dateLecture &&
+                                selectedMessage.estLu && (
+                                  <div className="text-success">
+                                    <small style={{ fontSize: "0.75rem" }}>
+                                      <FontAwesomeIcon
+                                        icon={faCheckCircle}
+                                        className="me-1"
+                                      />
+                                      Lu le{" "}
+                                      {new Date(
+                                        selectedMessage.dateLecture,
+                                      ).toLocaleDateString("fr-FR", {
+                                        weekday: "long",
+                                        day: "numeric",
+                                        month: "long",
+                                        year: "numeric",
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })}
+                                    </small>
+                                  </div>
+                                )}
                             </div>
                           </div>
 
@@ -2313,13 +3255,68 @@ function MessagesContent() {
                               />
                               Répondre au message
                             </button>
+
+                            {!selectedMessage.estLu ? (
+                              <button
+                                className="btn btn-outline-success d-flex align-items-center justify-content-center gap-3 py-2"
+                                onClick={() =>
+                                  handleMarkAsRead(selectedMessage.uuid)
+                                }
+                                style={{ fontSize: "0.85rem" }}
+                                disabled={
+                                  deletingMessageId === selectedMessage.uuid
+                                }
+                              >
+                                <FontAwesomeIcon icon={faCheckCircle} />
+                                Marquer comme lu
+                              </button>
+                            ) : (
+                              <button
+                                className="btn btn-outline-warning d-flex align-items-center justify-content-center gap-3 py-2"
+                                onClick={() =>
+                                  handleMarkAsUnread(selectedMessage.uuid)
+                                }
+                                style={{ fontSize: "0.85rem" }}
+                                disabled={
+                                  deletingMessageId === selectedMessage.uuid
+                                }
+                              >
+                                <FontAwesomeIcon icon={faClock} />
+                                Marquer comme non lu
+                              </button>
+                            )}
+
+                            <button
+                              className="btn btn-outline-danger d-flex align-items-center justify-content-center gap-3 py-2"
+                              onClick={() => openDeleteModal(selectedMessage)}
+                              style={{ fontSize: "0.85rem" }}
+                              disabled={
+                                deletingMessageId === selectedMessage.uuid
+                              }
+                            >
+                              {deletingMessageId === selectedMessage.uuid ? (
+                                <>
+                                  <span
+                                    className="spinner-border spinner-border-sm"
+                                    role="status"
+                                  />
+                                  <span>Suppression...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <FontAwesomeIcon icon={faTrash} />
+                                  <span>Supprimer</span>
+                                </>
+                              )}
+                            </button>
+
                             <button
                               className="btn btn-outline-secondary d-flex align-items-center justify-content-center gap-3 py-2"
                               onClick={() => setSelectedMessage(null)}
                               style={{ fontSize: "0.85rem" }}
                             >
                               <FontAwesomeIcon icon={faTimes} />
-                              Fermer les détails
+                              Fermer
                             </button>
                           </div>
                         </>
@@ -2440,7 +3437,7 @@ function MessagesContent() {
                                 className="py-2 px-3"
                                 style={{ fontSize: "0.8rem" }}
                               >
-                                Statut
+                                Statut de lecture
                               </th>
                               <th
                                 className="py-2 px-3 text-center"
@@ -2525,8 +3522,12 @@ function MessagesContent() {
                                   <td className="py-2 px-3">
                                     {message.estLu ? (
                                       <span
-                                        className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 d-flex align-items-center gap-2 px-2 py-1"
-                                        style={{ fontSize: "0.75rem" }}
+                                        className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 d-inline-flex align-items-center gap-2 px-2 py-1"
+                                        title={
+                                          message.dateLecture
+                                            ? `Lu le ${new Date(message.dateLecture).toLocaleString("fr-FR")}`
+                                            : ""
+                                        }
                                       >
                                         <FontAwesomeIcon
                                           icon={faCheckCircle}
@@ -2535,10 +3536,7 @@ function MessagesContent() {
                                         <span className="fw-medium">Lu</span>
                                       </span>
                                     ) : (
-                                      <span
-                                        className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 d-flex align-items-center gap-2 px-2 py-1"
-                                        style={{ fontSize: "0.75rem" }}
-                                      >
+                                      <span className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 d-inline-flex align-items-center gap-2 px-2 py-1">
                                         <FontAwesomeIcon
                                           icon={faClock}
                                           className="fs-12"
@@ -2767,6 +3765,43 @@ function MessagesContent() {
           -webkit-line-clamp: 2;
           -webkit-box-orient: vertical;
           overflow: hidden;
+        }
+
+        @keyframes slideIn {
+          from {
+            transform: translateX(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+
+        .toast {
+          animation: slideIn 0.3s ease;
+        }
+
+        .notifications-list {
+          max-height: 400px;
+          overflow-y: auto;
+        }
+
+        .notifications-list::-webkit-scrollbar {
+          width: 6px;
+        }
+
+        .notifications-list::-webkit-scrollbar-track {
+          background: #f1f1f1;
+        }
+
+        .notifications-list::-webkit-scrollbar-thumb {
+          background: #c1c1c1;
+          border-radius: 10px;
+        }
+
+        .notifications-list::-webkit-scrollbar-thumb:hover {
+          background: #a8a8a8;
         }
 
         @media (max-width: 768px) {
@@ -3000,20 +4035,26 @@ const StatsCard = ({
 };
 
 // ============================================
-// COMPOSANT MESSAGE ITEM - AVEC FONCTION RÉPONDRE
+// COMPOSANT MESSAGE ITEM - AVEC FONCTION RÉPONDRE ET INDICATEUR DE LECTURE
 // ============================================
 const MessageItem = ({
   message,
   isSelected,
   onSelect,
   onReply,
+  onDelete,
+  onMarkAsUnread,
   showSeparator = false,
+  isDeleting = false,
 }: {
   message: Message;
   isSelected: boolean;
   onSelect: (message: Message) => void;
   onReply?: (message: Message) => void;
+  onDelete?: (message: Message) => void;
+  onMarkAsUnread?: (messageId: string) => void;
   showSeparator?: boolean;
+  isDeleting?: boolean;
 }) => {
   const formatDate = (dateString: string) => {
     try {
@@ -3106,18 +4147,26 @@ const MessageItem = ({
           transition: "all 0.2s ease",
           borderRadius: "8px",
           marginBottom: "4px",
+          opacity: isDeleting ? 0.5 : 1,
         }}
       >
         <div className="d-flex justify-content-between align-items-start mb-2">
           <div className="d-flex align-items-center gap-3">
             <div
-              className={`bg-${getTypeColor()} bg-opacity-10 text-${getTypeColor()} rounded-circle d-flex align-items-center justify-content-center`}
+              className={`bg-${getTypeColor()} bg-opacity-10 text-${getTypeColor()} rounded-circle d-flex align-items-center justify-content-center position-relative`}
               style={{ width: "40px", height: "40px" }}
             >
               <FontAwesomeIcon
                 icon={getTypeIcon()}
                 className={`fs-5 ${message.estLu ? "opacity-75" : ""}`}
               />
+              {message.estLu && (
+                <div
+                  className="position-absolute bottom-0 end-0 bg-success rounded-circle border border-2 border-white"
+                  style={{ width: "12px", height: "12px" }}
+                  title="Message lu"
+                />
+              )}
             </div>
             <div className="d-flex flex-column">
               <div className="d-flex align-items-center gap-2 mb-1">
@@ -3150,6 +4199,20 @@ const MessageItem = ({
           </div>
           <div className="d-flex flex-column align-items-end gap-2">
             <div className="d-flex align-items-center gap-2">
+              {message.estLu && (
+                <span
+                  className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 d-inline-flex align-items-center gap-1 px-2 py-1"
+                  title={
+                    message.dateLecture
+                      ? `Lu le ${new Date(message.dateLecture).toLocaleString("fr-FR")}`
+                      : ""
+                  }
+                  style={{ fontSize: "0.65rem" }}
+                >
+                  <FontAwesomeIcon icon={faCheckCircle} className="fs-10" />
+                  <span>Lu</span>
+                </span>
+              )}
               <small className="text-muted" style={{ fontSize: "0.75rem" }}>
                 <FontAwesomeIcon icon={faClock} className="me-1" />
                 {formatDate(message.envoyeLe)}
@@ -3201,6 +4264,7 @@ const MessageItem = ({
                 onSelect(message);
               }}
               style={{ fontSize: "0.8rem" }}
+              disabled={isDeleting}
             >
               <FontAwesomeIcon icon={faEye} style={{ fontSize: "0.8rem" }} />
               <span>Voir</span>
@@ -3212,10 +4276,52 @@ const MessageItem = ({
                 if (onReply) onReply(message);
               }}
               style={{ fontSize: "0.8rem" }}
+              disabled={isDeleting}
             >
               <FontAwesomeIcon icon={faReply} style={{ fontSize: "0.8rem" }} />
               <span>Répondre</span>
             </button>
+            {message.estLu && onMarkAsUnread && (
+              <button
+                className="btn btn-sm btn-outline-warning d-flex align-items-center gap-1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMarkAsUnread(message.uuid);
+                }}
+                style={{ fontSize: "0.8rem" }}
+                title="Marquer comme non lu"
+                disabled={isDeleting}
+              >
+                <FontAwesomeIcon
+                  icon={faClock}
+                  style={{ fontSize: "0.8rem" }}
+                />
+              </button>
+            )}
+            {onDelete && (
+              <button
+                className="btn btn-sm btn-outline-danger d-flex align-items-center gap-1"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(message);
+                }}
+                style={{ fontSize: "0.8rem" }}
+                disabled={isDeleting}
+                title="Supprimer"
+              >
+                {isDeleting ? (
+                  <span
+                    className="spinner-border spinner-border-sm"
+                    role="status"
+                  />
+                ) : (
+                  <FontAwesomeIcon
+                    icon={faTrash}
+                    style={{ fontSize: "0.8rem" }}
+                  />
+                )}
+              </button>
+            )}
           </div>
           {message.estEnvoye && !message.estLu && (
             <span
@@ -3229,6 +4335,12 @@ const MessageItem = ({
               />
               En attente de lecture
             </span>
+          )}
+          {message.dateLecture && message.estLu && (
+            <small className="text-success" style={{ fontSize: "0.7rem" }}>
+              <FontAwesomeIcon icon={faCheckCircle} className="me-1" />
+              Lu {formatDate(message.dateLecture)}
+            </small>
           )}
         </div>
       </div>

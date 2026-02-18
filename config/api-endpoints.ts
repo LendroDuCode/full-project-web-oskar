@@ -443,6 +443,7 @@ export const API_ENDPOINTS = {
     REPLY: withBaseUrl("/messagerie/repondre"),
     STATS: withBaseUrl("/messagerie/statistiques"),
     PUBLIC_SEND: withBaseUrl("/messagerie/public/envoyer"),
+    DELETE: (uuid: string) => withBaseUrl(`/messagerie/supprimer/${uuid}`),
   },
 
   // Permissions
@@ -522,6 +523,10 @@ export const API_ENDPOINTS = {
     BLOCK: (uuid: string) => withBaseUrl(`/produits/${uuid}/bloquer`),
     UNBLOCK: (uuid: string) => withBaseUrl(`/produits/${uuid}/debloquer`),
     EXPORT_PDF: withBaseUrl("/produits/produit-export-pdf"),
+    LIST_PRODUITS_FAVORIS_UTILISATEUR: withBaseUrl(
+      "/produits/favoris/utilisateur",
+    ),
+    LIST_PRODUITS_FAVORIS_VENDEUR: withBaseUrl("/produits/favoris/vendeur"),
   },
 
   // Catégories
@@ -586,6 +591,8 @@ export const API_ENDPOINTS = {
     RANDOM_DETAIL: (uuid: string) =>
       withBaseUrl(`/dons/details/aleatoire/${uuid}`),
     EXPORT_PDF: withBaseUrl("/dons/don-export-pdf"),
+    LIST_FAVORIS_DON_UTILISATEUR: withBaseUrl("/dons/favoris/utilisateur"),
+    LIST_FAVORIS_DON_VENDEUR: withBaseUrl("/dons/favoris/vendeur"),
   },
 
   // Notes
@@ -648,6 +655,10 @@ export const API_ENDPOINTS = {
     GET_UPLOAD: (filename: string) =>
       withBaseUrl(`/echanges/uploads/${filename}`),
     EXPORT_PDF: withBaseUrl("/echanges/export-echange-pdf"),
+    LIST_ECHANGES_FAVORIS_UTILISATEUR: withBaseUrl(
+      "/echanges/liste-echange-favoris-utilisateur",
+    ),
+    LIST_ECHANGES_FAVORIS_VENDEUR: withBaseUrl("/echanges/favoris/vendeur"),
   },
 
   // Commentaires
@@ -675,6 +686,11 @@ export const API_ENDPOINTS = {
   // Favoris
   FAVORIS: {
     LIST: withBaseUrl("/favoris"),
+    REMOVE_DON: (donUuid: string) => withBaseUrl(`/favoris/don/${donUuid}`),
+    REMOVE_PRODUIT: (produitUuid: string) =>
+      withBaseUrl(`/favoris/produit/${produitUuid}`),
+    REMOVE_ECHANGE: (echangeUuid: string) =>
+      withBaseUrl(`/favoris/echange/${echangeUuid}`),
     PRODUITS: withBaseUrl("/favoris/produits"),
     CHECK: (produitUuid: string) =>
       withBaseUrl(`/favoris/check/${produitUuid}`),

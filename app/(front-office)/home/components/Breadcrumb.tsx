@@ -1,8 +1,8 @@
 // Breadcrumb.tsx - CORRIGÉ ET RESPONSIVE
 "use client";
 
+import colors from "@/app/shared/constants/colors";
 import Link from "next/link";
-import colors from "../../../shared/constants/colors";
 import { useState, useEffect } from "react";
 
 interface BreadcrumbItem {

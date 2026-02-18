@@ -1,3 +1,4 @@
+// app/(front-office)/mes-favoris/page.tsx
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -5,7 +6,7 @@ import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import FilterBar from "./components/FilterBar";
 import DataTable from "./components/DataTable";
-import colors from "@/app/shared/constants/colors";
+
 import { FavoriItem, FavorisResponse } from "./type/favoris";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -23,9 +24,12 @@ import {
   faExternalLinkAlt,
   faFileExport,
   faSpinner,
+  faUser,
+  faStore,
 } from "@fortawesome/free-solid-svg-icons";
 import EmptyState from "./components/EmptyState";
 import ViewModal from "../annonces/components/ViewModal";
+import colors from "@/app/shared/constants/colors";
 
 export default function MesFavorisPage() {
   const [favoris, setFavoris] = useState<FavoriItem[]>([]);
@@ -87,12 +91,12 @@ export default function MesFavorisPage() {
           estPublie: produit?.estPublie,
           estBloque: produit?.estBloque,
           seller: {
-            name: produit?.vendeur
-              ? `${produit.vendeur.prenoms} ${produit.vendeur.nom}`
+            name: produit?.createur
+              ? `${produit.createur.prenoms} ${produit.createur.nom}`
               : "Vendeur inconnu",
-            avatar: produit?.vendeur?.avatar,
-            isPro: !!produit?.boutique,
-            type: "vendeur",
+            avatar: produit?.createur?.avatar,
+            isPro: false,
+            type: "utilisateur",
           },
           category: produit?.categorie?.libelle,
           originalData: produit,
@@ -103,7 +107,7 @@ export default function MesFavorisPage() {
         const don = favori.don;
         annonceData = {
           ...annonceData,
-          title: don?.nom || "Don sans nom",
+          title: don?.titre || don?.nom || "Don sans nom",
           description: don?.description,
           image: don?.image || `https://via.placeholder.com/64?text=D`,
           status: don?.statut?.toLowerCase() || "en-attente",
@@ -112,8 +116,12 @@ export default function MesFavorisPage() {
           estPublie: don?.estPublie,
           estBloque: don?.est_bloque,
           seller: {
-            name: don?.nom_donataire || "Donateur inconnu",
-            type: "donateur",
+            name: don?.createur
+              ? `${don.createur.prenoms} ${don.createur.nom}`
+              : "Donateur inconnu",
+            avatar: don?.createur?.avatar,
+            isPro: false,
+            type: "utilisateur",
           },
           category: don?.categorie,
           originalData: don,
@@ -125,7 +133,7 @@ export default function MesFavorisPage() {
         annonceData = {
           ...annonceData,
           title: echange?.nomElementEchange || "Échange sans nom",
-          description: echange?.nom_initiateur || echange?.nomElementEchange,
+          description: echange?.message || echange?.nomElementEchange,
           image: echange?.image || `https://via.placeholder.com/64?text=E`,
           status: echange?.statut?.toLowerCase() || "en-attente",
           price: echange?.prix,
@@ -134,7 +142,7 @@ export default function MesFavorisPage() {
           estBloque: echange?.estBloque,
           seller: {
             name: echange?.nom_initiateur || "Initié par",
-            type: "initiateur",
+            type: echange?.typeDestinataire || "utilisateur",
           },
           category: echange?.categorie,
           originalData: echange,
@@ -195,23 +203,145 @@ export default function MesFavorisPage() {
     setFullDetails(null);
   }, []);
 
-  // Charger les favoris
-  const fetchFavoris = useCallback(async () => {
+  // ✅ Charger les favoris utilisateur depuis les endpoints spécifiques
+  const fetchUserFavoris = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      console.log("📡 Chargement des favoris...");
-      const response = await api.get<FavorisResponse>(
-        API_ENDPOINTS.FAVORIS.LIST,
-      );
+      console.log("📡 Chargement des favoris utilisateur...");
 
-      console.log("✅ Favoris chargés:", response);
+      // Appeler les 3 endpoints spécifiques pour les utilisateurs
+      const [produitsRes, donsRes, echangesRes] = await Promise.allSettled([
+        api.get<any>(API_ENDPOINTS.PRODUCTS.LIST_PRODUITS_FAVORIS_UTILISATEUR),
+        api.get<any>(API_ENDPOINTS.DONS.LIST_FAVORIS_DON_UTILISATEUR),
+        api.get<any>(API_ENDPOINTS.ECHANGES.LIST_ECHANGES_FAVORIS_UTILISATEUR),
+      ]);
 
-      if (response && response.favoris) {
-        setFavoris(response.favoris);
-      } else {
-        setFavoris([]);
+      const allFavoris: FavoriItem[] = [];
+
+      // Traiter les produits
+      if (produitsRes.status === "fulfilled") {
+        const response = produitsRes.value;
+        const produitsData = response.data || response;
+
+        if (Array.isArray(produitsData)) {
+          produitsData.forEach((item: any) => {
+            // CORRIGÉ : Structure conforme à l'interface FavoriItem
+            allFavoris.push({
+              uuid: `produit-${item.uuid}-${Date.now()}`,
+              type: "produit",
+              produitUuid: item.uuid, // Ajout de produitUuid
+              donUuid: "", // Valeur par défaut
+              echangeUuid: "", // Valeur par défaut
+              utilisateurUuid: item.createur?.uuid || "",
+              itemUuid: item.uuid,
+              produit: {
+                ...item,
+                libelle: item.libelle,
+                description: item.description,
+                prix: item.prix,
+                image: item.image,
+                statut: item.statut,
+                estPublie: item.estPublie,
+                estBloque: item.estBloque,
+                quantite: item.quantite,
+                createur: item.createur,
+                categorie: item.categorie,
+              },
+              createdAt: item.createdAt || new Date().toISOString(),
+            });
+          });
+        }
+      }
+
+      // Traiter les dons
+      if (donsRes.status === "fulfilled") {
+        const response = donsRes.value;
+        const donsData = response.data || response;
+
+        if (Array.isArray(donsData)) {
+          donsData.forEach((item: any) => {
+            // CORRIGÉ : Structure conforme à l'interface FavoriItem
+            allFavoris.push({
+              uuid: `don-${item.uuid}-${Date.now()}`,
+              type: "don",
+              produitUuid: "", // Valeur par défaut
+              donUuid: item.uuid, // Ajout de donUuid
+              echangeUuid: "", // Valeur par défaut
+              utilisateurUuid: item.createur?.uuid || "",
+              itemUuid: item.uuid,
+              don: {
+                ...item,
+                titre: item.titre,
+                nom: item.titre,
+                description: item.description,
+                prix: item.prix,
+                image: item.image,
+                statut: item.statut,
+                estPublie: item.estPublie,
+                est_bloque: item.est_bloque,
+                quantite: item.quantite,
+                createur: item.createur,
+                categorie: item.categorie,
+              },
+              createdAt: item.createdAt || new Date().toISOString(),
+            });
+          });
+        }
+      }
+
+      // Traiter les échanges
+      if (echangesRes.status === "fulfilled") {
+        const response = echangesRes.value;
+        const echangesData = response.data || response;
+
+        if (Array.isArray(echangesData)) {
+          echangesData.forEach((item: any) => {
+            // CORRIGÉ : Structure conforme à l'interface FavoriItem
+            allFavoris.push({
+              uuid: `echange-${item.uuid}-${Date.now()}`,
+              type: "echange",
+              produitUuid: "", // Valeur par défaut
+              donUuid: "", // Valeur par défaut
+              echangeUuid: item.uuid, // Ajout de echangeUuid
+              utilisateurUuid: item.createur?.uuid || "",
+              itemUuid: item.uuid,
+              echange: {
+                ...item,
+                nomElementEchange: item.nomElementEchange,
+                message: item.message,
+                prix: item.prix,
+                image: item.image,
+                statut: item.statut,
+                estPublie: item.estPublie,
+                estBloque: item.estBloque,
+                quantite: item.quantite,
+                nom_initiateur: item.nom_initiateur,
+                typeDestinataire: item.typeDestinataire,
+              },
+              createdAt:
+                item.createdAt ||
+                item.dateProposition ||
+                new Date().toISOString(),
+            });
+          });
+        }
+      }
+
+      console.log(`✅ Total favoris utilisateur chargés: ${allFavoris.length}`);
+
+      // Trier par date (plus récents d'abord)
+      const sortedFavoris = allFavoris.sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA;
+      });
+
+      setFavoris(sortedFavoris);
+
+      if (allFavoris.length === 0) {
+        setError("Vous n'avez pas encore de favoris");
       }
     } catch (err: any) {
       console.error("❌ Erreur lors du chargement des favoris:", err);
@@ -249,13 +379,14 @@ export default function MesFavorisPage() {
             category = item.produit?.categorie?.libelle || "";
             break;
           case "don":
-            title = item.don?.nom || "";
+            title = item.don?.titre || item.don?.nom || "";
             description = item.don?.description || "";
             category = item.don?.categorie || "";
             break;
           case "echange":
             title = item.echange?.nomElementEchange || "";
-            description = item.echange?.nomElementEchange || "";
+            description =
+              item.echange?.message || item.echange?.nomElementEchange || "";
             category = item.echange?.categorie || "";
             break;
         }
@@ -320,14 +451,28 @@ export default function MesFavorisPage() {
       try {
         console.log(`🗑️ Retrait du favori ${uuid} (${type})`);
 
-        // Utiliser l'endpoint approprié
-        await api.delete(API_ENDPOINTS.FAVORIS.REMOVE(itemUuid));
+        // Utiliser l'endpoint approprié selon le type
+        let endpoint = "";
+        switch (type) {
+          case "produit":
+            endpoint = API_ENDPOINTS.FAVORIS.REMOVE(itemUuid);
+            break;
+          case "don":
+            endpoint =
+              API_ENDPOINTS.FAVORIS.REMOVE_DON?.(itemUuid) ||
+              `/favoris/don/${itemUuid}`;
+            break;
+          case "echange":
+            endpoint =
+              API_ENDPOINTS.FAVORIS.REMOVE_ECHANGE?.(itemUuid) ||
+              `/favoris/echange/${itemUuid}`;
+            break;
+        }
+
+        await api.delete(endpoint);
 
         // Recharger les favoris
-        await fetchFavoris();
-
-        // Retirer de la sélection
-        setSelectedItems((prev) => prev.filter((id) => id !== uuid));
+        await fetchUserFavoris();
 
         // Message de succès
         alert("L'élément a été retiré de vos favoris avec succès");
@@ -336,7 +481,7 @@ export default function MesFavorisPage() {
         alert("Erreur lors du retrait du favori. Veuillez réessayer.");
       }
     },
-    [fetchFavoris],
+    [fetchUserFavoris],
   );
 
   // Retirer plusieurs favoris
@@ -357,14 +502,30 @@ export default function MesFavorisPage() {
       );
 
       // Retirer chaque favori sélectionné
-      const promises = selectedFavoris.map((favori) =>
-        api.delete(API_ENDPOINTS.FAVORIS.REMOVE(favori.itemUuid)),
-      );
+      const promises = selectedFavoris.map((favori) => {
+        let endpoint = "";
+        switch (favori.type) {
+          case "produit":
+            endpoint = API_ENDPOINTS.FAVORIS.REMOVE(favori.itemUuid);
+            break;
+          case "don":
+            endpoint =
+              API_ENDPOINTS.FAVORIS.REMOVE_DON?.(favori.itemUuid) ||
+              `/favoris/don/${favori.itemUuid}`;
+            break;
+          case "echange":
+            endpoint =
+              API_ENDPOINTS.FAVORIS.REMOVE_ECHANGE?.(favori.itemUuid) ||
+              `/favoris/echange/${favori.itemUuid}`;
+            break;
+        }
+        return api.delete(endpoint);
+      });
 
       await Promise.all(promises);
 
       // Recharger les favoris
-      await fetchFavoris();
+      await fetchUserFavoris();
 
       // Réinitialiser la sélection
       setSelectedItems([]);
@@ -377,7 +538,7 @@ export default function MesFavorisPage() {
       console.error("❌ Erreur lors du retrait groupé:", err);
       alert("Erreur lors du retrait des favoris. Veuillez réessayer.");
     }
-  }, [selectedItems, filteredFavoris, fetchFavoris]);
+  }, [selectedItems, filteredFavoris, fetchUserFavoris]);
 
   // Exporter la sélection
   const handleExportSelection = useCallback(() => {
@@ -387,12 +548,13 @@ export default function MesFavorisPage() {
 
     const exportData = {
       dateExport: new Date().toISOString(),
+      type: "favoris-utilisateur",
       nombreElements: selectedFavoris.length,
       favoris: selectedFavoris.map((favori) => ({
         type: favori.type,
         titre:
           favori.produit?.libelle ||
-          favori.don?.nom ||
+          favori.don?.titre ||
           favori.echange?.nomElementEchange,
         dateAjout: favori.createdAt,
         url: `${window.location.origin}/${favori.type}s/${favori.itemUuid}`,
@@ -403,7 +565,7 @@ export default function MesFavorisPage() {
     const dataUri =
       "data:application/json;charset=utf-8," + encodeURIComponent(dataStr);
 
-    const exportFileDefaultName = `mes-favoris-${new Date().toISOString().split("T")[0]}.json`;
+    const exportFileDefaultName = `mes-favoris-utilisateur-${new Date().toISOString().split("T")[0]}.json`;
 
     const linkElement = document.createElement("a");
     linkElement.setAttribute("href", dataUri);
@@ -424,13 +586,13 @@ export default function MesFavorisPage() {
   }, []);
 
   const handleRefresh = useCallback(() => {
-    fetchFavoris();
-  }, [fetchFavoris]);
+    fetchUserFavoris();
+  }, [fetchUserFavoris]);
 
   // Charger au montage
   useEffect(() => {
-    fetchFavoris();
-  }, [fetchFavoris]);
+    fetchUserFavoris();
+  }, [fetchUserFavoris]);
 
   // Statistiques
   const stats = useMemo(() => {
@@ -508,6 +670,22 @@ export default function MesFavorisPage() {
                   <FontAwesomeIcon icon={faPlus} />
                   Explorer
                 </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Badge indicateur utilisateur */}
+          <div className="row mt-3">
+            <div className="col-12">
+              <div className="d-flex align-items-center gap-2 flex-wrap">
+                <span className="badge bg-info text-white px-3 py-2 rounded-pill">
+                  <FontAwesomeIcon icon={faUser} className="me-1" />
+                  Favoris utilisateur uniquement
+                </span>
+                <span className="badge bg-success bg-opacity-10 text-success px-3 py-2 rounded-pill">
+                  <FontAwesomeIcon icon={faHeart} className="me-1" />
+                  {stats.total} favori(s) trouvé(s)
+                </span>
               </div>
             </div>
           </div>
@@ -823,7 +1001,7 @@ export default function MesFavorisPage() {
                     selectedItems={selectedItems}
                     onSelectAll={handleSelectAll}
                     onSelectItem={handleSelectItem}
-                    onView={handleView} // Passer la fonction handleView au DataTable
+                    onView={handleView}
                     className="mb-0"
                   />
                 ) : (

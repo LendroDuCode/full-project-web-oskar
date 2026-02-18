@@ -1,75 +1,664 @@
-// app/annonces/page.tsx
+// app/(back-office)/dashboard-agent/annonces/page.tsx
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import FilterBar from "./components/FilterBar";
 import DataTable from "./components/DataTable";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 export default function Annonces() {
+  const router = useRouter();
   const [allData, setAllData] = useState<any[]>([]);
   const [selectedType, setSelectedType] = useState<string>("tous");
   const [selectedStatus, setSelectedStatus] = useState<string>("tous");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastFetchTime, setLastFetchTime] = useState<Date>(new Date());
+  const nonPublieAlertShown = useRef<Set<string>>(new Set());
 
-  // Fonction pour charger TOUTES les données une seule fois
-  const fetchAllData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  const pollingInterval = useRef<NodeJS.Timeout | null>(null);
 
-      // Charger les produits
-      const produits = await api.get<any[]>(API_ENDPOINTS.PRODUCTS.ALL);
+  // ============================================
+  // FONCTION DE COMPTAGE DES ÉLÉMENTS NON PUBLIÉS
+  // ============================================
+  const countNonPublie = useCallback((data: any[]) => {
+    const nonPublie = data.filter(
+      (item) =>
+        !item.estPublie &&
+        !item.estBloque &&
+        item.statut !== "rejeté" &&
+        item.statut !== "refuse",
+    );
 
-      // Charger les dons
-      const dons = await api.get<any[]>(API_ENDPOINTS.DONS.LIST);
+    const produits = nonPublie.filter((item) => item.type === "produit").length;
+    const dons = nonPublie.filter((item) => item.type === "don").length;
+    const echanges = nonPublie.filter((item) => item.type === "echange").length;
 
-      // Charger les échanges
-      const echanges = await api.get<any[]>(API_ENDPOINTS.ECHANGES.LIST);
+    return {
+      total: nonPublie.length,
+      produits,
+      dons,
+      echanges,
+      items: nonPublie,
+    };
+  }, []);
 
-      // Ajouter le type à chaque élément
-      const produitsWithType = produits.map((item) => ({
-        ...item,
-        type: "produit",
-        uuid: item.uuid || Math.random().toString(),
-      }));
+  // ============================================
+  // FONCTION D'AFFICHAGE D'ALERTE FLASH POUR LES ÉLÉMENTS NON PUBLIÉS
+  // ============================================
+  const showNonPublieAlert = useCallback((data: any[]) => {
+    const nonPublie = data.filter(
+      (item) =>
+        !item.estPublie &&
+        !item.estBloque &&
+        item.statut !== "rejeté" &&
+        item.statut !== "refuse",
+    );
 
-      const donsWithType = dons.map((item) => ({
-        ...item,
-        type: "don",
-        uuid: item.uuid || Math.random().toString(),
-      }));
+    if (nonPublie.length === 0) return;
 
-      const echangesWithType = echanges.map((item) => ({
-        ...item,
-        type: "echange",
-        uuid: item.uuid || Math.random().toString(),
-      }));
+    if (!nonPublieAlertShown.current) {
+      nonPublieAlertShown.current = new Set();
+    }
 
-      // Combiner toutes les données
-      const combinedData = [
-        ...produitsWithType,
-        ...donsWithType,
-        ...echangesWithType,
-      ];
+    // Filtrer ceux qui n'ont pas encore été signalés
+    const newNonPublie = nonPublie.filter((item) => {
+      const key = `${item.type}-${item.uuid}`;
+      return !nonPublieAlertShown.current?.has(key);
+    });
 
-      setAllData(combinedData);
-    } catch (err: any) {
-      console.error("Erreur lors du chargement des données:", err);
-      setError(
-        err.message || "Une erreur est survenue lors du chargement des données",
+    if (newNonPublie.length === 0) return;
+
+    // Mettre à jour le Set des alertes déjà montrées
+    newNonPublie.forEach((item) => {
+      const key = `${item.type}-${item.uuid}`;
+      nonPublieAlertShown.current?.add(key);
+    });
+
+    // Grouper par type pour l'affichage
+    const groupedByType = {
+      produits: newNonPublie.filter((item) => item.type === "produit"),
+      dons: newNonPublie.filter((item) => item.type === "don"),
+      echanges: newNonPublie.filter((item) => item.type === "echange"),
+    };
+
+    // Afficher les alertes flash
+    const totalCount = newNonPublie.length;
+
+    // Alerte principale - CORRIGÉ : icon est maintenant un élément JSX
+    toast.info(
+      <div style={{ padding: "8px" }}>
+        <div
+          style={{
+            fontWeight: "bold",
+            marginBottom: "10px",
+            fontSize: "1.1rem",
+          }}
+        >
+          📋 {totalCount} annonce(s) en attente de publication
+        </div>
+
+        {groupedByType.produits.length > 0 && (
+          <div
+            style={{
+              marginBottom: "8px",
+              padding: "5px",
+              background: "#f3f4f6",
+              borderRadius: "6px",
+            }}
+          >
+            <span style={{ color: "#10b981", fontWeight: "600" }}>
+              📦 Produits: {groupedByType.produits.length}
+            </span>
+            <div
+              style={{
+                fontSize: "0.85rem",
+                marginTop: "3px",
+                color: "#4b5563",
+              }}
+            >
+              {groupedByType.produits
+                .slice(0, 3)
+                .map((p) => p.libelle || p.nom)
+                .join(", ")}
+              {groupedByType.produits.length > 3 &&
+                ` et ${groupedByType.produits.length - 3} autre(s)`}
+            </div>
+          </div>
+        )}
+
+        {groupedByType.dons.length > 0 && (
+          <div
+            style={{
+              marginBottom: "8px",
+              padding: "5px",
+              background: "#f3f4f6",
+              borderRadius: "6px",
+            }}
+          >
+            <span style={{ color: "#8b5cf6", fontWeight: "600" }}>
+              🎁 Dons: {groupedByType.dons.length}
+            </span>
+            <div
+              style={{
+                fontSize: "0.85rem",
+                marginTop: "3px",
+                color: "#4b5563",
+              }}
+            >
+              {groupedByType.dons
+                .slice(0, 3)
+                .map((d) => d.nom || d.titre)
+                .join(", ")}
+              {groupedByType.dons.length > 3 &&
+                ` et ${groupedByType.dons.length - 3} autre(s)`}
+            </div>
+          </div>
+        )}
+
+        {groupedByType.echanges.length > 0 && (
+          <div
+            style={{
+              marginBottom: "8px",
+              padding: "5px",
+              background: "#f3f4f6",
+              borderRadius: "6px",
+            }}
+          >
+            <span style={{ color: "#f59e0b", fontWeight: "600" }}>
+              🔄 Échanges: {groupedByType.echanges.length}
+            </span>
+            <div
+              style={{
+                fontSize: "0.85rem",
+                marginTop: "3px",
+                color: "#4b5563",
+              }}
+            >
+              {groupedByType.echanges
+                .slice(0, 3)
+                .map((e) => e.nomElementEchange || e.objetPropose)
+                .join(", ")}
+              {groupedByType.echanges.length > 3 &&
+                ` et ${groupedByType.echanges.length - 3} autre(s)`}
+            </div>
+          </div>
+        )}
+
+        <div
+          style={{
+            marginTop: "10px",
+            display: "flex",
+            justifyContent: "flex-end",
+          }}
+        >
+          <button
+            onClick={() => {
+              toast.dismiss();
+              setSelectedStatus("en-attente");
+              setTimeout(() => {
+                const tableElement =
+                  document.querySelector(".table-responsive");
+                if (tableElement) {
+                  tableElement.scrollIntoView({ behavior: "smooth" });
+                }
+              }, 100);
+            }}
+            style={{
+              background: "#3b82f6",
+              color: "white",
+              border: "none",
+              padding: "6px 12px",
+              borderRadius: "20px",
+              cursor: "pointer",
+              fontSize: "0.85rem",
+              fontWeight: "500",
+            }}
+          >
+            Voir toutes les annonces en attente
+          </button>
+        </div>
+      </div>,
+      {
+        position: "top-right",
+        autoClose: 8000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        // CORRIGÉ : Supprimer la propriété icon ou utiliser un élément JSX
+        style: {
+          width: "450px",
+          background: "white",
+          boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
+          borderRadius: "12px",
+          border: "none",
+        },
+      },
+    );
+
+    // Alertes individuelles pour chaque type - CORRIGÉ : icon est maintenant un élément JSX
+    if (groupedByType.produits.length > 0) {
+      toast.success(
+        <div>
+          📦 {groupedByType.produits.length} nouveau(x) produit(s) en attente de
+          validation
+        </div>,
+        {
+          position: "top-right",
+          autoClose: 5000,
+        },
       );
-      setAllData([]);
-    } finally {
-      setLoading(false);
+    }
+
+    if (groupedByType.dons.length > 0) {
+      toast.success(
+        <div>
+          🎁 {groupedByType.dons.length} nouveau(x) don(s) en attente de
+          validation
+        </div>,
+        {
+          position: "top-right",
+          autoClose: 5000,
+        },
+      );
+    }
+
+    if (groupedByType.echanges.length > 0) {
+      toast.success(
+        <div>
+          🔄 {groupedByType.echanges.length} nouvel(le) échange(s) en attente de
+          validation
+        </div>,
+        {
+          position: "top-right",
+          autoClose: 5000,
+        },
+      );
     }
   }, []);
 
+  // ============================================
+  // FONCTION D'AFFICHAGE D'ALERTE FLASH POUR NOUVELLE CRÉATION
+  // ============================================
+  const showCreationAlert = useCallback(
+    (item: any, type: string) => {
+      let title = "";
+      let creatorName = "";
+      let itemType = "";
+      let itemIcon = "";
+      let color = "";
+
+      // Déterminer le titre et les informations selon le type
+      if (type === "produit") {
+        title = item.libelle || item.nom || "Produit sans nom";
+        creatorName = item.vendeur
+          ? `${item.vendeur.prenoms || ""} ${item.vendeur.nom || ""}`.trim()
+          : item.nom_vendeur || "Vendeur";
+        itemType = "Produit";
+        itemIcon = "📦";
+        color = "#10b981";
+      } else if (type === "don") {
+        title = item.nom || item.titre || "Don sans nom";
+        creatorName = item.nom_donataire || item.createur_nom || "Donateur";
+        itemType = "Don";
+        itemIcon = "🎁";
+        color = "#8b5cf6";
+      } else if (type === "echange") {
+        title =
+          item.nomElementEchange ||
+          item.objetPropose ||
+          item.titre ||
+          "Échange sans nom";
+        creatorName = item.nom_initiateur || item.createur_nom || "Initiateur";
+        itemType = "Échange";
+        itemIcon = "🔄";
+        color = "#f59e0b";
+      }
+
+      const isPublished = item.estPublie || false;
+      const statusText = isPublished
+        ? "✅ Publié"
+        : "⏳ En attente de publication";
+      const statusColor = isPublished ? "#10b981" : "#f59e0b";
+
+      toast.info(
+        <div style={{ padding: "8px" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              marginBottom: "12px",
+            }}
+          >
+            <div
+              style={{
+                background: `${color}15`,
+                borderRadius: "50%",
+                width: "40px",
+                height: "40px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                marginRight: "12px",
+              }}
+            >
+              <span style={{ fontSize: "1.5rem" }}>{itemIcon}</span>
+            </div>
+            <div>
+              <div
+                style={{
+                  fontWeight: "bold",
+                  fontSize: "1rem",
+                  color: "#1f2937",
+                }}
+              >
+                Nouveau {itemType}
+              </div>
+              <div
+                style={{
+                  fontSize: "0.85rem",
+                  color: statusColor,
+                  fontWeight: "500",
+                }}
+              >
+                {statusText}
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              marginBottom: "8px",
+              padding: "8px",
+              background: "#f9fafb",
+              borderRadius: "8px",
+            }}
+          >
+            <div
+              style={{
+                fontWeight: "600",
+                color: "#374151",
+                marginBottom: "4px",
+              }}
+            >
+              {title}
+            </div>
+            <div
+              style={{
+                fontSize: "0.85rem",
+                color: "#6b7280",
+                display: "flex",
+                alignItems: "center",
+              }}
+            >
+              <span style={{ marginRight: "8px" }}>👤 {creatorName}</span>
+            </div>
+          </div>
+
+          <div
+            style={{
+              marginTop: "10px",
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: "8px",
+            }}
+          >
+            <button
+              onClick={() => {
+                toast.dismiss();
+                if (item.uuid) {
+                  let basePath = "/dashboard-agent/annonces";
+                  switch (type) {
+                    case "produit":
+                      router.push(
+                        isPublished
+                          ? `${basePath}/produit/${item.uuid}`
+                          : `${basePath}/produit/non-publie/${item.uuid}`,
+                      );
+                      break;
+                    case "don":
+                      router.push(
+                        isPublished
+                          ? `${basePath}/don/${item.uuid}`
+                          : `${basePath}/don/non-publie/${item.uuid}`,
+                      );
+                      break;
+                    case "echange":
+                      router.push(
+                        isPublished
+                          ? `${basePath}/echange/${item.uuid}`
+                          : `${basePath}/echange/non-publie/${item.uuid}`,
+                      );
+                      break;
+                  }
+                }
+              }}
+              style={{
+                background: color,
+                color: "white",
+                border: "none",
+                padding: "6px 12px",
+                borderRadius: "20px",
+                cursor: "pointer",
+                fontSize: "0.85rem",
+                fontWeight: "500",
+              }}
+            >
+              Voir l'annonce
+            </button>
+            <button
+              onClick={() => toast.dismiss()}
+              style={{
+                background: "#f3f4f6",
+                color: "#6b7280",
+                border: "none",
+                padding: "6px 12px",
+                borderRadius: "20px",
+                cursor: "pointer",
+                fontSize: "0.85rem",
+              }}
+            >
+              Fermer
+            </button>
+          </div>
+        </div>,
+        {
+          position: "top-right",
+          autoClose: 8000,
+          hideProgressBar: false,
+          closeOnClick: false,
+          pauseOnHover: true,
+          draggable: true,
+          // CORRIGÉ : Supprimer la propriété icon
+          style: {
+            width: "400px",
+            background: "white",
+            boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
+            borderRadius: "12px",
+            border: "none",
+          },
+        },
+      );
+    },
+    [router],
+  );
+
+  // ============================================
+  // FONCTION DE DÉTECTION DES NOUVEAUX ARTICLES
+  // ============================================
+  const detectNewItems = useCallback(
+    (oldData: any[], newData: any[]) => {
+      const oldIds = new Set(oldData.map((item) => item.uuid || item.id));
+      const newItems = newData.filter(
+        (item) => !oldIds.has(item.uuid || item.id),
+      );
+
+      if (newItems.length > 0) {
+        console.log(`📢 ${newItems.length} nouvelle(s) annonce(s) détectée(s)`);
+
+        // Compter les non publiés parmi les nouveaux
+        const newNonPublie = newItems.filter((item) => !item.estPublie);
+        if (newNonPublie.length > 0) {
+          console.log(
+            `📋 ${newNonPublie.length} nouvelle(s) annonce(s) non publiée(s)`,
+          );
+        }
+
+        newItems.forEach((item) => {
+          let type = "produit";
+
+          // Déterminer le type
+          if (item.type) {
+            type = item.type;
+          } else if (item.libelle) {
+            type = "produit";
+          } else if (
+            item.nom &&
+            !item.libelle &&
+            !item.nomElementEchange &&
+            !item.objetPropose
+          ) {
+            type = "don";
+          } else if (
+            item.nomElementEchange ||
+            item.objetPropose ||
+            item.typeEchange
+          ) {
+            type = "echange";
+          }
+
+          // Afficher l'alerte
+          showCreationAlert(item, type);
+        });
+      }
+
+      // Vérifier les éléments non publiés dans l'ensemble des données
+      showNonPublieAlert(newData);
+    },
+    [showCreationAlert, showNonPublieAlert],
+  );
+
+  // Fonction pour charger TOUTES les données
+  const fetchAllData = useCallback(
+    async (isInitial = false, force = false) => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Sauvegarder les anciennes données pour détecter les nouveaux items
+        const oldData = [...allData];
+
+        // Charger les produits
+        const produits = await api.get<any[]>(API_ENDPOINTS.PRODUCTS.ALL);
+
+        // Charger les dons
+        const dons = await api.get<any[]>(API_ENDPOINTS.DONS.LIST);
+
+        // Charger les échanges
+        const echanges = await api.get<any[]>(API_ENDPOINTS.ECHANGES.LIST);
+
+        // Ajouter le type à chaque élément
+        const produitsWithType = (produits || []).map((item) => ({
+          ...item,
+          type: "produit",
+          uuid: item.uuid || `prod-${Date.now()}-${Math.random()}`,
+        }));
+
+        const donsWithType = (dons || []).map((item) => ({
+          ...item,
+          type: "don",
+          uuid: item.uuid || `don-${Date.now()}-${Math.random()}`,
+        }));
+
+        const echangesWithType = (echanges || []).map((item) => ({
+          ...item,
+          type: "echange",
+          uuid: item.uuid || `ech-${Date.now()}-${Math.random()}`,
+        }));
+
+        // Combiner toutes les données
+        const combinedData = [
+          ...produitsWithType,
+          ...donsWithType,
+          ...echangesWithType,
+        ];
+
+        // Détecter les nouveaux items (sauf au chargement initial)
+        if (!isInitial && oldData.length > 0) {
+          detectNewItems(oldData, combinedData);
+        } else if (isInitial) {
+          // Au chargement initial, afficher seulement les non publiés existants
+          const nonPublieCount = countNonPublie(combinedData);
+          if (nonPublieCount.total > 0) {
+            showNonPublieAlert(combinedData);
+          }
+        }
+
+        setAllData(combinedData);
+        setLastFetchTime(new Date());
+      } catch (err: any) {
+        console.error("Erreur lors du chargement des données:", err);
+        setError(
+          err.message ||
+            "Une erreur est survenue lors du chargement des données",
+        );
+        setAllData([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [allData, detectNewItems, countNonPublie, showNonPublieAlert],
+  );
+
+  // Écouter l'événement de nouvelle annonce
   useEffect(() => {
-    fetchAllData();
+    const handleNewAnnonce = (event: CustomEvent) => {
+      console.log("📢 Événement de nouvelle annonce reçu", event.detail);
+
+      // Récupérer les données de l'annonce si disponibles
+      const annonceData = event.detail;
+
+      // Rafraîchir les données immédiatement
+      fetchAllData(false, true);
+
+      // Si les données de l'annonce sont fournies, on peut directement afficher l'alerte
+      if (annonceData && annonceData.item) {
+        const type = annonceData.type || "produit";
+        showCreationAlert(annonceData.item, type);
+      }
+    };
+
+    // @ts-ignore
+    window.addEventListener("annonce-created", handleNewAnnonce);
+
+    return () => {
+      // @ts-ignore
+      window.removeEventListener("annonce-created", handleNewAnnonce);
+    };
+  }, [fetchAllData, showCreationAlert]);
+
+  // Chargement initial
+  useEffect(() => {
+    fetchAllData(true);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Polling pour détecter les nouveaux items toutes les 30 secondes
+  useEffect(() => {
+    pollingInterval.current = setInterval(() => {
+      fetchAllData(false);
+    }, 30000);
+
+    return () => {
+      if (pollingInterval.current) {
+        clearInterval(pollingInterval.current);
+      }
+    };
   }, [fetchAllData]);
 
   // Filtrer les données en fonction des sélections
@@ -211,6 +800,9 @@ export default function Annonces() {
         category: item.categorie_uuid || item.categorieUuid,
         quantite: item.quantite,
         prix: item.prix,
+        estPublie: item.estPublie || false,
+        estBloque: item.estBloque || item.est_bloque || false,
+        originalData: item,
       };
     });
   }, [filteredData]);
@@ -237,12 +829,22 @@ export default function Annonces() {
 
         if (endpoint) {
           await api.post(endpoint, data);
+
+          // Afficher une alerte de succès
+          toast.success("✅ Annonce validée avec succès", {
+            position: "top-right",
+            autoClose: 3000,
+          });
+
           // Rafraîchir les données
-          await fetchAllData();
+          await fetchAllData(false);
         }
       } catch (err) {
         console.error("Erreur lors de la validation:", err);
-        alert("Erreur lors de la validation. Veuillez réessayer.");
+        toast.error("❌ Impossible de valider l'annonce", {
+          position: "top-right",
+          autoClose: 3000,
+        });
       }
     },
     [fetchAllData],
@@ -269,168 +871,311 @@ export default function Annonces() {
 
         if (endpoint) {
           await api.delete(endpoint);
+
+          // Afficher une alerte
+          toast.info("🗑️ Annonce rejetée", {
+            position: "top-right",
+            autoClose: 3000,
+          });
+
           // Rafraîchir les données
-          await fetchAllData();
+          await fetchAllData(false);
         }
       } catch (err) {
         console.error("Erreur lors du rejet:", err);
-        alert("Erreur lors du rejet. Veuillez réessayer.");
+        toast.error("❌ Impossible de rejeter l'annonce", {
+          position: "top-right",
+          autoClose: 3000,
+        });
       }
     },
     [fetchAllData],
   );
 
-  const handleView = useCallback((id: string, type: string) => {
-    console.log("Voir détails:", id, type);
-    // router.push(`/dashboard/annonces/${type}/${id}`);
-  }, []);
+  const handleView = useCallback(
+    (id: string, type: string) => {
+      router.push(`/dashboard-agent/annonces/${type}/${id}`);
+    },
+    [router],
+  );
 
   const handleResetFilters = useCallback(() => {
     setSelectedType("tous");
     setSelectedStatus("tous");
     setSearchQuery("");
+    toast.info("🔄 Filtres réinitialisés", {
+      position: "top-right",
+      autoClose: 2000,
+    });
   }, []);
 
+  // ============================================
+  // BOUTON POUR AFFICHER LES ANNONCES NON PUBLIÉES
+  // ============================================
+  const handleShowNonPublie = useCallback(() => {
+    setSelectedStatus("en-attente");
+    setTimeout(() => {
+      const tableElement = document.querySelector(".table-responsive");
+      if (tableElement) {
+        tableElement.scrollIntoView({ behavior: "smooth" });
+      }
+    }, 100);
+  }, []);
+
+  const nonPublieCount = useMemo(
+    () => countNonPublie(allData),
+    [allData, countNonPublie],
+  );
+
   return (
-    <main
-      style={{
-        padding: "2rem",
-        fontFamily: "Arial, sans-serif",
-        backgroundColor: "#f8f9fa",
-        minHeight: "100vh",
-      }}
-    >
-      <div className="mb-4">
-        <h1 className="h2 fw-bold mb-2">Gestion des Annonces</h1>
-        <p className="text-muted mb-4">
-          Gérez et modérez toutes les annonces (produits, dons et échanges) en
-          un seul endroit
-        </p>
-      </div>
+    <>
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+        limit={5}
+      />
 
-      {error && (
-        <div className="alert alert-danger mb-4">
-          <strong>Erreur:</strong> {error}
-          <button
-            className="btn btn-sm btn-outline-danger ms-3"
-            onClick={fetchAllData}
-          >
-            Réessayer
-          </button>
-        </div>
-      )}
+      <main className="p-4 bg-light min-vh-100">
+        <div className="mb-4">
+          <div className="d-flex justify-content-between align-items-start">
+            <div>
+              <h1 className="h2 fw-bold mb-2">Gestion des Annonces</h1>
+              <p className="text-muted mb-4">
+                Gérez et modérez toutes les annonces (produits, dons et
+                échanges) en un seul endroit
+              </p>
+            </div>
 
-      {/* Barre de filtres */}
-      <div className="mb-4">
-        <FilterBar
-          onStatusChange={setSelectedStatus}
-          onContentTypeChange={setSelectedType}
-          onSearchChange={setSearchQuery}
-          selectedStatus={selectedStatus}
-          selectedContentType={selectedType}
-        />
-      </div>
-
-      {/* Informations sur les filtres */}
-      {!loading && !error && (
-        <div className="d-flex justify-content-between align-items-center mb-3">
-          <div className="text-muted small">
-            {preparedData.length} annonce(s) trouvée(s)
-            {searchQuery && ` pour "${searchQuery}"`}
-            {selectedType !== "tous" && (
-              <span className="ms-2">(type: {selectedType})</span>
-            )}
-            {selectedStatus !== "tous" && (
-              <span className="ms-2">(statut: {selectedStatus})</span>
+            {/* Bouton pour les annonces non publiées */}
+            {nonPublieCount.total > 0 && (
+              <button
+                className="btn btn-warning btn-lg position-relative"
+                onClick={handleShowNonPublie}
+                style={{ borderRadius: "50px", padding: "12px 24px" }}
+              >
+                <i className="bi bi-bell-fill me-2"></i>
+                {nonPublieCount.total} annonce(s) en attente
+                <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                  {nonPublieCount.total}
+                </span>
+              </button>
             )}
           </div>
-          <div className="d-flex gap-2">
-            <button
-              className="btn btn-sm btn-outline-secondary"
-              onClick={fetchAllData}
-              disabled={loading}
-            >
-              {loading ? "Chargement..." : "Rafraîchir"}
-            </button>
-            <button
-              className="btn btn-sm btn-outline-warning"
-              onClick={handleResetFilters}
-              disabled={loading}
-            >
-              Réinitialiser
-            </button>
+
+          <div className="d-flex gap-3 mt-3">
+            <small className="text-success d-flex align-items-center gap-2">
+              <i className="bi bi-check-circle-fill text-success"></i>
+              Dernière mise à jour: {lastFetchTime.toLocaleTimeString()}
+            </small>
+
+            {/* Badges pour les non publiés */}
+            {nonPublieCount.total > 0 && (
+              <div className="d-flex gap-2">
+                {nonPublieCount.produits > 0 && (
+                  <span className="badge bg-primary bg-opacity-10 text-primary px-3 py-2">
+                    📦 Produits: {nonPublieCount.produits}
+                  </span>
+                )}
+                {nonPublieCount.dons > 0 && (
+                  <span className="badge bg-purple bg-opacity-10 text-purple px-3 py-2">
+                    🎁 Dons: {nonPublieCount.dons}
+                  </span>
+                )}
+                {nonPublieCount.echanges > 0 && (
+                  <span className="badge bg-warning bg-opacity-10 text-warning px-3 py-2">
+                    🔄 Échanges: {nonPublieCount.echanges}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         </div>
-      )}
 
-      {/* Tableau de données */}
-      <div className="mb-4">
-        {selectedType === "tous" ? (
-          // Si "tous" est sélectionné, afficher un DataTable pour chaque type
-          <div className="row">
-            <div className="col-12">
-              <div className="card mb-4">
-                <div className="card-body">
-                  <h5 className="card-title mb-3">Toutes les annonces</h5>
-                  <DataTable
-                    data={preparedData}
-                    loading={loading}
-                    onValidate={handleValidate}
-                    onReject={handleReject}
-                    onView={handleView}
-                  />
+        {error && (
+          <div className="alert alert-danger mb-4 d-flex align-items-center justify-content-between">
+            <div>
+              <strong>Erreur:</strong> {error}
+            </div>
+            <button
+              className="btn btn-sm btn-outline-danger"
+              onClick={() => fetchAllData(false)}
+            >
+              Réessayer
+            </button>
+          </div>
+        )}
+
+        {/* Barre de filtres */}
+        <div className="mb-4">
+          <FilterBar
+            onStatusChange={setSelectedStatus}
+            onContentTypeChange={setSelectedType}
+            onSearchChange={setSearchQuery}
+            selectedStatus={selectedStatus}
+            selectedContentType={selectedType}
+          />
+        </div>
+
+        {/* Informations sur les filtres */}
+        {!loading && !error && (
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <div className="text-muted small">
+              {preparedData.length} annonce(s) trouvée(s)
+              {searchQuery && ` pour "${searchQuery}"`}
+              {selectedType !== "tous" && (
+                <span className="ms-2 badge bg-primary bg-opacity-10 text-primary px-3 py-2">
+                  Type: {selectedType}
+                </span>
+              )}
+              {selectedStatus !== "tous" && (
+                <span className="ms-2 badge bg-info bg-opacity-10 text-info px-3 py-2">
+                  Statut: {selectedStatus}
+                </span>
+              )}
+            </div>
+            <div className="d-flex gap-2">
+              <button
+                className="btn btn-sm btn-outline-secondary d-flex align-items-center"
+                onClick={() => fetchAllData(false)}
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-2" />
+                    Chargement...
+                  </>
+                ) : (
+                  <>
+                    <i className="bi bi-arrow-repeat me-2"></i>
+                    Rafraîchir
+                  </>
+                )}
+              </button>
+              <button
+                className="btn btn-sm btn-outline-warning d-flex align-items-center"
+                onClick={handleResetFilters}
+                disabled={loading}
+              >
+                <i className="bi bi-x-circle me-2"></i>
+                Réinitialiser
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Tableau de données */}
+        <div className="mb-4">
+          {selectedType === "tous" ? (
+            // Si "tous" est sélectionné, afficher un DataTable pour chaque type
+            <div className="row">
+              <div className="col-12">
+                <div className="card shadow-sm border-0 mb-4">
+                  <div className="card-body p-0">
+                    <div className="p-3 bg-primary bg-opacity-10 border-bottom">
+                      <h5 className="card-title mb-0 d-flex align-items-center">
+                        <i className="bi bi-grid-3x3-gap-fill me-2 text-primary"></i>
+                        Toutes les annonces
+                        {nonPublieCount.total > 0 &&
+                          selectedStatus === "tous" && (
+                            <span className="badge bg-warning ms-3 px-3 py-2">
+                              ⏳ {nonPublieCount.total} en attente
+                            </span>
+                          )}
+                      </h5>
+                    </div>
+                    <DataTable
+                      data={preparedData}
+                      loading={loading}
+                      onValidate={handleValidate}
+                      onReject={handleReject}
+                      onView={handleView}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ) : (
-          // Si un type spécifique est sélectionné, utiliser le DataTable avec ce type
-          <DataTable
-            contentType={selectedType as "produit" | "don" | "echange"}
-            statusFilter={selectedStatus}
-            searchQuery={searchQuery}
-            onValidate={handleValidate}
-            onReject={handleReject}
-            onView={handleView}
-            data={preparedData}
-            loading={loading}
-          />
-        )}
-      </div>
-
-      {/* Message si pas de données */}
-      {!loading && !error && preparedData.length === 0 && (
-        <div className="text-center py-5">
-          <div className="mb-3">
-            <div
-              className="rounded-circle mx-auto d-flex align-items-center justify-content-center"
-              style={{
-                width: "80px",
-                height: "80px",
-                backgroundColor: "#f8f9fa",
-                color: "#6c757d",
-                fontSize: "2rem",
-                border: "2px solid #dee2e6",
-              }}
-            >
-              <i className="bi bi-search"></i>
+          ) : (
+            // Si un type spécifique est sélectionné, utiliser le DataTable avec ce type
+            <div className="card shadow-sm border-0">
+              <div className="card-body p-0">
+                <DataTable
+                  contentType={selectedType as "produit" | "don" | "echange"}
+                  statusFilter={selectedStatus}
+                  searchQuery={searchQuery}
+                  onValidate={handleValidate}
+                  onReject={handleReject}
+                  onView={handleView}
+                  data={preparedData}
+                  loading={loading}
+                />
+              </div>
             </div>
-          </div>
-          <h5 className="fw-semibold text-dark mb-2">Aucune annonce trouvée</h5>
-          <p className="text-muted mb-3">
-            {searchQuery || selectedStatus !== "tous" || selectedType !== "tous"
-              ? "Aucune annonce ne correspond à vos critères de recherche."
-              : "Aucune annonce disponible pour le moment."}
-          </p>
-          {searchQuery ||
-          selectedStatus !== "tous" ||
-          selectedType !== "tous" ? (
-            <button className="btn btn-primary" onClick={handleResetFilters}>
-              Afficher toutes les annonces
-            </button>
-          ) : null}
+          )}
         </div>
-      )}
-    </main>
+
+        {/* Message si pas de données */}
+        {!loading && !error && preparedData.length === 0 && (
+          <div className="text-center py-5 bg-white rounded-3 shadow-sm">
+            <div className="mb-3">
+              <div
+                className="rounded-circle mx-auto d-flex align-items-center justify-content-center"
+                style={{
+                  width: "80px",
+                  height: "80px",
+                  backgroundColor: "#f8f9fa",
+                  color: "#6c757d",
+                  fontSize: "2rem",
+                  border: "2px solid #dee2e6",
+                }}
+              >
+                <i className="bi bi-search"></i>
+              </div>
+            </div>
+            <h5 className="fw-semibold text-dark mb-2">
+              Aucune annonce trouvée
+            </h5>
+            <p className="text-muted mb-3">
+              {searchQuery ||
+              selectedStatus !== "tous" ||
+              selectedType !== "tous"
+                ? "Aucune annonce ne correspond à vos critères de recherche."
+                : "Aucune annonce disponible pour le moment."}
+            </p>
+            {(searchQuery ||
+              selectedStatus !== "tous" ||
+              selectedType !== "tous") && (
+              <button
+                className="btn btn-primary px-4 py-2"
+                onClick={handleResetFilters}
+              >
+                <i className="bi bi-x-circle me-2"></i>
+                Afficher toutes les annonces
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Styles supplémentaires */}
+        <style jsx>{`
+          .bg-purple {
+            background-color: #8b5cf6 !important;
+          }
+          .bg-opacity-10 {
+            opacity: 0.1;
+          }
+          .text-purple {
+            color: #8b5cf6 !important;
+          }
+        `}</style>
+      </main>
+    </>
   );
 }

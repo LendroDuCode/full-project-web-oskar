@@ -1,4 +1,3 @@
-// app/(front-office)/publication-annonce/components/SaleForm.tsx
 "use client";
 
 import { useState, useEffect, ChangeEvent } from "react";
@@ -96,6 +95,35 @@ const VenteForm: React.FC<VenteFormProps> = ({
   const [loadingBoutique, setLoadingBoutique] = useState(false);
   const [vendeurBoutique, setVendeurBoutique] = useState<Boutique | null>(null);
 
+  // Logs de débogage
+  useEffect(() => {
+    console.log("🔍 VenteForm - Structure complète de user:", {
+      user: user,
+      userType: user?.type,
+      userRole: user?.role,
+      userKeys: user ? Object.keys(user) : [],
+      userUuid: user?.uuid,
+      isVendeurParType: user?.type?.toLowerCase() === "vendeur",
+      isVendeurParRole: user?.role?.toLowerCase() === "vendeur",
+    });
+  }, [user]);
+
+  useEffect(() => {
+    console.log("🔄 VenteForm - Props reçues:", {
+      boutiquesCount: boutiques.length,
+      boutiques: boutiques.map((b) => ({
+        nom: b.nom,
+        uuid: b.uuid,
+        statut: b.statut,
+      })),
+      user: user ? { uuid: user.uuid, type: user.type, role: user.role } : null,
+      selectedBoutique: selectedBoutique
+        ? { nom: selectedBoutique.nom, uuid: selectedBoutique.uuid }
+        : null,
+      venteDataBoutiqueUuid: venteData.boutiqueUuid,
+    });
+  }, [boutiques, user, selectedBoutique, venteData.boutiqueUuid]);
+
   // Fonction pour obtenir le texte du statut de la boutique
   const getBoutiqueStatusText = (boutique: Boutique) => {
     if (boutique.est_bloque) {
@@ -109,6 +137,8 @@ const VenteForm: React.FC<VenteFormProps> = ({
         return "• Actif";
       case "en_review":
         return "• En revue";
+      case "en_attente":
+        return "• En attente";
       case "bloque":
         return "• Bloqué";
       default:
@@ -129,20 +159,14 @@ const VenteForm: React.FC<VenteFormProps> = ({
         return <span className="badge bg-success">Actif</span>;
       case "en_review":
         return <span className="badge bg-warning">En revue</span>;
+      case "en_attente":
+        return <span className="badge bg-info">En attente</span>;
       case "bloque":
         return <span className="badge bg-danger">Bloqué</span>;
       default:
         return <span className="badge bg-secondary">Inconnu</span>;
     }
   };
-
-  // Logs de débogage
-  useEffect(() => {}, [
-    venteData.boutiqueUuid,
-    user?.type,
-    selectedBoutique,
-    boutiques,
-  ]);
 
   // Charger les catégories
   useEffect(() => {
@@ -172,21 +196,42 @@ const VenteForm: React.FC<VenteFormProps> = ({
     fetchCategories();
   }, []);
 
-  // Récupérer la boutique du vendeur
+  // Récupérer la boutique du vendeur - Utilisation du ROLE au lieu du TYPE
   useEffect(() => {
-    const fetchVendeurBoutique = async () => {
-      if (!user || user?.type !== "vendeur") {
-        console.log("ℹ️ Utilisateur non-vendeur");
-        return;
-      }
+    // Log pour debug
+    console.log("🔍 VenteForm - Vérification user:", {
+      userExists: !!user,
+      userType: user?.type,
+      userRole: user?.role,
+      isVendeurParRole: user?.role?.toLowerCase() === "vendeur",
+    });
 
+    // Condition basée sur le ROLE (insensible à la casse)
+    const isVendeur = user?.role?.toLowerCase() === "vendeur";
+
+    if (!user) {
+      console.log("ℹ️ Utilisateur non connecté");
+      return;
+    }
+
+    if (!isVendeur) {
+      console.log("ℹ️ Utilisateur non-vendeur, rôle réel:", user?.role);
+      return;
+    }
+
+    const fetchVendeurBoutique = async () => {
       try {
         setLoadingBoutique(true);
-        console.log("🛍️ Chargement boutique vendeur...");
+        console.log(
+          "🛍️ Chargement boutique vendeur pour l'utilisateur:",
+          user.uuid,
+        );
 
         const response = await api.get(
           API_ENDPOINTS.BOUTIQUES.LISTE_BOUTIQUES_CREE_PAR_VENDEUR,
         );
+
+        console.log("📦 Réponse boutique vendeur:", response);
 
         let boutiquesData: Boutique[] = [];
 
@@ -208,22 +253,46 @@ const VenteForm: React.FC<VenteFormProps> = ({
           boutiquesData = response.data;
         }
 
-        const boutiquesActives = boutiquesData.filter(
-          (boutique: Boutique) =>
-            !boutique.est_bloque &&
-            !boutique.est_ferme &&
-            (boutique.statut === "actif" || boutique.statut === "en_review"),
+        console.log(
+          "📊 Boutiques brutes:",
+          boutiquesData.map((b) => ({
+            nom: b.nom,
+            uuid: b.uuid,
+            statut: b.statut,
+            vendeurUuid: b.vendeurUuid,
+          })),
         );
 
-        console.log(`📊 ${boutiquesActives.length} boutique(s) active(s)`);
+        // Filtrer UNIQUEMENT les boutiques qui appartiennent à CE vendeur
+        const boutiquesDuVendeur = boutiquesData.filter(
+          (boutique: Boutique) => boutique.vendeurUuid === user.uuid,
+        );
 
-        if (boutiquesActives.length > 0) {
-          const premiereBoutique = boutiquesActives[0];
+        console.log(
+          `📊 ${boutiquesDuVendeur.length} boutique(s) pour ce vendeur:`,
+          boutiquesDuVendeur.map((b) => ({ nom: b.nom, statut: b.statut })),
+        );
+
+        // On garde seulement le filtrage des boutiques bloquées ou fermées
+        const boutiquesDisponibles = boutiquesDuVendeur.filter(
+          (boutique: Boutique) => !boutique.est_bloque && !boutique.est_ferme,
+        );
+
+        console.log(
+          `📊 ${boutiquesDisponibles.length} boutique(s) disponible(s) après filtrage:`,
+          boutiquesDisponibles.map((b) => ({ nom: b.nom, statut: b.statut })),
+        );
+
+        if (boutiquesDisponibles.length > 0) {
+          const premiereBoutique = boutiquesDisponibles[0];
           setVendeurBoutique(premiereBoutique);
+          console.log("✅ VendeurBoutique définie:", premiereBoutique.nom);
 
           // Pré-sélectionner automatiquement si pas déjà fait
           if (!venteData.boutiqueUuid) {
-            console.log(`✅ Pré-sélection boutique: ${premiereBoutique.uuid}`);
+            console.log(
+              `✅ Pré-sélection automatique de la boutique: ${premiereBoutique.nom} (${premiereBoutique.uuid})`,
+            );
             onChange({
               ...venteData,
               boutiqueUuid: premiereBoutique.uuid,
@@ -232,9 +301,13 @@ const VenteForm: React.FC<VenteFormProps> = ({
             if (onBoutiqueChange) {
               onBoutiqueChange(premiereBoutique.uuid);
             }
+          } else {
+            console.log(
+              `ℹ️ Boutique déjà sélectionnée: ${venteData.boutiqueUuid}`,
+            );
           }
         } else {
-          console.log("ℹ️ Le vendeur n'a pas de boutique active");
+          console.log("ℹ️ Le vendeur n'a pas de boutique disponible");
           setVendeurBoutique(null);
         }
       } catch (err: any) {
@@ -247,7 +320,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
 
     fetchVendeurBoutique();
   }, [
-    user?.type,
+    user?.role,
     user?.uuid,
     venteData.boutiqueUuid,
     onChange,
@@ -291,8 +364,8 @@ const VenteForm: React.FC<VenteFormProps> = ({
               </h5>
             </div>
             <div className="card-body">
-              {/* Section boutique pour les vendeurs */}
-              {user?.type === "vendeur" && (
+              {/* Section boutique pour les vendeurs - basée sur le ROLE */}
+              {user?.role?.toLowerCase() === "vendeur" && (
                 <div className="mb-4">
                   <div className="d-flex justify-content-between align-items-center mb-3">
                     <label className="form-label fw-semibold d-flex align-items-center mb-0">
@@ -415,7 +488,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
                           className="me-2"
                         />
                         <span>
-                          Vous n'avez pas encore de boutique active.{" "}
+                          Vous n'avez pas encore de boutique.{" "}
                           <a
                             href="/dashboard-vendeur/boutiques"
                             className="fw-bold text-decoration-none"
@@ -432,7 +505,12 @@ const VenteForm: React.FC<VenteFormProps> = ({
               )}
 
               {/* Liste des boutiques pour tous les utilisateurs */}
-              {boutiques.length > 0 && (
+              {console.log("🔍 Rendu condition boutiques:", {
+                boutiquesLength: boutiques?.length,
+                condition: boutiques?.length > 0,
+              })}
+
+              {boutiques && boutiques.length > 0 && (
                 <div className="mb-4">
                   <label className="form-label fw-semibold d-flex align-items-center">
                     <FontAwesomeIcon
@@ -440,7 +518,9 @@ const VenteForm: React.FC<VenteFormProps> = ({
                       className="me-2 text-success"
                     />
                     Vendre via une boutique{" "}
-                    {user?.type !== "vendeur" ? "(optionnel)" : ""}
+                    {user?.role?.toLowerCase() !== "vendeur"
+                      ? "(optionnel)"
+                      : ""}
                   </label>
                   <select
                     className="form-select border-light"
@@ -455,10 +535,10 @@ const VenteForm: React.FC<VenteFormProps> = ({
                         onBoutiqueChange(e.target.value);
                       }
                     }}
-                    required={user?.type === "vendeur"}
+                    required={user?.role?.toLowerCase() === "vendeur"}
                   >
                     <option value="">
-                      {user?.type === "vendeur"
+                      {user?.role?.toLowerCase() === "vendeur"
                         ? "Sélectionnez votre boutique"
                         : "Sélectionnez une boutique (optionnel)"}
                     </option>
@@ -521,6 +601,18 @@ const VenteForm: React.FC<VenteFormProps> = ({
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Message de débogage temporaire si aucune boutique */}
+              {(!boutiques || boutiques.length === 0) && (
+                <div className="alert alert-info mt-3">
+                  <small>
+                    <strong>Debug:</strong> Aucune boutique disponible.
+                    {boutiques
+                      ? `boutiques.length = ${boutiques.length}`
+                      : "boutiques est null/undefined"}
+                  </small>
                 </div>
               )}
 

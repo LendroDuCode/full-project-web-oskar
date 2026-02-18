@@ -210,6 +210,7 @@ export interface VenteFormProps {
   selectedBoutique: Boutique | null;
   onBoutiqueChange: (boutiqueUuid: string) => void;
   user: UserInfo | null | undefined; // Allow undefined
+  validationErrors?: Record<string, string>; // ← AJOUTER CETTE LIGNE
 }
 export interface BoutiqueFormProps {
   boutiqueData: BoutiqueData;

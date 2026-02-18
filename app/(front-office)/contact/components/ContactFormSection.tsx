@@ -25,7 +25,7 @@ import {
   faTwitter,
   faLinkedin,
 } from "@fortawesome/free-brands-svg-icons";
-import colors from "../../../shared/constants/colors";
+import colors from "@/app/shared/constants/colors";
 
 interface ContactFormData {
   fullName: string;

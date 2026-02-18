@@ -9,7 +9,6 @@ import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { API_CONFIG } from "@/config/env";
 import { useAuth } from "@/app/(front-office)/auth/AuthContext";
 import { LoadingSpinner } from "@/app/shared/components/ui/LoadingSpinner";
-import colors from "@/app/shared/constants/colors";
 
 // Import des icônes FontAwesome
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -78,6 +77,7 @@ import {
   faLinkedin,
   faWhatsapp as faWhatsappBrand,
 } from "@fortawesome/free-brands-svg-icons";
+import colors from "@/app/shared/constants/colors";
 
 // ============================================
 // TYPES

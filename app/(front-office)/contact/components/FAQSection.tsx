@@ -14,7 +14,7 @@ import {
   faEnvelope,
   faBook,
 } from "@fortawesome/free-solid-svg-icons";
-import colors from "../../../shared/constants/colors";
+import colors from "@/app/shared/constants/colors";
 
 interface FAQItem {
   id: number;

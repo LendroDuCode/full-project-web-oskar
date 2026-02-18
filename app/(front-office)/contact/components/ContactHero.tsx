@@ -7,7 +7,7 @@ import {
   faShieldHalved,
   faLanguage,
 } from "@fortawesome/free-solid-svg-icons";
-import colors from "../../../shared/constants/colors"; // Assurez-vous d'avoir le bon chemin
+import colors from "@/app/shared/constants/colors";
 
 interface ContactHeroProps {
   title?: string;

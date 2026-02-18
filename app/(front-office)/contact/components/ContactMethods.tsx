@@ -7,7 +7,7 @@ import {
   faComments,
 } from "@fortawesome/free-solid-svg-icons";
 import { faWhatsapp } from "@fortawesome/free-brands-svg-icons";
-import colors from "../../../shared/constants/colors";
+import colors from "@/app/shared/constants/colors";
 
 interface ContactMethod {
   id: string;

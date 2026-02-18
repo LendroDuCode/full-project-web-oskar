@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import colors from "../../../shared/constants/colors";
+import colors from "@/app/shared/constants/colors";
 
 export interface ListingItem {
   uuid: string;

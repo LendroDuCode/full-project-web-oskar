@@ -1,3 +1,4 @@
+// app/(front-office)/echanges/[uuid]/page.tsx
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -17,13 +18,14 @@ import {
   faPhone,
   faMessage,
   faUserCheck,
+  faHeart,
   faHeadset,
   faUsers,
   faCommentDots,
   faShareAlt,
   faCertificate,
   faStar,
-  faHeart,
+  faHeart as FaHeartSolid,
   faShoppingBag,
   faCheckCircle,
   faTimesCircle,
@@ -66,7 +68,9 @@ import {
   faGift,
   faExchangeAlt,
   faHandHoldingHeart,
+  faReply,
 } from "@fortawesome/free-solid-svg-icons";
+import { faHeart as FaHeartRegular } from "@fortawesome/free-regular-svg-icons";
 
 // ============================================
 // TYPES
@@ -244,6 +248,7 @@ interface EchangeSimilaire {
   createur?: CreateurInfo;
 }
 
+// Interface pour le commentaire API
 interface CommentaireAPI {
   is_deleted: boolean;
   deleted_at: string | null;
@@ -258,12 +263,27 @@ interface CommentaireAPI {
   donUuid: string | null;
   echangeUuid: string | null;
   utilisateurUuid: string;
+  auteur?: {
+    type: string;
+    uuid: string;
+    nom: string;
+    prenoms: string;
+    avatar: string | null;
+    email: string;
+  };
   utilisateur?: {
     uuid: string;
     nom: string;
     prenoms: string;
     avatar: string | null;
   };
+  entite?: {
+    type: string;
+    uuid: string;
+    libelle: string;
+    description: string;
+  };
+  nombre_reponses?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -293,10 +313,12 @@ interface CommentairesResponse {
 interface Commentaire {
   uuid: string;
   utilisateur_nom: string;
+  utilisateur_prenoms?: string;
   utilisateur_photo: string | null;
   note: number;
   commentaire: string;
   date: string;
+  createdAt?: string;
   likes: number;
   is_helpful: boolean;
 }
@@ -310,6 +332,110 @@ interface NoteStats {
   total: number;
   moyenne: number;
 }
+
+// ============================================
+// FONCTION DE FORMATAGE DE DATE CORRIGÉE
+// ============================================
+const formatDate = (dateString: string | null | undefined): string => {
+  if (!dateString) return "Date inconnue";
+
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+      return "Date inconnue";
+    }
+
+    // Détecter si la date est en UTC (présence de 'Z')
+    const isUTC = dateString.includes("Z") || dateString.includes("+00:00");
+
+    // Obtenir la date UTC
+    const utcYear = date.getUTCFullYear();
+    const utcMonth = date.getUTCMonth();
+    const utcDay = date.getUTCDate();
+    const utcHours = date.getUTCHours();
+    const utcMinutes = date.getUTCMinutes();
+
+    // Obtenir la date locale actuelle
+    const now = new Date();
+
+    // Créer des dates UTC pour la comparaison
+    const todayUTC = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+    );
+
+    const commentDateUTC = new Date(Date.UTC(utcYear, utcMonth, utcDay));
+
+    // Calculer la différence en jours UTC
+    const diffTime = todayUTC.getTime() - commentDateUTC.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    // Formater l'heure en UTC
+    const hours = utcHours.toString().padStart(2, "0");
+    const minutes = utcMinutes.toString().padStart(2, "0");
+    const timeStr = `${hours}:${minutes}`;
+
+    if (diffDays === 0) {
+      return `Aujourd'hui à ${timeStr}`;
+    } else if (diffDays === 1) {
+      return `Hier à ${timeStr}`;
+    } else if (diffDays < 7) {
+      return `Il y a ${diffDays} jours`;
+    } else {
+      // Pour les dates plus anciennes, afficher la date
+      const day = utcDay.toString().padStart(2, "0");
+      const month = (utcMonth + 1).toString().padStart(2, "0");
+      const year = utcYear;
+      return `${day}/${month}/${year}`;
+    }
+  } catch {
+    return "Date inconnue";
+  }
+};
+
+// ============================================
+// FONCTION DE FORMATAGE DE PRIX AMÉLIORÉE
+// ============================================
+const formatPrice = (price: number | null): string => {
+  if (price === null || price === undefined || isNaN(price)) {
+    return "Prix à discuter";
+  }
+  if (price === 0) {
+    return "Gratuit";
+  }
+  // Formatage avec séparateurs de milliers et sans décimales
+  return (
+    price.toLocaleString("fr-FR", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }) + " FCFA"
+  );
+};
+
+// ============================================
+// FONCTION DE FORMATAGE DE NOMBRE AVEC SÉPARATEURS
+// ============================================
+const formatNumber = (value: number | null | undefined): string => {
+  if (value === null || value === undefined || isNaN(value)) {
+    return "0";
+  }
+  return value.toLocaleString("fr-FR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+};
+
+// ============================================
+// FONCTION DE FORMATAGE DES NOTES (1 décimale)
+// ============================================
+const formatRating = (value: number | null | undefined): string => {
+  if (value === null || value === undefined || isNaN(value)) {
+    return "0,0";
+  }
+  return value.toLocaleString("fr-FR", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+};
 
 // ============================================
 // COMPOSANT D'IMAGE SÉCURISÉ
@@ -333,38 +459,60 @@ const SecureImage = ({
     | ((event: React.SyntheticEvent<HTMLImageElement, Event>) => void)
     | null;
 }) => {
-  const [currentSrc, setCurrentSrc] = useState(src);
+  const [currentSrc, setCurrentSrc] = useState<string>(() => {
+    if (src && src !== "null" && src !== "undefined" && src.trim() !== "") {
+      return src;
+    }
+    return fallbackSrc;
+  });
+
   const [loading, setLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
-    setCurrentSrc(src);
-    setLoading(true);
-    setHasError(false);
-  }, [src]);
+    if (src && src !== "null" && src !== "undefined" && src.trim() !== "") {
+      setCurrentSrc(src);
+      setLoading(true);
+      setHasError(false);
+      setRetryCount(0);
+    } else {
+      setCurrentSrc(fallbackSrc);
+      setLoading(false);
+    }
+  }, [src, fallbackSrc]);
 
   const handleError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-    console.error(`Erreur chargement image ${src}:`, e);
+    if (currentSrc === fallbackSrc || currentSrc.includes("default")) {
+      return;
+    }
 
     if (!hasError) {
       setHasError(true);
 
-      const url = src;
-
-      if (!url) {
-        return;
+      if (src && src.includes("15.236.142.141:9000/oskar-bucket/")) {
+        try {
+          const key = src.replace(
+            "http://15.236.142.141:9000/oskar-bucket/",
+            "",
+          );
+          const encodedKey = encodeURIComponent(key);
+          const proxyUrl = `http://localhost:3005/api/files/${encodedKey}`;
+          setCurrentSrc(proxyUrl);
+          return;
+        } catch (err) {
+          console.debug("Erreur conversion proxy:", err);
+        }
       }
 
-      if (url.includes("15.236.142.141:9000/oskar-bucket/")) {
-        const key = url.replace("http://15.236.142.141:9000/oskar-bucket/", "");
-        const encodedKey = encodeURIComponent(key);
-        const proxyUrl = `http://localhost:3005/api/files/${encodedKey}`;
-        setCurrentSrc(proxyUrl);
-        return;
-      }
-
-      if (fallbackSrc && currentSrc !== fallbackSrc) {
+      if (retryCount >= 2) {
         setCurrentSrc(fallbackSrc);
+      } else {
+        setRetryCount((prev) => prev + 1);
+        setTimeout(() => {
+          setCurrentSrc(src || fallbackSrc);
+          setHasError(false);
+        }, 1000);
       }
     }
 
@@ -376,6 +524,7 @@ const SecureImage = ({
   const handleLoad = () => {
     setLoading(false);
     setHasError(false);
+    setRetryCount(0);
   };
 
   return (
@@ -384,7 +533,7 @@ const SecureImage = ({
       onClick={onClick}
       style={{ cursor: onClick ? "pointer" : "default" }}
     >
-      {loading && !hasError && (
+      {loading && !hasError && currentSrc !== fallbackSrc && (
         <div className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-light">
           <div
             className="spinner-border spinner-border-sm text-primary"
@@ -395,9 +544,10 @@ const SecureImage = ({
         </div>
       )}
       <img
-        src={currentSrc || fallbackSrc}
+        key={currentSrc}
+        src={currentSrc}
         alt={alt}
-        className={`${className} ${loading && !hasError ? "opacity-0" : "opacity-100"}`}
+        className={`${className} ${loading && !hasError && currentSrc !== fallbackSrc ? "opacity-0" : "opacity-100"}`}
         onError={handleError}
         onLoad={handleLoad}
         loading="lazy"
@@ -452,11 +602,52 @@ export default function EchangeDetailPage() {
     commentaire: "",
   });
   const [submittingReview, setSubmittingReview] = useState(false);
+  const [toast, setToast] = useState<{
+    show: boolean;
+    type: "success" | "error" | "info";
+    message: string;
+  } | null>(null);
 
-  // États pour les galeries
   const [selectedThumbnail, setSelectedThumbnail] = useState(0);
   const [contactVisible, setContactVisible] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
+
+  // Stockage local des favoris
+  const [favorisLocaux, setFavorisLocaux] = useState<Set<string>>(new Set());
+
+  // Timer pour le toast
+  useEffect(() => {
+    if (toast?.show) {
+      const timer = setTimeout(() => {
+        setToast(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  // Charger les favoris depuis localStorage au démarrage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const storedFavoris = localStorage.getItem("oskar_favoris");
+      if (storedFavoris) {
+        try {
+          setFavorisLocaux(new Set(JSON.parse(storedFavoris)));
+        } catch (e) {
+          console.error("Erreur lors du chargement des favoris:", e);
+        }
+      }
+    }
+  }, []);
+
+  // Sauvegarder les favoris dans localStorage
+  const sauvegarderFavoris = useCallback((nouveauxFavoris: Set<string>) => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(
+        "oskar_favoris",
+        JSON.stringify([...nouveauxFavoris]),
+      );
+    }
+  }, []);
 
   // FAQ
   const faqs = [
@@ -498,36 +689,6 @@ export default function EchangeDetailPage() {
     return `${API_CONFIG.BASE_URL || "http://localhost:3005"}/images/default-echange.png`;
   };
 
-  const convertMinioUrlToProxy = (minioUrl: string): string => {
-    if (!minioUrl) return getDefaultEchangeImage();
-
-    if (minioUrl.includes("localhost:3005/api/files/")) {
-      return minioUrl;
-    }
-
-    if (minioUrl.includes("15.236.142.141:9000/oskar-bucket/")) {
-      const key = minioUrl.replace(
-        "http://15.236.142.141:9000/oskar-bucket/",
-        "",
-      );
-      const encodedKey = encodeURIComponent(key);
-      return `http://localhost:3005/api/files/${encodedKey}`;
-    }
-
-    if (
-      minioUrl.includes("echanges/") ||
-      minioUrl.includes("produits/") ||
-      minioUrl.includes("categories/") ||
-      minioUrl.includes("utilisateurs/") ||
-      minioUrl.includes("vendeurs/")
-    ) {
-      const encodedKey = encodeURIComponent(minioUrl);
-      return `http://localhost:3005/api/files/${encodedKey}`;
-    }
-
-    return minioUrl;
-  };
-
   const normalizeImageUrl = (
     url: string | null,
     key: string | null = null,
@@ -554,7 +715,17 @@ export default function EchangeDetailPage() {
     }
 
     if (cleanUrl.includes("15.236.142.141:9000/oskar-bucket/")) {
-      return convertMinioUrlToProxy(cleanUrl);
+      try {
+        const key = cleanUrl.replace(
+          "http://15.236.142.141:9000/oskar-bucket/",
+          "",
+        );
+        const encodedKey = encodeURIComponent(key);
+        return `http://localhost:3005/api/files/${encodedKey}`;
+      } catch (err) {
+        console.debug("Erreur conversion MinIO:", err);
+        return getDefaultEchangeImage();
+      }
     }
 
     if (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://")) {
@@ -576,9 +747,12 @@ export default function EchangeDetailPage() {
     decimals: number = 1,
   ): string => {
     if (value === null || value === undefined || isNaN(value)) {
-      return "0.0";
+      return "0,0";
     }
-    return value.toFixed(decimals);
+    return value.toLocaleString("fr-FR", {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
   };
 
   const getSafeNoteMoyenne = (echange: Echange | null): number => {
@@ -746,21 +920,38 @@ export default function EchangeDetailPage() {
     };
   };
 
+  // ✅ FONCTION TRANSFORM COMMENTAIRE AMÉLIORÉE
   const transformCommentaireData = (
     apiCommentaire: CommentaireAPI,
   ): Commentaire => {
+    // Récupérer l'auteur (peut être dans auteur ou utilisateur selon la structure API)
+    const auteur = apiCommentaire.auteur || apiCommentaire.utilisateur || null;
+
+    let nomComplet = "Utilisateur";
+    let prenom = "";
+    let nom = "";
+
+    if (auteur) {
+      prenom = auteur.prenoms || "";
+      nom = auteur.nom || "";
+      nomComplet = `${prenom} ${nom}`.trim() || "Utilisateur";
+    }
+
+    // Construire l'URL de l'avatar
+    let avatarUrl = null;
+    if (auteur?.avatar) {
+      avatarUrl = normalizeImageUrl(auteur.avatar);
+    }
+
     return {
       uuid: apiCommentaire.uuid,
-      utilisateur_nom: apiCommentaire.utilisateur
-        ? `${apiCommentaire.utilisateur.prenoms || ""} ${apiCommentaire.utilisateur.nom || ""}`.trim() ||
-          "Utilisateur"
-        : "Utilisateur",
-      utilisateur_photo: apiCommentaire.utilisateur?.avatar
-        ? normalizeImageUrl(apiCommentaire.utilisateur.avatar)
-        : getDefaultAvatarUrl(),
+      utilisateur_nom: nomComplet,
+      utilisateur_prenoms: prenom,
+      utilisateur_photo: avatarUrl,
       note: apiCommentaire.note || 0,
       commentaire: apiCommentaire.contenu,
       date: apiCommentaire.createdAt,
+      createdAt: apiCommentaire.createdAt,
       likes: 0,
       is_helpful: false,
     };
@@ -776,9 +967,7 @@ export default function EchangeDetailPage() {
       const response = await api.get<any[]>(API_ENDPOINTS.ECHANGES.PUBLISHED);
 
       if (response && Array.isArray(response)) {
-        // Filtrer pour ne pas inclure l'échange courant
         const filtered = response.filter((item) => item.uuid !== uuid);
-        // Mélanger et prendre les 4 premiers
         const shuffled = filtered.sort(() => 0.5 - Math.random());
         const selected = shuffled.slice(0, 4);
 
@@ -815,47 +1004,86 @@ export default function EchangeDetailPage() {
     }
   }, [uuid]);
 
+  // ✅ FONCTION FETCH COMMENTAIRES AMÉLIORÉE
   const fetchCommentaires = useCallback(
     async (echangeUuid: string) => {
       if (!echangeUuid || commentairesFetched) return;
 
       try {
         setLoadingComments(true);
+        console.log(
+          "📥 Chargement des commentaires pour l'échange:",
+          echangeUuid,
+        );
 
         const response = await api.get<CommentairesResponse>(
           API_ENDPOINTS.COMMENTAIRES.FIND_COMMENTS_ECHANGE_BY_UUID(echangeUuid),
         );
+
+        console.log("✅ Réponse commentaires:", response);
 
         if (response && response.commentaires) {
           const commentairesData = response.commentaires.map(
             transformCommentaireData,
           );
 
+          // Trier par date (plus récent d'abord)
           commentairesData.sort(
             (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
           );
 
+          console.log(`📝 ${commentairesData.length} commentaires chargés`);
           setCommentaires(commentairesData);
 
-          const safeNoteMoyenne = response.stats?.noteMoyenne || 0;
-          const safeDistributionNotes = response.stats?.distributionNotes || {
-            1: 0,
-            2: 0,
-            3: 0,
-            4: 0,
-            5: 0,
-          };
+          // Mettre à jour les stats
+          if (response.stats) {
+            setCommentairesStats({
+              nombreCommentaires: response.stats.nombreCommentaires || 0,
+              nombreNotes: response.stats.nombreNotes || 0,
+              noteMoyenne: response.stats.noteMoyenne || 0,
+              distributionNotes: response.stats.distributionNotes || {
+                1: 0,
+                2: 0,
+                3: 0,
+                4: 0,
+                5: 0,
+              },
+            });
+          } else {
+            // Calculer les stats manuellement si non fournies
+            const totalNotes = commentairesData.reduce(
+              (sum, c) => sum + c.note,
+              0,
+            );
+            const moyenne =
+              commentairesData.length > 0
+                ? totalNotes / commentairesData.length
+                : 0;
 
-          setCommentairesStats({
-            nombreCommentaires: response.stats?.nombreCommentaires || 0,
-            nombreNotes: response.stats?.nombreNotes || 0,
-            noteMoyenne: safeNoteMoyenne,
-            distributionNotes: safeDistributionNotes,
-          });
+            const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+            commentairesData.forEach((c) => {
+              const note = Math.round(c.note);
+              if (note >= 1 && note <= 5) {
+                distribution[note as keyof typeof distribution]++;
+              }
+            });
+
+            setCommentairesStats({
+              nombreCommentaires: commentairesData.length,
+              nombreNotes: commentairesData.length,
+              noteMoyenne: moyenne,
+              distributionNotes: distribution,
+            });
+          }
+
+          setCommentairesFetched(true);
+        } else {
+          console.log("ℹ️ Aucun commentaire trouvé");
+          setCommentaires([]);
           setCommentairesFetched(true);
         }
       } catch (err: any) {
-        console.warn("Erreur chargement commentaires API:", err);
+        console.warn("⚠️ Erreur chargement commentaires:", err);
         const echangeNoteMoyenne = getSafeNoteMoyenne(echange);
 
         setCommentairesStats({
@@ -870,7 +1098,7 @@ export default function EchangeDetailPage() {
         setLoadingComments(false);
       }
     },
-    [echange, commentairesFetched],
+    [echange],
   );
 
   const fetchEchangeDetails = useCallback(async () => {
@@ -895,19 +1123,19 @@ export default function EchangeDetailPage() {
 
       setEchange(echangeData);
       setEchangesSimilaires(similairesData);
-      setFavori(response.echange.is_favoris || false);
 
-      // Gestion du créateur
+      // Vérifier si l'échange est dans les favoris locaux
+      const estFavori = favorisLocaux.has(uuid);
+      setFavori(estFavori);
+
       if (response.echange.createur) {
         const createurData = transformCreateurInfo(response.echange.createur);
         createurData.userType = response.echange.createurType || "utilisateur";
         setCreateur(createurData);
       }
 
-      // Gestion des images - Générer plusieurs images à partir des échanges similaires et récents
       const imageUrls: string[] = [echangeData.image];
 
-      // Ajouter des images des échanges similaires
       response.similaires.slice(0, 4).forEach((similaire) => {
         const imgUrl = normalizeImageUrl(similaire.image, similaire.image_key);
         if (imgUrl && !imageUrls.includes(imgUrl)) {
@@ -915,7 +1143,6 @@ export default function EchangeDetailPage() {
         }
       });
 
-      // Si pas assez d'images, ajouter des placeholders
       while (imageUrls.length < 5) {
         imageUrls.push(getDefaultEchangeImage());
       }
@@ -923,10 +1150,7 @@ export default function EchangeDetailPage() {
       setImages(imageUrls.slice(0, 5));
       setImagePrincipale(imageUrls[0]);
 
-      // Charger les commentaires
       fetchCommentaires(echangeData.uuid);
-
-      // Charger les échanges récents
       fetchEchangesRecents();
     } catch (err: any) {
       console.error("Erreur détail échange:", err);
@@ -945,7 +1169,7 @@ export default function EchangeDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [uuid, fetchCommentaires, fetchEchangesRecents]);
+  }, [uuid, fetchCommentaires, fetchEchangesRecents, favorisLocaux]);
 
   useEffect(() => {
     if (uuid && loading && !echange) {
@@ -956,46 +1180,8 @@ export default function EchangeDetailPage() {
   // ============================================
   // FONCTIONS D'AFFICHAGE
   // ============================================
-  const formatPrice = (price: number | null) => {
-    if (price === null || price === undefined || isNaN(price)) {
-      return "Prix à discuter";
-    }
-    if (price === 0) {
-      return "Gratuit";
-    }
-    return price.toLocaleString("fr-FR") + " FCFA";
-  };
-
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return "Non spécifiée";
-
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) {
-        return "Date inconnue";
-      }
-
-      const now = new Date();
-      const diffTime = Math.abs(now.getTime() - date.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-      if (diffDays === 0) {
-        return "Aujourd'hui";
-      } else if (diffDays === 1) {
-        return "Hier";
-      } else if (diffDays < 7) {
-        return `Il y a ${diffDays} jours`;
-      } else {
-        return date.toLocaleDateString("fr-FR", {
-          day: "numeric",
-          month: "long",
-          year: "numeric",
-        });
-      }
-    } catch {
-      return "Date inconnue";
-    }
-  };
+  // La fonction formatPrice est maintenant définie en haut du fichier
+  // Nous utilisons la nouvelle version avec séparateurs de milliers
 
   const renderStars = (rating: number | null | undefined) => {
     if (rating === null || rating === undefined || isNaN(rating)) {
@@ -1076,8 +1262,12 @@ export default function EchangeDetailPage() {
   const noteStats = calculateNoteStats();
 
   // ============================================
-  // FONCTIONS D'ACTIONS
+  // FONCTIONS D'ACTIONS - AVEC TOASTS
   // ============================================
+  const showToast = (type: "success" | "error" | "info", message: string) => {
+    setToast({ show: true, type, message });
+  };
+
   const handleContactWhatsApp = () => {
     if (!createur) return;
 
@@ -1127,11 +1317,11 @@ export default function EchangeDetailPage() {
     navigator.clipboard
       .writeText(contactInfo)
       .then(() => {
-        alert("Informations de contact copiées dans le presse-papier !");
+        showToast("success", "Informations de contact copiées !");
       })
       .catch((err) => {
         console.error("Erreur lors de la copie:", err);
-        alert("Impossible de copier les informations.");
+        showToast("error", "Impossible de copier les informations.");
       });
   };
 
@@ -1142,7 +1332,7 @@ export default function EchangeDetailPage() {
     }
 
     if (!createur) {
-      alert("Informations du créateur non disponibles");
+      showToast("error", "Informations du créateur non disponibles");
       return;
     }
 
@@ -1177,6 +1367,7 @@ export default function EchangeDetailPage() {
     router.push(`${dashboardPath}/messages?${params.toString()}`);
   };
 
+  // ✅ FONCTION POUR LES FAVORIS
   const handleAddToFavorites = async () => {
     if (!echange) return;
 
@@ -1186,26 +1377,46 @@ export default function EchangeDetailPage() {
     }
 
     try {
+      console.log(`🔄 ${favori ? "Retrait" : "Ajout"} aux favoris...`);
+
       if (favori) {
-        await api.delete(API_ENDPOINTS.FAVORIS.REMOVE(echange.uuid));
+        // Retrait des favoris (uniquement côté frontend)
+        const nouveauxFavoris = new Set(favorisLocaux);
+        nouveauxFavoris.delete(echange.uuid);
+        setFavorisLocaux(nouveauxFavoris);
+        sauvegarderFavoris(nouveauxFavoris);
         setFavori(false);
-        alert("Échange retiré des favoris");
+        showToast("success", "Échange retiré des favoris");
       } else {
-        await api.post(
+        // Ajout aux favoris (appel API + frontend)
+        const response = await api.post(
           API_ENDPOINTS.ECHANGES.AJOUT_ECHANGE_FAVORIS(echange.uuid),
           {},
         );
+        console.log("✅ Réponse favoris:", response);
+
+        const nouveauxFavoris = new Set(favorisLocaux);
+        nouveauxFavoris.add(echange.uuid);
+        setFavorisLocaux(nouveauxFavoris);
+        sauvegarderFavoris(nouveauxFavoris);
         setFavori(true);
-        alert("Échange ajouté aux favoris");
+        showToast("success", "Échange ajouté aux favoris");
       }
     } catch (err: any) {
-      console.error("Erreur mise à jour favoris:", err);
+      console.error("❌ Erreur détaillée mise à jour favoris:", err);
+
+      let errorMessage = "Une erreur est survenue. Veuillez réessayer.";
+
       if (err.response?.status === 401) {
-        alert("Votre session a expiré. Veuillez vous reconnecter.");
+        errorMessage = "Votre session a expiré. Veuillez vous reconnecter.";
         openLoginModal();
-      } else {
-        alert("Une erreur est survenue. Veuillez réessayer.");
+      } else if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.message) {
+        errorMessage = err.message;
       }
+
+      showToast("error", errorMessage);
     }
   };
 
@@ -1231,12 +1442,12 @@ export default function EchangeDetailPage() {
     navigator.clipboard
       .writeText(window.location.href)
       .then(() => {
-        alert("Lien copié dans le presse-papier !");
+        showToast("success", "Lien copié dans le presse-papier !");
         setShowShareMenu(false);
       })
       .catch((err) => {
         console.error("Erreur copie lien:", err);
-        alert("Impossible de copier le lien.");
+        showToast("error", "Impossible de copier le lien.");
       });
   };
 
@@ -1250,15 +1461,10 @@ export default function EchangeDetailPage() {
             : comment,
         ),
       );
+      showToast("success", "Merci pour votre retour !");
     } catch (err) {
       console.error("Erreur lors du like:", err);
-      setCommentaires((prev) =>
-        prev.map((comment) =>
-          comment.uuid === commentUuid
-            ? { ...comment, likes: comment.likes + 1 }
-            : comment,
-        ),
-      );
+      showToast("error", "Impossible d'aimer le commentaire");
     }
   };
 
@@ -1266,10 +1472,13 @@ export default function EchangeDetailPage() {
     if (window.confirm("Signaler ce commentaire comme inapproprié ?")) {
       try {
         await api.post(API_ENDPOINTS.COMMENTAIRES.REPORT(commentUuid), {});
-        alert("Commentaire signalé. Notre équipe le vérifiera sous 24h.");
+        showToast(
+          "success",
+          "Commentaire signalé. Notre équipe le vérifiera sous 24h.",
+        );
       } catch (err) {
         console.error("Erreur signalement:", err);
-        alert("Une erreur est survenue lors du signalement.");
+        showToast("error", "Une erreur est survenue lors du signalement.");
       }
     }
   };
@@ -1283,7 +1492,7 @@ export default function EchangeDetailPage() {
     }
 
     if (!newReview.commentaire.trim()) {
-      alert("Veuillez saisir un commentaire.");
+      showToast("error", "Veuillez saisir un commentaire.");
       return;
     }
 
@@ -1299,6 +1508,8 @@ export default function EchangeDetailPage() {
         },
       );
 
+      // Réinitialiser commentairesFetched pour forcer un rechargement
+      setCommentairesFetched(false);
       await fetchCommentaires(echange.uuid);
 
       setNewReview({
@@ -1307,20 +1518,18 @@ export default function EchangeDetailPage() {
       });
       setShowAddReview(false);
 
-      alert(
-        "Votre avis a été ajouté avec succès ! Merci pour votre contribution.",
-      );
-
+      showToast("success", "Votre avis a été ajouté avec succès !");
       await fetchEchangeDetails();
     } catch (err: any) {
       console.error("Erreur ajout avis:", err);
       if (err.response?.status === 401) {
-        alert("Votre session a expiré. Veuillez vous reconnecter.");
+        showToast(
+          "error",
+          "Votre session a expiré. Veuillez vous reconnecter.",
+        );
         openLoginModal();
       } else {
-        alert(
-          "Une erreur est survenue lors de l'ajout de votre avis. Veuillez réessayer.",
-        );
+        showToast("error", "Une erreur est survenue. Veuillez réessayer.");
       }
     } finally {
       setSubmittingReview(false);
@@ -1422,7 +1631,6 @@ export default function EchangeDetailPage() {
     ? commentaires
     : commentaires.slice(0, 3);
 
-  // Déterminer les échanges à afficher dans la section "Échanges Similaires"
   const echangesAShow =
     echangesSimilaires.length > 0
       ? echangesSimilaires.slice(0, 4)
@@ -1430,6 +1638,35 @@ export default function EchangeDetailPage() {
 
   return (
     <div className="bg-light min-vh-100">
+      {/* Toast notifications */}
+      {toast?.show && (
+        <div
+          className="position-fixed top-0 end-0 m-4 p-3 text-white rounded-3 shadow-lg"
+          style={{
+            zIndex: 9999,
+            backgroundColor:
+              toast.type === "success"
+                ? "#10b981"
+                : toast.type === "error"
+                  ? "#ef4444"
+                  : "#3b82f6",
+            minWidth: "300px",
+            animation: "slideIn 0.3s ease",
+          }}
+        >
+          <div className="d-flex align-items-center">
+            <i
+              className={`fas fa-${toast.type === "success" ? "check-circle" : toast.type === "error" ? "exclamation-circle" : "info-circle"} me-3 fs-4`}
+            ></i>
+            <span className="flex-grow-1">{toast.message}</span>
+            <button
+              className="btn-close btn-close-white"
+              onClick={() => setToast(null)}
+            ></button>
+          </div>
+        </div>
+      )}
+
       {/* Breadcrumb */}
       <section className="bg-white border-bottom py-3">
         <div className="container">
@@ -1490,8 +1727,9 @@ export default function EchangeDetailPage() {
                   className="position-absolute top-0 end-0 m-3 btn btn-light rounded-circle p-3 shadow-lg hover-bg-warning hover-text-white transition-all"
                   style={{ width: "50px", height: "50px" }}
                 >
-                  <i
-                    className={`fa-${favori ? "solid" : "regular"} fa-heart`}
+                  <FontAwesomeIcon
+                    icon={favori ? FaHeartSolid : FaHeartRegular}
+                    className={favori ? "text-danger" : ""}
                   />
                 </button>
                 <div className="position-absolute top-0 start-0 m-3 bg-primary text-white px-4 py-2 rounded-pill fw-semibold d-flex align-items-center gap-2">
@@ -1603,7 +1841,7 @@ export default function EchangeDetailPage() {
                   <div className="border-bottom py-3 d-flex justify-content-between">
                     <span className="text-muted">Quantité</span>
                     <span className="fw-semibold">
-                      {echange.quantite} unité(s)
+                      {formatNumber(echange.quantite)} unité(s)
                     </span>
                   </div>
                   {echange.categorie && (
@@ -1702,7 +1940,7 @@ export default function EchangeDetailPage() {
               </div>
             </div>
 
-            {/* Avis et évaluations */}
+            {/* Avis et évaluations - SECTION AMÉLIORÉE */}
             <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
               <h2 className="h2 fw-bold mb-4">Évaluations et Avis</h2>
 
@@ -1720,13 +1958,13 @@ export default function EchangeDetailPage() {
                     <div className="row align-items-center">
                       <div className="col-md-4 text-center">
                         <div className="display-1 fw-bold text-primary mb-2">
-                          {safeToFixed(noteStats.moyenne)}
+                          {safeToFixed(noteStats.moyenne, 1)}
                         </div>
                         <div className="mb-2 text-warning">
                           {renderStars(noteStats.moyenne)}
                         </div>
                         <p className="text-muted mb-0">
-                          Basé sur {noteStats.total} avis
+                          Basé sur {formatNumber(noteStats.total)} avis
                         </p>
                       </div>
                       <div className="col-md-8">
@@ -1755,7 +1993,7 @@ export default function EchangeDetailPage() {
                                 className="text-muted"
                                 style={{ width: "70px" }}
                               >
-                                {rating} étoiles
+                                {rating} étoile{rating > 1 ? "s" : ""}
                               </span>
                               <div
                                 className="progress flex-grow-1"
@@ -1770,7 +2008,7 @@ export default function EchangeDetailPage() {
                                 className="text-muted"
                                 style={{ width: "40px" }}
                               >
-                                {count}
+                                {formatNumber(count)}
                               </span>
                             </div>
                           );
@@ -1779,7 +2017,6 @@ export default function EchangeDetailPage() {
                     </div>
                   </div>
 
-                  {/* Formulaire d'ajout d'avis */}
                   {showAddReview ? (
                     <div className="card border mb-4">
                       <div className="card-body">
@@ -1864,7 +2101,7 @@ export default function EchangeDetailPage() {
                     </div>
                   )}
 
-                  {/* Liste des commentaires */}
+                  {/* ✅ LISTE DES COMMENTAIRES AMÉLIORÉE */}
                   {commentaires.length > 0 ? (
                     <div className="space-y-6">
                       {visibleComments.map((comment) => (
@@ -1873,54 +2110,105 @@ export default function EchangeDetailPage() {
                           className="border-bottom pb-4 mb-4"
                         >
                           <div className="d-flex gap-4">
-                            <SecureImage
-                              src={comment.utilisateur_photo}
-                              alt={comment.utilisateur_nom}
-                              fallbackSrc={getDefaultAvatarUrl()}
-                              className="rounded-circle"
-                              style={{
-                                width: "48px",
-                                height: "48px",
-                                objectFit: "cover",
-                              }}
-                            />
+                            {/* Avatar de l'utilisateur */}
+                            <div className="flex-shrink-0">
+                              {comment.utilisateur_photo ? (
+                                <SecureImage
+                                  src={comment.utilisateur_photo}
+                                  alt={comment.utilisateur_nom}
+                                  fallbackSrc={getDefaultAvatarUrl()}
+                                  className="rounded-circle"
+                                  style={{
+                                    width: "56px",
+                                    height: "56px",
+                                    objectFit: "cover",
+                                    border: "2px solid #f0f0f0",
+                                  }}
+                                />
+                              ) : (
+                                <div
+                                  className="bg-light rounded-circle d-flex align-items-center justify-content-center"
+                                  style={{
+                                    width: "56px",
+                                    height: "56px",
+                                    border: "2px solid #f0f0f0",
+                                  }}
+                                >
+                                  <FontAwesomeIcon
+                                    icon={faUserCircle}
+                                    className="text-muted fs-2"
+                                  />
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Contenu du commentaire */}
                             <div className="flex-grow-1">
                               <div className="d-flex justify-content-between align-items-start mb-2">
                                 <div>
-                                  <p className="fw-bold mb-1">
+                                  <h6 className="fw-bold mb-1">
                                     {comment.utilisateur_nom}
-                                  </p>
-                                  <div className="mb-2 text-warning">
+                                  </h6>
+                                  <div className="mb-2">
                                     {renderRatingStars(comment.note)}
                                   </div>
                                 </div>
                                 <small className="text-muted">
+                                  <FontAwesomeIcon
+                                    icon={faClock}
+                                    className="me-1"
+                                  />
                                   {formatDate(comment.date)}
                                 </small>
                               </div>
-                              <p className="text-muted mb-3">
+
+                              <p className="text-muted mb-3 bg-light p-3 rounded-3">
                                 {comment.commentaire}
                               </p>
-                              <div className="d-flex gap-4">
+
+                              <div className="d-flex gap-3">
                                 <button
-                                  className="btn btn-link text-muted p-0 text-decoration-none hover-text-warning"
+                                  className="btn btn-link text-muted p-0 text-decoration-none hover-text-primary"
                                   onClick={() =>
                                     handleLikeComment(comment.uuid)
                                   }
+                                  style={{ fontSize: "0.9rem" }}
                                 >
                                   <FontAwesomeIcon
                                     icon={faThumbsUp}
                                     className="me-1"
                                   />
-                                  Utile ({comment.likes})
+                                  Utile ({formatNumber(comment.likes)})
                                 </button>
                                 <button
-                                  className="btn btn-link text-muted p-0 text-decoration-none hover-text-warning"
+                                  className="btn btn-link text-muted p-0 text-decoration-none hover-text-danger"
                                   onClick={() =>
                                     handleReportComment(comment.uuid)
                                   }
+                                  style={{ fontSize: "0.9rem" }}
                                 >
+                                  <FontAwesomeIcon
+                                    icon={faFlag}
+                                    className="me-1"
+                                  />
                                   Signaler
+                                </button>
+                                <button
+                                  className="btn btn-link text-muted p-0 text-decoration-none hover-text-warning"
+                                  onClick={() => {
+                                    if (!isLoggedIn) {
+                                      openLoginModal();
+                                      return;
+                                    }
+                                    // Fonction pour répondre au commentaire (à implémenter)
+                                  }}
+                                  style={{ fontSize: "0.9rem" }}
+                                >
+                                  <FontAwesomeIcon
+                                    icon={faReply}
+                                    className="me-1"
+                                  />
+                                  Répondre
                                 </button>
                               </div>
                             </div>
@@ -1955,7 +2243,7 @@ export default function EchangeDetailPage() {
                       />
                       {showMoreComments
                         ? "Voir moins d'avis"
-                        : `Voir tous les ${commentaires.length} avis`}
+                        : `Voir tous les ${formatNumber(commentaires.length)} avis`}
                     </button>
                   )}
                 </>
@@ -2014,7 +2302,9 @@ export default function EchangeDetailPage() {
                                   <div className="me-2 text-warning">
                                     {renderStars(item.note_moyenne)}
                                   </div>
-                                  <span>({item.note_moyenne.toFixed(1)})</span>
+                                  <span>
+                                    ({formatRating(item.note_moyenne)})
+                                  </span>
                                 </div>
                                 <div className="d-flex align-items-center text-muted small">
                                   <FontAwesomeIcon
@@ -2022,13 +2312,15 @@ export default function EchangeDetailPage() {
                                     className="text-danger me-1"
                                   />
                                   <span className="me-2">
-                                    {item.note_moyenne * 10 || 0}
+                                    {formatNumber(item.note_moyenne * 10 || 0)}
                                   </span>
                                   <FontAwesomeIcon
                                     icon={faEye}
                                     className="text-info me-1"
                                   />
-                                  <span>{item.nombre_avis || 0} avis</span>
+                                  <span>
+                                    {formatNumber(item.nombre_avis || 0)} avis
+                                  </span>
                                 </div>
                               </div>
                             </div>
@@ -2107,7 +2399,7 @@ export default function EchangeDetailPage() {
                   className="btn btn-light w-100 py-3 fw-semibold"
                 >
                   <FontAwesomeIcon
-                    icon={faHeart}
+                    icon={favori ? FaHeartSolid : FaHeartRegular}
                     className={`me-2 ${favori ? "text-danger" : ""}`}
                   />
                   {favori ? "Retirer des favoris" : "Ajouter aux favoris"}
@@ -2132,7 +2424,6 @@ export default function EchangeDetailPage() {
                     </div>
                   </div>
 
-                  {/* Avatar du créateur avec redirection */}
                   <div className="d-flex align-items-center gap-3 mt-3">
                     {createur.avatar ? (
                       <SecureImage
@@ -2187,7 +2478,6 @@ export default function EchangeDetailPage() {
                     </div>
                   )}
 
-                  {/* Informations du créateur */}
                   <div className="border-top mt-3 pt-3">
                     <p className="fw-semibold small mb-2">Contact créateur</p>
                     {createur.email && (
@@ -2217,7 +2507,7 @@ export default function EchangeDetailPage() {
                 <div className="d-flex justify-content-between mb-2">
                   <span className="text-muted">Vues</span>
                   <span className="fw-semibold">
-                    {echange.note_moyenne * 100 + 500 || 0}
+                    {formatNumber(echange.note_moyenne * 100 + 500 || 0)}
                   </span>
                 </div>
                 <div className="d-flex justify-content-between mb-2">
@@ -2268,7 +2558,7 @@ export default function EchangeDetailPage() {
                     <div className="d-flex align-items-center gap-1 text-warning small mb-1">
                       {renderStars(echange.note_moyenne)}
                       <span className="text-muted ms-1">
-                        ({echange.note_moyenne.toFixed(1)})
+                        ({formatRating(echange.note_moyenne)})
                       </span>
                     </div>
                     <p className="small text-muted mb-0">
@@ -2282,19 +2572,23 @@ export default function EchangeDetailPage() {
                   <div className="d-flex justify-content-between py-2 border-bottom">
                     <span className="text-muted">Échanges actifs</span>
                     <span className="fw-semibold">
-                      {createur.nombre_annonces || echangesSimilaires.length}
+                      {formatNumber(
+                        createur.nombre_annonces || echangesSimilaires.length,
+                      )}
                     </span>
                   </div>
                   <div className="d-flex justify-content-between py-2 border-bottom">
                     <span className="text-muted">Échanges réalisés</span>
                     <span className="fw-semibold">
-                      {createur.nombre_ventes || echange.nombre_avis}
+                      {formatNumber(
+                        createur.nombre_ventes || echange.nombre_avis,
+                      )}
                     </span>
                   </div>
                   <div className="d-flex justify-content-between py-2 border-bottom">
                     <span className="text-muted">Taux de réponse</span>
                     <span className="text-success fw-semibold">
-                      {createur.taux_reponse || 98}%
+                      {formatNumber(createur.taux_reponse || 98)}%
                     </span>
                   </div>
                   <div className="d-flex justify-content-between py-2">
@@ -2418,7 +2712,7 @@ export default function EchangeDetailPage() {
                           <div className="me-2 text-warning">
                             {renderStars(item.note_moyenne)}
                           </div>
-                          <span>({item.note_moyenne.toFixed(1)})</span>
+                          <span>({formatRating(item.note_moyenne)})</span>
                         </div>
                         <div className="mt-auto d-flex justify-content-between align-items-center">
                           <div className="d-flex align-items-center">
@@ -2569,7 +2863,7 @@ export default function EchangeDetailPage() {
         </div>
       </section>
 
-      {/* CTA - Fond vert */}
+      {/* CTA */}
       <section className="bg-success text-white py-5">
         <div className="container text-center">
           <h2 className="display-5 fw-bold mb-3">
@@ -2662,6 +2956,16 @@ export default function EchangeDetailPage() {
         }
         .h-100 {
           height: 100%;
+        }
+        @keyframes slideIn {
+          from {
+            transform: translateX(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
         }
       `}</style>
     </div>

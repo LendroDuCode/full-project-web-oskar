@@ -1,8 +1,8 @@
 // CTABanner.tsx - CORRIGÉ avec container vert
 "use client";
 
+import colors from "@/app/shared/constants/colors";
 import Link from "next/link";
-import colors from "../../../shared/constants/colors";
 
 const CTABanner = () => {
   return (

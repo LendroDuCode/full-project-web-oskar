@@ -391,6 +391,49 @@ export default function DataTable({
     target.onerror = null;
   };
 
+  // ✅ CORRECTION: Fonction handleViewDetails améliorée
+  const handleViewDetails = (row: ContentItem) => {
+    // Déterminer si l'élément est publié
+    const isPublished =
+      row.estPublie ||
+      row.status === "publie" ||
+      row.status === "disponible" ||
+      row.status === "valide";
+
+    let basePath = "/dashboard-agent/annonces";
+
+    // Construire l'URL selon le type
+    switch (row.type) {
+      case "produit":
+        if (isPublished) {
+          router.push(`${basePath}/produit/${row.uuid}`);
+        } else {
+          router.push(`${basePath}/produit/non-publie/${row.uuid}`);
+        }
+        break;
+
+      case "don":
+        if (isPublished) {
+          router.push(`${basePath}/don/${row.uuid}`);
+        } else {
+          router.push(`${basePath}/don/non-publie/${row.uuid}`);
+        }
+        break;
+
+      case "echange":
+        if (isPublished) {
+          router.push(`${basePath}/echange/${row.uuid}`);
+        } else {
+          router.push(`${basePath}/echange/non-publie/${row.uuid}`);
+        }
+        break;
+
+      default:
+        // Fallback
+        router.push(`${basePath}/${row.type}/${row.uuid}`);
+    }
+  };
+
   // Actions individuelles
   const handleValidate = async (uuid: string) => {
     try {
@@ -486,11 +529,6 @@ export default function DataTable({
         return newSet;
       });
     }
-  };
-
-  const handleViewDetails = (uuid: string) => {
-    // Utiliser la navigation Next.js vers les pages de détail
-    router.push(`/dashboard-agent/annonces/${contentType}/${uuid}`);
   };
 
   // Actions en masse
@@ -896,7 +934,7 @@ export default function DataTable({
                         </div>
                       ) : (
                         <>
-                          {/* Bouton Voir détails */}
+                          {/* ✅ Bouton Voir détails corrigé */}
                           <button
                             type="button"
                             className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
@@ -908,7 +946,7 @@ export default function DataTable({
                               border: "none",
                               borderRadius: "6px",
                             }}
-                            onClick={() => handleViewDetails(row.uuid)}
+                            onClick={() => handleViewDetails(row)}
                             title="Voir détails"
                             disabled={isItemProcessing}
                           >

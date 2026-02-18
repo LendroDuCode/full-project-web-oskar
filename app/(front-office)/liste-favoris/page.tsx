@@ -4,75 +4,86 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useAuth } from "@/app/(front-office)/auth/AuthContext";
-import axios from "axios";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
-import { API_CONFIG, buildApiUrl } from "@/config/env";
 import colors from "@/app/shared/constants/colors";
+import { api } from "@/lib/api-client";
 
+// Types pour les favoris
 interface FavoriItem {
   uuid: string;
   type: "produit" | "echange" | "don";
-  titre?: string;
-  nom?: string;
+  titre: string;
   description?: string | null;
   prix?: number | string | null;
   image?: string | null;
   date?: string;
   disponible?: boolean;
   statut?: string;
-  numero?: string;
-  createdAt?: string | null;
   isFavoris?: boolean;
+  createur?: {
+    uuid: string;
+    nom: string;
+    prenoms: string;
+    email: string;
+    telephone?: string;
+    avatar?: string | null;
+  };
+  // Propriétés spécifiques
+  libelle?: string;
+  type_don?: string;
+  lieu_retrait?: string;
   nomElementEchange?: string;
   typeEchange?: string;
   objetPropose?: string;
   objetDemande?: string;
+  message?: string;
+  localisation?: string;
 }
 
 type TabType = "all" | "produits" | "dons" | "echanges";
 
-// Fonction pour convertir les filtres UI en types d'items
-const filterToItemType = (filter: string): "don" | "echange" | "produit" => {
-  switch(filter) {
-    case "dons": return "don";
-    case "echanges": return "echange";
-    case "produits": return "produit";
-    default: return "don"; // Fallback
-  }
-};
-
 // Fonction pour formater le prix
-const formatPrice = (price: number | string | null | undefined) => {
+const formatPrice = (
+  price: number | string | null | undefined,
+  type: string,
+) => {
   if (price === null || price === undefined) return "Gratuit";
   if (price === 0) return "Gratuit";
+  if (type === "don") return "Gratuit";
+  if (type === "echange") return "Troc";
 
   const priceNum = typeof price === "string" ? parseFloat(price) : price;
   if (isNaN(priceNum)) return "Prix à discuter";
-
   return `${priceNum.toLocaleString("fr-FR")} FCFA`;
 };
 
 // Fonction pour formater la date
-const formatDate = (dateString?: string) => {
+const formatDate = (dateString?: string | null) => {
   if (!dateString) return "";
 
   try {
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return "";
 
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return "Aujourd'hui";
+    if (diffDays === 1) return "Hier";
+    if (diffDays < 7) return `Il y a ${diffDays} jours`;
     return date.toLocaleDateString("fr-FR", {
       day: "2-digit",
       month: "short",
-      year: "numeric",
     });
   } catch {
     return "";
   }
 };
 
-// Image placeholder en base64
+// Image placeholder
 const PLACEHOLDER_IMAGE =
-  "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjBmMGYwIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPk5vbiBkaXNwb25pYmxlPC90ZXh0Pjwvc3ZnPg==";
+  "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2YzZjRmNiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM2NjY2NjYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5BdWN1bmUgaW1hZ2U8L3RleHQ+PC9zdmc+";
 
 // Composant pour la page de connexion
 function LoginRequiredPage() {
@@ -114,7 +125,7 @@ function LoginRequiredPage() {
         </div>
       </section>
 
-      {/* Section principale avec design amélioré */}
+      {/* Section principale */}
       <section className="py-5">
         <div className="container">
           <div className="row justify-content-center">
@@ -142,7 +153,6 @@ function LoginRequiredPage() {
                             <i className="fas fa-heart fa-3x text-white"></i>
                           </div>
 
-                          {/* Petits cercles décoratifs */}
                           <div
                             className="position-absolute top-0 end-0 rounded-circle"
                             style={{
@@ -210,7 +220,6 @@ function LoginRequiredPage() {
                         </p>
                       </div>
 
-                      {/* Icônes d'illustration */}
                       <div className="row g-3 mb-4">
                         <div className="col-4">
                           <div className="text-center">
@@ -332,7 +341,6 @@ function LoginRequiredPage() {
                         </div>
                       </div>
 
-                      {/* Boutons d'action */}
                       <div className="d-grid gap-3">
                         <button
                           className="btn btn-lg"
@@ -370,7 +378,6 @@ function LoginRequiredPage() {
                         </button>
                       </div>
 
-                      {/* Lien de découverte */}
                       <div className="text-center mt-4">
                         <p className="text-muted small mb-2">
                           Vous souhaitez d'abord découvrir nos annonces ?
@@ -388,262 +395,6 @@ function LoginRequiredPage() {
                   </div>
                 </div>
               </div>
-
-              {/* Section des avantages */}
-              <div className="mt-5">
-                <h4
-                  className="text-center fw-bold mb-4"
-                  style={{ color: colors.oskar.purple }}
-                >
-                  Les avantages de vos favoris
-                </h4>
-                <div className="row g-4">
-                  <div className="col-md-4">
-                    <div className="card border-0 shadow-sm h-100">
-                      <div className="card-body text-center p-4">
-                        <div className="mb-3">
-                          <div
-                            className="rounded-circle d-inline-flex align-items-center justify-content-center"
-                            style={{
-                              width: "70px",
-                              height: "70px",
-                              background: `${colors.oskar.purpleLight}`,
-                            }}
-                          >
-                            <i
-                              className="fas fa-bookmark fa-lg"
-                              style={{ color: colors.oskar.purple }}
-                            ></i>
-                          </div>
-                        </div>
-                        <h5 className="fw-bold mb-2">Sauvegarde facile</h5>
-                        <p className="text-muted small mb-0">
-                          Un simple clic pour sauvegarder vos annonces préférées
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="col-md-4">
-                    <div className="card border-0 shadow-sm h-100">
-                      <div className="card-body text-center p-4">
-                        <div className="mb-3">
-                          <div
-                            className="rounded-circle d-inline-flex align-items-center justify-content-center"
-                            style={{
-                              width: "70px",
-                              height: "70px",
-                              background: `${colors.oskar.greenHover}20`,
-                            }}
-                          >
-                            <i
-                              className="fas fa-bell fa-lg"
-                              style={{ color: colors.oskar.green }}
-                            ></i>
-                          </div>
-                        </div>
-                        <h5 className="fw-bold mb-2">Notifications</h5>
-                        <p className="text-muted small mb-0">
-                          Soyez alerté des changements sur vos annonces
-                          favorites
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="col-md-4">
-                    <div className="card border-0 shadow-sm h-100">
-                      <div className="card-body text-center p-4">
-                        <div className="mb-3">
-                          <div
-                            className="rounded-circle d-inline-flex align-items-center justify-content-center"
-                            style={{
-                              width: "70px",
-                              height: "70px",
-                              background: "#E3F2FD",
-                            }}
-                          >
-                            <i
-                              className="fas fa-sync-alt fa-lg"
-                              style={{ color: "#2196F3" }}
-                            ></i>
-                          </div>
-                        </div>
-                        <h5 className="fw-bold mb-2">Accès rapide</h5>
-                        <p className="text-muted small mb-0">
-                          Retrouvez rapidement toutes vos annonces en un seul
-                          endroit
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Section FAQ */}
-      <section className="py-5 bg-light">
-        <div className="container">
-          <div className="text-center mb-4">
-            <h3
-              className="h4 fw-bold mb-2"
-              style={{ color: colors.oskar.purple }}
-            >
-              Questions fréquentes
-            </h3>
-            <p className="text-muted">
-              Tout ce que vous devez savoir sur les favoris
-            </p>
-          </div>
-
-          <div className="row g-4">
-            <div className="col-md-6">
-              <div className="card border-0 shadow-sm h-100">
-                <div className="card-body p-4">
-                  <div className="d-flex">
-                    <div className="flex-shrink-0">
-                      <i
-                        className="fas fa-question-circle fa-lg me-3"
-                        style={{ color: colors.oskar.purple }}
-                      ></i>
-                    </div>
-                    <div>
-                      <h5 className="fw-bold mb-2">
-                        Les favoris sont-ils gratuits ?
-                      </h5>
-                      <p className="text-muted mb-0">
-                        Oui, la fonctionnalité "Favoris" est entièrement
-                        gratuite pour tous les utilisateurs inscrits sur notre
-                        plateforme.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="col-md-6">
-              <div className="card border-0 shadow-sm h-100">
-                <div className="card-body p-4">
-                  <div className="d-flex">
-                    <div className="flex-shrink-0">
-                      <i
-                        className="fas fa-question-circle fa-lg me-3"
-                        style={{ color: colors.oskar.purple }}
-                      ></i>
-                    </div>
-                    <div>
-                      <h5 className="fw-bold mb-2">
-                        Puis-je partager mes favoris ?
-                      </h5>
-                      <p className="text-muted mb-0">
-                        Non, votre liste de favoris est personnelle et privée.
-                        Vous pouvez cependant partager des annonces
-                        individuelles avec vos proches.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="col-md-6">
-              <div className="card border-0 shadow-sm h-100">
-                <div className="card-body p-4">
-                  <div className="d-flex">
-                    <div className="flex-shrink-0">
-                      <i
-                        className="fas fa-question-circle fa-lg me-3"
-                        style={{ color: colors.oskar.purple }}
-                      ></i>
-                    </div>
-                    <div>
-                      <h5 className="fw-bold mb-2">
-                        Combien de favoris puis-je avoir ?
-                      </h5>
-                      <p className="text-muted mb-0">
-                        Il n'y a pas de limite au nombre d'annonces que vous
-                        pouvez ajouter à vos favoris. Ajoutez autant d'annonces
-                        que vous le souhaitez !
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="col-md-6">
-              <div className="card border-0 shadow-sm h-100">
-                <div className="card-body p-4">
-                  <div className="d-flex">
-                    <div className="flex-shrink-0">
-                      <i
-                        className="fas fa-question-circle fa-lg me-3"
-                        style={{ color: colors.oskar.purple }}
-                      ></i>
-                    </div>
-                    <div>
-                      <h5 className="fw-bold mb-2">
-                        Mes favoris sont-ils sauvegardés ?
-                      </h5>
-                      <p className="text-muted mb-0">
-                        Oui, vos favoris sont sauvegardés sur votre compte et
-                        restent accessibles depuis n'importe quel appareil
-                        lorsque vous vous connectez.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* CTA final */}
-          <div className="text-center mt-5">
-            <div
-              className="card border-0 shadow"
-              style={{
-                background: `linear-gradient(135deg, ${colors.oskar.purple}10 0%, ${colors.oskar.green}10 100%)`,
-                border: `1px solid ${colors.oskar.purple}20`,
-              }}
-            >
-              <div className="card-body py-5 px-4">
-                <h4
-                  className="fw-bold mb-3"
-                  style={{ color: colors.oskar.purple }}
-                >
-                  Prêt à découvrir nos annonces ?
-                </h4>
-                <p className="text-muted mb-4">
-                  Rejoignez notre communauté et commencez à sauvegarder vos
-                  annonces favorites dès maintenant.
-                </p>
-                <div className="d-flex flex-wrap gap-3 justify-content-center">
-                  <button
-                    className="btn btn-lg px-4"
-                    onClick={openRegisterModal}
-                    style={{
-                      background: `linear-gradient(135deg, ${colors.oskar.purple} 0%, ${colors.oskar.purple}90 100%)`,
-                      color: "white",
-                      border: "none",
-                      fontWeight: "600",
-                    }}
-                  >
-                    <i className="fas fa-user-plus me-2"></i>
-                    Créer un compte
-                  </button>
-                  <button
-                    className="btn btn-lg btn-outline-success px-4"
-                    onClick={openLoginModal}
-                  >
-                    <i className="fas fa-sign-in-alt me-2"></i>
-                    Se connecter
-                  </button>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -652,10 +403,263 @@ function LoginRequiredPage() {
   );
 }
 
+// Composant de carte de favori
+const FavoriCard = ({
+  item,
+  onRemove,
+}: {
+  item: FavoriItem;
+  onRemove: (uuid: string, type: "produit" | "echange" | "don") => void;
+}) => {
+  const [isFavorite, setIsFavorite] = useState(true);
+  const [imageError, setImageError] = useState(false);
+
+  const getTypeConfig = (type: string) => {
+    switch (type) {
+      case "produit":
+        return {
+          label: "vente",
+          color: colors.oskar.green,
+          bgColor: "#16a34a",
+          btnColor: "#f97316",
+          icon: "fa-tag",
+          priceColor: "text-success",
+        };
+      case "don":
+        return {
+          label: "don",
+          color: "#9333ea",
+          bgColor: "#9333ea",
+          btnColor: "#9333ea",
+          icon: "fa-gift",
+          priceColor: "text-purple-600",
+        };
+      case "echange":
+        return {
+          label: "échange",
+          color: "#2563eb",
+          bgColor: "#2563eb",
+          btnColor: "#2563eb",
+          icon: "fa-exchange-alt",
+          priceColor: "text-primary",
+        };
+      default:
+        return {
+          label: "annonce",
+          color: colors.oskar.grey,
+          bgColor: colors.oskar.grey,
+          btnColor: colors.oskar.orange,
+          icon: "fa-tag",
+          priceColor: "text-muted",
+        };
+    }
+  };
+
+  const typeConfig = getTypeConfig(item.type);
+
+  const getButtonText = () => {
+    switch (item.type) {
+      case "produit":
+        return "Contacter";
+      case "don":
+        return "Intéressé";
+      case "echange":
+        return "Proposer";
+      default:
+        return "Voir";
+    }
+  };
+
+  const getDetailLink = () => {
+    switch (item.type) {
+      case "don":
+        return `/dons/${item.uuid}`;
+      case "echange":
+        return `/echanges/${item.uuid}`;
+      case "produit":
+        return `/produits/${item.uuid}`;
+      default:
+        return `/annonces/${item.uuid}`;
+    }
+  };
+
+  const getImageSrc = () => {
+    if (imageError || !item.image) return PLACEHOLDER_IMAGE;
+    if (item.image.startsWith("http")) return item.image;
+    return `${process.env.NEXT_PUBLIC_API_URL || ""}${item.image}`;
+  };
+
+  const handleRemoveClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsFavorite(false);
+    onRemove(item.uuid, item.type);
+  };
+
+  return (
+    <div className="card h-100 border-0 rounded-4 overflow-hidden shadow group cursor-pointer transition-all">
+      {/* Image */}
+      <div
+        className="position-relative overflow-hidden"
+        style={{ height: "224px" }}
+      >
+        <Link href={getDetailLink()}>
+          <img
+            src={getImageSrc()}
+            alt={item.titre || "Favori"}
+            className="w-100 h-100 object-fit-cover transition-transform group-hover-scale"
+            style={{ transition: "transform 0.3s ease" }}
+            onError={() => setImageError(true)}
+          />
+        </Link>
+
+        {/* Badge type */}
+        <div
+          className="position-absolute top-0 start-0 px-2 py-1 text-white small fw-bold rounded-3 d-flex align-items-center gap-1 m-2"
+          style={{ backgroundColor: typeConfig.bgColor }}
+        >
+          <i className={`fas ${typeConfig.icon}`}></i>
+          <span>{typeConfig.label}</span>
+        </div>
+
+        {/* Bouton retirer favori */}
+        <button
+          className="position-absolute top-0 end-0 w-10 h-10 bg-white rounded-circle d-flex align-items-center justify-content-center shadow border-0 m-2 transition-colors"
+          style={{
+            width: "40px",
+            height: "40px",
+            color: "#ff6b6b",
+          }}
+          onClick={handleRemoveClick}
+          aria-label={`Retirer ${item.titre} des favoris`}
+        >
+          <i className="fa-solid fa-heart"></i>
+        </button>
+      </div>
+
+      {/* Contenu */}
+      <div className="card-body p-4">
+        <Link href={getDetailLink()} className="text-decoration-none">
+          <h5 className="card-title fw-bold text-dark mb-2 text-truncate">
+            {item.titre}
+          </h5>
+        </Link>
+
+        <div className={`fw-bold fs-4 mb-2 ${typeConfig.priceColor}`}>
+          {formatPrice(item.prix, item.type)}
+        </div>
+
+        {item.description && (
+          <p className="card-text text-muted small mb-3 line-clamp-2">
+            {item.description}
+          </p>
+        )}
+
+        <div className="d-flex justify-content-between align-items-center text-muted small mb-3">
+          {item.localisation && (
+            <span className="d-flex align-items-center">
+              <i className="fa-solid fa-location-dot me-1 text-warning"></i>
+              {item.localisation}
+            </span>
+          )}
+          {item.date && (
+            <span className="d-flex align-items-center">
+              <i className="fa-regular fa-clock me-1"></i>
+              {formatDate(item.date)}
+            </span>
+          )}
+        </div>
+
+        <div className="d-flex justify-content-between align-items-center pt-3 border-top">
+          <div className="d-flex align-items-center">
+            {item.createur?.avatar ? (
+              <img
+                src={item.createur.avatar}
+                alt={`${item.createur.prenoms} ${item.createur.nom}`}
+                className="rounded-circle object-fit-cover me-2"
+                style={{ width: "32px", height: "32px" }}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src =
+                    "https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-1.jpg";
+                }}
+              />
+            ) : (
+              <div
+                className="rounded-circle bg-light d-flex align-items-center justify-content-center me-2"
+                style={{ width: "32px", height: "32px" }}
+              >
+                <i className="fas fa-user text-muted"></i>
+              </div>
+            )}
+            <span className="small fw-medium text-dark">
+              {item.createur
+                ? `${item.createur.prenoms || ""} ${item.createur.nom || ""}`.trim() ||
+                  "Annonceur"
+                : "Annonceur"}
+            </span>
+          </div>
+          <Link
+            href={getDetailLink()}
+            className="btn text-white px-4 py-2 rounded-3 fw-semibold border-0 transition-colors"
+            style={{ backgroundColor: typeConfig.btnColor }}
+          >
+            {getButtonText()}
+          </Link>
+        </div>
+      </div>
+
+      <style jsx>{`
+        .group {
+          transition: all 0.3s ease;
+        }
+
+        .group:hover {
+          transform: translateY(-4px);
+          box-shadow:
+            0 20px 25px -5px rgba(0, 0, 0, 0.1),
+            0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
+        }
+
+        .group:hover .group-hover-scale {
+          transform: scale(1.05);
+        }
+
+        .transition-transform {
+          transition: transform 0.3s ease;
+        }
+
+        .transition-colors {
+          transition: all 0.3s ease;
+        }
+
+        .transition-colors:hover {
+          opacity: 0.9;
+          transform: translateY(-2px);
+          box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .line-clamp-2 {
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+
+        .object-fit-cover {
+          object-fit: cover;
+        }
+
+        .text-purple-600 {
+          color: #9333ea;
+        }
+      `}</style>
+    </div>
+  );
+};
+
 export default function ListeFavorisPage() {
   const { isLoggedIn, openLoginModal, user } = useAuth();
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [sortOption, setSortOption] = useState("recent");
+  const [viewMode] = useState<"grid" | "list">("grid"); // Forcé en grid pour correspondre au design
   const [activeFilter, setActiveFilter] = useState<TabType>("all");
   const [showFilters, setShowFilters] = useState(false);
   const [favoris, setFavoris] = useState<FavoriItem[]>([]);
@@ -669,55 +673,12 @@ export default function ListeFavorisPage() {
     totalFavoris: 0,
   });
 
-  // Fonction pour récupérer le token
-  const getToken = useCallback(() => {
-    if (typeof window === "undefined") return null;
-    return localStorage.getItem("oskar_token");
-  }, []);
+  // ✅ Déterminer le type d'utilisateur
+  const getUserType = useCallback(() => {
+    return user?.type?.toLowerCase() || "utilisateur";
+  }, [user]);
 
-  // Fonction pour obtenir le lien de détail
-  const getDetailLink = (item: FavoriItem) => {
-    switch (item.type) {
-      case "don":
-        return `/dons/${item.uuid}`;
-      case "echange":
-        return `/echanges/${item.uuid}`;
-      case "produit":
-        return `/produits/${item.uuid}`;
-      default:
-        return `/annonces/${item.uuid}`;
-    }
-  };
-
-  // Fonction pour obtenir le type en français
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case "don":
-        return "Don";
-      case "echange":
-        return "Échange";
-      case "produit":
-        return "Produit";
-      default:
-        return "Annonce";
-    }
-  };
-
-  // Fonction pour obtenir la couleur du type
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case "don":
-        return "#9C27B0";
-      case "echange":
-        return "#2196F3";
-      case "produit":
-        return colors.oskar.green;
-      default:
-        return colors.oskar.grey;
-    }
-  };
-
-  // Fonction pour récupérer tous les favoris
+  // ✅ FONCTION RÉCUPÉRER LES FAVORIS
   const fetchAllFavoris = useCallback(async () => {
     if (!isLoggedIn) {
       setLoading(false);
@@ -729,40 +690,32 @@ export default function ListeFavorisPage() {
     setError(null);
 
     try {
-      const token = getToken();
-      if (!token) {
-        throw new Error(
-          "Vous devez vous reconnecter pour accéder à vos favoris.",
-        );
+      console.log("📥 Récupération des favoris...");
+
+      const userType = getUserType();
+      console.log(`👤 Type d'utilisateur: ${userType}`);
+
+      let produitsEndpoint = "";
+      let donsEndpoint = "";
+      let echangesEndpoint = "";
+
+      if (userType === "vendeur") {
+        produitsEndpoint = API_ENDPOINTS.PRODUCTS.LIST_PRODUITS_FAVORIS_VENDEUR;
+        donsEndpoint = API_ENDPOINTS.DONS.LIST_FAVORIS_DON_VENDEUR;
+        echangesEndpoint = API_ENDPOINTS.ECHANGES.LIST_ECHANGES_FAVORIS_VENDEUR;
+      } else {
+        produitsEndpoint =
+          API_ENDPOINTS.PRODUCTS.LIST_PRODUITS_FAVORIS_UTILISATEUR;
+        donsEndpoint = API_ENDPOINTS.DONS.LIST_FAVORIS_DON_UTILISATEUR;
+        echangesEndpoint =
+          API_ENDPOINTS.ECHANGES.LIST_ECHANGES_FAVORIS_UTILISATEUR;
       }
 
-      const [produitsResponse, donsResponse, echangesResponse] =
-        await Promise.allSettled([
-          axios.get(
-            buildApiUrl(API_ENDPOINTS.PRODUCTS.DETAIL_FAVORIS_UTILISATEUR),
-            {
-              headers: {
-                ...API_CONFIG.DEFAULT_HEADERS,
-                Authorization: `Bearer ${token}`,
-              },
-              timeout: API_CONFIG.TIMEOUT,
-            },
-          ),
-          axios.get(buildApiUrl(API_ENDPOINTS.DONS.DONS_FAVORIS), {
-            headers: {
-              ...API_CONFIG.DEFAULT_HEADERS,
-              Authorization: `Bearer ${token}`,
-            },
-            timeout: API_CONFIG.TIMEOUT,
-          }),
-          axios.get(buildApiUrl(API_ENDPOINTS.ECHANGES.ECHANGES_FAVORIS), {
-            headers: {
-              ...API_CONFIG.DEFAULT_HEADERS,
-              Authorization: `Bearer ${token}`,
-            },
-            timeout: API_CONFIG.TIMEOUT,
-          }),
-        ]);
+      const [produitsRes, donsRes, echangesRes] = await Promise.allSettled([
+        api.get<any>(produitsEndpoint),
+        api.get<any>(donsEndpoint),
+        api.get<any>(echangesEndpoint),
+      ]);
 
       const allFavoris: FavoriItem[] = [];
       let produitsCount = 0;
@@ -770,80 +723,115 @@ export default function ListeFavorisPage() {
       let echangesCount = 0;
 
       // Traiter les produits
-      if (produitsResponse.status === "fulfilled") {
-        const produitsData = Array.isArray(produitsResponse.value.data)
-          ? produitsResponse.value.data
-          : [];
+      if (produitsRes.status === "fulfilled") {
+        const response = produitsRes.value;
+        let produitsData = [];
 
-        produitsCount = produitsData.length;
+        if (response.data && Array.isArray(response.data)) {
+          produitsData = response.data;
+        } else if (
+          response.data &&
+          response.data.data &&
+          Array.isArray(response.data.data)
+        ) {
+          produitsData = response.data.data;
+        } else if (Array.isArray(response)) {
+          produitsData = response;
+        }
+
         produitsData.forEach((item: any) => {
           allFavoris.push({
-            uuid: item.uuid || "",
+            uuid: item.uuid,
             type: "produit",
-            titre: item.nom || "Produit sans nom",
-            nom: item.nom,
+            titre: item.libelle || item.titre || "Produit sans nom",
             description: item.description,
             prix: item.prix,
-            image: item.image || PLACEHOLDER_IMAGE,
-            date: item.date,
+            image: item.image,
+            date: item.createdAt || item.updatedAt,
+            statut: item.statut,
             disponible: item.disponible,
-            isFavoris: true,
-            createdAt: item.createdAt,
+            localisation: item.localisation || item.ville,
+            createur: item.createur || item.vendeur || item.utilisateur,
           });
+          produitsCount++;
         });
       }
 
       // Traiter les dons
-      if (donsResponse.status === "fulfilled") {
-        const donsData = Array.isArray(donsResponse.value.data)
-          ? donsResponse.value.data
-          : [];
+      if (donsRes.status === "fulfilled") {
+        const response = donsRes.value;
+        let donsData = [];
 
-        donsCount = donsData.length;
+        if (response.data && Array.isArray(response.data)) {
+          donsData = response.data;
+        } else if (
+          response.data &&
+          response.data.data &&
+          Array.isArray(response.data.data)
+        ) {
+          donsData = response.data.data;
+        } else if (Array.isArray(response)) {
+          donsData = response;
+        }
+
         donsData.forEach((item: any) => {
           allFavoris.push({
-            uuid: item.uuid || "",
+            uuid: item.uuid,
             type: "don",
-            titre: item.titre || "Don sans titre",
+            titre: item.titre || item.nom || "Don sans titre",
             description: item.description,
             prix: item.prix,
-            image: item.image || PLACEHOLDER_IMAGE,
+            image: item.image,
+            date: item.createdAt,
             statut: item.statut,
-            numero: item.numero,
-            isFavoris: true,
-            createdAt: item.createdAt,
+            disponible: item.disponible,
+            localisation: item.localisation || item.lieu_retrait,
+            type_don: item.type_don,
+            lieu_retrait: item.lieu_retrait,
+            createur: item.createur,
           });
+          donsCount++;
         });
       }
 
       // Traiter les échanges
-      if (echangesResponse.status === "fulfilled") {
-        const echangesData =
-          echangesResponse.value.data.data || echangesResponse.value.data;
-        const echangesArray = Array.isArray(echangesData) ? echangesData : [];
+      if (echangesRes.status === "fulfilled") {
+        const response = echangesRes.value;
+        let echangesData = [];
 
-        echangesCount = echangesArray.length;
-        echangesArray.forEach((item: any) => {
+        if (response.data && Array.isArray(response.data)) {
+          echangesData = response.data;
+        } else if (
+          response.data &&
+          response.data.data &&
+          Array.isArray(response.data.data)
+        ) {
+          echangesData = response.data.data;
+        } else if (Array.isArray(response)) {
+          echangesData = response;
+        }
+
+        echangesData.forEach((item: any) => {
           allFavoris.push({
-            uuid: item.uuid || "",
+            uuid: item.uuid,
             type: "echange",
             titre: item.nomElementEchange || item.titre || "Échange sans titre",
-            nomElementEchange: item.nomElementEchange,
-            description: item.message,
+            description: item.message || item.description,
             prix: item.prix,
-            image: item.image || PLACEHOLDER_IMAGE,
+            image: item.image,
+            date: item.dateProposition || item.createdAt,
             statut: item.statut,
+            localisation: item.localisation || item.lieu_rencontre,
             typeEchange: item.typeEchange,
             objetPropose: item.objetPropose,
             objetDemande: item.objetDemande,
-            isFavoris: true,
-            createdAt: item.createdAt,
-            date: item.dateProposition,
           });
+          echangesCount++;
         });
       }
 
-      // Mettre à jour les statistiques
+      console.log(`📊 Total favoris trouvés: ${allFavoris.length}`);
+
       setStats({
         totalProduits: produitsCount,
         totalDons: donsCount,
@@ -861,16 +849,10 @@ export default function ListeFavorisPage() {
       setFavoris(sortedFavoris);
       setError(null);
     } catch (err: any) {
-      console.error("Erreur lors de la récupération des favoris:", err);
+      console.error("❌ Erreur lors de la récupération des favoris:", err);
 
       if (err.response?.status === 401) {
         setError("Votre session a expiré. Veuillez vous reconnecter.");
-      } else if (err.code === "ECONNABORTED") {
-        setError(
-          "Le serveur met trop de temps à répondre. Veuillez réessayer.",
-        );
-      } else if (err.message?.includes("Network Error")) {
-        setError("Problème de connexion. Vérifiez votre internet.");
       } else {
         setError(err.message || "Impossible de charger vos favoris");
       }
@@ -886,7 +868,7 @@ export default function ListeFavorisPage() {
       setLoading(false);
       setInitialLoad(false);
     }
-  }, [isLoggedIn, getToken]);
+  }, [isLoggedIn, getUserType]);
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -898,62 +880,13 @@ export default function ListeFavorisPage() {
     }
   }, [fetchAllFavoris, isLoggedIn]);
 
-  // Si l'utilisateur n'est pas connecté
-  if (!isLoggedIn && !initialLoad) {
-    return <LoginRequiredPage />;
-  }
-
-  // Filtrer les favoris selon l'onglet actif
-  const filteredFavoris = favoris.filter((item) => {
-    if (activeFilter === "all") return true;
-    // Utiliser la fonction de conversion pour comparer les types
-    const itemType = filterToItemType(activeFilter);
-    return item.type === itemType;
-  });
-
-  const handleSortChange = (sort: string) => {
-    setSortOption(sort);
-    // Trier localement
-    const sorted = [...filteredFavoris].sort((a, b) => {
-      switch (sort) {
-        case "price-asc":
-          const priceA = a.prix ? parseFloat(a.prix.toString()) : 0;
-          const priceB = b.prix ? parseFloat(b.prix.toString()) : 0;
-          return priceA - priceB;
-        case "price-desc":
-          const priceC = a.prix ? parseFloat(a.prix.toString()) : 0;
-          const priceD = b.prix ? parseFloat(b.prix.toString()) : 0;
-          return priceD - priceC;
-        case "recent":
-        default:
-          const dateA = a.date ? new Date(a.date).getTime() : 0;
-          const dateB = b.date ? new Date(b.date).getTime() : 0;
-          return dateB - dateA;
-      }
-    });
-    // On ne peut pas directement setFilteredFavoris, donc on met à jour le state principal
-    // Pour simplifier, on va juste mettre à jour l'état local de tri
-  };
-
-  const handleViewModeChange = (mode: "grid" | "list") => {
-    setViewMode(mode);
-  };
-
-  const handleFilterChange = (filterId: string) => {
-    setActiveFilter(filterId as TabType);
-  };
-
-  // Fonction pour supprimer un favori
+  // ✅ Fonction pour supprimer un favori
   const handleRemoveFavori = async (
     uuid: string,
     type: "produit" | "echange" | "don",
   ) => {
     try {
-      const token = getToken();
-      if (!token) {
-        alert("Vous devez être connecté pour retirer un favori");
-        return;
-      }
+      console.log(`🗑️ Suppression du favori ${type}: ${uuid}`);
 
       let endpoint = "";
 
@@ -963,20 +896,11 @@ export default function ListeFavorisPage() {
           break;
         default:
           endpoint = `/favoris/${uuid}`;
-          break;
       }
 
-      await axios.delete(buildApiUrl(endpoint), {
-        headers: {
-          ...API_CONFIG.DEFAULT_HEADERS,
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      await api.delete(endpoint);
 
-      // Mettre à jour la liste localement
       setFavoris((prev) => prev.filter((item) => item.uuid !== uuid));
-
-      // Mettre à jour les statistiques
       setStats((prev) => ({
         ...prev,
         totalFavoris: prev.totalFavoris - 1,
@@ -986,15 +910,39 @@ export default function ListeFavorisPage() {
         totalEchanges:
           type === "echange" ? prev.totalEchanges - 1 : prev.totalEchanges,
       }));
+
+      console.log("✅ Favori supprimé avec succès");
     } catch (err) {
-      console.error("Erreur lors de la suppression du favori:", err);
+      console.error("❌ Erreur lors de la suppression du favori:", err);
       alert("Impossible de supprimer ce favori pour le moment");
     }
   };
 
+  // Filtrer les favoris selon l'onglet actif
+  const filteredFavoris = favoris.filter((item) => {
+    if (activeFilter === "all") return true;
+    if (activeFilter === "produits") return item.type === "produit";
+    if (activeFilter === "dons") return item.type === "don";
+    if (activeFilter === "echanges") return item.type === "echange";
+    return true;
+  });
+
+  const handleFilterChange = (filterId: string) => {
+    setActiveFilter(filterId as TabType);
+  };
+
+  const handleRefresh = () => {
+    fetchAllFavoris();
+  };
+
+  // Si l'utilisateur n'est pas connecté
+  if (!isLoggedIn && !initialLoad) {
+    return <LoginRequiredPage />;
+  }
+
   return (
     <>
-      {/* Hero Section - MÊME DESIGN QUE DONS & ÉCHANGES */}
+      {/* Hero Section */}
       <section
         className="py-4 py-md-5"
         style={{
@@ -1014,7 +962,7 @@ export default function ListeFavorisPage() {
                   <button
                     className="btn btn-light btn-sm px-3 py-2 fw-semibold"
                     style={{ color: colors.oskar.purple || "#9C27B0" }}
-                    onClick={fetchAllFavoris}
+                    onClick={handleRefresh}
                   >
                     <i className="fas fa-sync-alt me-1"></i>
                     Actualiser la liste
@@ -1045,7 +993,7 @@ export default function ListeFavorisPage() {
         </div>
       </section>
 
-      {/* Statistiques - MÊME DESIGN QUE DONS & ÉCHANGES */}
+      {/* Statistiques */}
       <section className="py-3 border-bottom">
         <div className="container">
           <div className="row g-3">
@@ -1091,14 +1039,14 @@ export default function ListeFavorisPage() {
         </div>
       </section>
 
-      {/* Contenu principal - MÊME STRUCTURE QUE DONS & ÉCHANGES */}
+      {/* Contenu principal */}
       <section className="py-4">
         <div className="container">
           <div className="row g-3">
             {/* Sidebar des filtres */}
             <div className="col-xl-3 col-lg-4 d-none d-lg-block">
               <div className="sticky-top" style={{ top: "90px" }}>
-                {/* Filtres par type - SIMILAIRE À DONS & ÉCHANGES */}
+                {/* Filtres par type */}
                 <div className="card border-0 shadow-sm mb-3">
                   <div className="card-header bg-white border-0 py-3">
                     <h6 className="mb-0 fw-semibold">
@@ -1208,7 +1156,7 @@ export default function ListeFavorisPage() {
                   </div>
                 </div>
 
-                {/* Info supplémentaire - SIMILAIRE À DONS & ÉCHANGES */}
+                {/* Info supplémentaire */}
                 <div className="card border-0 shadow-sm">
                   <div className="card-body p-3">
                     <h6 className="card-title fw-semibold mb-2">
@@ -1248,15 +1196,30 @@ export default function ListeFavorisPage() {
 
             {/* Contenu principal */}
             <div className="col-xl-9 col-lg-8">
-              {/* Barre de filtres et options - MÊME DESIGN QUE DONS & ÉCHANGES */}
+              {/* Barre de filtres et options */}
               <div className="mb-3">
                 <div className="d-flex justify-content-between align-items-center mb-2">
                   <div>
-                    <h2 className="h5 fw-bold mb-0">
+                    <h2 className="h4 fw-bold text-dark d-flex align-items-center">
                       {activeFilter === "all" && "Tous mes favoris"}
-                      {activeFilter === "produits" && "Mes produits favoris"}
-                      {activeFilter === "dons" && "Mes dons favoris"}
-                      {activeFilter === "echanges" && "Mes échanges favoris"}
+                      {activeFilter === "produits" && (
+                        <>
+                          <i className="fas fa-tag text-success me-2"></i>
+                          Mes produits favoris
+                        </>
+                      )}
+                      {activeFilter === "dons" && (
+                        <>
+                          <i className="fas fa-gift text-purple-600 me-2"></i>
+                          Mes dons favoris
+                        </>
+                      )}
+                      {activeFilter === "echanges" && (
+                        <>
+                          <i className="fas fa-exchange-alt text-primary me-2"></i>
+                          Mes échanges favoris
+                        </>
+                      )}
                     </h2>
                   </div>
                   <div className="d-flex gap-1">
@@ -1270,38 +1233,12 @@ export default function ListeFavorisPage() {
                   </div>
                 </div>
 
-                {/* Barre de tri et vue - SIMILAIRE À DONS & ÉCHANGES */}
-                <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 border-bottom pb-2 mb-3">
-                  <div className="d-flex gap-1">
-                    <button
-                      className={`btn btn-sm ${viewMode === "grid" ? "btn-success" : "btn-outline-success"}`}
-                      onClick={() => handleViewModeChange("grid")}
-                      type="button"
-                    >
-                      <i className="fas fa-th"></i>
-                    </button>
-                    <button
-                      className={`btn btn-sm ${viewMode === "list" ? "btn-success" : "btn-outline-success"}`}
-                      onClick={() => handleViewModeChange("list")}
-                      type="button"
-                    >
-                      <i className="fas fa-list"></i>
-                    </button>
-                  </div>
-
-                  <div className="d-flex align-items-center gap-2">
-                    <span className="small text-muted">Trier par :</span>
-                    <select
-                      className="form-select form-select-sm"
-                      style={{ width: "auto" }}
-                      value={sortOption}
-                      onChange={(e) => handleSortChange(e.target.value)}
-                    >
-                      <option value="recent">Plus récents</option>
-                      <option value="price-asc">Prix croissant</option>
-                      <option value="price-desc">Prix décroissant</option>
-                    </select>
-                  </div>
+                {/* Barre d'information */}
+                <div className="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+                  <p className="text-muted mb-0">
+                    Affichage de {filteredFavoris.length} sur{" "}
+                    {stats.totalFavoris} résultats
+                  </p>
                 </div>
               </div>
 
@@ -1358,7 +1295,7 @@ export default function ListeFavorisPage() {
                         style={{
                           background:
                             activeFilter === "produits"
-                              ? `${colors.oskar.greenHover}20`
+                              ? `${colors.oskar.green}20`
                               : "transparent",
                           color:
                             activeFilter === "produits"
@@ -1452,7 +1389,7 @@ export default function ListeFavorisPage() {
                   {error}
                   <button
                     className="btn btn-outline-danger btn-sm ms-3"
-                    onClick={fetchAllFavoris}
+                    onClick={handleRefresh}
                   >
                     <i className="fa-solid fa-rotate me-1"></i>
                     Réessayer
@@ -1497,236 +1434,27 @@ export default function ListeFavorisPage() {
                   </div>
                 </div>
               ) : (
-                <div
-                  className={
-                    viewMode === "grid" ? "row g-4" : "list-view-container"
-                  }
-                >
-                  {(sortOption === "recent"
-                    ? filteredFavoris
-                    : [...filteredFavoris].sort((a, b) => {
-                        switch (sortOption) {
-                          case "price-asc":
-                            const priceA = a.prix
-                              ? parseFloat(a.prix.toString())
-                              : 0;
-                            const priceB = b.prix
-                              ? parseFloat(b.prix.toString())
-                              : 0;
-                            return priceA - priceB;
-                          case "price-desc":
-                            const priceC = a.prix
-                              ? parseFloat(a.prix.toString())
-                              : 0;
-                            const priceD = b.prix
-                              ? parseFloat(b.prix.toString())
-                              : 0;
-                            return priceD - priceC;
-                          default:
-                            return 0;
-                        }
-                      })
-                  ).map((item) => (
-                    <div
-                      key={`${item.type}-${item.uuid}`}
-                      className={
-                        viewMode === "grid" ? "col-xl-4 col-lg-6 col-md-6" : ""
-                      }
-                    >
-                      {viewMode === "grid" ? (
-                        /* Carte en mode grille - STYLE SIMILAIRE À DONS & ÉCHANGES */
-                        <div className="card favori-card h-100 border-0 shadow-sm position-relative">
-                          <button
-                            className="btn btn-link position-absolute top-0 end-0 p-3 z-2"
-                            onClick={() =>
-                              handleRemoveFavori(item.uuid, item.type)
-                            }
-                            style={{
-                              color: "#ff6b6b",
-                              zIndex: 2,
-                            }}
-                            aria-label={`Retirer ${item.titre} des favoris`}
-                          >
-                            <i className="fa-solid fa-heart"></i>
-                          </button>
-
-                          <div className="position-relative">
-                            {/* Image */}
-                            <div className="favori-image-container">
-                              <Link href={getDetailLink(item)}>
-                                <img
-                                  src={item.image || PLACEHOLDER_IMAGE}
-                                  alt={item.titre || "Favori"}
-                                  className="card-img-top favori-image"
-                                  loading="lazy"
-                                  onError={(e) => {
-                                    const target = e.target as HTMLImageElement;
-                                    target.onerror = null;
-                                    target.src = PLACEHOLDER_IMAGE;
-                                  }}
-                                />
-                              </Link>
-
-                              {/* Badge type */}
-                              <span
-                                className="favori-type-badge"
-                                style={{
-                                  backgroundColor: getTypeColor(item.type),
-                                }}
-                              >
-                                {getTypeLabel(item.type)}
-                              </span>
-                            </div>
-
-                            <div className="card-body p-3">
-                              {/* Titre */}
-                              <h5 className="card-title favori-title mb-2">
-                                <Link
-                                  href={getDetailLink(item)}
-                                  className="text-decoration-none text-dark"
-                                >
-                                  {item.titre}
-                                </Link>
-                              </h5>
-
-                              {/* Description */}
-                              {item.description && (
-                                <p className="card-text text-muted small mb-3">
-                                  {item.description.length > 100
-                                    ? `${item.description.substring(0, 100)}...`
-                                    : item.description}
-                                </p>
-                              )}
-
-                              <div className="d-flex justify-content-between align-items-center">
-                                {/* Prix */}
-                                <div
-                                  className="favori-price fw-bold"
-                                  style={{
-                                    color: colors.oskar.green,
-                                    fontSize: "1.1rem",
-                                  }}
-                                >
-                                  {formatPrice(item.prix)}
-                                </div>
-
-                                {/* Date */}
-                                {item.date && (
-                                  <div className="text-muted small">
-                                    <i className="fa-solid fa-clock me-1"></i>
-                                    {formatDate(item.date)}
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Bouton d'action */}
-                              <div className="mt-3">
-                                <Link
-                                  href={getDetailLink(item)}
-                                  className="btn btn-outline-success btn-sm w-100"
-                                >
-                                  <i className="fa-solid fa-eye me-2"></i>
-                                  Voir les détails
-                                </Link>
-                              </div>
-                            </div>
-                          </div>
+                <div className="listings-grid">
+                  {/* Toutes les annonces favorites */}
+                  <div className="all-listings mb-5">
+                    <div className="row g-4">
+                      {filteredFavoris.map((item) => (
+                        <div
+                          key={`${item.type}-${item.uuid}`}
+                          className="col-lg-4 col-md-6"
+                        >
+                          <FavoriCard
+                            item={item}
+                            onRemove={handleRemoveFavori}
+                          />
                         </div>
-                      ) : (
-                        /* Carte en mode liste - STYLE SIMILAIRE À DONS & ÉCHANGES */
-                        <div className="card mb-3 border-0 shadow-sm">
-                          <div className="row g-0">
-                            <div className="col-md-3 position-relative">
-                              <img
-                                src={item.image || PLACEHOLDER_IMAGE}
-                                alt={item.titre}
-                                className="img-fluid rounded-start h-100 w-100 object-fit-cover"
-                                style={{ height: "200px" }}
-                                onError={(e) => {
-                                  const target = e.target as HTMLImageElement;
-                                  target.onerror = null;
-                                  target.src = PLACEHOLDER_IMAGE;
-                                }}
-                              />
-                              <span
-                                className="position-absolute top-0 start-0 m-2 badge"
-                                style={{
-                                  backgroundColor: getTypeColor(item.type),
-                                  color: "white",
-                                }}
-                              >
-                                {getTypeLabel(item.type)}
-                              </span>
-                              <button
-                                className="position-absolute top-0 end-0 m-2 btn btn-link p-1"
-                                onClick={() =>
-                                  handleRemoveFavori(item.uuid, item.type)
-                                }
-                                style={{ color: "#ff6b6b" }}
-                              >
-                                <i className="fa-solid fa-heart"></i>
-                              </button>
-                            </div>
-                            <div className="col-md-9">
-                              <div className="card-body">
-                                <div className="d-flex justify-content-between align-items-start">
-                                  <div className="flex-grow-1">
-                                    <h5 className="card-title mb-1">
-                                      <Link
-                                        href={getDetailLink(item)}
-                                        className="text-decoration-none text-dark"
-                                      >
-                                        {item.titre}
-                                      </Link>
-                                    </h5>
-                                    {item.description && (
-                                      <p className="card-text text-muted small mb-2">
-                                        {item.description.length > 200
-                                          ? `${item.description.substring(0, 200)}...`
-                                          : item.description}
-                                      </p>
-                                    )}
-                                  </div>
-                                  <div className="ms-3 text-end">
-                                    <div
-                                      className="fw-bold fs-5"
-                                      style={{ color: colors.oskar.green }}
-                                    >
-                                      {formatPrice(item.prix)}
-                                    </div>
-                                    {item.date && (
-                                      <div className="text-muted small">
-                                        <i className="fa-solid fa-clock me-1"></i>
-                                        {formatDate(item.date)}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="d-flex justify-content-between align-items-center mt-3">
-                                  <div>
-                                    <Link
-                                      href={getDetailLink(item)}
-                                      className="btn btn-success btn-sm"
-                                    >
-                                      <i className="fa-solid fa-eye me-2"></i>
-                                      Voir les détails
-                                    </Link>
-                                  </div>
-                                  <div className="text-muted small">
-                                    Réf: {item.uuid.substring(0, 8)}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
+                      ))}
                     </div>
-                  ))}
+                  </div>
                 </div>
               )}
 
-              {/* Section d'information - SIMILAIRE À DONS & ÉCHANGES */}
+              {/* Section d'information */}
               {!loading && !error && filteredFavoris.length > 0 && (
                 <div className="mt-4 pt-3 border-top">
                   <div className="row g-3">
@@ -1831,7 +1559,7 @@ export default function ListeFavorisPage() {
                 </div>
               )}
 
-              {/* CTA compact - SIMILAIRE À DONS & ÉCHANGES */}
+              {/* CTA compact */}
               {!loading && !error && filteredFavoris.length > 0 && (
                 <div
                   className="mt-4 rounded-2 p-3 text-center"
@@ -1868,7 +1596,7 @@ export default function ListeFavorisPage() {
         </div>
       </section>
 
-      {/* FAQ - SIMILAIRE À DONS & ÉCHANGES */}
+      {/* FAQ */}
       <section className="py-4 bg-light">
         <div className="container">
           <div className="text-center mb-4">
@@ -1968,67 +1696,35 @@ export default function ListeFavorisPage() {
           top: 90px;
         }
 
-        .favori-card {
-          transition:
-            transform 0.3s ease,
-            box-shadow 0.3s ease;
-          border-radius: 12px;
-          overflow: hidden;
+        .listings-grid {
+          flex: 1;
         }
 
-        .favori-card:hover {
-          transform: translateY(-5px);
-          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1) !important;
+        .group {
+          transition: all 0.3s ease;
         }
 
-        .favori-image-container {
-          position: relative;
-          height: 200px;
-          overflow: hidden;
-          background-color: ${colors.oskar.lightGrey};
+        .group:hover {
+          transform: translateY(-4px);
+          box-shadow:
+            0 20px 25px -5px rgba(0, 0, 0, 0.1),
+            0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
         }
 
-        .favori-image {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          transition: transform 0.5s ease;
-        }
-
-        .favori-card:hover .favori-image {
+        .group:hover .group-hover-scale {
           transform: scale(1.05);
         }
 
-        .favori-type-badge {
-          position: absolute;
-          top: 10px;
-          left: 10px;
-          color: white;
-          padding: 4px 12px;
-          border-radius: 20px;
-          font-size: 0.75rem;
-          font-weight: 600;
-          z-index: 2;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
+        .transition-transform {
+          transition: transform 0.3s ease;
         }
 
-        .favori-title {
-          font-size: 1rem;
-          font-weight: 600;
-          line-height: 1.4;
-          overflow: hidden;
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
+        .transition-colors {
+          transition: all 0.3s ease;
         }
 
-        .favori-price {
-          font-size: 1.1rem;
-        }
-
-        .object-fit-cover {
-          object-fit: cover;
+        .text-purple-600 {
+          color: #9333ea;
         }
 
         @media (max-width: 1199.98px) {
@@ -2059,9 +1755,6 @@ export default function ListeFavorisPage() {
           }
           .lead {
             font-size: 1rem;
-          }
-          .favori-image-container {
-            height: 180px;
           }
         }
       `}</style>

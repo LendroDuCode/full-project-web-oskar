@@ -28,6 +28,13 @@ export interface ProduitFavori {
   estPublie: boolean;
   estBloque: boolean;
   quantite: number;
+  createur?: {
+    nom: string;
+    prenoms: string;
+    avatar?: string;
+    email: string;
+    telephone: string;
+  };
   categorie?: {
     libelle: string;
   };
@@ -44,6 +51,7 @@ export interface ProduitFavori {
 export interface DonFavori {
   uuid: string;
   nom: string;
+  titre: string;
   type_don: string;
   description?: string;
   image: string;
@@ -51,6 +59,13 @@ export interface DonFavori {
   prix: number;
   estPublie: boolean;
   est_bloque?: boolean;
+  createur?: {
+    nom: string;
+    prenoms: string;
+    avatar?: string;
+    email: string;
+    telephone: string;
+  };
   quantite: number;
   date_debut: string;
   categorie?: string;
@@ -60,6 +75,7 @@ export interface DonFavori {
 export interface EchangeFavori {
   uuid: string;
   nomElementEchange: string;
+  message: string;
   prix: string;
   image: string;
   statut: string;
@@ -69,6 +85,7 @@ export interface EchangeFavori {
   dateProposition: string;
   categorie?: string;
   nom_initiateur?: string;
+  typeDestinataire?: string;
 }
 
 export interface FavorisResponse {
