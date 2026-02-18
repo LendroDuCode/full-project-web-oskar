@@ -143,6 +143,7 @@ export interface Boutique {
   logo: string | null;
   banniere: string | null;
   statut: BoutiqueStatus;
+  vendeurUuid?: string;
   type_boutique: {
     uuid: string;
     libelle: string;
@@ -210,7 +211,7 @@ export interface VenteFormProps {
   selectedBoutique: Boutique | null;
   onBoutiqueChange: (boutiqueUuid: string) => void;
   user: UserInfo | null | undefined; // Allow undefined
-  validationErrors?: Record<string, string>; // ← AJOUTER CETTE LIGNE
+  validationErrors?: Record<string, string>; // ✅ AJOUTER CETTE LIGNE (déjà présente)
 }
 export interface BoutiqueFormProps {
   boutiqueData: BoutiqueData;
@@ -388,7 +389,7 @@ export interface UserInfo {
   email: string;
   nom_complet: string;
   type: string;
-  role: string;
+  role: string | undefined;
   temp_token?: string;
 }
 
