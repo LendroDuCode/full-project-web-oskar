@@ -166,7 +166,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
     }
   };
 
-  // Charger les catégories
+  // Charger les catégories test
   useEffect(() => {
     const fetchCategories = async () => {
       try {
