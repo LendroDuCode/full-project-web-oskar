@@ -1,4 +1,3 @@
-// components/ListingsGrid.tsx
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -39,22 +38,9 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
   const PLACEHOLDER_IMAGE =
     "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2YzZjRmNiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM2NjY2NjYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5BdWN1bmUgaW1hZ2U8L3RleHQ+PC9zdmc+";
 
-  // ✅ MODIFIER normalizeImageUrl pour gérer correctement les URLs
   const normalizeImageUrl = useCallback((url: string | null): string => {
     if (!url) return PLACEHOLDER_IMAGE;
-
-    // Si l'URL contient localhost, la corriger pour l'environnement actuel
-    if (url.includes("localhost")) {
-      const baseUrl =
-        typeof window !== "undefined"
-          ? window.location.origin
-          : process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
-
-      return url.replace(/http:\/\/localhost(:\d+)?/g, baseUrl);
-    }
-
     if (url.startsWith("http://") || url.startsWith("https://")) return url;
-
     if (
       url.startsWith("/uploads/") ||
       url.startsWith("/images/") ||

@@ -19,7 +19,6 @@ const nextConfig = {
         port: "3005",
         pathname: "/api/files/**",
       },
-      // ✅ AJOUTER ces patterns pour la production
       {
         protocol: "http",
         hostname: "15.236.142.141",
@@ -33,64 +32,19 @@ const nextConfig = {
         pathname: "/oskar-bucket/**",
       },
     ],
-    unoptimized: true, // Important pour éviter l'optimisation Next.js
+    unoptimized: true,
   },
 
   async rewrites() {
-    // En production, utiliser l'URL distante
-    const apiUrl =
-      process.env.NODE_ENV === "production"
-        ? "http://15.236.142.141:3005"
-        : "http://localhost:3005";
-
     return [
       {
         source: "/api/:path*",
-        destination: `${apiUrl}/:path*`,
+        destination: `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005"}/:path*`,
       },
+      // Proxy pour les fichiers statiques
       {
-        source: "/categories",
-        destination: `${apiUrl}/categories`,
-        has: [
-          {
-            type: "header",
-            key: "accept",
-            value: "application/json",
-          },
-        ],
-      },
-      {
-        source: "/categories/:path*",
-        destination: `${apiUrl}/categories/:path*`,
-        has: [
-          {
-            type: "header",
-            key: "accept",
-            value: "application/json",
-          },
-        ],
-      },
-      {
-        source: "/annonces/:path*",
-        destination: `${apiUrl}/annonces/:path*`,
-        has: [
-          {
-            type: "header",
-            key: "accept",
-            value: "application/json",
-          },
-        ],
-      },
-      {
-        source: "/annonces",
-        destination: `${apiUrl}/annonces`,
-        has: [
-          {
-            type: "header",
-            key: "accept",
-            value: "application/json",
-          },
-        ],
+        source: "/api/files/:path*",
+        destination: `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005"}/api/files/:path*`,
       },
     ];
   },
