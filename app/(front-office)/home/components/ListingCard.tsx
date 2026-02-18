@@ -13,6 +13,7 @@ export interface ListingItem {
   description?: string | null;
   prix?: number | string | null;
   image?: string | null;
+  image_key?: string | null; // ✅ AJOUT DE LA CLÉ MINIO
   date?: string | null | undefined;
   disponible?: boolean;
   statut?: string;
@@ -41,6 +42,44 @@ const ListingCard: React.FC<ListingCardProps> = ({
 }) => {
   const [isFavorite, setIsFavorite] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [useDirectFallback, setUseDirectFallback] = useState(false);
+
+  // ✅ FONCTION AMÉLIORÉE POUR CONSTRUIRE L'URL DE L'IMAGE
+  const getImageSrc = () => {
+    if (imageError) return PLACEHOLDER_IMAGE;
+
+    // 1. Utiliser l'image_key pour construire l'URL proxy (recommandé)
+    if (listing.image_key && !useDirectFallback) {
+      const baseUrl =
+        process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
+      return `${baseUrl}/api/files/${encodeURIComponent(listing.image_key)}`;
+    }
+
+    // 2. Fallback sur l'URL directe MinIO si disponible
+    if (listing.image_key && useDirectFallback) {
+      return `http://15.236.142.141:9000/oskar-bucket/${listing.image_key}`;
+    }
+
+    // 3. Utiliser l'image existante (ancien format)
+    if (listing.image) {
+      if (listing.image.startsWith("http")) return listing.image;
+      return `${process.env.NEXT_PUBLIC_API_URL || ""}${listing.image}`;
+    }
+
+    return PLACEHOLDER_IMAGE;
+  };
+
+  const handleImageError = () => {
+    if (listing.image_key && !useDirectFallback) {
+      // Si proxy échoue, essayer l'URL directe MinIO
+      console.log("⚠️ Proxy échoué, tentative URL directe MinIO");
+      setUseDirectFallback(true);
+    } else {
+      // Si tout échoue, utiliser le placeholder
+      console.log("❌ Toutes les tentatives ont échoué");
+      setImageError(true);
+    }
+  };
 
   const getTypeConfig = (type: string) => {
     switch (type) {
@@ -105,12 +144,6 @@ const ListingCard: React.FC<ListingCardProps> = ({
       default:
         return `/annonces/${listing.uuid}`;
     }
-  };
-
-  const getImageSrc = () => {
-    if (imageError || !listing.image) return PLACEHOLDER_IMAGE;
-    if (listing.image.startsWith("http")) return listing.image;
-    return `${process.env.NEXT_PUBLIC_API_URL || ""}${listing.image}`;
   };
 
   const formatPrice = (price: number | string | null | undefined) => {
@@ -202,7 +235,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
                 alt={listing.titre || "Annonce"}
                 className="w-100 h-100 object-fit-cover transition-transform group-hover-scale"
                 style={{ height: "200px", objectFit: "cover" }}
-                onError={() => setImageError(true)}
+                onError={handleImageError}
               />
               <div
                 className="position-absolute top-0 start-0 px-2 py-1 text-white small fw-bold rounded-3 d-flex align-items-center gap-1 m-2"
@@ -329,7 +362,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
           alt={listing.titre || "Annonce"}
           className="w-100 h-100 object-fit-cover transition-transform group-hover-scale"
           style={{ transition: "transform 0.3s ease" }}
-          onError={() => setImageError(true)}
+          onError={handleImageError}
         />
 
         {/* Badge type */}

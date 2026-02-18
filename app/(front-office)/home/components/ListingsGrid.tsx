@@ -30,25 +30,16 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
   const abortControllerRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
 
-  // Récupérer les filtres de recherche depuis le contexte
   const { searchQuery, selectedCategory, selectedLocation, maxPrice } =
     useSearch();
 
   const MAX_RETRIES = 3;
   const PLACEHOLDER_IMAGE =
-    "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2YzZjRmNiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM2NjY2NjYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5BdWN1bmUgaW1hZ2U8L3RleHQ+PC9zdmc+";
+    "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0jZjNmNGY2Lz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjNjY2NjY2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+QXVjdW5lIGltYWdlPC90ZXh0Pjwvc3ZnPg==";
 
+  // ✅ FONCTION SIMPLIFIÉE - Plus besoin de normaliser car ListingCard gère maintenant
   const normalizeImageUrl = useCallback((url: string | null): string => {
-    if (!url) return PLACEHOLDER_IMAGE;
-    if (url.startsWith("http://") || url.startsWith("https://")) return url;
-    if (
-      url.startsWith("/uploads/") ||
-      url.startsWith("/images/") ||
-      url.startsWith("/api/files/")
-    ) {
-      return `${process.env.NEXT_PUBLIC_API_URL || ""}${url}`;
-    }
-    return PLACEHOLDER_IMAGE;
+    return url || PLACEHOLDER_IMAGE;
   }, []);
 
   const abortCurrentRequest = useCallback(() => {
@@ -89,7 +80,6 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
     try {
       let endpoint = "";
 
-      // Si categoryUuid est fourni, charger les annonces de la catégorie spécifique
       if (categoryUuid) {
         endpoint = API_ENDPOINTS.ANNONCES.LIST_TOUTES_ANNONCES;
       } else {
@@ -177,6 +167,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           description: item.description,
           prix: item.prix,
           image: normalizeImageUrl(item.image),
+          image_key: item.image_key, // ✅ INCLURE LA CLÉ
           date: item.date || item.createdAt || item.publieLe,
           disponible: item.disponible,
           statut: item.statut,
@@ -201,6 +192,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           description: item.description,
           prix: item.prix,
           image: normalizeImageUrl(item.image),
+          image_key: item.image_key, // ✅ INCLURE LA CLÉ
           statut: item.statut,
           numero: item.numero,
           localisation:
@@ -225,6 +217,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           description: item.message || item.description,
           prix: item.prix,
           image: normalizeImageUrl(item.image),
+          image_key: item.image_key, // ✅ INCLURE LA CLÉ
           statut: item.statut,
           numero: item.numero,
           localisation:
@@ -250,6 +243,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           description: item.description,
           prix: item.prix,
           image: normalizeImageUrl(item.image),
+          image_key: item.image_key, // ✅ INCLURE LA CLÉ
           date: item.date || item.createdAt || item.publieLe,
           disponible: item.disponible,
           statut: item.statut,
@@ -273,7 +267,6 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
       // ============================================
       let filteredData = transformedData;
 
-      // 1. Filtre par texte de recherche
       if (searchQuery) {
         const query = searchQuery.toLowerCase().trim();
         filteredData = filteredData.filter((item) => {
@@ -281,15 +274,10 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           const description = item.description?.toLowerCase() || "";
           return titre.includes(query) || description.includes(query);
         });
-        console.log(
-          `🔍 Filtre texte "${searchQuery}": ${filteredData.length} résultats`,
-        );
       }
 
-      // 2. Filtre par catégorie
       if (selectedCategory) {
         filteredData = filteredData.filter((item) => {
-          // Adapter selon votre logique de catégorie
           if (selectedCategory === "electronique") {
             return (
               item.titre?.toLowerCase().includes("téléphone") ||
@@ -334,36 +322,24 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           }
           return true;
         });
-        console.log(
-          `📁 Filtre catégorie "${selectedCategory}": ${filteredData.length} résultats`,
-        );
       }
 
-      // 3. Filtre par localisation
       if (selectedLocation) {
         const location = selectedLocation.toLowerCase();
         filteredData = filteredData.filter((item) => {
           const localisation = item.localisation?.toLowerCase() || "";
           return localisation.includes(location);
         });
-        console.log(
-          `📍 Filtre localisation "${selectedLocation}": ${filteredData.length} résultats`,
-        );
       }
 
-      // 4. Filtre par prix maximum
       if (maxPrice) {
         const max = parseFloat(maxPrice);
         filteredData = filteredData.filter((item) => {
           const price = item.prix ? parseFloat(item.prix.toString()) : 0;
           return price <= max;
         });
-        console.log(
-          `💰 Filtre prix max ${maxPrice}: ${filteredData.length} résultats`,
-        );
       }
 
-      // Tri des données
       const sortedData = [...filteredData].sort((a, b) => {
         switch (sortOption) {
           case "price-asc": {
@@ -387,7 +363,6 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
       });
 
       if (isMountedRef.current) {
-        // Simuler des annonces à la une (les 3 premières)
         const featured = sortedData.slice(0, 3);
         const regular = sortedData.slice(3);
 
@@ -515,7 +490,6 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
 
   return (
     <div className="listings-grid flex-1">
-      {/* Annonces à la une */}
       {showFeatured && featuredListings.length > 0 && (
         <div className="featured-listings mb-5">
           <div className="d-flex align-items-center justify-content-between mb-4">
@@ -538,7 +512,6 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
         </div>
       )}
 
-      {/* Toutes les annonces */}
       <div className="all-listings mb-5">
         <div className="d-flex align-items-center justify-content-between mb-4">
           <h2 className="h4 fw-bold text-dark">Toutes les annonces</h2>
