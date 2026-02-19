@@ -107,13 +107,37 @@ const ListingCard: React.FC<ListingCardProps> = ({
     }
   };
 
+  // app/(front-office)/home/components/ListingCard.tsx
   const getImageSrc = () => {
-    //if (imageError || !listing.image) return PLACEHOLDER_IMAGE;
-    //if (listing.image.startsWith("http")) return listing.image;
-    //return `${process.env.NEXT_PUBLIC_API_URL || ""}${listing.image}`;
-    const imgUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/files/${listing.image}`;
-    console.log("Test hhhhh", imgUrl);
-    return imgUrl;
+    if (imageError || !listing.image) {
+      return "/images/placeholder.jpg"; // Utilisez votre image par défaut
+    }
+
+    // Si l'image est déjà une URL complète
+    if (listing.image.startsWith("http")) {
+      // Vérifier si c'est une URL locale (localhost)
+      if (listing.image.includes("localhost")) {
+        // Remplacer localhost par l'URL de production
+        const productionUrl =
+          process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
+          "https://oskar-api.mysonec.pro";
+        return listing.image.replace(
+          /http:\/\/localhost(:\d+)?/g,
+          productionUrl,
+        );
+      }
+      return listing.image;
+    }
+
+    // Si c'est un chemin encodé (avec %2F)
+    if (listing.image.includes("%2F")) {
+      // Nettoyer le chemin (enlever les http://localhost qui pourraient être présents)
+      const cleanImage = listing.image.replace(/^.*?\/api\/files\//, "");
+      return `${process.env.NEXT_PUBLIC_API_URL}/api/files/${cleanImage}`;
+    }
+
+    // Si c'est un chemin simple
+    return `${process.env.NEXT_PUBLIC_API_URL}/api/files/${listing.image}`;
   };
 
   const formatPrice = (price: number | string | null | undefined) => {
