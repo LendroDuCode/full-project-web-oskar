@@ -1,10 +1,8 @@
-// components/ListingCard.tsx
 "use client";
 
 import { useState } from "react";
 import Link from "next/link";
 import colors from "@/app/shared/constants/colors";
-import { useImageUrl } from "@/app/shared/hooks/useImageUrl";
 
 export interface ListingItem {
   uuid: string;
@@ -33,8 +31,8 @@ interface ListingCardProps {
   viewMode?: "grid" | "list";
 }
 
-const PLACEHOLDER_IMAGE =
-  "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2YzZjRmNiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM2NjY2NjYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5BdWN1bmUgaW1hZ2U8L3RleHQ+PC9zdmc+";
+//const PLACEHOLDER_IMAGE =
+//  "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2YzZjRmNiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM2NjY2NjYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5BdWN1bmUgaW1hZ2U8L3RleHQ+PC9zdmc+";
 
 const ListingCard: React.FC<ListingCardProps> = ({
   listing,
@@ -42,8 +40,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
   viewMode = "grid",
 }) => {
   const [isFavorite, setIsFavorite] = useState(false);
-  // ✅ REMPLACER imageError par le hook useImageUrl
-  const { imageUrl, handleImageError } = useImageUrl(listing.image);
+  const [imageError, setImageError] = useState(false);
 
   const getTypeConfig = (type: string) => {
     switch (type) {
@@ -110,8 +107,14 @@ const ListingCard: React.FC<ListingCardProps> = ({
     }
   };
 
-  // ✅ SUPPRIMER l'ancienne fonction getImageSrc
-  // const getImageSrc = () => { ... }
+  const getImageSrc = () => {
+    //if (imageError || !listing.image) return PLACEHOLDER_IMAGE;
+    //if (listing.image.startsWith("http")) return listing.image;
+    //return `${process.env.NEXT_PUBLIC_API_URL || ""}${listing.image}`;
+    const imgUrl = `${process.env.NEXT_PUBLIC_API_URL}/api/files/${listing.image}`;
+    console.log("Test hhhhh", imgUrl);
+    return imgUrl;
+  };
 
   const formatPrice = (price: number | string | null | undefined) => {
     if (price === null || price === undefined) return "Gratuit";
@@ -197,13 +200,12 @@ const ListingCard: React.FC<ListingCardProps> = ({
               className="position-relative h-100"
               style={{ minHeight: "200px" }}
             >
-              {/* ✅ UTILISER imageUrl du hook au lieu de getImageSrc() */}
               <img
-                src={imageUrl}
+                src={getImageSrc()}
                 alt={listing.titre || "Annonce"}
                 className="w-100 h-100 object-fit-cover transition-transform group-hover-scale"
                 style={{ height: "200px", objectFit: "cover" }}
-                onError={handleImageError}
+                onError={() => setImageError(true)}
               />
               <div
                 className="position-absolute top-0 start-0 px-2 py-1 text-white small fw-bold rounded-3 d-flex align-items-center gap-1 m-2"
@@ -325,13 +327,12 @@ const ListingCard: React.FC<ListingCardProps> = ({
         className="position-relative overflow-hidden"
         style={{ height: "224px" }}
       >
-        {/* ✅ UTILISER imageUrl du hook au lieu de getImageSrc() */}
         <img
-          src={imageUrl}
+          src={getImageSrc()}
           alt={listing.titre || "Annonce"}
           className="w-100 h-100 object-fit-cover transition-transform group-hover-scale"
           style={{ transition: "transform 0.3s ease" }}
-          onError={handleImageError}
+          onError={() => setImageError(true)}
         />
 
         {/* Badge type */}

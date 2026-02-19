@@ -1,4 +1,5 @@
-// app/shared/hooks/useImageUrl.ts
+// app/shared/hooks/useImageUrl.ts*
+/*
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -16,28 +17,11 @@ export const useImageUrl = (initialUrl?: string | null) => {
     return process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
   }, []);
 
-  const getFrontendBaseUrl = useCallback((): string => {
-    if (typeof window !== "undefined") {
-      return window.location.origin;
-    }
-    return "http://localhost:3001";
-  }, []);
-
   const formatImageUrl = useCallback(
     (url: string | null | undefined): string => {
       if (!url) return PLACEHOLDER_IMAGE;
 
       let formattedUrl = url;
-
-      // ✅ Si l'URL contient localhost:3001 (frontend), la rediriger vers le backend
-      if (formattedUrl.includes("localhost:3001")) {
-        const apiBaseUrl = getApiBaseUrl();
-        formattedUrl = formattedUrl.replace(
-          /http:\/\/localhost:3001/g,
-          apiBaseUrl,
-        );
-        console.log("🖼️ URL corrigée (frontend → backend):", formattedUrl);
-      }
 
       // ✅ Si l'URL contient localhost sans port spécifique
       if (
@@ -109,3 +93,6 @@ export const useImageUrl = (initialUrl?: string | null) => {
     resetImage,
   };
 };
+
+
+*/
