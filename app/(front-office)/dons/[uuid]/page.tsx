@@ -329,6 +329,67 @@ interface NoteStats {
 }
 
 // ============================================
+// FONCTION DE CONSTRUCTION D'URL D'IMAGE
+// ============================================
+const buildImageUrl = (
+  imagePath: string | null,
+  imageKey: string | null = null,
+): string => {
+  // Si on a une clé, priorité à la construction via API
+  if (imageKey) {
+    // Si la clé est déjà une URL complète
+    if (imageKey.startsWith("http://") || imageKey.startsWith("https://")) {
+      return imageKey;
+    }
+
+    // Construire l'URL avec la clé
+    const apiUrl =
+      process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+    const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+
+    // Si la clé contient déjà %2F, l'utiliser directement
+    if (imageKey.includes("%2F")) {
+      return `${apiUrl}${filesUrl}/${imageKey}`;
+    }
+
+    // Sinon, encoder la clé
+    const encodedKey = encodeURIComponent(imageKey);
+    return `${apiUrl}${filesUrl}/${encodedKey}`;
+  }
+
+  // Fallback sur le chemin image
+  if (!imagePath) {
+    return "/images/placeholder.jpg";
+  }
+
+  // Si c'est déjà une URL complète
+  if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
+    // Remplacer localhost par l'URL de production si nécessaire
+    if (imagePath.includes("localhost")) {
+      const productionUrl =
+        process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
+        "https://oskar-api.mysonec.pro";
+      return imagePath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
+    }
+    return imagePath;
+  }
+
+  // Si c'est un chemin encodé (avec %2F)
+  if (imagePath.includes("%2F")) {
+    const apiUrl =
+      process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+    const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+    return `${apiUrl}${filesUrl}/${imagePath}`;
+  }
+
+  // Si c'est un chemin simple
+  const apiUrl =
+    process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+  const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+  return `${apiUrl}${filesUrl}/${imagePath}`;
+};
+
+// ============================================
 // COMPOSANT D'IMAGE SÉCURISÉ
 // ============================================
 const SecureImage = ({
@@ -381,30 +442,26 @@ const SecureImage = ({
     if (!hasError) {
       setHasError(true);
 
-      if (src && src.includes("15.236.142.141:9000/oskar-bucket/")) {
-        try {
-          const key = src.replace(
-            "http://15.236.142.141:9000/oskar-bucket/",
-            "",
-          );
-          const encodedKey = encodeURIComponent(key);
-          const proxyUrl = `http://localhost:3005/api/files/${encodedKey}`;
-          setCurrentSrc(proxyUrl);
+      // Tentative de reconstruction de l'URL
+      if (retryCount < 2) {
+        setRetryCount((prev) => prev + 1);
+
+        // Essayer de reconstruire l'URL
+        const apiUrl =
+          process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+        const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+
+        // Extraire le chemin de l'URL actuelle
+        const urlParts = currentSrc.split("/api/files/");
+        if (urlParts.length > 1) {
+          const path = urlParts[1];
+          setCurrentSrc(`${apiUrl}${filesUrl}/${path}`);
           return;
-        } catch (err) {
-          console.debug("Erreur conversion proxy:", err);
         }
       }
 
-      if (retryCount >= 2) {
-        setCurrentSrc(fallbackSrc);
-      } else {
-        setRetryCount((prev) => prev + 1);
-        setTimeout(() => {
-          setCurrentSrc(src || fallbackSrc);
-          setHasError(false);
-        }, 1000);
-      }
+      // Si tous les essais échouent, utiliser le fallback
+      setCurrentSrc(fallbackSrc);
     }
 
     if (onError) {
@@ -628,64 +685,18 @@ export default function DonDetailPage() {
   // FONCTIONS UTILITAIRES
   // ============================================
   const getDefaultAvatarUrl = (): string => {
-    return `${API_CONFIG.BASE_URL || "http://localhost:3005"}/images/default-avatar.png`;
+    return `${API_CONFIG.BASE_URL || "https://oskar-api.mysonec.pro"}/images/default-avatar.png`;
   };
 
   const getDefaultDonImage = (): string => {
-    return `${API_CONFIG.BASE_URL || "http://localhost:3005"}/images/default-don.png`;
+    return `${API_CONFIG.BASE_URL || "https://oskar-api.mysonec.pro"}/images/default-don.png`;
   };
 
   const normalizeImageUrl = (
     url: string | null,
     key: string | null = null,
   ): string => {
-    if (key) {
-      if (!key.startsWith("http://") && !key.startsWith("https://")) {
-        const encodedKey = encodeURIComponent(key);
-        const proxyUrl = `http://localhost:3005/api/files/${encodedKey}`;
-        return proxyUrl;
-      }
-    }
-
-    if (!url || url.trim() === "") {
-      return getDefaultDonImage();
-    }
-
-    const cleanUrl = url.trim();
-
-    if (cleanUrl.includes("localhost:3005/api/files/")) {
-      if (cleanUrl.includes("http:localhost")) {
-        return cleanUrl.replace("http:localhost", "http://localhost");
-      }
-      return cleanUrl;
-    }
-
-    if (cleanUrl.includes("15.236.142.141:9000/oskar-bucket/")) {
-      try {
-        const key = cleanUrl.replace(
-          "http://15.236.142.141:9000/oskar-bucket/",
-          "",
-        );
-        const encodedKey = encodeURIComponent(key);
-        return `http://localhost:3005/api/files/${encodedKey}`;
-      } catch (err) {
-        console.debug("Erreur conversion MinIO:", err);
-        return getDefaultDonImage();
-      }
-    }
-
-    if (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://")) {
-      if (cleanUrl.includes("http:localhost")) {
-        return cleanUrl.replace("http:localhost", "http://localhost");
-      }
-      return cleanUrl;
-    }
-
-    if (cleanUrl.startsWith("/")) {
-      return `${API_CONFIG.BASE_URL || "http://localhost:3005"}${cleanUrl}`;
-    }
-
-    return getDefaultDonImage();
+    return buildImageUrl(url, key);
   };
 
   const safeToFixed = (
