@@ -1,8 +1,10 @@
+// components/ListingCard.tsx
 "use client";
 
 import { useState } from "react";
 import Link from "next/link";
 import colors from "@/app/shared/constants/colors";
+import { useImageUrl } from "@/app/shared/hooks/useImageUrl";
 
 export interface ListingItem {
   uuid: string;
@@ -13,7 +15,6 @@ export interface ListingItem {
   description?: string | null;
   prix?: number | string | null;
   image?: string | null;
-  image_key?: string | null; // ✅ AJOUT DE LA CLÉ MINIO
   date?: string | null | undefined;
   disponible?: boolean;
   statut?: string;
@@ -41,45 +42,8 @@ const ListingCard: React.FC<ListingCardProps> = ({
   viewMode = "grid",
 }) => {
   const [isFavorite, setIsFavorite] = useState(false);
-  const [imageError, setImageError] = useState(false);
-  const [useDirectFallback, setUseDirectFallback] = useState(false);
-
-  // ✅ FONCTION AMÉLIORÉE POUR CONSTRUIRE L'URL DE L'IMAGE
-  const getImageSrc = () => {
-    if (imageError) return PLACEHOLDER_IMAGE;
-
-    // 1. Utiliser l'image_key pour construire l'URL proxy (recommandé)
-    if (listing.image_key && !useDirectFallback) {
-      const baseUrl =
-        process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
-      return `${baseUrl}/api/files/${encodeURIComponent(listing.image_key)}`;
-    }
-
-    // 2. Fallback sur l'URL directe MinIO si disponible
-    if (listing.image_key && useDirectFallback) {
-      return `http://15.236.142.141:9000/oskar-bucket/${listing.image_key}`;
-    }
-
-    // 3. Utiliser l'image existante (ancien format)
-    if (listing.image) {
-      if (listing.image.startsWith("http")) return listing.image;
-      return `${process.env.NEXT_PUBLIC_API_URL || ""}${listing.image}`;
-    }
-
-    return PLACEHOLDER_IMAGE;
-  };
-
-  const handleImageError = () => {
-    if (listing.image_key && !useDirectFallback) {
-      // Si proxy échoue, essayer l'URL directe MinIO
-      console.log("⚠️ Proxy échoué, tentative URL directe MinIO");
-      setUseDirectFallback(true);
-    } else {
-      // Si tout échoue, utiliser le placeholder
-      console.log("❌ Toutes les tentatives ont échoué");
-      setImageError(true);
-    }
-  };
+  // ✅ REMPLACER imageError par le hook useImageUrl
+  const { imageUrl, handleImageError } = useImageUrl(listing.image);
 
   const getTypeConfig = (type: string) => {
     switch (type) {
@@ -145,6 +109,9 @@ const ListingCard: React.FC<ListingCardProps> = ({
         return `/annonces/${listing.uuid}`;
     }
   };
+
+  // ✅ SUPPRIMER l'ancienne fonction getImageSrc
+  // const getImageSrc = () => { ... }
 
   const formatPrice = (price: number | string | null | undefined) => {
     if (price === null || price === undefined) return "Gratuit";
@@ -230,8 +197,9 @@ const ListingCard: React.FC<ListingCardProps> = ({
               className="position-relative h-100"
               style={{ minHeight: "200px" }}
             >
+              {/* ✅ UTILISER imageUrl du hook au lieu de getImageSrc() */}
               <img
-                src={getImageSrc()}
+                src={imageUrl}
                 alt={listing.titre || "Annonce"}
                 className="w-100 h-100 object-fit-cover transition-transform group-hover-scale"
                 style={{ height: "200px", objectFit: "cover" }}
@@ -357,8 +325,9 @@ const ListingCard: React.FC<ListingCardProps> = ({
         className="position-relative overflow-hidden"
         style={{ height: "224px" }}
       >
+        {/* ✅ UTILISER imageUrl du hook au lieu de getImageSrc() */}
         <img
-          src={getImageSrc()}
+          src={imageUrl}
           alt={listing.titre || "Annonce"}
           className="w-100 h-100 object-fit-cover transition-transform group-hover-scale"
           style={{ transition: "transform 0.3s ease" }}
