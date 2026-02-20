@@ -424,7 +424,7 @@ export default function DataTable({
         if (isPublished) {
           router.push(`${basePath}/echange/${row.uuid}`);
         } else {
-          router.push(`${basePath}/echange/non-publie/${row.uuid}`);
+          router.push(`${basePath}/echange/${row.uuid}`);
         }
         break;
 
