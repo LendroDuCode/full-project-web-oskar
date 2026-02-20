@@ -433,7 +433,7 @@ export default function Annonces() {
                       router.push(
                         isPublished
                           ? `${basePath}/echange/${item.uuid}`
-                          : `${basePath}/echange/non-publie/${item.uuid}`,
+                          : `${basePath}/echange/${item.uuid}`,
                       );
                       break;
                   }

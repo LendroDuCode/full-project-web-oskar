@@ -15,6 +15,35 @@ interface ListingsGridProps {
   showFeatured?: boolean;
 }
 
+// ============================================
+// FONCTION DE CONSTRUCTION D'URL D'IMAGE
+// ============================================
+const buildImageUrl = (imagePath: string | null): string | null => {
+  if (!imagePath) return null;
+
+  const apiUrl =
+    process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+  const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+
+  // Si c'est déjà une URL complète
+  if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
+    // Remplacer localhost par l'URL de production si nécessaire
+    if (imagePath.includes("localhost")) {
+      const productionUrl = apiUrl.replace(/\/api$/, "");
+      return imagePath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
+    }
+    return imagePath;
+  }
+
+  // Si c'est un chemin encodé (avec %2F)
+  if (imagePath.includes("%2F")) {
+    return `${apiUrl}${filesUrl}/${imagePath}`;
+  }
+
+  // Si c'est un chemin simple
+  return `${apiUrl}${filesUrl}/${imagePath}`;
+};
+
 const ListingsGrid: React.FC<ListingsGridProps> = ({
   categoryUuid,
   filterType = "all",
@@ -36,13 +65,10 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
     useSearch();
 
   const MAX_RETRIES = 3;
-  const PLACEHOLDER_IMAGE =
-    "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2YzZjRmNiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZpbGx9";
 
-  // ✅ MODIFIER normalizeImageUrl pour retourner null quand pas d'image
+  // ✅ Fonction de normalisation qui construit l'URL complète
   const normalizeImageUrl = useCallback((url: string | null): string | null => {
-    if (!url) return null;
-    return url;
+    return buildImageUrl(url);
   }, []);
 
   const abortCurrentRequest = useCallback(() => {
@@ -61,7 +87,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
       const useProxy = process.env.NEXT_PUBLIC_USE_PROXY === "true";
       if (useProxy) {
         const baseUrl =
-          process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
+          process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
         if (endpoint.startsWith(baseUrl)) {
           const path = endpoint.substring(baseUrl.length);
           return `/api${path}`;
