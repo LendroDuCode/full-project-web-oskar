@@ -1,4 +1,4 @@
-// app/(back-office)/dashboard-agent/annonces/page.tsx
+// app/(back-office)/page.tsx
 // Fichier test
 "use client";
 
