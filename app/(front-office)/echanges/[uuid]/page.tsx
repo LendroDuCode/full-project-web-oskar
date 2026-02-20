@@ -334,7 +334,75 @@ interface NoteStats {
 }
 
 // ============================================
-// FONCTION DE FORMATAGE DE DATE CORRIGÉE
+// FONCTION DE CONSTRUCTION D'URL D'IMAGE
+// ============================================
+const buildImageUrl = (
+  imagePath: string | null,
+  imageKey: string | null = null,
+): string => {
+  // Si on a une clé, priorité à la construction via API
+  if (imageKey) {
+    // Si la clé est déjà une URL complète
+    if (imageKey.startsWith("http://") || imageKey.startsWith("https://")) {
+      // Remplacer localhost par l'URL de production si nécessaire
+      if (imageKey.includes("localhost")) {
+        const productionUrl =
+          process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
+          "https://oskar-api.mysonec.pro";
+        return imageKey.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
+      }
+      return imageKey;
+    }
+
+    // Construire l'URL avec la clé
+    const apiUrl =
+      process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+    const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+
+    // Si la clé contient déjà %2F, l'utiliser directement
+    if (imageKey.includes("%2F")) {
+      return `${apiUrl}${filesUrl}/${imageKey}`;
+    }
+
+    // Sinon, encoder la clé
+    const encodedKey = encodeURIComponent(imageKey);
+    return `${apiUrl}${filesUrl}/${encodedKey}`;
+  }
+
+  // Fallback sur le chemin image
+  if (!imagePath || imagePath.trim() === "") {
+    return "/images/placeholder.jpg";
+  }
+
+  // Si c'est déjà une URL complète
+  if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
+    // Remplacer localhost par l'URL de production si nécessaire
+    if (imagePath.includes("localhost")) {
+      const productionUrl =
+        process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
+        "https://oskar-api.mysonec.pro";
+      return imagePath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
+    }
+    return imagePath;
+  }
+
+  // Si c'est un chemin encodé (avec %2F)
+  if (imagePath.includes("%2F")) {
+    const apiUrl =
+      process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+    const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+    return `${apiUrl}${filesUrl}/${imagePath}`;
+  }
+
+  // Si c'est un chemin simple
+  const apiUrl =
+    process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+  const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+  return `${apiUrl}${filesUrl}/${imagePath}`;
+};
+
+// ============================================
+// FONCTION DE FORMATAGE DE DATE
 // ============================================
 const formatDate = (dateString: string | null | undefined): string => {
   if (!dateString) return "Date inconnue";
@@ -345,46 +413,22 @@ const formatDate = (dateString: string | null | undefined): string => {
       return "Date inconnue";
     }
 
-    // Détecter si la date est en UTC (présence de 'Z')
-    const isUTC = dateString.includes("Z") || dateString.includes("+00:00");
-
-    // Obtenir la date UTC
-    const utcYear = date.getUTCFullYear();
-    const utcMonth = date.getUTCMonth();
-    const utcDay = date.getUTCDate();
-    const utcHours = date.getUTCHours();
-    const utcMinutes = date.getUTCMinutes();
-
-    // Obtenir la date locale actuelle
     const now = new Date();
-
-    // Créer des dates UTC pour la comparaison
-    const todayUTC = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-    );
-
-    const commentDateUTC = new Date(Date.UTC(utcYear, utcMonth, utcDay));
-
-    // Calculer la différence en jours UTC
-    const diffTime = todayUTC.getTime() - commentDateUTC.getTime();
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-    // Formater l'heure en UTC
-    const hours = utcHours.toString().padStart(2, "0");
-    const minutes = utcMinutes.toString().padStart(2, "0");
-    const timeStr = `${hours}:${minutes}`;
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
     if (diffDays === 0) {
-      return `Aujourd'hui à ${timeStr}`;
+      const hours = date.getHours().toString().padStart(2, "0");
+      const minutes = date.getMinutes().toString().padStart(2, "0");
+      return `Aujourd'hui à ${hours}:${minutes}`;
     } else if (diffDays === 1) {
-      return `Hier à ${timeStr}`;
+      return "Hier";
     } else if (diffDays < 7) {
       return `Il y a ${diffDays} jours`;
     } else {
-      // Pour les dates plus anciennes, afficher la date
-      const day = utcDay.toString().padStart(2, "0");
-      const month = (utcMonth + 1).toString().padStart(2, "0");
-      const year = utcYear;
+      const day = date.getDate().toString().padStart(2, "0");
+      const month = (date.getMonth() + 1).toString().padStart(2, "0");
+      const year = date.getFullYear();
       return `${day}/${month}/${year}`;
     }
   } catch {
@@ -393,7 +437,7 @@ const formatDate = (dateString: string | null | undefined): string => {
 };
 
 // ============================================
-// FONCTION DE FORMATAGE DE PRIX AMÉLIORÉE
+// FONCTION DE FORMATAGE DE PRIX
 // ============================================
 const formatPrice = (price: number | null): string => {
   if (price === null || price === undefined || isNaN(price)) {
@@ -402,7 +446,6 @@ const formatPrice = (price: number | null): string => {
   if (price === 0) {
     return "Gratuit";
   }
-  // Formatage avec séparateurs de milliers et sans décimales
   return (
     price.toLocaleString("fr-FR", {
       minimumFractionDigits: 0,
@@ -412,7 +455,7 @@ const formatPrice = (price: number | null): string => {
 };
 
 // ============================================
-// FONCTION DE FORMATAGE DE NOMBRE AVEC SÉPARATEURS
+// FONCTION DE FORMATAGE DE NOMBRE
 // ============================================
 const formatNumber = (value: number | null | undefined): string => {
   if (value === null || value === undefined || isNaN(value)) {
@@ -425,7 +468,7 @@ const formatNumber = (value: number | null | undefined): string => {
 };
 
 // ============================================
-// FONCTION DE FORMATAGE DES NOTES (1 décimale)
+// FONCTION DE FORMATAGE DES NOTES
 // ============================================
 const formatRating = (value: number | null | undefined): string => {
   if (value === null || value === undefined || isNaN(value)) {
@@ -490,30 +533,26 @@ const SecureImage = ({
     if (!hasError) {
       setHasError(true);
 
-      if (src && src.includes("15.236.142.141:9000/oskar-bucket/")) {
-        try {
-          const key = src.replace(
-            "http://15.236.142.141:9000/oskar-bucket/",
-            "",
-          );
-          const encodedKey = encodeURIComponent(key);
-          const proxyUrl = `http://localhost:3005/api/files/${encodedKey}`;
-          setCurrentSrc(proxyUrl);
+      // Tentative de reconstruction de l'URL
+      if (retryCount < 2) {
+        setRetryCount((prev) => prev + 1);
+
+        // Essayer de reconstruire l'URL
+        const apiUrl =
+          process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+        const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+
+        // Extraire le chemin de l'URL actuelle
+        const urlParts = currentSrc.split("/api/files/");
+        if (urlParts.length > 1) {
+          const path = urlParts[1];
+          setCurrentSrc(`${apiUrl}${filesUrl}/${path}`);
           return;
-        } catch (err) {
-          console.debug("Erreur conversion proxy:", err);
         }
       }
 
-      if (retryCount >= 2) {
-        setCurrentSrc(fallbackSrc);
-      } else {
-        setRetryCount((prev) => prev + 1);
-        setTimeout(() => {
-          setCurrentSrc(src || fallbackSrc);
-          setHasError(false);
-        }, 1000);
-      }
+      // Si tous les essais échouent, utiliser le fallback
+      setCurrentSrc(fallbackSrc);
     }
 
     if (onError) {
@@ -682,64 +721,18 @@ export default function EchangeDetailPage() {
   // FONCTIONS UTILITAIRES
   // ============================================
   const getDefaultAvatarUrl = (): string => {
-    return `${API_CONFIG.BASE_URL || "http://localhost:3005"}/images/default-avatar.png`;
+    return `${API_CONFIG.BASE_URL || "https://oskar-api.mysonec.pro"}/images/default-avatar.png`;
   };
 
   const getDefaultEchangeImage = (): string => {
-    return `${API_CONFIG.BASE_URL || "http://localhost:3005"}/images/default-echange.png`;
+    return `${API_CONFIG.BASE_URL || "https://oskar-api.mysonec.pro"}/images/default-echange.png`;
   };
 
   const normalizeImageUrl = (
     url: string | null,
     key: string | null = null,
   ): string => {
-    if (key) {
-      if (!key.startsWith("http://") && !key.startsWith("https://")) {
-        const encodedKey = encodeURIComponent(key);
-        const proxyUrl = `http://localhost:3005/api/files/${encodedKey}`;
-        return proxyUrl;
-      }
-    }
-
-    if (!url || url.trim() === "") {
-      return getDefaultEchangeImage();
-    }
-
-    const cleanUrl = url.trim();
-
-    if (cleanUrl.includes("localhost:3005/api/files/")) {
-      if (cleanUrl.includes("http:localhost")) {
-        return cleanUrl.replace("http:localhost", "http://localhost");
-      }
-      return cleanUrl;
-    }
-
-    if (cleanUrl.includes("15.236.142.141:9000/oskar-bucket/")) {
-      try {
-        const key = cleanUrl.replace(
-          "http://15.236.142.141:9000/oskar-bucket/",
-          "",
-        );
-        const encodedKey = encodeURIComponent(key);
-        return `http://localhost:3005/api/files/${encodedKey}`;
-      } catch (err) {
-        console.debug("Erreur conversion MinIO:", err);
-        return getDefaultEchangeImage();
-      }
-    }
-
-    if (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://")) {
-      if (cleanUrl.includes("http:localhost")) {
-        return cleanUrl.replace("http:localhost", "http://localhost");
-      }
-      return cleanUrl;
-    }
-
-    if (cleanUrl.startsWith("/")) {
-      return `${API_CONFIG.BASE_URL || "http://localhost:3005"}${cleanUrl}`;
-    }
-
-    return getDefaultEchangeImage();
+    return buildImageUrl(url, key);
   };
 
   const safeToFixed = (
@@ -1180,9 +1173,6 @@ export default function EchangeDetailPage() {
   // ============================================
   // FONCTIONS D'AFFICHAGE
   // ============================================
-  // La fonction formatPrice est maintenant définie en haut du fichier
-  // Nous utilisons la nouvelle version avec séparateurs de milliers
-
   const renderStars = (rating: number | null | undefined) => {
     if (rating === null || rating === undefined || isNaN(rating)) {
       rating = 0;
