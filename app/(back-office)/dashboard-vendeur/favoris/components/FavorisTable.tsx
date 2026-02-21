@@ -22,6 +22,7 @@ import {
   faBoxOpen,
   faUser,
   faMoneyBillWave,
+  faImage,
 } from "@fortawesome/free-solid-svg-icons";
 import colors from "@/app/shared/constants/colors";
 import {
@@ -32,11 +33,48 @@ import {
   getStatusLabel,
 } from "@/app/shared/utils/formatters";
 
+// ============================================
+// FONCTION DE CONSTRUCTION D'URL D'IMAGE ROBUSTE
+// ============================================
+const buildImageUrl = (imagePath: string | null): string | null => {
+  if (!imagePath) return null;
+
+  // Nettoyer le chemin des espaces indésirables
+  let cleanPath = imagePath
+    .replace(/\s+/g, "") // Supprimer tous les espaces
+    .replace(/-/g, "-") // Normaliser les tirets
+    .trim();
+
+  const apiUrl =
+    process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+  const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+
+  // ✅ CAS 1: Déjà une URL complète
+  if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
+    if (cleanPath.includes("localhost")) {
+      const productionUrl = apiUrl.replace(/\/api$/, "");
+      return cleanPath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
+    }
+    return cleanPath;
+  }
+
+  // ✅ CAS 2: Chemin avec %2F (déjà encodé)
+  if (cleanPath.includes("%2F")) {
+    // Nettoyer les espaces autour de %2F
+    const finalPath = cleanPath.replace(/%2F\s+/, "%2F");
+    return `${apiUrl}${filesUrl}/${finalPath}`;
+  }
+
+  // ✅ CAS 3: Chemin simple
+  return `${apiUrl}${filesUrl}/${cleanPath}`;
+};
+
 interface FavoriItem {
   uuid: string;
   title: string;
   description?: string;
-  image: string;
+  image: string | null;
+  image_key?: string;
   type: "produit" | "don" | "echange" | "annonce";
   status: string;
   date: string;
@@ -47,6 +85,7 @@ interface FavoriItem {
   seller?: {
     name: string;
     avatar?: string;
+    avatar_key?: string;
     isPro?: boolean;
     type?: string;
   };
@@ -88,10 +127,74 @@ export default function FavorisTable({
     new Set(),
   );
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
 
   const totalPages = Math.ceil(data.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const currentItems = data.slice(startIndex, startIndex + itemsPerPage);
+
+  // ✅ Gestion des erreurs d'image
+  const handleImageError = (
+    favoriteId: string,
+    e: React.SyntheticEvent<HTMLImageElement, Event>,
+  ) => {
+    const target = e.currentTarget;
+
+    // Si l'URL contient localhost, essayer de la corriger
+    if (target.src.includes("localhost")) {
+      const productionUrl =
+        process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
+        "https://oskar-api.mysonec.pro";
+      target.src = target.src.replace(
+        /http:\/\/localhost(:\d+)?/g,
+        productionUrl,
+      );
+      return;
+    }
+
+    // Si l'URL contient des espaces, essayer de les nettoyer
+    if (target.src.includes("%20")) {
+      target.src = target.src.replace(/%20/g, "");
+      return;
+    }
+
+    setImageErrors((prev) => new Set(prev).add(favoriteId));
+    target.onerror = null;
+  };
+
+  // ✅ Obtenir l'URL de l'image
+  const getImageUrl = (item: FavoriItem): string | null => {
+    if (imageErrors.has(item.favoriteId)) return null;
+
+    // Essayer d'abord avec image_key
+    if (item.image_key) {
+      const url = buildImageUrl(item.image_key);
+      if (url) return url;
+    }
+
+    // Sinon avec image
+    if (item.image) {
+      const url = buildImageUrl(item.image);
+      if (url) return url;
+    }
+
+    return null;
+  };
+
+  // ✅ Obtenir l'URL de l'avatar du vendeur
+  const getAvatarUrl = (seller: FavoriItem["seller"]): string | null => {
+    if (!seller) return null;
+
+    if (seller.avatar_key) {
+      return buildImageUrl(seller.avatar_key);
+    }
+
+    if (seller.avatar) {
+      return buildImageUrl(seller.avatar);
+    }
+
+    return null;
+  };
 
   const getTypeConfig = (type: string) => {
     const configs = {
@@ -408,6 +511,8 @@ export default function FavorisTable({
               const isSelected = selectedItems.has(item.favoriteId);
               const isProcessing = processingItems.has(item.favoriteId);
               const isExpanded = expandedItems.has(item.favoriteId);
+              const imageUrl = getImageUrl(item);
+              const avatarUrl = getAvatarUrl(item.seller);
 
               return (
                 <tr
@@ -443,15 +548,26 @@ export default function FavorisTable({
                           flexShrink: 0,
                         }}
                       >
-                        <img
-                          src={item.image}
-                          alt={item.title}
-                          className="w-100 h-100 object-cover"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.src = `https://via.placeholder.com/48?text=${item.title.charAt(0)}`;
-                          }}
-                        />
+                        {imageUrl ? (
+                          <img
+                            src={imageUrl}
+                            alt={item.title}
+                            className="w-100 h-100 object-cover"
+                            onError={(e) =>
+                              handleImageError(item.favoriteId, e)
+                            }
+                          />
+                        ) : (
+                          <div
+                            className="w-100 h-100 d-flex align-items-center justify-content-center"
+                            style={{
+                              backgroundColor: typeConfig.bgColor,
+                              color: typeConfig.color,
+                            }}
+                          >
+                            <FontAwesomeIcon icon={faImage} size="xs" />
+                          </div>
+                        )}
                         <div
                           className="position-absolute top-0 end-0 m-1"
                           style={{
@@ -554,6 +670,26 @@ export default function FavorisTable({
                                   <span className="badge bg-primary bg-opacity-10 text-primary">
                                     Professionnel
                                   </span>
+                                </div>
+                              )}
+                              {avatarUrl && item.seller?.name && (
+                                <div className="col-12">
+                                  <small className="text-muted d-block">
+                                    Avatar du vendeur
+                                  </small>
+                                  <img
+                                    src={avatarUrl}
+                                    alt={item.seller.name}
+                                    className="rounded-circle"
+                                    style={{
+                                      width: "32px",
+                                      height: "32px",
+                                      objectFit: "cover",
+                                    }}
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = "none";
+                                    }}
+                                  />
                                 </div>
                               )}
                             </div>

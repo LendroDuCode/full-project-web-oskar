@@ -34,7 +34,8 @@ interface Product {
   libelle: string;
   slug: string;
   type: string | null;
-  image: string;
+  image: string | null;
+  image_key?: string;
   disponible: boolean;
   statut: "publie" | "non_publie" | "en_attente" | "bloque";
   prix: string;
@@ -50,7 +51,8 @@ interface Product {
     uuid: string;
     libelle: string;
     type: string;
-    image: string;
+    image: string | null;
+    image_key?: string;
   };
   estPublie: boolean;
   estBloque: boolean;

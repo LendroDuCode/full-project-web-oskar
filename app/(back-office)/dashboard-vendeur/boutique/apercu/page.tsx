@@ -39,6 +39,42 @@ import DeleteBoutiqueModal from "./components/modals/DeleteBoutiqueModal";
 import BoutiqueStatusBadge from "./components/modals/BoutiqueStatusBadge";
 import Pagination from "./components/modals/Pagination";
 
+// ============================================
+// FONCTION DE CONSTRUCTION D'URL D'IMAGE ROBUSTE
+// ============================================
+const buildImageUrl = (imagePath: string | null): string | null => {
+  if (!imagePath) return null;
+
+  // Nettoyer le chemin des espaces indésirables
+  let cleanPath = imagePath
+    .replace(/\s+/g, "") // Supprimer tous les espaces
+    .replace(/-/g, "-") // Normaliser les tirets
+    .trim();
+
+  const apiUrl =
+    process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+  const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+
+  // ✅ CAS 1: Déjà une URL complète
+  if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
+    if (cleanPath.includes("localhost")) {
+      const productionUrl = apiUrl.replace(/\/api$/, "");
+      return cleanPath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
+    }
+    return cleanPath;
+  }
+
+  // ✅ CAS 2: Chemin avec %2F (déjà encodé)
+  if (cleanPath.includes("%2F")) {
+    // Nettoyer les espaces autour de %2F
+    const finalPath = cleanPath.replace(/%2F\s+/, "%2F");
+    return `${apiUrl}${filesUrl}/${finalPath}`;
+  }
+
+  // ✅ CAS 3: Chemin simple
+  return `${apiUrl}${filesUrl}/${cleanPath}`;
+};
+
 // ============ TYPES ============
 interface TypeBoutique {
   uuid: string;
@@ -47,7 +83,8 @@ interface TypeBoutique {
   description: string | null;
   peut_vendre_produits: boolean;
   peut_vendre_biens: boolean;
-  image: string;
+  image: string | null;
+  image_key?: string;
   statut: string;
 }
 
@@ -64,8 +101,8 @@ interface Boutique {
   banniere: string | null;
   politique_retour: string | null;
   conditions_utilisation: string | null;
-  logo_key: string;
-  banniere_key: string;
+  logo_key: string | null;
+  banniere_key: string | null;
   statut: "en_review" | "actif" | "bloque" | "ferme";
   created_at: string;
   updated_at: string;
@@ -98,6 +135,7 @@ export default function ListeBoutiquesVendeur() {
   const [authLoading, setAuthLoading] = useState(true);
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [showDebug, setShowDebug] = useState(false);
+  const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
 
   // États pour les modales
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -128,10 +166,87 @@ export default function ListeBoutiquesVendeur() {
   // États pour les types de boutique uniques (pour les filtres)
   const [uniqueTypes, setUniqueTypes] = useState<TypeBoutique[]>([]);
 
+  // ✅ Gestion des erreurs d'image
+  const handleImageError = (
+    uuid: string,
+    e: React.SyntheticEvent<HTMLImageElement, Event>,
+  ) => {
+    const target = e.currentTarget;
+
+    // Si l'URL contient localhost, essayer de la corriger
+    if (target.src.includes("localhost")) {
+      const productionUrl =
+        process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
+        "https://oskar-api.mysonec.pro";
+      target.src = target.src.replace(
+        /http:\/\/localhost(:\d+)?/g,
+        productionUrl,
+      );
+      return;
+    }
+
+    // Si l'URL contient des espaces, essayer de les nettoyer
+    if (target.src.includes("%20")) {
+      target.src = target.src.replace(/%20/g, "");
+      return;
+    }
+
+    setImageErrors((prev) => new Set(prev).add(uuid));
+    target.onerror = null;
+  };
+
+  // ✅ Obtenir l'URL du logo
+  const getLogoUrl = (boutique: Boutique): string | null => {
+    if (imageErrors.has(boutique.uuid)) return null;
+
+    // Essayer d'abord avec logo_key
+    if (boutique.logo_key) {
+      const url = buildImageUrl(boutique.logo_key);
+      if (url) return url;
+    }
+
+    // Sinon avec logo
+    if (boutique.logo) {
+      const url = buildImageUrl(boutique.logo);
+      if (url) return url;
+    }
+
+    return null;
+  };
+
+  // ✅ Obtenir l'URL de la bannière
+  const getBanniereUrl = (boutique: Boutique): string | null => {
+    if (imageErrors.has(`${boutique.uuid}-banner`)) return null;
+
+    // Essayer d'abord avec banniere_key
+    if (boutique.banniere_key) {
+      const url = buildImageUrl(boutique.banniere_key);
+      if (url) return url;
+    }
+
+    // Sinon avec banniere
+    if (boutique.banniere) {
+      const url = buildImageUrl(boutique.banniere);
+      if (url) return url;
+    }
+
+    return null;
+  };
+
+  // ✅ Obtenir l'URL de l'image du type de boutique
+  const getTypeImageUrl = (typeBoutique: TypeBoutique): string | null => {
+    if (typeBoutique.image_key) {
+      return buildImageUrl(typeBoutique.image_key);
+    }
+    if (typeBoutique.image) {
+      return buildImageUrl(typeBoutique.image);
+    }
+    return null;
+  };
+
   // Fonction pour vérifier si l'utilisateur est authentifié
   const checkAuthentication = useCallback(() => {
     try {
-      // Vérifier si le token existe dans localStorage
       const token =
         typeof window !== "undefined"
           ? localStorage.getItem("oskar_token")
@@ -146,7 +261,6 @@ export default function ListeBoutiquesVendeur() {
         setIsAuthenticated(false);
         setError("Veuillez vous connecter pour accéder à cette page");
 
-        // Rediriger vers la page de connexion après un délai
         setTimeout(() => {
           router.push("/login");
         }, 2000);
@@ -294,15 +408,6 @@ export default function ListeBoutiquesVendeur() {
       const response = await api.get<any>(url);
 
       console.log("📦 Réponse brute:", response);
-
-      // Analyser la structure de la réponse
-      console.log("🔍 Structure de la réponse:", {
-        type: typeof response,
-        isArray: Array.isArray(response),
-        hasData: response && typeof response === "object" && "data" in response,
-        keys:
-          response && typeof response === "object" ? Object.keys(response) : [],
-      });
 
       let boutiquesData: Boutique[] = [];
       let paginationData = {
@@ -1557,6 +1662,7 @@ export default function ListeBoutiquesVendeur() {
                             const startIndex =
                               (pagination.page - 1) * pagination.limit;
                             const displayIndex = startIndex + index + 1;
+                            const logoUrl = getLogoUrl(boutique);
 
                             return (
                               <tr key={boutique.uuid} className="align-middle">
@@ -1564,9 +1670,9 @@ export default function ListeBoutiquesVendeur() {
                                   {displayIndex}
                                 </td>
                                 <td>
-                                  {boutique.logo ? (
+                                  {logoUrl ? (
                                     <img
-                                      src={boutique.logo}
+                                      src={logoUrl}
                                       alt={boutique.nom}
                                       className="rounded border"
                                       style={{
@@ -1574,10 +1680,9 @@ export default function ListeBoutiquesVendeur() {
                                         height: "60px",
                                         objectFit: "cover",
                                       }}
-                                      onError={(e) => {
-                                        (e.target as HTMLImageElement).src =
-                                          `https://via.placeholder.com/60/cccccc/ffffff?text=${boutique.nom?.charAt(0) || "B"}`;
-                                      }}
+                                      onError={(e) =>
+                                        handleImageError(boutique.uuid, e)
+                                      }
                                     />
                                   ) : (
                                     <div

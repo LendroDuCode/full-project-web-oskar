@@ -9,6 +9,42 @@ import { useAuth } from "@/app/(front-office)/auth/AuthContext";
 import PublishAdModal from "@/app/(front-office)/publication-annonce/page";
 import HelpModalVendeur from "./HelpModalVendeur";
 
+// ============================================
+// FONCTION DE CONSTRUCTION D'URL D'IMAGE ROBUSTE
+// ============================================
+const buildImageUrl = (imagePath: string | null): string | null => {
+  if (!imagePath) return null;
+
+  // Nettoyer le chemin des espaces indésirables
+  let cleanPath = imagePath
+    .replace(/\s+/g, "") // Supprimer tous les espaces
+    .replace(/-/g, "-") // Normaliser les tirets
+    .trim();
+
+  const apiUrl =
+    process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+  const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+
+  // ✅ CAS 1: Déjà une URL complète
+  if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
+    if (cleanPath.includes("localhost")) {
+      const productionUrl = apiUrl.replace(/\/api$/, "");
+      return cleanPath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
+    }
+    return cleanPath;
+  }
+
+  // ✅ CAS 2: Chemin avec %2F (déjà encodé)
+  if (cleanPath.includes("%2F")) {
+    // Nettoyer les espaces autour de %2F
+    const finalPath = cleanPath.replace(/%2F\s+/, "%2F");
+    return `${apiUrl}${filesUrl}/${finalPath}`;
+  }
+
+  // ✅ CAS 3: Chemin simple
+  return `${apiUrl}${filesUrl}/${cleanPath}`;
+};
+
 interface HeaderProps {
   title?: string;
   subtitle?: string;
@@ -26,6 +62,7 @@ interface VendeurProfile {
   email: string;
   telephone: string;
   avatar: string | null;
+  avatar_key?: string;
   type: "standard" | "premium";
   est_verifie: boolean;
   est_bloque: boolean;
@@ -55,6 +92,7 @@ export default function DashboardHeaderVendeur({
   const [error, setError] = useState<string | null>(null);
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
 
   const router = useRouter();
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -102,6 +140,7 @@ export default function DashboardHeaderVendeur({
       try {
         setLoading(true);
         setError(null);
+        setAvatarError(false);
 
         const response = await api.get(API_ENDPOINTS.AUTH.VENDEUR.PROFILE);
 
@@ -222,15 +261,62 @@ export default function DashboardHeaderVendeur({
     return `${profile.prenoms} ${profile.nom}`;
   }, [profile]);
 
+  // ✅ Fonction getAvatarUrl améliorée avec buildImageUrl
   const getAvatarUrl = useCallback(() => {
     if (!profile) return getDefaultAvatar("", "");
-    return profile.avatar || getDefaultAvatar(profile.nom, profile.prenoms);
-  }, [profile, getDefaultAvatar]);
+
+    if (avatarError) {
+      return getDefaultAvatar(profile.nom, profile.prenoms);
+    }
+
+    // Essayer d'abord avec avatar_key si disponible
+    if ((profile as any).avatar_key) {
+      const url = buildImageUrl((profile as any).avatar_key);
+      if (url) return url;
+    }
+
+    // Sinon avec avatar
+    if (profile.avatar) {
+      const url = buildImageUrl(profile.avatar);
+      if (url) return url;
+    }
+
+    return getDefaultAvatar(profile.nom, profile.prenoms);
+  }, [profile, getDefaultAvatar, avatarError]);
 
   const formatDateNaissance = useCallback((date: string | null) => {
     if (!date) return "Non spécifiée";
     return new Date(date).toLocaleDateString("fr-FR");
   }, []);
+
+  // ✅ Gestionnaire d'erreur d'image amélioré
+  const handleImageError = useCallback(
+    (e: React.SyntheticEvent<HTMLImageElement>) => {
+      const target = e.target as HTMLImageElement;
+
+      // Si l'URL contient localhost, essayer de la corriger
+      if (target.src.includes("localhost")) {
+        const productionUrl =
+          process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
+          "https://oskar-api.mysonec.pro";
+        target.src = target.src.replace(
+          /http:\/\/localhost(:\d+)?/g,
+          productionUrl,
+        );
+        return;
+      }
+
+      // Si l'URL contient des espaces, essayer de les nettoyer
+      if (target.src.includes("%20")) {
+        target.src = target.src.replace(/%20/g, "");
+        return;
+      }
+
+      setAvatarError(true);
+      target.src = getDefaultAvatar(profile?.nom || "", profile?.prenoms || "");
+    },
+    [profile, getDefaultAvatar],
+  );
 
   // Badge de vérification
   const VerificationBadge = () => {
@@ -288,11 +374,6 @@ export default function DashboardHeaderVendeur({
     },
     [],
   );
-
-  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    const target = e.target as HTMLImageElement;
-    target.src = getDefaultAvatar(profile?.nom || "", profile?.prenoms || "");
-  };
 
   return (
     <>

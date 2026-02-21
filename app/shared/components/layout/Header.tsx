@@ -9,6 +9,42 @@ import { API_ENDPOINTS } from "@/config/api-endpoints";
 import PublishAdModal from "@/app/(front-office)/publication-annonce/page";
 import { api } from "@/lib/api-client";
 
+// ============================================
+// FONCTION DE CONSTRUCTION D'URL D'IMAGE ROBUSTE
+// ============================================
+const buildImageUrl = (imagePath: string | null): string | null => {
+  if (!imagePath) return null;
+
+  // Nettoyer le chemin des espaces indésirables
+  let cleanPath = imagePath
+    .replace(/\s+/g, "") // Supprimer tous les espaces
+    .replace(/-/g, "-") // Normaliser les tirets
+    .trim();
+
+  const apiUrl =
+    process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+  const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+
+  // ✅ CAS 1: Déjà une URL complète
+  if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
+    if (cleanPath.includes("localhost")) {
+      const productionUrl = apiUrl.replace(/\/api$/, "");
+      return cleanPath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
+    }
+    return cleanPath;
+  }
+
+  // ✅ CAS 2: Chemin avec %2F (déjà encodé)
+  if (cleanPath.includes("%2F")) {
+    // Nettoyer les espaces autour de %2F
+    const finalPath = cleanPath.replace(/%2F\s+/, "%2F");
+    return `${apiUrl}${filesUrl}/${finalPath}`;
+  }
+
+  // ✅ CAS 3: Chemin simple
+  return `${apiUrl}${filesUrl}/${cleanPath}`;
+};
+
 interface NavLink {
   name: string;
   href: string;
@@ -39,6 +75,7 @@ interface UserProfile {
   firstName?: string;
   lastName?: string;
   avatar?: string;
+  avatar_key?: string;
   type: "admin" | "agent" | "vendeur" | "utilisateur";
   role?: string;
   isSuperAdmin?: boolean;
@@ -133,6 +170,7 @@ const Header: FC = () => {
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [forceUpdate, setForceUpdate] = useState(0);
   const [windowWidth, setWindowWidth] = useState<number>(0);
+  const [avatarError, setAvatarError] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const categoriesDropdownRef = useRef<{
@@ -222,6 +260,7 @@ const Header: FC = () => {
       setUserProfile(null);
       setDropdownOpen(false);
       setMobileMenuOpen(false);
+      setAvatarError(false);
       setForceUpdate((prev) => prev + 1);
 
       // Rediriger vers la page d'accueil si on est sur une page dashboard
@@ -393,6 +432,7 @@ const Header: FC = () => {
 
     if (isLoggedIn && user) {
       console.log("🟢 Header - User is logged in, setting context profile");
+      setAvatarError(false);
 
       const immediateProfile: UserProfile = {
         uuid: user.uuid || "",
@@ -402,6 +442,7 @@ const Header: FC = () => {
         type: user.type as any,
         nom_complet: user.nom_complet || "",
         avatar: user.avatar,
+        avatar_key: (user as any).avatar_key,
         role: user.role,
         est_bloque: user.est_bloque,
         nom: user.nom,
@@ -445,6 +486,8 @@ const Header: FC = () => {
                   email: response.data?.email || user.email || "",
                   nom: response.data?.nom || user.nom || "",
                   avatar: response.data?.avatar || user.avatar,
+                  avatar_key:
+                    response.data?.avatar_key || (user as any).avatar_key,
                   type: "admin",
                   role: response.data?.role || user.role || "admin",
                   isSuperAdmin: response.data?.isSuperAdmin || false,
@@ -460,6 +503,8 @@ const Header: FC = () => {
                   nom: response.data?.nom || user.nom || "",
                   prenoms: response.data?.prenoms || user.prenoms || "",
                   avatar: response.data?.avatar || user.avatar,
+                  avatar_key:
+                    response.data?.avatar_key || (user as any).avatar_key,
                   type: "agent",
                   est_bloque: response.data?.est_bloque || false,
                 };
@@ -472,6 +517,8 @@ const Header: FC = () => {
                   nom: response.data?.nom || user.nom || "",
                   prenoms: response.data?.prenoms || user.prenoms || "",
                   avatar: response.data?.avatar || user.avatar,
+                  avatar_key:
+                    response.data?.avatar_key || (user as any).avatar_key,
                   type: "vendeur",
                   est_bloque: response.data?.est_bloque || false,
                   civilite: response.data?.civilité || user.civilite,
@@ -485,6 +532,8 @@ const Header: FC = () => {
                   nom: response.data?.nom || user.nom || "",
                   prenoms: response.data?.prenoms || user.prenoms || "",
                   avatar: response.data?.avatar || user.avatar,
+                  avatar_key:
+                    response.data?.avatar_key || (user as any).avatar_key,
                   type: "utilisateur",
                   est_bloque: response.data?.est_bloque || false,
                   civilite: response.data?.civilite || user.civilite,
@@ -512,6 +561,7 @@ const Header: FC = () => {
     } else {
       console.log("🔴 Header - No user in context, clearing profile");
       setUserProfile(null);
+      setAvatarError(false);
       setLoadingProfile(false);
     }
   }, [isLoggedIn, user]);
@@ -611,6 +661,7 @@ const Header: FC = () => {
 
       // Vider le profil utilisateur
       setUserProfile(null);
+      setAvatarError(false);
 
       // Forcer une mise à jour
       setForceUpdate((prev) => prev + 1);
@@ -751,9 +802,27 @@ const Header: FC = () => {
     return userType === "vendeur" || userType === "utilisateur";
   }, [user, userProfile]);
 
+  // ✅ Fonction getAvatarToDisplay améliorée avec buildImageUrl
   const getAvatarToDisplay = useCallback(() => {
-    return user?.avatar || userProfile?.avatar;
-  }, [user, userProfile]);
+    const profile = user || userProfile;
+    if (!profile) return null;
+
+    if (avatarError) return null;
+
+    // Essayer d'abord avec avatar_key
+    if ((profile as any).avatar_key) {
+      const url = buildImageUrl((profile as any).avatar_key);
+      if (url) return url;
+    }
+
+    // Sinon avec avatar
+    if (profile.avatar) {
+      const url = buildImageUrl(profile.avatar);
+      if (url) return url;
+    }
+
+    return null;
+  }, [user, userProfile, avatarError]);
 
   const getEmailToDisplay = useCallback(() => {
     return user?.email || userProfile?.email;
@@ -878,7 +947,7 @@ const Header: FC = () => {
     return null;
   }
 
-  // Tailles responsives pour les différents éléments
+  // Tailles responsives pour les différents éléments - DÉFINIES AVANT LEURS UTILISATIONS
   const logoSize = getResponsiveSize({
     xs: 28,
     sm: 32,
@@ -951,6 +1020,50 @@ const Header: FC = () => {
     xl: 2.5,
     xxl: 3,
   });
+
+  // ✅ Gestionnaire d'erreur d'image amélioré - DÉFINI APRÈS LES VARIABLES DONT IL DÉPEND
+  const handleImageError = useCallback(
+    (e: React.SyntheticEvent<HTMLImageElement>) => {
+      const target = e.target as HTMLImageElement;
+
+      // Si l'URL contient localhost, essayer de la corriger
+      if (target.src.includes("localhost")) {
+        const productionUrl =
+          process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
+          "https://oskar-api.mysonec.pro";
+        target.src = target.src.replace(
+          /http:\/\/localhost(:\d+)?/g,
+          productionUrl,
+        );
+        return;
+      }
+
+      // Si l'URL contient des espaces, essayer de les nettoyer
+      if (target.src.includes("%20")) {
+        target.src = target.src.replace(/%20/g, "");
+        return;
+      }
+
+      setAvatarError(true);
+      target.style.display = "none";
+
+      // Remplacer par les initiales
+      const parent = target.parentElement;
+      if (parent) {
+        const initialsDiv = document.createElement("div");
+        initialsDiv.className =
+          "d-flex align-items-center justify-content-center w-100 h-100";
+        initialsDiv.style.backgroundColor = colors.oskar.green;
+        initialsDiv.style.color = "white";
+        initialsDiv.style.fontSize = `${iconFontSize * 0.5}px`;
+        initialsDiv.style.fontWeight = "bold";
+        initialsDiv.textContent = getUserInitials();
+        parent.innerHTML = "";
+        parent.appendChild(initialsDiv);
+      }
+    },
+    [getUserInitials, iconFontSize],
+  );
 
   return (
     <>
@@ -1419,7 +1532,7 @@ const Header: FC = () => {
                             </span>
                           </div>
                         </div>
-                      ) : getAvatarToDisplay() ? (
+                      ) : (
                         <div
                           className="rounded-circle overflow-hidden"
                           style={{
@@ -1428,40 +1541,30 @@ const Header: FC = () => {
                             border: `2px solid ${colors.oskar.green}`,
                           }}
                         >
-                          <img
-                            src={getAvatarToDisplay()}
-                            alt={getUserFullName()}
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              objectFit: "cover",
-                            }}
-                            onError={(e) => {
-                              e.currentTarget.style.display = "none";
-                              const parent = e.currentTarget.parentElement;
-                              if (parent) {
-                                parent.innerHTML = `
-                                  <div class="d-flex align-items-center justify-content-center w-100 h-100" style="background-color: ${colors.oskar.green}; color: white; font-size: ${iconFontSize * 0.5}px; font-weight: bold;">
-                                    ${getUserInitials()}
-                                  </div>
-                                `;
-                              }
-                            }}
-                          />
-                        </div>
-                      ) : (
-                        <div
-                          className="rounded-circle d-flex align-items-center justify-content-center"
-                          style={{
-                            width: iconSize,
-                            height: iconSize,
-                            backgroundColor: colors.oskar.green,
-                            color: "white",
-                            fontSize: iconFontSize * 0.5,
-                            fontWeight: "bold",
-                          }}
-                        >
-                          {getUserInitials()}
+                          {getAvatarToDisplay() ? (
+                            <img
+                              src={getAvatarToDisplay()!}
+                              alt={getUserFullName()}
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "cover",
+                              }}
+                              onError={handleImageError}
+                            />
+                          ) : (
+                            <div
+                              className="d-flex align-items-center justify-content-center w-100 h-100"
+                              style={{
+                                backgroundColor: colors.oskar.green,
+                                color: "white",
+                                fontSize: iconFontSize * 0.5,
+                                fontWeight: "bold",
+                              }}
+                            >
+                              {getUserInitials()}
+                            </div>
+                          )}
                         </div>
                       )}
                     </button>
@@ -1485,72 +1588,51 @@ const Header: FC = () => {
                       >
                         <div className="p-3 border-bottom">
                           <div className="d-flex align-items-center">
-                            {getAvatarToDisplay() ? (
-                              <div
-                                className="rounded-circle overflow-hidden me-3 flex-shrink-0"
-                                style={{
-                                  width: getResponsiveSize({
-                                    lg: 44,
-                                    xl: 48,
-                                    xxl: 52,
-                                  }),
-                                  height: getResponsiveSize({
-                                    lg: 44,
-                                    xl: 48,
-                                    xxl: 52,
-                                  }),
-                                  border: `2px solid ${colors.oskar.green}`,
-                                }}
-                              >
+                            <div
+                              className="rounded-circle overflow-hidden me-3 flex-shrink-0"
+                              style={{
+                                width: getResponsiveSize({
+                                  lg: 44,
+                                  xl: 48,
+                                  xxl: 52,
+                                }),
+                                height: getResponsiveSize({
+                                  lg: 44,
+                                  xl: 48,
+                                  xxl: 52,
+                                }),
+                                border: `2px solid ${colors.oskar.green}`,
+                              }}
+                            >
+                              {getAvatarToDisplay() ? (
                                 <img
-                                  src={getAvatarToDisplay()}
+                                  src={getAvatarToDisplay()!}
                                   alt={getUserFullName()}
                                   style={{
                                     width: "100%",
                                     height: "100%",
                                     objectFit: "cover",
                                   }}
-                                  onError={(e) => {
-                                    e.currentTarget.style.display = "none";
-                                    const parent =
-                                      e.currentTarget.parentElement;
-                                    if (parent) {
-                                      parent.innerHTML = `
-                                        <div class="d-flex align-items-center justify-content-center w-100 h-100" style="background-color: ${colors.oskar.green}; color: white; font-size: ${getResponsiveSize({ lg: 14, xl: 15, xxl: 16 })}px; font-weight: bold;">
-                                          ${getUserInitials()}
-                                        </div>
-                                      `;
-                                    }
-                                  }}
+                                  onError={handleImageError}
                                 />
-                              </div>
-                            ) : (
-                              <div
-                                className="rounded-circle d-flex align-items-center justify-content-center me-3 flex-shrink-0"
-                                style={{
-                                  width: getResponsiveSize({
-                                    lg: 44,
-                                    xl: 48,
-                                    xxl: 52,
-                                  }),
-                                  height: getResponsiveSize({
-                                    lg: 44,
-                                    xl: 48,
-                                    xxl: 52,
-                                  }),
-                                  backgroundColor: colors.oskar.green,
-                                  color: "white",
-                                  fontSize: getResponsiveSize({
-                                    lg: 14,
-                                    xl: 15,
-                                    xxl: 16,
-                                  }),
-                                  fontWeight: "bold",
-                                }}
-                              >
-                                {getUserInitials()}
-                              </div>
-                            )}
+                              ) : (
+                                <div
+                                  className="d-flex align-items-center justify-content-center w-100 h-100"
+                                  style={{
+                                    backgroundColor: colors.oskar.green,
+                                    color: "white",
+                                    fontSize: getResponsiveSize({
+                                      lg: 14,
+                                      xl: 15,
+                                      xxl: 16,
+                                    }),
+                                    fontWeight: "bold",
+                                  }}
+                                >
+                                  {getUserInitials()}
+                                </div>
+                              )}
+                            </div>
                             <div className="flex-grow-1 min-w-0">
                               <h6
                                 className="fw-bold mb-0 text-truncate"

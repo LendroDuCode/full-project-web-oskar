@@ -75,6 +75,42 @@ import { API_ENDPOINTS } from "@/config/api-endpoints";
 import EditProductModal from "../../../produits/components/modals/EditProductModal";
 import ViewProductModal from "../../../produits/components/modals/ViewProductModal";
 
+// ============================================
+// FONCTION DE CONSTRUCTION D'URL D'IMAGE ROBUSTE
+// ============================================
+const buildImageUrl = (imagePath: string | null): string | null => {
+  if (!imagePath) return null;
+
+  // Nettoyer le chemin des espaces indésirables
+  let cleanPath = imagePath
+    .replace(/\s+/g, "") // Supprimer tous les espaces
+    .replace(/-/g, "-") // Normaliser les tirets
+    .trim();
+
+  const apiUrl =
+    process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+  const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+
+  // ✅ CAS 1: Déjà une URL complète
+  if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
+    if (cleanPath.includes("localhost")) {
+      const productionUrl = apiUrl.replace(/\/api$/, "");
+      return cleanPath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
+    }
+    return cleanPath;
+  }
+
+  // ✅ CAS 2: Chemin avec %2F (déjà encodé)
+  if (cleanPath.includes("%2F")) {
+    // Nettoyer les espaces autour de %2F
+    const finalPath = cleanPath.replace(/%2F\s+/, "%2F");
+    return `${apiUrl}${filesUrl}/${finalPath}`;
+  }
+
+  // ✅ CAS 3: Chemin simple
+  return `${apiUrl}${filesUrl}/${cleanPath}`;
+};
+
 // ============ TYPES ============
 interface TypeBoutique {
   uuid: string;
@@ -83,7 +119,8 @@ interface TypeBoutique {
   description: string | null;
   peut_vendre_produits: boolean;
   peut_vendre_biens: boolean;
-  image: string;
+  image: string | null;
+  image_key?: string;
   statut: string;
 }
 
@@ -95,7 +132,8 @@ interface Produit {
   libelle: string;
   slug: string;
   type: string | null;
-  image: string;
+  image: string | null;
+  image_key?: string;
   disponible: boolean;
   statut: "publie" | "non_publie" | "en_attente" | "bloque";
   prix: string;
@@ -111,7 +149,8 @@ interface Produit {
     uuid: string;
     libelle: string;
     type: string;
-    image: string;
+    image: string | null;
+    image_key?: string;
   };
   estPublie: boolean;
   estBloque: boolean;
@@ -132,12 +171,12 @@ interface Boutique {
   nom: string;
   slug: string;
   description: string | null;
-  logo: string;
-  banniere: string;
+  logo: string | null;
+  banniere: string | null;
   politique_retour: string | null;
   conditions_utilisation: string | null;
-  logo_key: string;
-  banniere_key: string;
+  logo_key: string | null;
+  banniere_key: string | null;
   statut: "en_review" | "actif" | "bloque" | "ferme";
   created_at: string;
   updated_at: string;
@@ -763,6 +802,7 @@ export default function BoutiqueApercu() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
 
   // États pour les modals produits
   const [showEditModal, setShowEditModal] = useState(false);
@@ -786,6 +826,141 @@ export default function BoutiqueApercu() {
     key: keyof Produit;
     direction: "asc" | "desc";
   } | null>(null);
+
+  // ✅ Gestion des erreurs d'image
+  const handleImageError = (
+    uuid: string,
+    e: React.SyntheticEvent<HTMLImageElement, Event>,
+  ) => {
+    const target = e.currentTarget;
+
+    // Si l'URL contient localhost, essayer de la corriger
+    if (target.src.includes("localhost")) {
+      const productionUrl =
+        process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
+        "https://oskar-api.mysonec.pro";
+      target.src = target.src.replace(
+        /http:\/\/localhost(:\d+)?/g,
+        productionUrl,
+      );
+      return;
+    }
+
+    // Si l'URL contient des espaces, essayer de les nettoyer
+    if (target.src.includes("%20")) {
+      target.src = target.src.replace(/%20/g, "");
+      return;
+    }
+
+    setImageErrors((prev) => new Set(prev).add(uuid));
+    target.onerror = null;
+  };
+
+  // ✅ Obtenir l'URL du logo de la boutique
+  const getLogoUrl = (boutique: Boutique | null): string | null => {
+    if (!boutique) return null;
+    if (imageErrors.has(boutique.uuid)) return null;
+
+    if (boutique.logo_key) {
+      const url = buildImageUrl(boutique.logo_key);
+      if (url) return url;
+    }
+
+    if (boutique.logo) {
+      const url = buildImageUrl(boutique.logo);
+      if (url) return url;
+    }
+
+    return null;
+  };
+
+  // ✅ Obtenir l'URL de la bannière de la boutique
+  const getBanniereUrl = (boutique: Boutique | null): string | null => {
+    if (!boutique) return null;
+    if (imageErrors.has(`${boutique.uuid}-banner`)) return null;
+
+    if (boutique.banniere_key) {
+      const url = buildImageUrl(boutique.banniere_key);
+      if (url) return url;
+    }
+
+    if (boutique.banniere) {
+      const url = buildImageUrl(boutique.banniere);
+      if (url) return url;
+    }
+
+    return null;
+  };
+
+  // ✅ Obtenir l'URL de l'image du type de boutique
+  const getTypeImageUrl = (
+    typeBoutique: TypeBoutique | null,
+  ): string | null => {
+    if (!typeBoutique) return null;
+
+    if (typeBoutique.image_key) {
+      return buildImageUrl(typeBoutique.image_key);
+    }
+
+    if (typeBoutique.image) {
+      return buildImageUrl(typeBoutique.image);
+    }
+
+    return null;
+  };
+
+  // ✅ Obtenir l'URL de l'image d'un produit
+  const getProductImageUrl = (product: Produit): string | null => {
+    if (imageErrors.has(product.uuid)) return null;
+
+    if (product.image_key) {
+      const url = buildImageUrl(product.image_key);
+      if (url) return url;
+    }
+
+    if (product.image) {
+      const url = buildImageUrl(product.image);
+      if (url) return url;
+    }
+
+    return null;
+  };
+
+  // ✅ Obtenir l'URL de l'image de la catégorie
+  const getCategoryImageUrl = (categorie: any): string | null => {
+    if (!categorie) return null;
+
+    if (categorie.image_key) {
+      return buildImageUrl(categorie.image_key);
+    }
+
+    if (categorie.image) {
+      return buildImageUrl(categorie.image);
+    }
+
+    return null;
+  };
+
+  // ✅ Adapter le produit pour le modal d'édition
+  const adaptProductForModal = useCallback((product: Produit): Produit => {
+    // Créer une copie du produit avec l'image garantie non-nulle
+    const adaptedProduct = { ...product };
+
+    // Si l'image est null, utiliser une image par défaut
+    if (!adaptedProduct.image) {
+      adaptedProduct.image = `https://via.placeholder.com/300/6f42c1/ffffff?text=${encodeURIComponent(product.libelle?.charAt(0) || "P")}`;
+    }
+
+    // S'assurer que la catégorie a une image non-nulle si elle existe
+    if (adaptedProduct.categorie && !adaptedProduct.categorie.image) {
+      adaptedProduct.categorie = {
+        ...adaptedProduct.categorie,
+        image: `https://via.placeholder.com/50/6f42c1/ffffff?text=${encodeURIComponent(adaptedProduct.categorie.libelle?.charAt(0) || "C")}`,
+      };
+    }
+
+    return adaptedProduct;
+  }, []);
 
   // Charger les détails de la boutique
   const fetchBoutique = useCallback(async () => {
@@ -1427,13 +1602,17 @@ export default function BoutiqueApercu() {
     );
   }
 
+  const logoUrl = getLogoUrl(boutique);
+  const banniereUrl = getBanniereUrl(boutique);
+  const typeImageUrl = getTypeImageUrl(boutique.type_boutique);
+
   return (
     <>
       {/* Modales */}
       {selectedProduct && (
         <EditProductModal
           isOpen={showEditModal}
-          product={selectedProduct}
+          product={adaptProductForModal(selectedProduct)}
           onClose={() => {
             setShowEditModal(false);
             setSelectedProduct(null);
@@ -1511,7 +1690,7 @@ export default function BoutiqueApercu() {
             className="position-relative"
             style={{
               height: "300px",
-              backgroundImage: `url(${boutique.banniere || "https://via.placeholder.com/1200x300/cccccc/ffffff?text=Bannière"})`,
+              backgroundImage: `url(${banniereUrl || "https://via.placeholder.com/1200x300/cccccc/ffffff?text=Bannière"})`,
               backgroundSize: "cover",
               backgroundPosition: "center",
             }}
@@ -1523,23 +1702,34 @@ export default function BoutiqueApercu() {
                   className="position-relative"
                   style={{ marginTop: "-80px" }}
                 >
-                  <img
-                    src={
-                      boutique.logo ||
-                      `https://via.placeholder.com/160/cccccc/ffffff?text=${boutique.nom.charAt(0)}`
-                    }
-                    alt={boutique.nom}
-                    className="rounded-circle border border-4 border-white shadow"
-                    style={{
-                      width: "160px",
-                      height: "160px",
-                      objectFit: "cover",
-                    }}
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src =
-                        `https://via.placeholder.com/160/cccccc/ffffff?text=${boutique.nom.charAt(0)}`;
-                    }}
-                  />
+                  {logoUrl ? (
+                    <img
+                      src={logoUrl}
+                      alt={boutique.nom}
+                      className="rounded-circle border border-4 border-white shadow"
+                      style={{
+                        width: "160px",
+                        height: "160px",
+                        objectFit: "cover",
+                      }}
+                      onError={(e) => handleImageError(boutique.uuid, e)}
+                    />
+                  ) : (
+                    <div
+                      className="rounded-circle border border-4 border-white shadow d-flex align-items-center justify-content-center bg-secondary"
+                      style={{
+                        width: "160px",
+                        height: "160px",
+                        backgroundColor: "#6c757d",
+                      }}
+                    >
+                      <FontAwesomeIcon
+                        icon={faStore}
+                        className="text-white"
+                        style={{ fontSize: "3rem" }}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Informations */}
@@ -1826,6 +2016,7 @@ export default function BoutiqueApercu() {
                       <tbody>
                         {filteredProducts.map((product) => {
                           const isSelected = selectedProducts.has(product.uuid);
+                          const productImageUrl = getProductImageUrl(product);
 
                           return (
                             <tr
@@ -1861,23 +2052,34 @@ export default function BoutiqueApercu() {
                                 </div>
                               </td>
                               <td>
-                                <img
-                                  src={
-                                    product.image ||
-                                    `https://via.placeholder.com/60/cccccc/ffffff?text=${product.libelle?.charAt(0) || "P"}`
-                                  }
-                                  alt={product.libelle}
-                                  className="rounded"
-                                  style={{
-                                    width: "60px",
-                                    height: "60px",
-                                    objectFit: "cover",
-                                  }}
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).src =
-                                      `https://via.placeholder.com/60/cccccc/ffffff?text=${product.libelle?.charAt(0) || "P"}`;
-                                  }}
-                                />
+                                {productImageUrl ? (
+                                  <img
+                                    src={productImageUrl}
+                                    alt={product.libelle}
+                                    className="rounded"
+                                    style={{
+                                      width: "60px",
+                                      height: "60px",
+                                      objectFit: "cover",
+                                    }}
+                                    onError={(e) =>
+                                      handleImageError(product.uuid, e)
+                                    }
+                                  />
+                                ) : (
+                                  <div
+                                    className="rounded bg-secondary bg-opacity-10 d-flex align-items-center justify-content-center"
+                                    style={{
+                                      width: "60px",
+                                      height: "60px",
+                                    }}
+                                  >
+                                    <FontAwesomeIcon
+                                      icon={faImage}
+                                      className="text-muted"
+                                    />
+                                  </div>
+                                )}
                               </td>
                               <td>
                                 <div className="fw-semibold">
@@ -1992,23 +2194,36 @@ export default function BoutiqueApercu() {
               </div>
               <div className="card-body">
                 <div className="d-flex align-items-start gap-3">
-                  <img
-                    src={
-                      boutique.type_boutique.image ||
-                      `https://via.placeholder.com/80/cccccc/ffffff?text=${boutique.type_boutique.libelle.charAt(0)}`
-                    }
-                    alt={boutique.type_boutique.libelle}
-                    className="rounded"
-                    style={{
-                      width: "80px",
-                      height: "80px",
-                      objectFit: "cover",
-                    }}
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src =
-                        `https://via.placeholder.com/80/cccccc/ffffff?text=${boutique.type_boutique.libelle.charAt(0)}`;
-                    }}
-                  />
+                  {typeImageUrl ? (
+                    <img
+                      src={typeImageUrl}
+                      alt={boutique.type_boutique.libelle}
+                      className="rounded"
+                      style={{
+                        width: "80px",
+                        height: "80px",
+                        objectFit: "cover",
+                      }}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src =
+                          `https://via.placeholder.com/80/cccccc/ffffff?text=${boutique.type_boutique.libelle.charAt(0)}`;
+                      }}
+                    />
+                  ) : (
+                    <div
+                      className="rounded d-flex align-items-center justify-content-center bg-secondary bg-opacity-10"
+                      style={{
+                        width: "80px",
+                        height: "80px",
+                      }}
+                    >
+                      <FontAwesomeIcon
+                        icon={faTags}
+                        className="text-muted"
+                        style={{ fontSize: "2rem" }}
+                      />
+                    </div>
+                  )}
                   <div>
                     <h5 className="fw-bold mb-1">
                       {boutique.type_boutique.libelle}

@@ -1,4 +1,3 @@
-// components/DataTable.tsx
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -25,6 +24,7 @@ import {
   faGlobe,
   faLock,
   faUnlock,
+  faImage,
 } from "@fortawesome/free-solid-svg-icons";
 import "bootstrap/dist/css/bootstrap.min.css";
 import { api } from "@/lib/api-client";
@@ -41,7 +41,7 @@ interface ContentItem {
   date: string;
   seller?: {
     name: string;
-    avatar?: string;
+    avatar?: string; // ✅ Doit être string | undefined, pas null
     isPro?: boolean;
   };
   category?: string;
@@ -68,6 +68,42 @@ interface DataTableProps {
   loading?: boolean;
 }
 
+// ============================================
+// FONCTION DE CONSTRUCTION D'URL D'IMAGE ROBUSTE
+// ============================================
+const buildImageUrl = (imagePath: string | null): string | null => {
+  if (!imagePath) return null;
+
+  // Nettoyer le chemin des espaces indésirables
+  let cleanPath = imagePath
+    .replace(/\s+/g, "") // Supprimer tous les espaces
+    .replace(/-/g, "-") // Normaliser les tirets
+    .trim();
+
+  const apiUrl =
+    process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+  const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+
+  // ✅ CAS 1: Déjà une URL complète
+  if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
+    if (cleanPath.includes("localhost")) {
+      const productionUrl = apiUrl.replace(/\/api$/, "");
+      return cleanPath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
+    }
+    return cleanPath;
+  }
+
+  // ✅ CAS 2: Chemin avec %2F (déjà encodé)
+  if (cleanPath.includes("%2F")) {
+    // Nettoyer les espaces autour de %2F
+    const finalPath = cleanPath.replace(/%2F\s+/, "%2F");
+    return `${apiUrl}${filesUrl}/${finalPath}`;
+  }
+
+  // ✅ CAS 3: Chemin simple
+  return `${apiUrl}${filesUrl}/${cleanPath}`;
+};
+
 export default function DataTable({
   contentType = "produit",
   statusFilter = "tous",
@@ -92,6 +128,7 @@ export default function DataTable({
   const [processing, setProcessing] = useState<Set<string>>(new Set());
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
+  const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
 
   const fetchData = useCallback(async () => {
     if (externalData !== undefined) {
@@ -145,14 +182,10 @@ export default function DataTable({
           isPublished = item.estPublie || false;
           isBlocked = item.estBloque || false;
 
-          if (item.image && item.image.startsWith("/")) {
-            imageUrl = `${process.env.NEXT_PUBLIC_API_URL}${item.image}`;
-          } else if (item.image) {
-            imageUrl = item.image;
-          } else {
-            const firstChar = title?.charAt?.(0) || "P";
-            imageUrl = `https://via.placeholder.com/48?text=${encodeURIComponent(firstChar)}`;
-          }
+          // ✅ CORRECTION: Utiliser buildImageUrl pour l'image
+          imageUrl =
+            buildImageUrl(item.image) ||
+            `https://via.placeholder.com/48?text=${encodeURIComponent(title?.charAt?.(0) || "P")}`;
         } else if (contentType === "don") {
           title = item.nom || "Don sans nom";
           sellerName = item.nom_donataire || "Donateur";
@@ -161,13 +194,10 @@ export default function DataTable({
           isPublished = item.estPublie || false;
           isBlocked = item.est_bloque || false;
 
-          if (item.image && item.image.startsWith("/")) {
-            imageUrl = `${process.env.NEXT_PUBLIC_API_URL}${item.image}`;
-          } else if (item.image) {
-            imageUrl = item.image;
-          } else {
-            imageUrl = `https://via.placeholder.com/48?text=D`;
-          }
+          // ✅ CORRECTION: Utiliser buildImageUrl pour l'image
+          imageUrl =
+            buildImageUrl(item.image) ||
+            `https://via.placeholder.com/48?text=D`;
         } else if (contentType === "echange") {
           title =
             item.nomElementEchange ||
@@ -179,17 +209,21 @@ export default function DataTable({
           isPublished = item.estPublie || false;
           isBlocked = item.estBloque || false;
 
-          if (item.image && item.image.startsWith("/")) {
-            imageUrl = `${process.env.NEXT_PUBLIC_API_URL}${item.image}`;
-          } else if (item.image) {
-            imageUrl = item.image;
-          } else {
-            imageUrl = `https://via.placeholder.com/48?text=E`;
-          }
+          // ✅ CORRECTION: Utiliser buildImageUrl pour l'image
+          imageUrl =
+            buildImageUrl(item.image) ||
+            `https://via.placeholder.com/48?text=E`;
         }
 
         if (!title || title.trim() === "") {
           title = `${contentType.charAt(0).toUpperCase() + contentType.slice(1)} sans nom`;
+        }
+
+        // ✅ CORRECTION: Gérer l'avatar pour éviter null
+        let avatarUrl: string | undefined = undefined;
+        if (item.vendeur?.avatar) {
+          const url = buildImageUrl(item.vendeur.avatar);
+          if (url) avatarUrl = url;
         }
 
         return {
@@ -203,7 +237,7 @@ export default function DataTable({
           date,
           seller: {
             name: sellerName,
-            avatar: item.vendeur?.avatar,
+            avatar: avatarUrl, // ✅ Toujours string | undefined, jamais null
             isPro: sellerIsPro,
           },
           category: item.categorie_uuid || item.categorieUuid,
@@ -242,6 +276,48 @@ export default function DataTable({
       setLoading(externalLoading);
     }
   }, [externalLoading]);
+
+  // ✅ Gestion des erreurs d'image
+  const handleImageError = (
+    e: React.SyntheticEvent<HTMLImageElement, Event>,
+    title: string,
+    uuid: string,
+  ) => {
+    const target = e.currentTarget;
+
+    // Si l'URL contient localhost, essayer de la corriger
+    if (target.src.includes("localhost")) {
+      const productionUrl =
+        process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
+        "https://oskar-api.mysonec.pro";
+      target.src = target.src.replace(
+        /http:\/\/localhost(:\d+)?/g,
+        productionUrl,
+      );
+      return;
+    }
+
+    // Si l'URL contient des espaces, essayer de les nettoyer
+    if (target.src.includes("%20")) {
+      target.src = target.src.replace(/%20/g, "");
+      return;
+    }
+
+    setImageErrors((prev) => new Set(prev).add(uuid));
+
+    // Fallback vers placeholder
+    const firstChar = title?.charAt?.(0)?.toUpperCase() || "?";
+    target.src = `https://via.placeholder.com/48?text=${encodeURIComponent(firstChar)}`;
+    target.onerror = null;
+  };
+
+  // ✅ Obtenir l'URL de l'image avec fallback
+  const getImageUrl = (item: ContentItem): string => {
+    if (imageErrors.has(item.uuid)) {
+      return `https://via.placeholder.com/48?text=${item.title?.charAt(0) || "?"}`;
+    }
+    return item.image;
+  };
 
   // Filtrer les données
   const filteredData = useMemo(() => {
@@ -380,18 +456,7 @@ export default function DataTable({
     );
   };
 
-  // Gestion des erreurs d'image
-  const handleImageError = (
-    e: React.SyntheticEvent<HTMLImageElement, Event>,
-    title: string,
-  ) => {
-    const target = e.currentTarget;
-    const firstChar = title?.charAt?.(0)?.toUpperCase() || "?";
-    target.src = `https://via.placeholder.com/48?text=${encodeURIComponent(firstChar)}`;
-    target.onerror = null;
-  };
-
-  // ✅ CORRECTION: Fonction handleViewDetails améliorée
+  // ✅ Fonction handleViewDetails améliorée
   const handleViewDetails = (row: ContentItem) => {
     // Déterminer si l'élément est publié
     const isPublished =
@@ -429,7 +494,6 @@ export default function DataTable({
         break;
 
       default:
-        // Fallback
         router.push(`${basePath}/${row.type}/${row.uuid}`);
     }
   };
@@ -654,7 +718,6 @@ export default function DataTable({
             </span>
 
             <div className="d-flex flex-wrap gap-2">
-              {/* Actions en masse */}
               <button
                 type="button"
                 className="btn btn-sm btn-outline-success"
@@ -790,6 +853,7 @@ export default function DataTable({
               const isSelected = selectedItems.has(row.uuid);
               const isEnAttente =
                 row.status === "en-attente" || row.status === "en_attente";
+              const imageUrl = getImageUrl(row);
 
               return (
                 <tr
@@ -816,10 +880,12 @@ export default function DataTable({
                       style={{ width: "48px", height: "48px" }}
                     >
                       <img
-                        src={row.image}
+                        src={imageUrl}
                         alt={row.title}
                         className="w-100 h-100 object-cover"
-                        onError={(e) => handleImageError(e, row.title)}
+                        onError={(e) =>
+                          handleImageError(e, row.title, row.uuid)
+                        }
                       />
                     </div>
                   </td>
@@ -934,7 +1000,6 @@ export default function DataTable({
                         </div>
                       ) : (
                         <>
-                          {/* ✅ Bouton Voir détails corrigé */}
                           <button
                             type="button"
                             className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
@@ -953,7 +1018,6 @@ export default function DataTable({
                             <FontAwesomeIcon icon={faEye} size="xs" />
                           </button>
 
-                          {/* Bouton Valider - seulement si en attente */}
                           {isEnAttente && (
                             <button
                               type="button"
@@ -974,7 +1038,6 @@ export default function DataTable({
                             </button>
                           )}
 
-                          {/* Bouton Refuser - seulement si en attente */}
                           {isEnAttente && (
                             <button
                               type="button"
@@ -995,7 +1058,6 @@ export default function DataTable({
                             </button>
                           )}
 
-                          {/* Bouton Publier/Dépublier */}
                           <button
                             type="button"
                             className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
@@ -1025,7 +1087,6 @@ export default function DataTable({
                             />
                           </button>
 
-                          {/* Bouton Bloquer/Débloquer */}
                           <button
                             type="button"
                             className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
@@ -1051,7 +1112,6 @@ export default function DataTable({
                             />
                           </button>
 
-                          {/* Bouton Supprimer */}
                           <button
                             type="button"
                             className="btn btn-sm p-1 d-flex align-items-center justify-content-center"

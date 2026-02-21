@@ -15,8 +15,10 @@ interface ListingsGridProps {
   showFeatured?: boolean;
 }
 
+// app/(front-office)/home/components/ListingsGrid.tsx
+
 // ============================================
-// FONCTION DE CONSTRUCTION D'URL D'IMAGE
+// FONCTION DE CONSTRUCTION D'URL D'IMAGE ROBUSTE
 // ============================================
 const buildImageUrl = (imagePath: string | null): string | null => {
   if (!imagePath) return null;
@@ -25,25 +27,31 @@ const buildImageUrl = (imagePath: string | null): string | null => {
     process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
   const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
 
-  // Si c'est déjà une URL complète
-  if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
-    // Remplacer localhost par l'URL de production si nécessaire
-    if (imagePath.includes("localhost")) {
+  // ✅ Nettoyer le chemin des espaces indésirables
+  let cleanPath = imagePath
+    .replace(/\s+/g, "") // Supprimer tous les espaces
+    .replace(/-/g, "-") // Normaliser les tirets
+    .trim();
+
+  // ✅ CAS 1: Déjà une URL complète
+  if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
+    if (cleanPath.includes("localhost")) {
       const productionUrl = apiUrl.replace(/\/api$/, "");
-      return imagePath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
+      return cleanPath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
     }
-    return imagePath;
+    return cleanPath;
   }
 
-  // Si c'est un chemin encodé (avec %2F)
-  if (imagePath.includes("%2F")) {
-    return `${apiUrl}${filesUrl}/${imagePath}`;
+  // ✅ CAS 2: Chemin avec %2F (déjà encodé)
+  if (cleanPath.includes("%2F")) {
+    // Nettoyer les espaces autour de %2F
+    cleanPath = cleanPath.replace(/%2F\s+/, "%2F");
+    return `${apiUrl}${filesUrl}/${cleanPath}`;
   }
 
-  // Si c'est un chemin simple
-  return `${apiUrl}${filesUrl}/${imagePath}`;
+  // ✅ CAS 3: Chemin simple
+  return `${apiUrl}${filesUrl}/${cleanPath}`;
 };
-
 const ListingsGrid: React.FC<ListingsGridProps> = ({
   categoryUuid,
   filterType = "all",

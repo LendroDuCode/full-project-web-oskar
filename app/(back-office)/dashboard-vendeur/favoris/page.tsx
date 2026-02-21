@@ -9,11 +9,13 @@ import FavorisTable from "./components/FavorisTable";
 import ViewModal from "../annonces/components/ViewModal";
 import EmptyState from "../annonces/components/EmptyState";
 
-interface FavoriData {
+// Type qui correspond exactement à ce qu'attend FavorisTable
+interface FavoriItem {
   uuid: string;
   title: string;
   description?: string;
-  image: string;
+  image: string | null; // Changé pour accepter null
+  image_key?: string;
   type: "produit" | "don" | "echange" | "annonce";
   status: string;
   date: string;
@@ -24,6 +26,7 @@ interface FavoriData {
   seller?: {
     name: string;
     avatar?: string;
+    avatar_key?: string;
     isPro?: boolean;
     type?: string;
   };
@@ -35,8 +38,8 @@ interface FavoriData {
 }
 
 export default function FavorisPage() {
-  const [favoris, setFavoris] = useState<FavoriData[]>([]);
-  const [filteredFavoris, setFilteredFavoris] = useState<FavoriData[]>([]);
+  const [favoris, setFavoris] = useState<FavoriItem[]>([]);
+  const [filteredFavoris, setFilteredFavoris] = useState<FavoriItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState("tous");
@@ -44,207 +47,238 @@ export default function FavorisPage() {
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
 
   // États pour la modal de détails
-  const [selectedFavori, setSelectedFavori] = useState<FavoriData | null>(null);
+  const [selectedFavori, setSelectedFavori] = useState<FavoriItem | null>(null);
   const [showViewModal, setShowViewModal] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [fullDetails, setFullDetails] = useState<any>(null);
 
+  // Fonction pour construire l'URL d'une image
+  const buildImageUrl = (imagePath: string | null): string | null => {
+    if (!imagePath) return null;
+
+    const apiUrl =
+      process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+    const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+
+    // Déjà une URL complète
+    if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
+      if (imagePath.includes("localhost")) {
+        const productionUrl = apiUrl.replace(/\/api$/, "");
+        return imagePath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
+      }
+      return imagePath;
+    }
+
+    // Chemin simple
+    return `${apiUrl}${filesUrl}/${imagePath}`;
+  };
+
   // Fonction pour transformer les données de favoris selon le type
-  const transformFavoriData = useCallback((item: any): FavoriData | null => {
-    try {
-      if (!item) return null;
+  const transformFavoriData = useCallback(
+    (item: any): FavoriItem | null => {
+      try {
+        if (!item) return null;
 
-      // Déterminer le type et l'item correspondant
-      let itemData: any = null;
-      let type: "produit" | "don" | "echange" | "annonce" = "produit";
+        // Déterminer le type et l'item correspondant
+        let itemData: any = null;
+        let type: "produit" | "don" | "echange" | "annonce" = "produit";
 
-      // Déterminer le type basé sur les champs présents
-      if (item.produit && typeof item.produit === "object") {
-        itemData = item.produit;
-        type = "produit";
-      } else if (item.don && typeof item.don === "object") {
-        itemData = item.don;
-        type = "don";
-      } else if (item.echange && typeof item.echange === "object") {
-        itemData = item.echange;
-        type = "echange";
-      } else if (item.annonce && typeof item.annonce === "object") {
-        itemData = item.annonce;
-        type = "annonce";
-      } else {
-        // Essayer de deviner le type à partir des champs UUID
-        if (item.produitUuid) {
+        // Déterminer le type basé sur les champs présents
+        if (item.produit && typeof item.produit === "object") {
+          itemData = item.produit;
           type = "produit";
-          itemData = item;
-        } else if (item.donUuid) {
+        } else if (item.don && typeof item.don === "object") {
+          itemData = item.don;
           type = "don";
-          itemData = item;
-        } else if (item.echangeUuid) {
+        } else if (item.echange && typeof item.echange === "object") {
+          itemData = item.echange;
           type = "echange";
-          itemData = item;
-        } else if (item.annonceUuid) {
+        } else if (item.annonce && typeof item.annonce === "object") {
+          itemData = item.annonce;
           type = "annonce";
-          itemData = item;
         } else {
-          // Vérifier le type explicitement défini
-          if (
-            item.type === "produit" ||
-            item.type === "don" ||
-            item.type === "echange" ||
-            item.type === "annonce"
-          ) {
-            type = item.type;
+          // Essayer de deviner le type à partir des champs UUID
+          if (item.produitUuid) {
+            type = "produit";
+            itemData = item;
+          } else if (item.donUuid) {
+            type = "don";
+            itemData = item;
+          } else if (item.echangeUuid) {
+            type = "echange";
+            itemData = item;
+          } else if (item.annonceUuid) {
+            type = "annonce";
             itemData = item;
           } else {
-            console.warn("Type inconnu pour l'item:", item);
-            return null;
+            // Vérifier le type explicitement défini
+            if (
+              item.type === "produit" ||
+              item.type === "don" ||
+              item.type === "echange" ||
+              item.type === "annonce"
+            ) {
+              type = item.type;
+              itemData = item;
+            } else {
+              console.warn("Type inconnu pour l'item:", item);
+              return null;
+            }
           }
         }
-      }
 
-      // Si itemData est null, utiliser l'item lui-même
-      if (!itemData) {
-        itemData = item;
-      }
+        // Si itemData est null, utiliser l'item lui-même
+        if (!itemData) {
+          itemData = item;
+        }
 
-      // Extraire les informations de base
-      const itemUuid = item.itemUuid || itemData.uuid || "";
-      const favoriteId = item.uuid || ""; // ← C'EST l'ID du favori lui-même
+        // Extraire les informations de base
+        const itemUuid = item.itemUuid || itemData.uuid || "";
+        const favoriteId = item.uuid || ""; // ← C'EST l'ID du favori lui-même
 
-      if (!favoriteId) {
-        console.warn("Pas d'ID de favori trouvé pour:", item);
+        if (!favoriteId) {
+          console.warn("Pas d'ID de favori trouvé pour:", item);
+          return null;
+        }
+
+        // Construire l'URL de l'image
+        let imageUrl: string | null = null;
+        if (itemData.image_key) {
+          imageUrl = buildImageUrl(itemData.image_key);
+        } else if (itemData.image) {
+          imageUrl = buildImageUrl(itemData.image);
+        }
+
+        // Configurations communes
+        const commonData = {
+          uuid:
+            item.produitUuid ||
+            item.donUuid ||
+            item.echangeUuid ||
+            item.annonceUuid ||
+            itemUuid,
+          itemUuid: itemUuid, // UUID original de l'élément
+          favoriteId: favoriteId, // UUID du favori lui-même
+          addedAt:
+            item.createdAt || itemData.createdAt || new Date().toISOString(),
+          type,
+          originalData: item,
+        };
+
+        // Traitement spécifique selon le type
+        switch (type) {
+          case "produit":
+            return {
+              ...commonData,
+              title: itemData.libelle || itemData.nom || "Produit sans nom",
+              description: itemData.description || "",
+              image: imageUrl,
+              image_key: itemData.image_key,
+              status: (itemData.statut || "inconnu").toLowerCase(),
+              date:
+                itemData.createdAt || itemData.updatedAt || commonData.addedAt,
+              price: itemData.prix || null,
+              quantity: itemData.quantite || 1,
+              estPublie: itemData.estPublie || false,
+              estBloque: itemData.estBloque || itemData.est_bloque || false,
+              seller: {
+                name: item.vendeur?.nom
+                  ? `${item.vendeur.prenoms || ""} ${item.vendeur.nom}`.trim()
+                  : itemData.vendeur?.nom
+                    ? `${itemData.vendeur.prenoms || ""} ${itemData.vendeur.nom}`.trim()
+                    : "Vendeur",
+                isPro: !!item.vendeur?.boutique || !!itemData.vendeur?.boutique,
+                type: "vendeur",
+                avatar: item.vendeur?.avatar || itemData.vendeur?.avatar,
+                avatar_key:
+                  item.vendeur?.avatar_key || itemData.vendeur?.avatar_key,
+              },
+              category:
+                itemData.categorie?.libelle || itemData.categorie_uuid || "",
+            };
+
+          case "don":
+            return {
+              ...commonData,
+              title: itemData.nom || itemData.titre || "Don sans nom",
+              description: itemData.description || "",
+              image: imageUrl,
+              image_key: itemData.image_key,
+              status: (itemData.statut || "inconnu").toLowerCase(),
+              date: itemData.date_debut || commonData.addedAt,
+              price: itemData.prix || itemData.valeur_estimee || null,
+              quantity: itemData.quantite || 1,
+              estPublie: itemData.estPublie || false,
+              estBloque: itemData.est_bloque || false,
+              seller: {
+                name: item.vendeur?.nom
+                  ? `${item.vendeur.prenoms || ""} ${item.vendeur.nom}`.trim()
+                  : itemData.nom_donataire || "Donateur",
+                type: item.vendeur ? "vendeur" : "utilisateur",
+              },
+              category: itemData.categorie?.libelle || "",
+            };
+
+          case "echange":
+            return {
+              ...commonData,
+              title:
+                itemData.nomElementEchange ||
+                itemData.titre ||
+                "Échange sans nom",
+              description: itemData.description || itemData.message || "",
+              image: imageUrl,
+              image_key: itemData.image_key,
+              status: (itemData.statut || "inconnu").toLowerCase(),
+              date: itemData.dateProposition || commonData.addedAt,
+              price: itemData.prix || itemData.valeur_estimee || null,
+              quantity: itemData.quantite || 1,
+              estPublie: itemData.estPublie || false,
+              estBloque: itemData.estBloque || false,
+              seller: {
+                name: item.vendeur?.nom
+                  ? `${item.vendeur.prenoms || ""} ${item.vendeur.nom}`.trim()
+                  : itemData.nom_initiateur || "Initiateur",
+                type: item.vendeur ? "vendeur" : "utilisateur",
+              },
+              category: itemData.categorie?.libelle || "",
+            };
+
+          case "annonce":
+            return {
+              ...commonData,
+              title: itemData.titre || itemData.nom || "Annonce sans nom",
+              description: itemData.description || "",
+              image: imageUrl,
+              image_key: itemData.image_key,
+              status: (itemData.statut || "inconnu").toLowerCase(),
+              date: itemData.created_at || commonData.addedAt,
+              price: itemData.prix || null,
+              quantity: itemData.quantite || 1,
+              estPublie: itemData.estPublie || false,
+              estBloque: itemData.est_bloque || false,
+              seller: {
+                name: item.vendeur?.nom
+                  ? `${item.vendeur.prenoms || ""} ${item.vendeur.nom}`.trim()
+                  : "Annonceur",
+                type: "annonceur",
+              },
+              category: itemData.categorie?.libelle || itemData.type || "",
+            };
+
+          default:
+            return null;
+        }
+      } catch (err) {
+        console.error("Erreur lors de la transformation de l'item:", err, item);
         return null;
       }
+    },
+    [buildImageUrl],
+  );
 
-      // Configurations communes
-      const commonData = {
-        uuid:
-          item.produitUuid ||
-          item.donUuid ||
-          item.echangeUuid ||
-          item.annonceUuid ||
-          itemUuid,
-        itemUuid: itemUuid, // UUID original de l'élément
-        favoriteId: favoriteId, // UUID du favori lui-même
-        addedAt:
-          item.createdAt || itemData.createdAt || new Date().toISOString(),
-        type,
-        originalData: item,
-      };
-
-      // Traitement spécifique selon le type
-      switch (type) {
-        case "produit":
-          return {
-            ...commonData,
-            title: itemData.libelle || itemData.nom || "Produit sans nom",
-            description: itemData.description || "",
-            image:
-              itemData.image ||
-              `https://via.placeholder.com/300x200?text=Produit`,
-            status: (itemData.statut || "inconnu").toLowerCase(),
-            date:
-              itemData.createdAt || itemData.updatedAt || commonData.addedAt,
-            price: itemData.prix || null,
-            quantity: itemData.quantite || 1,
-            estPublie: itemData.estPublie || false,
-            estBloque: itemData.estBloque || itemData.est_bloque || false,
-            seller: {
-              name: item.vendeur?.nom
-                ? `${item.vendeur.prenoms || ""} ${item.vendeur.nom}`.trim()
-                : itemData.vendeur?.nom
-                  ? `${itemData.vendeur.prenoms || ""} ${itemData.vendeur.nom}`.trim()
-                  : "Vendeur",
-              isPro: !!item.vendeur?.boutique || !!itemData.vendeur?.boutique,
-              type: "vendeur",
-              avatar: item.vendeur?.avatar || itemData.vendeur?.avatar,
-            },
-            category:
-              itemData.categorie?.libelle || itemData.categorie_uuid || "",
-          };
-
-        case "don":
-          return {
-            ...commonData,
-            title: itemData.nom || itemData.titre || "Don sans nom",
-            description: itemData.description || "",
-            image:
-              itemData.image || `https://via.placeholder.com/300x200?text=Don`,
-            status: (itemData.statut || "inconnu").toLowerCase(),
-            date: itemData.date_debut || commonData.addedAt,
-            price: itemData.prix || itemData.valeur_estimee || null,
-            quantity: itemData.quantite || 1,
-            estPublie: itemData.estPublie || false,
-            estBloque: itemData.est_bloque || false,
-            seller: {
-              name: item.vendeur?.nom
-                ? `${item.vendeur.prenoms || ""} ${item.vendeur.nom}`.trim()
-                : itemData.nom_donataire || "Donateur",
-              type: item.vendeur ? "vendeur" : "utilisateur",
-            },
-            category: itemData.categorie?.libelle || "",
-          };
-
-        case "echange":
-          return {
-            ...commonData,
-            title:
-              itemData.nomElementEchange ||
-              itemData.titre ||
-              "Échange sans nom",
-            description: itemData.description || itemData.message || "",
-            image:
-              itemData.image ||
-              `https://via.placeholder.com/300x200?text=Échange`,
-            status: (itemData.statut || "inconnu").toLowerCase(),
-            date: itemData.dateProposition || commonData.addedAt,
-            price: itemData.prix || itemData.valeur_estimee || null,
-            quantity: itemData.quantite || 1,
-            estPublie: itemData.estPublie || false,
-            estBloque: itemData.estBloque || false,
-            seller: {
-              name: item.vendeur?.nom
-                ? `${item.vendeur.prenoms || ""} ${item.vendeur.nom}`.trim()
-                : itemData.nom_initiateur || "Initiateur",
-              type: item.vendeur ? "vendeur" : "utilisateur",
-            },
-            category: itemData.categorie?.libelle || "",
-          };
-
-        case "annonce":
-          return {
-            ...commonData,
-            title: itemData.titre || itemData.nom || "Annonce sans nom",
-            description: itemData.description || "",
-            image:
-              itemData.image ||
-              `https://via.placeholder.com/300x200?text=Annonce`,
-            status: (itemData.statut || "inconnu").toLowerCase(),
-            date: itemData.created_at || commonData.addedAt,
-            price: itemData.prix || null,
-            quantity: itemData.quantite || 1,
-            estPublie: itemData.estPublie || false,
-            estBloque: itemData.est_bloque || false,
-            seller: {
-              name: item.vendeur?.nom
-                ? `${item.vendeur.prenoms || ""} ${item.vendeur.nom}`.trim()
-                : "Annonceur",
-              type: "annonceur",
-            },
-            category: itemData.categorie?.libelle || itemData.type || "",
-          };
-
-        default:
-          return null;
-      }
-    } catch (err) {
-      console.error("Erreur lors de la transformation de l'item:", err, item);
-      return null;
-    }
-  }, []);
-
-  // Transformer un FavoriData en données pour la modal
-  const transformToAnnonceData = useCallback((favori: FavoriData): any => {
+  // Transformer un FavoriItem en données pour la modal
+  const transformToAnnonceData = useCallback((favori: FavoriItem): any => {
     if (!favori) return null;
 
     return {
@@ -266,7 +300,7 @@ export default function FavorisPage() {
   }, []);
 
   // Charger les détails complets d'un favori
-  const fetchFullDetails = useCallback(async (favori: FavoriData) => {
+  const fetchFullDetails = useCallback(async (favori: FavoriItem) => {
     if (!favori?.itemUuid) return;
 
     setDetailLoading(true);
@@ -484,7 +518,7 @@ export default function FavorisPage() {
           }
           return transformed;
         })
-        .filter((item): item is FavoriData => item !== null);
+        .filter((item): item is FavoriItem => item !== null);
 
       console.log("Données transformées:", transformedData);
 
@@ -569,7 +603,7 @@ export default function FavorisPage() {
     [favoris],
   );
 
-  const handleBulkRemove = useCallback(async (items: FavoriData[]) => {
+  const handleBulkRemove = useCallback(async (items: FavoriItem[]) => {
     if (items.length === 0) {
       alert("Aucun favori sélectionné");
       return;

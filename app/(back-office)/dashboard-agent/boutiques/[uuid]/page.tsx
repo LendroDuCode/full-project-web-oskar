@@ -74,20 +74,62 @@ import {
   FaLockOpen,
 } from "react-icons/fa";
 
+// ============================================
+// FONCTION DE CONSTRUCTION D'URL D'IMAGE ROBUSTE
+// ============================================
+const buildImageUrl = (
+  imagePath: string | null,
+  imageKey: string | null = null,
+): string | null => {
+  // Priorité à image_key si disponible
+  const path = imageKey || imagePath;
+
+  if (!path) return null;
+
+  // Nettoyer le chemin des espaces indésirables
+  let cleanPath = path
+    .replace(/\s+/g, "") // Supprimer tous les espaces
+    .replace(/-/g, "-") // Normaliser les tirets
+    .trim();
+
+  const apiUrl =
+    process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+  const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+
+  // ✅ CAS 1: Déjà une URL complète
+  if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
+    if (cleanPath.includes("localhost")) {
+      const productionUrl = apiUrl.replace(/\/api$/, "");
+      return cleanPath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
+    }
+    return cleanPath;
+  }
+
+  // ✅ CAS 2: Chemin avec %2F (déjà encodé)
+  if (cleanPath.includes("%2F")) {
+    // Nettoyer les espaces autour de %2F
+    const finalPath = cleanPath.replace(/%2F\s+/, "%2F");
+    return `${apiUrl}${filesUrl}/${finalPath}`;
+  }
+
+  // ✅ CAS 3: Chemin simple
+  return `${apiUrl}${filesUrl}/${cleanPath}`;
+};
+
 interface TypeBoutique {
   uuid: string;
   code: string;
   libelle: string;
-  image: string;
-  image_key: string;
+  image: string | null;
+  image_key: string | null;
   statut: string;
 }
 
 interface Categorie {
   uuid: string;
   libelle: string;
-  image: string;
-  image_key: string;
+  image: string | null;
+  image_key: string | null;
   is_deleted?: boolean;
 }
 
@@ -95,8 +137,8 @@ interface Produit {
   uuid: string;
   libelle: string;
   slug: string;
-  image: string;
-  image_key: string;
+  image: string | null;
+  image_key: string | null;
   prix: string;
   description: string | null;
   statut: string;
@@ -119,8 +161,10 @@ interface Boutique {
   nom: string;
   slug: string;
   description: string;
-  logo: string;
-  banniere: string;
+  logo: string | null;
+  banniere: string | null;
+  logo_key: string | null;
+  banniere_key: string | null;
   statut: string;
   type_boutique: TypeBoutique;
   produits: Produit[];
@@ -161,10 +205,128 @@ const BoutiqueDetail: React.FC = () => {
     type: "success" | "error" | "warning" | "info";
     message: string;
   } | null>(null);
+  const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
+
+  // ✅ Gestion des erreurs d'image
+  const handleImageError = useCallback(
+    (id: string, e: React.SyntheticEvent<HTMLImageElement>) => {
+      const target = e.target as HTMLImageElement;
+
+      // Si l'URL contient localhost, essayer de la corriger
+      if (target.src.includes("localhost")) {
+        const productionUrl =
+          process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
+          "https://oskar-api.mysonec.pro";
+        target.src = target.src.replace(
+          /http:\/\/localhost(:\d+)?/g,
+          productionUrl,
+        );
+        return;
+      }
+
+      // Si l'URL contient des espaces, essayer de les nettoyer
+      if (target.src.includes("%20")) {
+        target.src = target.src.replace(/%20/g, "");
+        return;
+      }
+
+      setImageErrors((prev) => new Set(prev).add(id));
+      target.onerror = null;
+    },
+    [],
+  );
+
+  // ✅ Obtenir l'URL du logo
+  const getLogoUrl = (boutique: Boutique | null): string | null => {
+    if (!boutique) return null;
+    if (imageErrors.has(boutique.uuid)) return null;
+
+    if (boutique.logo_key) {
+      const url = buildImageUrl(boutique.logo_key);
+      if (url) return url;
+    }
+
+    if (boutique.logo) {
+      const url = buildImageUrl(boutique.logo);
+      if (url) return url;
+    }
+
+    return null;
+  };
+
+  // ✅ Obtenir l'URL de la bannière
+  const getBanniereUrl = (boutique: Boutique | null): string | null => {
+    if (!boutique) return null;
+    if (imageErrors.has(`${boutique.uuid}-banner`)) return null;
+
+    if (boutique.banniere_key) {
+      const url = buildImageUrl(boutique.banniere_key);
+      if (url) return url;
+    }
+
+    if (boutique.banniere) {
+      const url = buildImageUrl(boutique.banniere);
+      if (url) return url;
+    }
+
+    return null;
+  };
+
+  // ✅ Obtenir l'URL de l'image du type de boutique
+  const getTypeImageUrl = (
+    typeBoutique: TypeBoutique | null,
+  ): string | null => {
+    if (!typeBoutique) return null;
+    if (imageErrors.has(`type-${typeBoutique.uuid}`)) return null;
+
+    if (typeBoutique.image_key) {
+      const url = buildImageUrl(typeBoutique.image_key);
+      if (url) return url;
+    }
+
+    if (typeBoutique.image) {
+      const url = buildImageUrl(typeBoutique.image);
+      if (url) return url;
+    }
+
+    return null;
+  };
+
+  // ✅ Obtenir l'URL de l'image d'un produit
+  const getProductImageUrl = (produit: Produit): string | null => {
+    if (imageErrors.has(produit.uuid)) return null;
+
+    if (produit.image_key) {
+      const url = buildImageUrl(produit.image_key);
+      if (url) return url;
+    }
+
+    if (produit.image) {
+      const url = buildImageUrl(produit.image);
+      if (url) return url;
+    }
+
+    return null;
+  };
+
+  // ✅ Obtenir l'URL de l'image de la catégorie
+  const getCategoryImageUrl = (categorie: Categorie): string | null => {
+    if (!categorie) return null;
+
+    if (categorie.image_key) {
+      return buildImageUrl(categorie.image_key);
+    }
+
+    if (categorie.image) {
+      return buildImageUrl(categorie.image);
+    }
+
+    return null;
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -963,6 +1125,10 @@ const BoutiqueDetail: React.FC = () => {
     const filteredProducts = getFilteredProducts();
     const currentProducts = getCurrentPageProducts();
 
+    const logoUrl = getLogoUrl(boutique);
+    const banniereUrl = getBanniereUrl(boutique);
+    const typeImageUrl = getTypeImageUrl(boutique?.type_boutique || null);
+
     return (
       <>
         {/* Alertes flottantes */}
@@ -1180,7 +1346,7 @@ const BoutiqueDetail: React.FC = () => {
                   className="position-relative"
                   style={{
                     height: "250px",
-                    backgroundImage: `url(${boutique!.banniere || "https://via.placeholder.com/1200x400/0d6efd/ffffff?text=Bannière+de+la+boutique"})`,
+                    backgroundImage: `url(${banniereUrl || "https://via.placeholder.com/1200x400/0d6efd/ffffff?text=Bannière+de+la+boutique"})`,
                     backgroundSize: "cover",
                     backgroundPosition: "center",
                   }}
@@ -1212,21 +1378,12 @@ const BoutiqueDetail: React.FC = () => {
                           marginTop: "-80px",
                         }}
                       >
-                        {boutique!.logo ? (
+                        {logoUrl ? (
                           <img
-                            src={boutique!.logo}
+                            src={logoUrl}
                             alt={`Logo ${boutique!.nom}`}
                             className="w-100 h-100 rounded-3 object-fit-cover"
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.onerror = null;
-                              target.style.display = "none";
-                              const parent = target.parentElement;
-                              if (parent) {
-                                parent.innerHTML =
-                                  '<div class="w-100 h-100 d-flex align-items-center justify-content-center bg-light rounded-3"><FaStore className="text-muted fs-1" /></div>';
-                              }
-                            }}
+                            onError={(e) => handleImageError(boutique!.uuid, e)}
                           />
                         ) : (
                           <div className="w-100 h-100 d-flex align-items-center justify-content-center bg-light rounded-3">
@@ -1623,212 +1780,310 @@ const BoutiqueDetail: React.FC = () => {
                             </tr>
                           </thead>
                           <tbody>
-                            {currentProducts.map((produit) => (
-                              <tr
-                                key={produit.uuid}
-                                className={
-                                  selectedProducts.includes(produit.uuid)
-                                    ? "table-active"
-                                    : ""
-                                }
-                              >
-                                <td className="ps-4">
-                                  <Form.Check
-                                    type="checkbox"
-                                    checked={selectedProducts.includes(
-                                      produit.uuid,
-                                    )}
-                                    onChange={() =>
-                                      handleProductSelect(produit.uuid)
-                                    }
-                                    className="form-check-lg"
-                                    disabled={actionLoading === produit.uuid}
-                                  />
-                                </td>
-                                <td>
-                                  <div className="d-flex align-items-center">
-                                    <div
-                                      className="rounded-3 border bg-light me-3 d-flex align-items-center justify-content-center"
-                                      style={{
-                                        width: "60px",
-                                        height: "60px",
-                                        flexShrink: 0,
-                                      }}
-                                    >
-                                      {produit.image ? (
-                                        <img
-                                          src={produit.image}
-                                          alt={produit.libelle}
-                                          className="w-100 h-100 object-fit-cover rounded-3"
-                                          onError={(e) => {
-                                            const target =
-                                              e.target as HTMLImageElement;
-                                            target.onerror = null;
-                                            target.style.display = "none";
-                                            const parent = target.parentElement;
-                                            if (parent) {
-                                              parent.innerHTML =
-                                                '<div class="w-100 h-100 d-flex align-items-center justify-content-center"><FaBox className="text-muted fs-4" /></div>';
-                                            }
-                                          }}
-                                        />
-                                      ) : (
-                                        <FaBox className="text-muted fs-4" />
+                            {currentProducts.map((produit) => {
+                              const productImageUrl =
+                                getProductImageUrl(produit);
+
+                              return (
+                                <tr
+                                  key={produit.uuid}
+                                  className={
+                                    selectedProducts.includes(produit.uuid)
+                                      ? "table-active"
+                                      : ""
+                                  }
+                                >
+                                  <td className="ps-4">
+                                    <Form.Check
+                                      type="checkbox"
+                                      checked={selectedProducts.includes(
+                                        produit.uuid,
                                       )}
-                                    </div>
-                                    <div>
-                                      <div className="fw-semibold fs-6 mb-1">
-                                        {produit.libelle}
-                                      </div>
-                                      <div className="d-flex align-items-center gap-2">
-                                        <Badge
-                                          bg="light"
-                                          text="dark"
-                                          className="border rounded-pill px-3 py-2"
-                                        >
-                                          <FaTags className="me-2" />
-                                          {produit.categorie?.libelle ||
-                                            "Non catégorisé"}
-                                        </Badge>
-                                        {produit.description && (
-                                          <OverlayTrigger
-                                            placement="top"
-                                            overlay={
-                                              <Tooltip>
-                                                {produit.description}
-                                              </Tooltip>
+                                      onChange={() =>
+                                        handleProductSelect(produit.uuid)
+                                      }
+                                      className="form-check-lg"
+                                      disabled={actionLoading === produit.uuid}
+                                    />
+                                  </td>
+                                  <td>
+                                    <div className="d-flex align-items-center">
+                                      <div
+                                        className="rounded-3 border bg-light me-3 d-flex align-items-center justify-content-center"
+                                        style={{
+                                          width: "60px",
+                                          height: "60px",
+                                          flexShrink: 0,
+                                        }}
+                                      >
+                                        {productImageUrl ? (
+                                          <img
+                                            src={productImageUrl}
+                                            alt={produit.libelle}
+                                            className="w-100 h-100 object-fit-cover rounded-3"
+                                            onError={(e) =>
+                                              handleImageError(produit.uuid, e)
                                             }
-                                          >
-                                            <span className="text-muted cursor-pointer">
-                                              <FaInfoCircle />
-                                            </span>
-                                          </OverlayTrigger>
+                                          />
+                                        ) : (
+                                          <FaBox className="text-muted fs-4" />
                                         )}
                                       </div>
+                                      <div>
+                                        <div className="fw-semibold fs-6 mb-1">
+                                          {produit.libelle}
+                                        </div>
+                                        <div className="d-flex align-items-center gap-2">
+                                          <Badge
+                                            bg="light"
+                                            text="dark"
+                                            className="border rounded-pill px-3 py-2"
+                                          >
+                                            <FaTags className="me-2" />
+                                            {produit.categorie?.libelle ||
+                                              "Non catégorisé"}
+                                          </Badge>
+                                          {produit.description && (
+                                            <OverlayTrigger
+                                              placement="top"
+                                              overlay={
+                                                <Tooltip>
+                                                  {produit.description}
+                                                </Tooltip>
+                                              }
+                                            >
+                                              <span className="text-muted cursor-pointer">
+                                                <FaInfoCircle />
+                                              </span>
+                                            </OverlayTrigger>
+                                          )}
+                                        </div>
+                                      </div>
                                     </div>
-                                  </div>
-                                </td>
-                                <td>
-                                  <div className="fw-bold text-primary fs-6">
-                                    {formatPrice(produit.prix)}
-                                  </div>
-                                </td>
-                                <td>
-                                  <Badge
-                                    bg={
-                                      produit.quantite > 0
-                                        ? "success"
-                                        : "danger"
-                                    }
-                                    className="d-flex align-items-center px-3 py-2 rounded-pill"
-                                  >
-                                    {produit.quantite > 0 ? (
-                                      <FaCheckCircle className="me-2" />
-                                    ) : (
-                                      <FaTimesCircle className="me-2" />
-                                    )}
-                                    {produit.quantite}
-                                  </Badge>
-                                </td>
-                                <td>{getStatusBadge(produit)}</td>
-                                <td>
-                                  <div className="d-flex flex-column">
-                                    <div className="d-flex align-items-center mb-2">
-                                      <FaStar className="text-warning me-2" />
-                                      <span className="fw-semibold">
-                                        {produit.note_moyenne || "0.0"}
-                                      </span>
-                                      <span className="text-muted small ms-2">
-                                        ({produit.nombre_avis} avis)
-                                      </span>
+                                  </td>
+                                  <td>
+                                    <div className="fw-bold text-primary fs-6">
+                                      {formatPrice(produit.prix)}
                                     </div>
-                                    <div className="d-flex align-items-center">
-                                      <FaHeart className="text-danger me-2" />
-                                      <span className="text-muted small">
-                                        {produit.nombre_favoris} favoris
-                                      </span>
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className="text-end pe-4">
-                                  <div className="d-flex justify-content-end gap-2">
-                                    <OverlayTrigger
-                                      placement="top"
-                                      overlay={<Tooltip>Voir détails</Tooltip>}
+                                  </td>
+                                  <td>
+                                    <Badge
+                                      bg={
+                                        produit.quantite > 0
+                                          ? "success"
+                                          : "danger"
+                                      }
+                                      className="d-flex align-items-center px-3 py-2 rounded-pill"
                                     >
-                                      <Button
-                                        variant="outline-primary"
-                                        size="sm"
-                                        className="rounded-circle"
-                                        onClick={() =>
-                                          router.push(
-                                            `/dashboard-agent/annonces/produit/${produit.uuid}`,
-                                          )
-                                        }
-                                        disabled={
-                                          actionLoading === produit.uuid
-                                        }
-                                      >
-                                        <FaEye />
-                                      </Button>
-                                    </OverlayTrigger>
-                                    <OverlayTrigger
-                                      placement="top"
-                                      overlay={<Tooltip>Modifier</Tooltip>}
-                                    >
-                                      <Button
-                                        variant="outline-warning"
-                                        size="sm"
-                                        className="rounded-circle"
-                                        onClick={() =>
-                                          router.push(
-                                            `/dashboard-agent/produits/edit/${produit.uuid}`,
-                                          )
-                                        }
-                                        disabled={
-                                          actionLoading === produit.uuid
-                                        }
-                                      >
-                                        <FaPencilAlt />
-                                      </Button>
-                                    </OverlayTrigger>
-                                    {produit.estBloque ? (
+                                      {produit.quantite > 0 ? (
+                                        <FaCheckCircle className="me-2" />
+                                      ) : (
+                                        <FaTimesCircle className="me-2" />
+                                      )}
+                                      {produit.quantite}
+                                    </Badge>
+                                  </td>
+                                  <td>{getStatusBadge(produit)}</td>
+                                  <td>
+                                    <div className="d-flex flex-column">
+                                      <div className="d-flex align-items-center mb-2">
+                                        <FaStar className="text-warning me-2" />
+                                        <span className="fw-semibold">
+                                          {produit.note_moyenne || "0.0"}
+                                        </span>
+                                        <span className="text-muted small ms-2">
+                                          ({produit.nombre_avis} avis)
+                                        </span>
+                                      </div>
+                                      <div className="d-flex align-items-center">
+                                        <FaHeart className="text-danger me-2" />
+                                        <span className="text-muted small">
+                                          {produit.nombre_favoris} favoris
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="text-end pe-4">
+                                    <div className="d-flex justify-content-end gap-2">
                                       <OverlayTrigger
                                         placement="top"
-                                        overlay={<Tooltip>Débloquer</Tooltip>}
+                                        overlay={
+                                          <Tooltip>Voir détails</Tooltip>
+                                        }
                                       >
                                         <Button
-                                          variant="outline-info"
+                                          variant="outline-primary"
                                           size="sm"
                                           className="rounded-circle"
                                           onClick={() =>
-                                            showConfirmation(
-                                              "Débloquer le produit",
-                                              `Êtes-vous sûr de vouloir débloquer "${produit.libelle}" ?`,
-                                              () =>
-                                                handleUnblockProduct(
-                                                  produit.uuid,
-                                                ),
+                                            router.push(
+                                              `/dashboard-agent/annonces/produit/${produit.uuid}`,
                                             )
                                           }
                                           disabled={
                                             actionLoading === produit.uuid
                                           }
                                         >
-                                          {actionLoading === produit.uuid ? (
-                                            <Spinner
-                                              animation="border"
-                                              size="sm"
-                                            />
-                                          ) : (
-                                            <FaLockOpen />
-                                          )}
+                                          <FaEye />
                                         </Button>
                                       </OverlayTrigger>
-                                    ) : (
                                       <OverlayTrigger
                                         placement="top"
-                                        overlay={<Tooltip>Bloquer</Tooltip>}
+                                        overlay={<Tooltip>Modifier</Tooltip>}
+                                      >
+                                        <Button
+                                          variant="outline-warning"
+                                          size="sm"
+                                          className="rounded-circle"
+                                          onClick={() =>
+                                            router.push(
+                                              `/dashboard-agent/produits/edit/${produit.uuid}`,
+                                            )
+                                          }
+                                          disabled={
+                                            actionLoading === produit.uuid
+                                          }
+                                        >
+                                          <FaPencilAlt />
+                                        </Button>
+                                      </OverlayTrigger>
+                                      {produit.estBloque ? (
+                                        <OverlayTrigger
+                                          placement="top"
+                                          overlay={<Tooltip>Débloquer</Tooltip>}
+                                        >
+                                          <Button
+                                            variant="outline-info"
+                                            size="sm"
+                                            className="rounded-circle"
+                                            onClick={() =>
+                                              showConfirmation(
+                                                "Débloquer le produit",
+                                                `Êtes-vous sûr de vouloir débloquer "${produit.libelle}" ?`,
+                                                () =>
+                                                  handleUnblockProduct(
+                                                    produit.uuid,
+                                                  ),
+                                              )
+                                            }
+                                            disabled={
+                                              actionLoading === produit.uuid
+                                            }
+                                          >
+                                            {actionLoading === produit.uuid ? (
+                                              <Spinner
+                                                animation="border"
+                                                size="sm"
+                                              />
+                                            ) : (
+                                              <FaLockOpen />
+                                            )}
+                                          </Button>
+                                        </OverlayTrigger>
+                                      ) : (
+                                        <OverlayTrigger
+                                          placement="top"
+                                          overlay={<Tooltip>Bloquer</Tooltip>}
+                                        >
+                                          <Button
+                                            variant="outline-danger"
+                                            size="sm"
+                                            className="rounded-circle"
+                                            onClick={() =>
+                                              showConfirmation(
+                                                "Bloquer le produit",
+                                                `Êtes-vous sûr de vouloir bloquer "${produit.libelle}" ?`,
+                                                () =>
+                                                  handleBlockProduct(
+                                                    produit.uuid,
+                                                  ),
+                                              )
+                                            }
+                                            disabled={
+                                              actionLoading === produit.uuid
+                                            }
+                                          >
+                                            {actionLoading === produit.uuid ? (
+                                              <Spinner
+                                                animation="border"
+                                                size="sm"
+                                              />
+                                            ) : (
+                                              <FaLock />
+                                            )}
+                                          </Button>
+                                        </OverlayTrigger>
+                                      )}
+                                      {produit.estPublie ? (
+                                        <OverlayTrigger
+                                          placement="top"
+                                          overlay={<Tooltip>Dépublier</Tooltip>}
+                                        >
+                                          <Button
+                                            variant="outline-secondary"
+                                            size="sm"
+                                            className="rounded-circle"
+                                            onClick={() =>
+                                              showConfirmation(
+                                                "Dépublier le produit",
+                                                `Êtes-vous sûr de vouloir dépublié "${produit.libelle}" ?`,
+                                                () =>
+                                                  handleUnpublishProduct(
+                                                    produit.uuid,
+                                                  ),
+                                              )
+                                            }
+                                            disabled={
+                                              actionLoading === produit.uuid
+                                            }
+                                          >
+                                            {actionLoading === produit.uuid ? (
+                                              <Spinner
+                                                animation="border"
+                                                size="sm"
+                                              />
+                                            ) : (
+                                              <FaEyeSlash />
+                                            )}
+                                          </Button>
+                                        </OverlayTrigger>
+                                      ) : (
+                                        <OverlayTrigger
+                                          placement="top"
+                                          overlay={<Tooltip>Publier</Tooltip>}
+                                        >
+                                          <Button
+                                            variant="outline-success"
+                                            size="sm"
+                                            className="rounded-circle"
+                                            onClick={() =>
+                                              showConfirmation(
+                                                "Publier le produit",
+                                                `Êtes-vous sûr de vouloir publier "${produit.libelle}" ?`,
+                                                () =>
+                                                  handlePublishProduct(
+                                                    produit.uuid,
+                                                  ),
+                                              )
+                                            }
+                                            disabled={
+                                              actionLoading === produit.uuid
+                                            }
+                                          >
+                                            {actionLoading === produit.uuid ? (
+                                              <Spinner
+                                                animation="border"
+                                                size="sm"
+                                              />
+                                            ) : (
+                                              <FaEye />
+                                            )}
+                                          </Button>
+                                        </OverlayTrigger>
+                                      )}
+                                      <OverlayTrigger
+                                        placement="top"
+                                        overlay={<Tooltip>Supprimer</Tooltip>}
                                       >
                                         <Button
                                           variant="outline-danger"
@@ -1836,10 +2091,10 @@ const BoutiqueDetail: React.FC = () => {
                                           className="rounded-circle"
                                           onClick={() =>
                                             showConfirmation(
-                                              "Bloquer le produit",
-                                              `Êtes-vous sûr de vouloir bloquer "${produit.libelle}" ?`,
+                                              "Supprimer le produit",
+                                              `Êtes-vous sûr de vouloir supprimer définitivement "${produit.libelle}" ? Cette action est irréversible.`,
                                               () =>
-                                                handleBlockProduct(
+                                                handleDeleteProduct(
                                                   produit.uuid,
                                                 ),
                                             )
@@ -1854,112 +2109,15 @@ const BoutiqueDetail: React.FC = () => {
                                               size="sm"
                                             />
                                           ) : (
-                                            <FaLock />
+                                            <FaTrash />
                                           )}
                                         </Button>
                                       </OverlayTrigger>
-                                    )}
-                                    {produit.estPublie ? (
-                                      <OverlayTrigger
-                                        placement="top"
-                                        overlay={<Tooltip>Dépublier</Tooltip>}
-                                      >
-                                        <Button
-                                          variant="outline-secondary"
-                                          size="sm"
-                                          className="rounded-circle"
-                                          onClick={() =>
-                                            showConfirmation(
-                                              "Dépublier le produit",
-                                              `Êtes-vous sûr de vouloir dépublié "${produit.libelle}" ?`,
-                                              () =>
-                                                handleUnpublishProduct(
-                                                  produit.uuid,
-                                                ),
-                                            )
-                                          }
-                                          disabled={
-                                            actionLoading === produit.uuid
-                                          }
-                                        >
-                                          {actionLoading === produit.uuid ? (
-                                            <Spinner
-                                              animation="border"
-                                              size="sm"
-                                            />
-                                          ) : (
-                                            <FaEyeSlash />
-                                          )}
-                                        </Button>
-                                      </OverlayTrigger>
-                                    ) : (
-                                      <OverlayTrigger
-                                        placement="top"
-                                        overlay={<Tooltip>Publier</Tooltip>}
-                                      >
-                                        <Button
-                                          variant="outline-success"
-                                          size="sm"
-                                          className="rounded-circle"
-                                          onClick={() =>
-                                            showConfirmation(
-                                              "Publier le produit",
-                                              `Êtes-vous sûr de vouloir publier "${produit.libelle}" ?`,
-                                              () =>
-                                                handlePublishProduct(
-                                                  produit.uuid,
-                                                ),
-                                            )
-                                          }
-                                          disabled={
-                                            actionLoading === produit.uuid
-                                          }
-                                        >
-                                          {actionLoading === produit.uuid ? (
-                                            <Spinner
-                                              animation="border"
-                                              size="sm"
-                                            />
-                                          ) : (
-                                            <FaEye />
-                                          )}
-                                        </Button>
-                                      </OverlayTrigger>
-                                    )}
-                                    <OverlayTrigger
-                                      placement="top"
-                                      overlay={<Tooltip>Supprimer</Tooltip>}
-                                    >
-                                      <Button
-                                        variant="outline-danger"
-                                        size="sm"
-                                        className="rounded-circle"
-                                        onClick={() =>
-                                          showConfirmation(
-                                            "Supprimer le produit",
-                                            `Êtes-vous sûr de vouloir supprimer définitivement "${produit.libelle}" ? Cette action est irréversible.`,
-                                            () =>
-                                              handleDeleteProduct(produit.uuid),
-                                          )
-                                        }
-                                        disabled={
-                                          actionLoading === produit.uuid
-                                        }
-                                      >
-                                        {actionLoading === produit.uuid ? (
-                                          <Spinner
-                                            animation="border"
-                                            size="sm"
-                                          />
-                                        ) : (
-                                          <FaTrash />
-                                        )}
-                                      </Button>
-                                    </OverlayTrigger>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </Table>
                       </div>
@@ -2027,11 +2185,17 @@ const BoutiqueDetail: React.FC = () => {
                     className="rounded-4 overflow-hidden mx-auto mb-4 shadow-sm"
                     style={{ width: "120px", height: "120px" }}
                   >
-                    {boutique!.type_boutique.image ? (
+                    {typeImageUrl ? (
                       <img
-                        src={boutique!.type_boutique.image}
+                        src={typeImageUrl}
                         alt={boutique!.type_boutique.libelle}
                         className="w-100 h-100 object-fit-cover"
+                        onError={(e) =>
+                          handleImageError(
+                            `type-${boutique!.type_boutique.uuid}`,
+                            e,
+                          )
+                        }
                       />
                     ) : (
                       <div className="w-100 h-100 d-flex align-items-center justify-content-center bg-light">

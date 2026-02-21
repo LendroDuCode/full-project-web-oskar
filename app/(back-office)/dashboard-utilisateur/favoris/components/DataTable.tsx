@@ -33,13 +33,52 @@ import {
 } from "@/app/shared/utils/formatters";
 import { FavoriItem } from "../type/favoris";
 
+// ============================================
+// FONCTION DE CONSTRUCTION D'URL D'IMAGE ROBUSTE
+// ============================================
+const buildImageUrl = (imagePath: string | null): string | null => {
+  if (!imagePath) return null;
+
+  // Nettoyer le chemin des espaces indésirables
+  let cleanPath = imagePath
+    .replace(/\s+/g, "") // Supprimer tous les espaces
+    .replace(/-/g, "-") // Normaliser les tirets
+    .trim();
+
+  const apiUrl =
+    process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+  const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+
+  // ✅ CAS 1: Déjà une URL complète
+  if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
+    if (cleanPath.includes("localhost")) {
+      const productionUrl = apiUrl.replace(/\/api$/, "");
+      return cleanPath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
+    }
+    return cleanPath;
+  }
+
+  // ✅ CAS 2: Chemin avec %2F (déjà encodé)
+  if (cleanPath.includes("%2F")) {
+    // Nettoyer les espaces autour de %2F
+    const finalPath = cleanPath.replace(/%2F\s+/, "%2F");
+    return `${apiUrl}${filesUrl}/${finalPath}`;
+  }
+
+  // ✅ CAS 3: Chemin simple
+  return `${apiUrl}${filesUrl}/${cleanPath}`;
+};
+
+// Type for color keys
+type ColorKey = "product" | "don" | "exchange";
+
 interface DataTableProps {
   data: FavoriItem[];
   loading?: boolean;
   error?: string | null;
   onRemoveFavorite?: (uuid: string, type: string, itemUuid: string) => void;
   onRefresh?: () => void;
-  onView?: (uuid: string, type: string, itemUuid: string) => void; // Ajouté
+  onView?: (uuid: string, type: string, itemUuid: string) => void;
   selectedItems?: string[];
   onSelectAll?: (checked: boolean) => void;
   onSelectItem?: (uuid: string, checked: boolean) => void;
@@ -52,7 +91,7 @@ export default function DataTable({
   error = null,
   onRemoveFavorite,
   onRefresh,
-  onView, // Ajouté
+  onView,
   selectedItems = [],
   onSelectAll,
   onSelectItem,
@@ -65,6 +104,7 @@ export default function DataTable({
     new Set(),
   );
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
 
   const selectedItemsSet = useMemo(
     () => new Set(selectedItems),
@@ -78,6 +118,20 @@ export default function DataTable({
     currentItems.length > 0 &&
     currentItems.every((item) => selectedItemsSet.has(item.uuid));
   const allSelected = data.length > 0 && selectedItemsSet.size === data.length;
+
+  // Helper function to map item type to color key
+  const getTypeColorKey = useCallback((type: string): ColorKey => {
+    switch (type) {
+      case "produit":
+        return "product";
+      case "don":
+        return "don";
+      case "echange":
+        return "exchange";
+      default:
+        return "product"; // Default fallback
+    }
+  }, []);
 
   const getTypeConfig = useCallback((type: string) => {
     const configs = {
@@ -103,68 +157,157 @@ export default function DataTable({
     return configs[type as keyof typeof configs] || configs.produit;
   }, []);
 
-  const getItemDetails = useCallback((item: FavoriItem) => {
-    switch (item.type) {
-      case "produit":
-        return {
-          title: item.produit?.libelle || "Produit sans nom",
-          description: item.produit?.description,
-          image: item.produit?.image || `https://via.placeholder.com/64?text=P`,
-          price: item.produit?.prix,
-          quantity: item.produit?.quantite || 1,
-          status: item.produit?.statut,
-          estPublie: item.produit?.estPublie,
-          estBloque: item.produit?.estBloque,
-          category: item.produit?.categorie?.libelle,
-          seller: item.produit?.vendeur,
-          sellerName: item.produit?.vendeur
-            ? `${item.produit.vendeur.prenoms} ${item.produit.vendeur.nom}`
-            : "Vendeur inconnu",
-          boutique: item.produit?.boutique,
-          itemUuid: item.itemUuid,
-        };
-      case "don":
-        return {
-          title: item.don?.nom || "Don sans nom",
-          description: item.don?.description,
-          image: item.don?.image || `https://via.placeholder.com/64?text=D`,
-          price: null,
-          quantity: item.don?.quantite || 1,
-          status: item.don?.statut,
-          estPublie: item.don?.estPublie,
-          estBloque: item.don?.est_bloque,
-          category: item.don?.categorie,
-          seller: { name: item.don?.nom_donataire || "Donateur" },
-          sellerName: item.don?.nom_donataire || "Donateur",
-          date: item.don?.date_debut,
-          itemUuid: item.itemUuid,
-        };
-      case "echange":
-        return {
-          title: item.echange?.nomElementEchange || "Échange sans nom",
-          description: item.echange?.nomElementEchange,
-          image: item.echange?.image || `https://via.placeholder.com/64?text=E`,
-          price: item.echange?.prix,
-          quantity: item.echange?.quantite || 1,
-          status: item.echange?.statut,
-          estPublie: item.echange?.estPublie,
-          estBloque: item.echange?.estBloque,
-          category: item.echange?.categorie,
-          seller: { name: item.echange?.nom_initiateur || "Initié par" },
-          sellerName: item.echange?.nom_initiateur || "Initié par",
-          date: item.echange?.dateProposition,
-          itemUuid: item.itemUuid,
-        };
-      default:
-        return {
-          title: "Élément sans nom",
-          image: `https://via.placeholder.com/64?text=?`,
-          quantity: 1,
-          sellerName: "Inconnu",
-          itemUuid: item.itemUuid,
-        };
+  // ✅ Gestion des erreurs d'image
+  const handleImageError = useCallback(
+    (uuid: string, e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+      const target = e.currentTarget;
+
+      // Si l'URL contient localhost, essayer de la corriger
+      if (target.src.includes("localhost")) {
+        const productionUrl =
+          process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
+          "https://oskar-api.mysonec.pro";
+        target.src = target.src.replace(
+          /http:\/\/localhost(:\d+)?/g,
+          productionUrl,
+        );
+        return;
+      }
+
+      // Si l'URL contient des espaces, essayer de les nettoyer
+      if (target.src.includes("%20")) {
+        target.src = target.src.replace(/%20/g, "");
+        return;
+      }
+
+      setImageErrors((prev) => new Set(prev).add(uuid));
+      target.onerror = null;
+    },
+    [],
+  );
+
+  // ✅ Obtenir l'URL de l'image d'un produit
+  const getProduitImageUrl = useCallback((item: any): string => {
+    if (!item) return `https://via.placeholder.com/60/6f42c1/ffffff?text=P`;
+
+    // Essayer d'abord avec image_key
+    if (item.image_key) {
+      const url = buildImageUrl(item.image_key);
+      if (url) return url;
     }
+
+    // Sinon avec image
+    if (item.image) {
+      const url = buildImageUrl(item.image);
+      if (url) return url;
+    }
+
+    return `https://via.placeholder.com/60/6f42c1/ffffff?text=P`;
   }, []);
+
+  // ✅ Obtenir l'URL de l'image d'un don
+  const getDonImageUrl = useCallback((item: any): string => {
+    if (!item) return `https://via.placeholder.com/60/6f42c1/ffffff?text=D`;
+
+    // Essayer d'abord avec image_key
+    if (item.image_key) {
+      const url = buildImageUrl(item.image_key);
+      if (url) return url;
+    }
+
+    // Sinon avec image
+    if (item.image) {
+      const url = buildImageUrl(item.image);
+      if (url) return url;
+    }
+
+    return `https://via.placeholder.com/60/6f42c1/ffffff?text=D`;
+  }, []);
+
+  // ✅ Obtenir l'URL de l'image d'un échange
+  const getEchangeImageUrl = useCallback((item: any): string => {
+    if (!item) return `https://via.placeholder.com/60/6f42c1/ffffff?text=E`;
+
+    // Essayer d'abord avec image_key
+    if (item.image_key) {
+      const url = buildImageUrl(item.image_key);
+      if (url) return url;
+    }
+
+    // Sinon avec image
+    if (item.image) {
+      const url = buildImageUrl(item.image);
+      if (url) return url;
+    }
+
+    return `https://via.placeholder.com/60/6f42c1/ffffff?text=E`;
+  }, []);
+
+  const getItemDetails = useCallback(
+    (item: FavoriItem) => {
+      switch (item.type) {
+        case "produit":
+          return {
+            title: item.produit?.libelle || "Produit sans nom",
+            description: item.produit?.description,
+            image: getProduitImageUrl(item.produit),
+            price: item.produit?.prix,
+            quantity: item.produit?.quantite || 1,
+            status: item.produit?.statut,
+            estPublie: item.produit?.estPublie,
+            estBloque: item.produit?.estBloque,
+            category: item.produit?.categorie?.libelle,
+            seller: item.produit?.vendeur,
+            sellerName: item.produit?.vendeur
+              ? `${item.produit.vendeur.prenoms} ${item.produit.vendeur.nom}`
+              : "Vendeur inconnu",
+            boutique: item.produit?.boutique,
+            itemUuid: item.itemUuid,
+          };
+        case "don":
+          return {
+            title: item.don?.nom || "Don sans nom",
+            description: item.don?.description,
+            image: getDonImageUrl(item.don),
+            price: null,
+            quantity: item.don?.quantite || 1,
+            status: item.don?.statut,
+            estPublie: item.don?.estPublie,
+            estBloque: item.don?.est_bloque,
+            category: item.don?.categorie,
+            seller: { name: item.don?.nom_donataire || "Donateur" },
+            sellerName: item.don?.nom_donataire || "Donateur",
+            date: item.don?.date_debut,
+            itemUuid: item.itemUuid,
+          };
+        case "echange":
+          return {
+            title: item.echange?.nomElementEchange || "Échange sans nom",
+            description: item.echange?.nomElementEchange,
+            image: getEchangeImageUrl(item.echange),
+            price: item.echange?.prix,
+            quantity: item.echange?.quantite || 1,
+            status: item.echange?.statut,
+            estPublie: item.echange?.estPublie,
+            estBloque: item.echange?.estBloque,
+            category: item.echange?.categorie,
+            seller: { name: item.echange?.nom_initiateur || "Initié par" },
+            sellerName: item.echange?.nom_initiateur || "Initié par",
+            date: item.echange?.dateProposition,
+            itemUuid: item.itemUuid,
+          };
+        default:
+          return {
+            title: "Élément sans nom",
+            image: `https://via.placeholder.com/64?text=?`,
+            quantity: 1,
+            sellerName: "Inconnu",
+            itemUuid: item.itemUuid,
+          };
+      }
+    },
+    [getProduitImageUrl, getDonImageUrl, getEchangeImageUrl],
+  );
 
   const getStatusConfig = useCallback(
     (item: FavoriItem) => {
@@ -232,10 +375,8 @@ export default function DataTable({
   const handleViewDetails = useCallback(
     (item: FavoriItem) => {
       if (onView) {
-        // Utiliser la fonction onView passée par le parent (pour ouvrir la modal)
         onView(item.uuid, item.type, item.itemUuid);
       } else {
-        // Fallback: redirection
         router.push(`/${item.type}s/${item.itemUuid}`);
       }
     },
@@ -405,6 +546,9 @@ export default function DataTable({
                 const isProcessing = processingItems.has(item.uuid);
                 const isExpanded = expandedItems.has(item.uuid);
                 const isSelected = selectedItemsSet.has(item.uuid);
+                const hasImageError = imageErrors.has(item.uuid);
+                const typeColorKey = getTypeColorKey(item.type);
+                const typeColor = colors.type[typeColorKey];
 
                 return (
                   <tr
@@ -447,14 +591,31 @@ export default function DataTable({
                               flexShrink: 0,
                             }}
                           >
-                            <img
-                              src={details.image}
-                              alt={details.title}
-                              className="w-100 h-100 object-cover"
-                              onError={(e) => {
-                                e.currentTarget.src = `https://via.placeholder.com/60/6f42c1/ffffff?text=${details.title.charAt(0)}`;
-                              }}
-                            />
+                            {!hasImageError && details.image ? (
+                              <img
+                                src={details.image}
+                                alt={details.title}
+                                className="w-100 h-100 object-cover"
+                                onError={(e) => handleImageError(item.uuid, e)}
+                              />
+                            ) : (
+                              <div
+                                className="w-100 h-100 d-flex align-items-center justify-content-center"
+                                style={{
+                                  backgroundColor: typeColor + "20",
+                                  color: typeColor,
+                                  fontSize: "1.5rem",
+                                  fontWeight: "bold",
+                                }}
+                              >
+                                {details.title?.charAt(0).toUpperCase() ||
+                                  (item.type === "produit"
+                                    ? "P"
+                                    : item.type === "don"
+                                      ? "D"
+                                      : "E")}
+                              </div>
+                            )}
                           </div>
                           <div
                             className="position-absolute top-0 end-0 p-1"

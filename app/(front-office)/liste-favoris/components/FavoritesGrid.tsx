@@ -3,6 +3,42 @@
 
 import { useState } from "react";
 
+// ============================================
+// FONCTION DE CONSTRUCTION D'URL D'IMAGE ROBUSTE
+// ============================================
+const buildImageUrl = (imagePath: string | null): string => {
+  if (!imagePath) return "/images/placeholder.jpg";
+
+  // Nettoyer le chemin des espaces indésirables
+  let cleanPath = imagePath
+    .replace(/\s+/g, "") // Supprimer tous les espaces
+    .replace(/-/g, "-") // Normaliser les tirets
+    .trim();
+
+  const apiUrl =
+    process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+  const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+
+  // ✅ CAS 1: Déjà une URL complète
+  if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
+    if (cleanPath.includes("localhost")) {
+      const productionUrl = apiUrl.replace(/\/api$/, "");
+      return cleanPath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
+    }
+    return cleanPath;
+  }
+
+  // ✅ CAS 2: Chemin avec %2F (déjà encodé)
+  if (cleanPath.includes("%2F")) {
+    // Nettoyer les espaces autour de %2F
+    const finalPath = cleanPath.replace(/%2F\s+/, "%2F");
+    return `${apiUrl}${filesUrl}/${finalPath}`;
+  }
+
+  // ✅ CAS 3: Chemin simple
+  return `${apiUrl}${filesUrl}/${cleanPath}`;
+};
+
 interface FavoriteItem {
   id: number;
   title: string;
@@ -12,6 +48,7 @@ interface FavoriteItem {
   location: string;
   timeAgo: string;
   imageSrc: string;
+  imageKey?: string;
   imageAlt: string;
   tag: "vente" | "échange" | "don";
   tagColor: string;
@@ -196,6 +233,8 @@ const favoriteItems: FavoriteItem[] = [
 const FavoriteCard = ({ item }: { item: FavoriteItem }) => {
   const [isFavorite, setIsFavorite] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const [imageSrc, setImageSrc] = useState(item.imageSrc);
 
   const getTagIcon = (tag: FavoriteItem["tag"]) => {
     switch (tag) {
@@ -210,6 +249,74 @@ const FavoriteCard = ({ item }: { item: FavoriteItem }) => {
     }
   };
 
+  const getTagColorClass = (tag: FavoriteItem["tag"]) => {
+    switch (tag) {
+      case "vente":
+        return "bg-success";
+      case "échange":
+        return "bg-primary";
+      case "don":
+        return "bg-purple-600";
+      default:
+        return "bg-secondary";
+    }
+  };
+
+  const getButtonColorClass = (tag: FavoriteItem["tag"]) => {
+    switch (tag) {
+      case "vente":
+        return "btn-success";
+      case "échange":
+        return "btn-primary";
+      case "don":
+        return "btn-purple";
+      default:
+        return "btn-secondary";
+    }
+  };
+
+  // ✅ Gestion des erreurs d'image
+  const handleImageError = () => {
+    if (imageSrc.includes("localhost")) {
+      const productionUrl =
+        process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
+        "https://oskar-api.mysonec.pro";
+      const correctedUrl = imageSrc.replace(
+        /http:\/\/localhost(:\d+)?/g,
+        productionUrl,
+      );
+      setImageSrc(correctedUrl);
+      return;
+    }
+
+    if (imageSrc.includes("%20")) {
+      const correctedUrl = imageSrc.replace(/%20/g, "");
+      setImageSrc(correctedUrl);
+      return;
+    }
+
+    setImageError(true);
+  };
+
+  // ✅ Obtenir l'URL de l'image avec buildImageUrl
+  const getImageUrl = () => {
+    if (imageError) {
+      return `https://via.placeholder.com/256x256/cccccc/ffffff?text=${item.title.charAt(0)}`;
+    }
+
+    // Si c'est une URL de placeholder ou d'API externe, la retourner directement
+    if (imageSrc.startsWith("http") && !imageSrc.includes("localhost")) {
+      return imageSrc;
+    }
+
+    // Sinon, utiliser buildImageUrl
+    const builtUrl = buildImageUrl(imageSrc);
+    return (
+      builtUrl ||
+      `https://via.placeholder.com/256x256/cccccc/ffffff?text=${item.title.charAt(0)}`
+    );
+  };
+
   return (
     <div className="card h-100 border-0 shadow-sm hover-shadow transition-all">
       <div
@@ -219,19 +326,20 @@ const FavoriteCard = ({ item }: { item: FavoriteItem }) => {
         onMouseLeave={() => setIsHovered(false)}
       >
         <img
-          src={item.imageSrc}
+          src={getImageUrl()}
           alt={item.imageAlt}
           className="w-100 h-100 object-cover"
           style={{
             transform: isHovered ? "scale(1.05)" : "scale(1)",
             transition: "transform 0.3s ease",
           }}
+          onError={handleImageError}
         />
 
         {/* Badge */}
         <div className="position-absolute top-3 start-3">
           <span
-            className={`${item.tagColor} text-white px-3 py-2 rounded-pill d-flex align-items-center gap-2`}
+            className={`${getTagColorClass(item.tag)} text-white px-3 py-2 rounded-pill d-flex align-items-center gap-2`}
             style={{ fontSize: "0.75rem" }}
           >
             <i className={`fas ${getTagIcon(item.tag)}`}></i>
@@ -318,7 +426,7 @@ const FavoriteCard = ({ item }: { item: FavoriteItem }) => {
         </div>
 
         <button
-          className={`btn w-100 ${item.buttonColor} text-white fw-semibold py-2`}
+          className={`btn w-100 ${getButtonColorClass(item.tag)} text-white fw-semibold py-2`}
           style={{ borderRadius: "8px" }}
         >
           {item.buttonText}

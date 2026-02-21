@@ -45,6 +45,42 @@ import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import colors from "@/app/shared/constants/colors";
 
+// ============================================
+// FONCTION DE CONSTRUCTION D'URL D'IMAGE ROBUSTE
+// ============================================
+const buildImageUrl = (imagePath: string | null): string | null => {
+  if (!imagePath) return null;
+
+  // Nettoyer le chemin des espaces indésirables
+  let cleanPath = imagePath
+    .replace(/\s+/g, "") // Supprimer tous les espaces
+    .replace(/-/g, "-") // Normaliser les tirets
+    .trim();
+
+  const apiUrl =
+    process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+  const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+
+  // ✅ CAS 1: Déjà une URL complète
+  if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
+    if (cleanPath.includes("localhost")) {
+      const productionUrl = apiUrl.replace(/\/api$/, "");
+      return cleanPath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
+    }
+    return cleanPath;
+  }
+
+  // ✅ CAS 2: Chemin avec %2F (déjà encodé)
+  if (cleanPath.includes("%2F")) {
+    // Nettoyer les espaces autour de %2F
+    const finalPath = cleanPath.replace(/%2F\s+/, "%2F");
+    return `${apiUrl}${filesUrl}/${finalPath}`;
+  }
+
+  // ✅ CAS 3: Chemin simple
+  return `${apiUrl}${filesUrl}/${cleanPath}`;
+};
+
 // Types
 interface Civilite {
   uuid: string;
@@ -64,6 +100,7 @@ interface Produit {
   uuid: string;
   libelle: string;
   image?: string;
+  image_key?: string;
   prix: string;
   statut: string;
   estPublie: boolean;
@@ -93,6 +130,7 @@ interface User {
   is_deleted: boolean;
   statut: string;
   avatar?: string;
+  avatar_key?: string;
   indicatif?: string;
   adminUuid?: string;
   created_at: string;
@@ -133,6 +171,7 @@ export default function DetailUtilisateurPage() {
   const [activeTab, setActiveTab] = useState<
     "info" | "produits" | "historique"
   >("info");
+  const [imageError, setImageError] = useState(false);
 
   // Fonction pour récupérer l'utilisateur
   const fetchUser = async (): Promise<void> => {
@@ -157,6 +196,7 @@ export default function DetailUtilisateurPage() {
       }
 
       setUser(userData);
+      setImageError(false);
     } catch (err: any) {
       console.error("❌ Error fetching user:", err);
 
@@ -180,7 +220,7 @@ export default function DetailUtilisateurPage() {
   const blockUser = async (): Promise<void> => {
     try {
       setActionLoading(true);
-      const result = await api.post(API_ENDPOINTS.ADMIN.USERS.BLOCK(userId));
+      await api.post(API_ENDPOINTS.ADMIN.USERS.BLOCK(userId));
       await fetchUser(); // Rafraîchir les données
       setSuccessMessage("Utilisateur bloqué avec succès");
     } catch (err: any) {
@@ -195,7 +235,7 @@ export default function DetailUtilisateurPage() {
   const unblockUser = async (): Promise<void> => {
     try {
       setActionLoading(true);
-      const result = await api.post(API_ENDPOINTS.ADMIN.USERS.UNBLOCK(userId));
+      await api.post(API_ENDPOINTS.ADMIN.USERS.UNBLOCK(userId));
       await fetchUser(); // Rafraîchir les données
       setSuccessMessage("Utilisateur débloqué avec succès");
     } catch (err: any) {
@@ -336,6 +376,66 @@ export default function DetailUtilisateurPage() {
     );
   };
 
+  // ✅ Gestion des erreurs d'image
+  const handleImageError = (
+    e: React.SyntheticEvent<HTMLImageElement, Event>,
+  ) => {
+    const target = e.currentTarget;
+
+    // Si l'URL contient localhost, essayer de la corriger
+    if (target.src.includes("localhost")) {
+      const productionUrl =
+        process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
+        "https://oskar-api.mysonec.pro";
+      target.src = target.src.replace(
+        /http:\/\/localhost(:\d+)?/g,
+        productionUrl,
+      );
+      return;
+    }
+
+    // Si l'URL contient des espaces, essayer de les nettoyer
+    if (target.src.includes("%20")) {
+      target.src = target.src.replace(/%20/g, "");
+      return;
+    }
+
+    setImageError(true);
+    target.onerror = null;
+  };
+
+  // ✅ Obtenir l'URL de l'avatar
+  const getAvatarUrl = (): string | null => {
+    if (imageError) return null;
+
+    if (user?.avatar_key) {
+      const url = buildImageUrl(user.avatar_key);
+      if (url) return url;
+    }
+
+    if (user?.avatar) {
+      const url = buildImageUrl(user.avatar);
+      if (url) return url;
+    }
+
+    return null;
+  };
+
+  // ✅ Obtenir l'URL de l'image d'un produit
+  const getProductImageUrl = (produit: Produit): string => {
+    if (produit.image_key) {
+      const url = buildImageUrl(produit.image_key);
+      if (url) return url;
+    }
+
+    if (produit.image) {
+      const url = buildImageUrl(produit.image);
+      if (url) return url;
+    }
+
+    return "";
+  };
+
   // Affichage du chargement
   if (loading) {
     return (
@@ -412,6 +512,8 @@ export default function DetailUtilisateurPage() {
       </div>
     );
   }
+
+  const avatarUrl = getAvatarUrl();
 
   return (
     <div className="container-fluid py-4">
@@ -608,9 +710,9 @@ export default function DetailUtilisateurPage() {
                       <div className="card-body text-center">
                         {/* Avatar */}
                         <div className="mb-4">
-                          {user.avatar ? (
+                          {avatarUrl ? (
                             <img
-                              src={user.avatar}
+                              src={avatarUrl}
                               alt={`${user.nom} ${user.prenoms}`}
                               className="rounded-circle border"
                               style={{
@@ -618,6 +720,7 @@ export default function DetailUtilisateurPage() {
                                 height: "120px",
                                 objectFit: "cover",
                               }}
+                              onError={handleImageError}
                             />
                           ) : (
                             <div
@@ -996,83 +1099,96 @@ export default function DetailUtilisateurPage() {
                 </div>
                 <div className="card-body">
                   <div className="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
-                    {user.produits.map((produit) => (
-                      <div key={produit.uuid} className="col">
-                        <div className="card h-100 border hover-shadow">
-                          <div className="position-relative">
-                            {produit.image ? (
-                              <img
-                                src={produit.image}
-                                alt={produit.libelle}
-                                className="card-img-top"
-                                style={{ height: "200px", objectFit: "cover" }}
-                              />
-                            ) : (
-                              <div
-                                className="card-img-top d-flex align-items-center justify-content-center bg-light"
-                                style={{ height: "200px" }}
-                              >
-                                <FontAwesomeIcon
-                                  icon={faBox}
-                                  className="text-muted"
-                                  style={{ fontSize: "3rem" }}
+                    {user.produits.map((produit) => {
+                      const productImageUrl = getProductImageUrl(produit);
+
+                      return (
+                        <div key={produit.uuid} className="col">
+                          <div className="card h-100 border hover-shadow">
+                            <div className="position-relative">
+                              {productImageUrl ? (
+                                <img
+                                  src={productImageUrl}
+                                  alt={produit.libelle}
+                                  className="card-img-top"
+                                  style={{
+                                    height: "200px",
+                                    objectFit: "cover",
+                                  }}
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = "none";
+                                  }}
                                 />
-                              </div>
-                            )}
-                            <div className="position-absolute top-0 end-0 m-2">
-                              <span
-                                className={`badge ${produit.estPublie ? "bg-success" : "bg-warning"}`}
-                              >
-                                {produit.estPublie ? "Publié" : "Non publié"}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="card-body">
-                            <h6 className="card-title text-truncate">
-                              {produit.libelle}
-                            </h6>
-                            <div className="mb-2">
-                              <span className="fw-bold text-primary">
-                                {formatPrice(produit.prix)}
-                              </span>
-                            </div>
-                            <div className="d-flex justify-content-between align-items-center mb-2">
-                              <div>
-                                <FontAwesomeIcon
-                                  icon={faStar}
-                                  className="text-warning me-1"
-                                />
-                                <small>
-                                  {produit.note_moyenne.toFixed(1)} (
-                                  {produit.nombre_avis})
-                                </small>
-                              </div>
-                              <div>
-                                <FontAwesomeIcon
-                                  icon={faShoppingCart}
-                                  className="text-muted me-1"
-                                />
-                                <small>Qté: {produit.quantite}</small>
+                              ) : (
+                                <div
+                                  className="card-img-top d-flex align-items-center justify-content-center bg-light"
+                                  style={{ height: "200px" }}
+                                >
+                                  <FontAwesomeIcon
+                                    icon={faBox}
+                                    className="text-muted"
+                                    style={{ fontSize: "3rem" }}
+                                  />
+                                </div>
+                              )}
+                              <div className="position-absolute top-0 end-0 m-2">
+                                <span
+                                  className={`badge ${produit.estPublie ? "bg-success" : "bg-warning"}`}
+                                >
+                                  {produit.estPublie ? "Publié" : "Non publié"}
+                                </span>
                               </div>
                             </div>
-                            {produit.description && (
-                              <p
-                                className="card-text small text-muted mb-0"
-                                style={{ height: "3rem", overflow: "hidden" }}
-                              >
-                                {produit.description}
-                              </p>
-                            )}
-                          </div>
-                          <div className="card-footer bg-transparent">
-                            <button className="btn btn-sm btn-outline-primary w-100">
-                              <FontAwesomeIcon icon={faEye} className="me-2" />
-                              Voir détails
-                            </button>
+                            <div className="card-body">
+                              <h6 className="card-title text-truncate">
+                                {produit.libelle}
+                              </h6>
+                              <div className="mb-2">
+                                <span className="fw-bold text-primary">
+                                  {formatPrice(produit.prix)}
+                                </span>
+                              </div>
+                              <div className="d-flex justify-content-between align-items-center mb-2">
+                                <div>
+                                  <FontAwesomeIcon
+                                    icon={faStar}
+                                    className="text-warning me-1"
+                                  />
+                                  <small>
+                                    {produit.note_moyenne.toFixed(1)} (
+                                    {produit.nombre_avis})
+                                  </small>
+                                </div>
+                                <div>
+                                  <FontAwesomeIcon
+                                    icon={faShoppingCart}
+                                    className="text-muted me-1"
+                                  />
+                                  <small>Qté: {produit.quantite}</small>
+                                </div>
+                              </div>
+                              {produit.description && (
+                                <p
+                                  className="card-text small text-muted mb-0"
+                                  style={{ height: "3rem", overflow: "hidden" }}
+                                >
+                                  {produit.description}
+                                </p>
+                              )}
+                            </div>
+                            <div className="card-footer bg-transparent">
+                              <button className="btn btn-sm btn-outline-primary w-100">
+                                <FontAwesomeIcon
+                                  icon={faEye}
+                                  className="me-2"
+                                />
+                                Voir détails
+                              </button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>

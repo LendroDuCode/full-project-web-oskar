@@ -28,22 +28,34 @@ interface TypeBoutique {
   description: string | null;
   peut_vendre_produits: boolean;
   peut_vendre_biens: boolean;
-  image: string;
+  image: string | null; // Changé pour accepter null
+  image_key?: string;
   statut: string;
 }
 
 interface Boutique {
+  is_deleted: boolean;
+  deleted_at: string | null;
+  id: number;
   uuid: string;
-  nom: string;
   type_boutique_uuid: string;
+  nom: string;
+  slug: string;
   description: string | null;
   logo: string | null;
   banniere: string | null;
   politique_retour: string | null;
   conditions_utilisation: string | null;
-  type_boutique: TypeBoutique;
+  logo_key: string | null;
+  banniere_key: string | null;
+  statut: "en_review" | "actif" | "bloque" | "ferme";
   created_at: string;
   updated_at: string;
+  type_boutique: TypeBoutique;
+  vendeurUuid: string;
+  agentUuid: string | null;
+  est_bloque: boolean;
+  est_ferme: boolean;
 }
 
 interface EditBoutiqueModalProps {
@@ -78,6 +90,27 @@ const EditBoutiqueModal = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showOriginalLogo, setShowOriginalLogo] = useState(true);
   const [showOriginalBanniere, setShowOriginalBanniere] = useState(true);
+
+  // Fonction pour construire l'URL d'une image
+  const buildImageUrl = (imagePath: string | null): string | null => {
+    if (!imagePath) return null;
+
+    const apiUrl =
+      process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+    const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+
+    // Déjà une URL complète
+    if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
+      if (imagePath.includes("localhost")) {
+        const productionUrl = apiUrl.replace(/\/api$/, "");
+        return imagePath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
+      }
+      return imagePath;
+    }
+
+    // Chemin simple
+    return `${apiUrl}${filesUrl}/${imagePath}`;
+  };
 
   const handleFileChange = (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -154,11 +187,13 @@ const EditBoutiqueModal = ({
   const resetToOriginalImage = (type: "logo" | "banniere") => {
     if (type === "logo") {
       setFormData({ ...formData, logo: null });
-      setLogoPreview(boutique?.logo || null);
+      setLogoPreview(boutique?.logo ? buildImageUrl(boutique.logo) : null);
       setShowOriginalLogo(true);
     } else {
       setFormData({ ...formData, banniere: null });
-      setBannierePreview(boutique?.banniere || null);
+      setBannierePreview(
+        boutique?.banniere ? buildImageUrl(boutique.banniere) : null,
+      );
       setShowOriginalBanniere(true);
     }
     setErrors({ ...errors, [type]: "" });
@@ -175,13 +210,27 @@ const EditBoutiqueModal = ({
         politique_retour: boutique.politique_retour || "",
         conditions_utilisation: boutique.conditions_utilisation || "",
       });
-      setLogoPreview(boutique.logo);
-      setBannierePreview(boutique.banniere);
+      setLogoPreview(boutique.logo ? buildImageUrl(boutique.logo) : null);
+      setBannierePreview(
+        boutique.banniere ? buildImageUrl(boutique.banniere) : null,
+      );
       setShowOriginalLogo(true);
       setShowOriginalBanniere(true);
       setErrors({});
     }
   };
+
+  // Nettoyer les URLs blob
+  useEffect(() => {
+    return () => {
+      if (logoPreview && logoPreview.startsWith("blob:")) {
+        URL.revokeObjectURL(logoPreview);
+      }
+      if (bannierePreview && bannierePreview.startsWith("blob:")) {
+        URL.revokeObjectURL(bannierePreview);
+      }
+    };
+  }, [logoPreview, bannierePreview]);
 
   useEffect(() => {
     if (show) {
@@ -212,6 +261,13 @@ const EditBoutiqueModal = ({
   };
 
   const handleClose = () => {
+    // Nettoyer les URLs blob
+    if (logoPreview && logoPreview.startsWith("blob:")) {
+      URL.revokeObjectURL(logoPreview);
+    }
+    if (bannierePreview && bannierePreview.startsWith("blob:")) {
+      URL.revokeObjectURL(bannierePreview);
+    }
     resetForm();
     onClose();
   };
@@ -502,6 +558,11 @@ const EditBoutiqueModal = ({
                                     alt="Logo"
                                     className="img-fluid rounded shadow-sm"
                                     style={{ maxHeight: "150px" }}
+                                    onError={(e) => {
+                                      // Si l'image échoue à charger, afficher un placeholder
+                                      (e.target as HTMLImageElement).src =
+                                        `https://via.placeholder.com/150/fbbf24/ffffff?text=Logo`;
+                                    }}
                                   />
                                   <div className="mt-3 d-flex gap-2 justify-content-center">
                                     <button
@@ -614,6 +675,11 @@ const EditBoutiqueModal = ({
                                       maxHeight: "100px",
                                       width: "100%",
                                       objectFit: "cover",
+                                    }}
+                                    onError={(e) => {
+                                      // Si l'image échoue à charger, afficher un placeholder
+                                      (e.target as HTMLImageElement).src =
+                                        `https://via.placeholder.com/400x100/fbbf24/ffffff?text=Bannière`;
                                     }}
                                   />
                                   <div className="mt-3 d-flex gap-2 justify-content-center">

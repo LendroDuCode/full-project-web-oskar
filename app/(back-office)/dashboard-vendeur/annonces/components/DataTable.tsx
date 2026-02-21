@@ -34,11 +34,48 @@ import {
   getTypeLabel,
 } from "@/app/shared/utils/formatters";
 
+// ============================================
+// FONCTION DE CONSTRUCTION D'URL D'IMAGE ROBUSTE
+// ============================================
+const buildImageUrl = (imagePath: string | null): string | null => {
+  if (!imagePath) return null;
+
+  // Nettoyer le chemin des espaces indésirables
+  let cleanPath = imagePath
+    .replace(/\s+/g, "") // Supprimer tous les espaces
+    .replace(/-/g, "-") // Normaliser les tirets
+    .trim();
+
+  const apiUrl =
+    process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+  const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+
+  // ✅ CAS 1: Déjà une URL complète
+  if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
+    if (cleanPath.includes("localhost")) {
+      const productionUrl = apiUrl.replace(/\/api$/, "");
+      return cleanPath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
+    }
+    return cleanPath;
+  }
+
+  // ✅ CAS 2: Chemin avec %2F (déjà encodé)
+  if (cleanPath.includes("%2F")) {
+    // Nettoyer les espaces autour de %2F
+    const finalPath = cleanPath.replace(/%2F\s+/, "%2F");
+    return `${apiUrl}${filesUrl}/${finalPath}`;
+  }
+
+  // ✅ CAS 3: Chemin simple
+  return `${apiUrl}${filesUrl}/${cleanPath}`;
+};
+
 interface AnnonceItem {
   uuid: string;
   title: string;
   description?: string;
   image: string;
+  image_key?: string;
   type: "produit" | "don" | "echange";
   status: string;
   date: string;
@@ -49,6 +86,7 @@ interface AnnonceItem {
   seller?: {
     name: string;
     avatar?: string;
+    avatar_key?: string;
     isPro?: boolean;
     type?: string;
   };
@@ -97,6 +135,7 @@ export default function DataTable({
     new Set(),
   );
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
 
   // Utiliser useMemo pour optimiser les calculs
   const totalPages = useMemo(
@@ -181,6 +220,71 @@ export default function DataTable({
       color,
       icon,
     };
+  };
+
+  // ✅ Gestion des erreurs d'image
+  const handleImageError = (
+    uuid: string,
+    e: React.SyntheticEvent<HTMLImageElement, Event>,
+  ) => {
+    const target = e.currentTarget;
+
+    // Si l'URL contient localhost, essayer de la corriger
+    if (target.src.includes("localhost")) {
+      const productionUrl =
+        process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
+        "https://oskar-api.mysonec.pro";
+      target.src = target.src.replace(
+        /http:\/\/localhost(:\d+)?/g,
+        productionUrl,
+      );
+      return;
+    }
+
+    // Si l'URL contient des espaces, essayer de les nettoyer
+    if (target.src.includes("%20")) {
+      target.src = target.src.replace(/%20/g, "");
+      return;
+    }
+
+    setImageErrors((prev) => new Set(prev).add(uuid));
+    target.onerror = null;
+  };
+
+  // ✅ Obtenir l'URL de l'image
+  const getImageUrl = (item: AnnonceItem): string => {
+    if (imageErrors.has(item.uuid)) {
+      return `https://via.placeholder.com/48?text=${item.title?.charAt(0) || "?"}`;
+    }
+
+    // Essayer d'abord avec image_key
+    if (item.image_key) {
+      const url = buildImageUrl(item.image_key);
+      if (url) return url;
+    }
+
+    // Sinon avec image
+    if (item.image) {
+      const url = buildImageUrl(item.image);
+      if (url) return url;
+    }
+
+    return `https://via.placeholder.com/48?text=${item.title?.charAt(0) || "?"}`;
+  };
+
+  // ✅ Obtenir l'URL de l'avatar du vendeur
+  const getSellerAvatarUrl = (item: AnnonceItem): string | null => {
+    if (!item.seller) return null;
+
+    if (item.seller.avatar_key) {
+      return buildImageUrl(item.seller.avatar_key);
+    }
+
+    if (item.seller.avatar) {
+      return buildImageUrl(item.seller.avatar);
+    }
+
+    return null;
   };
 
   const toggleSelectAll = () => {
@@ -486,6 +590,7 @@ export default function DataTable({
               const isExpanded = expandedItems.has(item.uuid);
               const isPublished = item.estPublie === true;
               const isBlocked = item.estBloque === true;
+              const imageUrl = getImageUrl(item);
 
               return (
                 <tr
@@ -519,12 +624,10 @@ export default function DataTable({
                         }}
                       >
                         <img
-                          src={item.image}
+                          src={imageUrl}
                           alt={item.title}
                           className="w-100 h-100 object-cover"
-                          onError={(e) => {
-                            e.currentTarget.src = `https://via.placeholder.com/48?text=${item.title.charAt(0)}`;
-                          }}
+                          onError={(e) => handleImageError(item.uuid, e)}
                         />
                       </div>
 
