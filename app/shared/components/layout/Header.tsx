@@ -666,11 +666,6 @@ const Header: FC = () => {
       // Forcer une mise à jour
       setForceUpdate((prev) => prev + 1);
 
-      // Rediriger vers la page d'accueil si on est sur une page protégée
-      if (pathname.startsWith("/dashboard-")) {
-        window.location.href = "/";
-      }
-
       // Déclencher un événement personnalisé pour notifier les autres composants
       const logoutEvent = new CustomEvent("oskar-logout", {
         detail: { timestamp: Date.now() },
@@ -679,7 +674,7 @@ const Header: FC = () => {
     } catch (error) {
       console.error("🔴 Header - Error during logout:", error);
     }
-  }, [logout, pathname]);
+  }, [logout]);
 
   const handleClosePublishModal = useCallback(() => {
     setShowPublishModal(false);
@@ -941,12 +936,6 @@ const Header: FC = () => {
     },
   });
 
-  // RETOUR CONDITIONNEL APRÈS TOUS LES HOOKS
-  const isDashboardPage = pathname.startsWith("/dashboard-");
-  if (isDashboardPage) {
-    return null;
-  }
-
   // Tailles responsives pour les différents éléments - DÉFINIES AVANT LEURS UTILISATIONS
   const logoSize = getResponsiveSize({
     xs: 28,
@@ -1064,6 +1053,14 @@ const Header: FC = () => {
     },
     [getUserInitials, iconFontSize],
   );
+
+  // DÉTERMINER SI C'EST UNE PAGE DASHBOARD APRÈS TOUS LES HOOKS
+  const isDashboardPage = pathname.startsWith("/dashboard-");
+
+  // NE PAS RENDRE LE HEADER SUR LES PAGES DASHBOARD
+  if (isDashboardPage) {
+    return null;
+  }
 
   return (
     <>
