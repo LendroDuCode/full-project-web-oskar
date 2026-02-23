@@ -92,6 +92,7 @@ export interface EchangeData {
 export interface VenteData {
   // Utilisez boutiqueUuid (camelCase) au lieu de boutique_uuid
   boutiqueUuid: string;
+  boutiqueNom: string;
   libelle: string;
   type: string;
   disponible: boolean;
@@ -195,6 +196,8 @@ export interface EchangeFormProps {
   step: number;
 }
 
+// components/PublishAdModal/types.ts
+
 export interface VenteFormProps {
   venteData: VenteData;
   conditions: ConditionOption[];
@@ -206,12 +209,12 @@ export interface VenteFormProps {
   saleMode: SaleMode;
   boutiqueCreated?: boolean;
   createdBoutiqueUuid?: string | null;
-  // Add missing props
-  boutiques: Boutique[];
-  selectedBoutique: Boutique | null;
-  onBoutiqueChange: (boutiqueUuid: string) => void;
-  user: UserInfo | null | undefined; // Allow undefined
-  validationErrors?: Record<string, string>; // ✅ AJOUTER CETTE LIGNE (déjà présente)
+  // Rendre ces props optionnelles avec ? et valeurs par défaut dans le composant
+  boutiques?: Boutique[];
+  selectedBoutique?: Boutique | null;
+  onBoutiqueChange?: (boutiqueUuid: string) => void;
+  user?: UserInfo | null | undefined;
+  validationErrors?: Record<string, string>;
 }
 export interface BoutiqueFormProps {
   boutiqueData: BoutiqueData;

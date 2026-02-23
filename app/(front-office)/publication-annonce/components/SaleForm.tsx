@@ -1,7 +1,7 @@
 // app/(front-office)/publication-annonce/components/SaleForm.tsx
 "use client";
 
-import { useState, useEffect, ChangeEvent } from "react";
+import { useState, useEffect, ChangeEvent, useCallback } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faShoppingCart,
@@ -19,6 +19,7 @@ import {
   faStore,
   faBuilding,
   faUserTie,
+  faPencil,
 } from "@fortawesome/free-solid-svg-icons";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { api } from "@/lib/api-client";
@@ -85,93 +86,75 @@ const VenteForm: React.FC<VenteFormProps> = ({
   onImageUpload,
   onRemoveImage,
   step,
-  boutiques = [], // ✅ Valeur par défaut
-  selectedBoutique,
-  onBoutiqueChange,
   user,
-  validationErrors = {}, // ✅ AJOUTER CETTE LIGNE
+  validationErrors = {},
+  // Props optionnelles avec valeurs par défaut
+  boutiques: externalBoutiques = [],
+  selectedBoutique: externalSelectedBoutique = null,
+  onBoutiqueChange: externalOnBoutiqueChange,
 }) => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [loadingBoutique, setLoadingBoutique] = useState(false);
-  const [vendeurBoutique, setVendeurBoutique] = useState<Boutique | null>(null);
+  const [loadingBoutiques, setLoadingBoutiques] = useState(false);
+  const [boutiques, setBoutiques] = useState<Boutique[]>(externalBoutiques);
+  const [boutiqueInputMode, setBoutiqueInputMode] = useState(false);
+  const [nouvelleBoutiqueNom, setNouvelleBoutiqueNom] = useState("");
 
-  // Logs de débogage
-  useEffect(() => {
-    console.log("🔍 VenteForm - Structure complète de user:", {
-      user: user,
-      userType: user?.type,
-      userRole: user?.role,
-      userKeys: user ? Object.keys(user) : [],
-      userUuid: user?.uuid,
-      isVendeurParType: user?.type?.toLowerCase() === "vendeur",
-      isVendeurParRole: user?.role?.toLowerCase() === "vendeur",
-    });
+  // Fonction pour vérifier si l'utilisateur est un vendeur
+  const isUserVendeur = useCallback(() => {
+    if (user?.type?.toLowerCase() === "vendeur") return true;
+    if (user?.role?.toLowerCase() === "vendeur") return true;
+    return false;
   }, [user]);
 
+  // Charger toutes les boutiques si aucune n'est fournie de l'extérieur
   useEffect(() => {
-    console.log("🔄 VenteForm - Props reçues:", {
-      boutiquesCount: boutiques.length,
-      boutiques: boutiques.map((b) => ({
-        nom: b.nom,
-        uuid: b.uuid,
-        statut: b.statut,
-      })),
-      user: user ? { uuid: user.uuid, type: user.type, role: user.role } : null,
-      selectedBoutique: selectedBoutique
-        ? { nom: selectedBoutique.nom, uuid: selectedBoutique.uuid }
-        : null,
-      venteDataBoutiqueUuid: venteData.boutiqueUuid,
-    });
-  }, [boutiques, user, selectedBoutique, venteData.boutiqueUuid]);
+    const fetchAllBoutiques = async () => {
+      // Si des boutiques sont déjà fournies de l'extérieur, on les utilise
+      if (externalBoutiques && externalBoutiques.length > 0) {
+        setBoutiques(externalBoutiques);
+        return;
+      }
 
-  // Fonction pour obtenir le texte du statut de la boutique
-  const getBoutiqueStatusText = (boutique: Boutique) => {
-    if (boutique.est_bloque) {
-      return "• Bloqué";
-    }
-    if (boutique.est_ferme) {
-      return "• Fermé";
-    }
-    switch (boutique.statut) {
-      case "actif":
-        return "• Actif";
-      case "en_review":
-        return "• En revue";
-      case "bloque":
-        return "• Bloqué";
-      default:
-        return "";
-    }
-  };
+      try {
+        setLoadingBoutiques(true);
+        console.log("🏪 Chargement de toutes les boutiques...");
 
-  // Fonction pour obtenir le badge de statut (à utiliser en dehors des <option>)
-  const getBoutiqueStatusBadge = (boutique: Boutique) => {
-    if (boutique.est_bloque) {
-      return <span className="badge bg-danger">Bloqué</span>;
-    }
-    if (boutique.est_ferme) {
-      return <span className="badge bg-secondary">Fermé</span>;
-    }
-    switch (boutique.statut) {
-      case "actif":
-        return <span className="badge bg-success">Actif</span>;
-      case "en_review":
-        return <span className="badge bg-warning">En revue</span>;
-      case "bloque":
-        return <span className="badge bg-danger">Bloqué</span>;
-      default:
-        return <span className="badge bg-secondary">Inconnu</span>;
-    }
-  };
+        const response = await api.get(API_ENDPOINTS.BOUTIQUES.ALL);
+        console.log("📦 Réponse boutiques:", response);
 
-  // Charger les catégories test
+        let boutiquesData: Boutique[] = [];
+        if (response?.data && Array.isArray(response.data)) {
+          boutiquesData = response.data;
+        } else if (Array.isArray(response)) {
+          boutiquesData = response;
+        }
+
+        // Filtrer les boutiques valides (non bloquées, non fermées)
+        const boutiquesValides = boutiquesData.filter(
+          (b) => !b.est_bloque && !b.est_ferme,
+        );
+
+        console.log(`✅ ${boutiquesValides.length} boutiques disponibles`);
+        setBoutiques(boutiquesValides);
+      } catch (error) {
+        console.error("❌ Erreur chargement boutiques:", error);
+      } finally {
+        setLoadingBoutiques(false);
+      }
+    };
+
+    fetchAllBoutiques();
+  }, [externalBoutiques]);
+
+  // Charger les catégories
   useEffect(() => {
     const fetchCategories = async () => {
       try {
         setLoading(true);
         const response = await api.get(API_ENDPOINTS.CATEGORIES.LIST);
+
         if (Array.isArray(response)) {
           const formatted: Category[] = response.map((item) => ({
             label: item.libelle || item.type || "Catégorie sans nom",
@@ -180,8 +163,6 @@ const VenteForm: React.FC<VenteFormProps> = ({
             icon: faList,
           }));
           setCategories(formatted);
-        } else {
-          throw new Error("Format de réponse invalide");
         }
       } catch (err: any) {
         console.error("Erreur chargement catégories:", err);
@@ -194,136 +175,47 @@ const VenteForm: React.FC<VenteFormProps> = ({
     fetchCategories();
   }, []);
 
-  // Récupérer la boutique du vendeur - Utilisation du ROLE au lieu du TYPE
-  useEffect(() => {
-    // Log pour debug
-    console.log("🔍 VenteForm - Vérification user:", {
-      userExists: !!user,
-      userType: user?.type,
-      userRole: user?.role,
-      isVendeurParRole: user?.role?.toLowerCase() === "vendeur",
+  // Gérer le changement de boutique
+  const handleBoutiqueSelect = (e: ChangeEvent<HTMLSelectElement>) => {
+    const uuid = e.target.value;
+    setBoutiqueInputMode(false);
+
+    // Mettre à jour l'état local
+    onChange({
+      ...venteData,
+      boutiqueUuid: uuid,
     });
 
-    // Condition basée sur le ROLE (insensible à la casse)
-    const isVendeur = user?.role?.toLowerCase() === "vendeur";
-
-    if (!user) {
-      console.log("ℹ️ Utilisateur non connecté");
-      return;
+    // Appeler le callback externe si fourni
+    if (externalOnBoutiqueChange) {
+      externalOnBoutiqueChange(uuid);
     }
+  };
 
-    if (!isVendeur) {
-      console.log("ℹ️ Utilisateur non-vendeur, rôle réel:", user?.role);
-      return;
+  const handleNouvelleBoutiqueNomChange = (
+    e: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const nom = e.target.value;
+    setNouvelleBoutiqueNom(nom);
+    // Ici on garde boutiqueUuid vide pour indiquer qu'on veut créer une nouvelle boutique
+    // La création réelle se fera dans PublishAdModal
+    onChange({
+      ...venteData,
+      boutiqueUuid: "",
+    });
+  };
+
+  const toggleInputMode = () => {
+    setBoutiqueInputMode(!boutiqueInputMode);
+    if (!boutiqueInputMode) {
+      // Passage en mode saisie
+      setNouvelleBoutiqueNom("");
+      onChange({
+        ...venteData,
+        boutiqueUuid: "",
+      });
     }
-
-    const fetchVendeurBoutique = async () => {
-      try {
-        setLoadingBoutique(true);
-        console.log(
-          "🛍️ Chargement boutique vendeur pour l'utilisateur:",
-          user.uuid,
-        );
-
-        const response = await api.get(
-          API_ENDPOINTS.BOUTIQUES.LISTE_BOUTIQUES_CREE_PAR_VENDEUR,
-        );
-
-        console.log("📦 Réponse boutique vendeur:", response);
-
-        let boutiquesData: Boutique[] = [];
-
-        if (Array.isArray(response)) {
-          boutiquesData = response;
-        } else if (response && Array.isArray(response.data)) {
-          boutiquesData = response.data;
-        } else if (
-          response &&
-          response.data &&
-          Array.isArray(response.data.data)
-        ) {
-          boutiquesData = response.data.data;
-        } else if (
-          response &&
-          response.success &&
-          Array.isArray(response.data)
-        ) {
-          boutiquesData = response.data;
-        }
-
-        console.log(
-          "📊 Boutiques brutes:",
-          boutiquesData.map((b) => ({
-            nom: b.nom,
-            uuid: b.uuid,
-            statut: b.statut,
-            vendeurUuid: b.vendeurUuid,
-          })),
-        );
-
-        // Filtrer UNIQUEMENT les boutiques qui appartiennent à CE vendeur
-        const boutiquesDuVendeur = boutiquesData.filter(
-          (boutique: Boutique) => boutique.vendeurUuid === user.uuid,
-        );
-
-        console.log(
-          `📊 ${boutiquesDuVendeur.length} boutique(s) pour ce vendeur:`,
-          boutiquesDuVendeur.map((b) => ({ nom: b.nom, statut: b.statut })),
-        );
-
-        // On garde seulement le filtrage des boutiques bloquées ou fermées
-        const boutiquesDisponibles = boutiquesDuVendeur.filter(
-          (boutique: Boutique) => !boutique.est_bloque && !boutique.est_ferme,
-        );
-
-        console.log(
-          `📊 ${boutiquesDisponibles.length} boutique(s) disponible(s) après filtrage:`,
-          boutiquesDisponibles.map((b) => ({ nom: b.nom, statut: b.statut })),
-        );
-
-        if (boutiquesDisponibles.length > 0) {
-          const premiereBoutique = boutiquesDisponibles[0];
-          setVendeurBoutique(premiereBoutique);
-          console.log("✅ VendeurBoutique définie:", premiereBoutique.nom);
-
-          // Pré-sélectionner automatiquement si pas déjà fait
-          if (!venteData.boutiqueUuid) {
-            console.log(
-              `✅ Pré-sélection automatique de la boutique: ${premiereBoutique.nom} (${premiereBoutique.uuid})`,
-            );
-            onChange({
-              ...venteData,
-              boutiqueUuid: premiereBoutique.uuid,
-            });
-
-            if (onBoutiqueChange) {
-              onBoutiqueChange(premiereBoutique.uuid);
-            }
-          } else {
-            console.log(
-              `ℹ️ Boutique déjà sélectionnée: ${venteData.boutiqueUuid}`,
-            );
-          }
-        } else {
-          console.log("ℹ️ Le vendeur n'a pas de boutique disponible");
-          setVendeurBoutique(null);
-        }
-      } catch (err: any) {
-        console.error("❌ Erreur chargement boutique:", err);
-        setVendeurBoutique(null);
-      } finally {
-        setLoadingBoutique(false);
-      }
-    };
-
-    fetchVendeurBoutique();
-  }, [
-    user?.role,
-    user?.uuid,
-    venteData.boutiqueUuid,
-    onChange,
-    onBoutiqueChange,
-  ]);
+  };
 
   const renderVenteStep2 = () => {
     return (
@@ -363,252 +255,106 @@ const VenteForm: React.FC<VenteFormProps> = ({
                 </h5>
               </div>
               <div className="card-body">
-                {/* Section boutique pour les vendeurs - basée sur le ROLE */}
-                {user?.role?.toLowerCase() === "vendeur" && (
-                  <div className="mb-4">
-                    <div className="d-flex justify-content-between align-items-center mb-3">
-                      <label className="form-label fw-semibold d-flex align-items-center mb-0">
-                        <FontAwesomeIcon
-                          icon={faUserTie}
-                          className="me-2 text-primary"
-                        />
-                        Vendre en tant que vendeur
-                      </label>
-                      {vendeurBoutique && !loadingBoutique && (
-                        <span className="badge bg-primary bg-opacity-10 text-primary">
-                          <FontAwesomeIcon icon={faStore} className="me-1" />
-                          Votre boutique
-                        </span>
-                      )}
-                    </div>
-
-                    {loadingBoutique ? (
-                      <div className="alert alert-info border-0 mb-3">
-                        <div className="d-flex align-items-center">
-                          <div className="spinner-border spinner-border-sm me-2"></div>
-                          Chargement de votre boutique...
-                        </div>
-                      </div>
-                    ) : vendeurBoutique ? (
-                      <div className="mb-4">
-                        <div className="alert alert-success border-0 mb-3">
-                          <div className="d-flex align-items-center">
-                            <FontAwesomeIcon
-                              icon={faCheckCircle}
-                              className="me-2"
-                            />
-                            <span>
-                              Votre boutique{" "}
-                              <strong>{vendeurBoutique.nom}</strong> a été
-                              présélectionnée
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="card border border-success border-2 bg-success bg-opacity-5 p-3">
-                          <div className="d-flex align-items-center">
-                            {vendeurBoutique.logo ? (
-                              <SafeImage
-                                src={vendeurBoutique.logo}
-                                alt={vendeurBoutique.nom}
-                                className="rounded-circle me-3"
-                                style={{
-                                  width: "50px",
-                                  height: "50px",
-                                  objectFit: "cover",
-                                }}
-                                fallbackIcon={faBuilding}
-                                fallbackSize="20px"
-                              />
-                            ) : (
-                              <div className="bg-white rounded-circle p-3 me-3 border border-success">
-                                <FontAwesomeIcon
-                                  icon={faBuilding}
-                                  className="text-success fs-4"
-                                />
-                              </div>
-                            )}
-                            <div className="flex-grow-1">
-                              <div className="d-flex justify-content-between align-items-start">
-                                <div>
-                                  <h6 className="fw-bold mb-1 d-flex align-items-center">
-                                    {vendeurBoutique.nom}
-                                    <span className="ms-2">
-                                      {getBoutiqueStatusBadge(vendeurBoutique)}
-                                    </span>
-                                  </h6>
-                                  <p className="text-muted small mb-2">
-                                    {vendeurBoutique.description ||
-                                      "Aucune description"}
-                                  </p>
-                                  <div className="d-flex gap-2">
-                                    <small className="badge bg-light text-dark">
-                                      {vendeurBoutique.type_boutique?.libelle ||
-                                        "Type inconnu"}
-                                    </small>
-                                    <small className="text-muted">
-                                      <FontAwesomeIcon
-                                        icon={faBuilding}
-                                        className="me-1"
-                                      />
-                                      Votre boutique par défaut
-                                    </small>
-                                  </div>
-                                </div>
-                                <div className="text-end">
-                                  <button
-                                    type="button"
-                                    className="btn btn-outline-secondary btn-sm"
-                                    onClick={() => {
-                                      console.log("🔄 Changement de boutique");
-                                      setVendeurBoutique(null);
-                                      onChange({
-                                        ...venteData,
-                                        boutiqueUuid: "",
-                                      });
-                                      if (onBoutiqueChange) {
-                                        onBoutiqueChange("");
-                                      }
-                                    }}
-                                  >
-                                    Changer
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      !loadingBoutique && (
-                        <div className="alert alert-warning border-0 mb-3">
-                          <FontAwesomeIcon
-                            icon={faExclamationCircle}
-                            className="me-2"
-                          />
-                          <span>
-                            Vous n'avez pas encore de boutique.{" "}
-                            <a
-                              href="/dashboard-vendeur/boutiques"
-                              className="fw-bold text-decoration-none"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              Créer une boutique
-                            </a>
-                          </span>
-                        </div>
-                      )
-                    )}
-                  </div>
-                )}
-
-                {/* Liste des boutiques pour tous les utilisateurs */}
-                {boutiques && boutiques.length > 0 && (
-                  <div className="mb-4">
-                    <label className="form-label fw-semibold d-flex align-items-center">
+                {/* Section Boutique */}
+                <div className="mb-4">
+                  <div className="d-flex justify-content-between align-items-center mb-3">
+                    <label className="form-label fw-semibold d-flex align-items-center mb-0">
                       <FontAwesomeIcon
                         icon={faStore}
                         className="me-2 text-success"
                       />
-                      Vendre via une boutique{" "}
-                      {user?.role?.toLowerCase() !== "vendeur"
-                        ? "(optionnel)"
-                        : ""}
+                      Boutique
+                      {isUserVendeur() && (
+                        <span className="badge bg-primary bg-opacity-10 text-primary ms-2">
+                          Recommandé pour les vendeurs
+                        </span>
+                      )}
                     </label>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-secondary"
+                      onClick={toggleInputMode}
+                    >
+                      <FontAwesomeIcon icon={faPencil} className="me-1" />
+                      {boutiqueInputMode
+                        ? "Choisir une boutique existante"
+                        : "Créer une nouvelle boutique"}
+                    </button>
+                  </div>
+
+                  {loadingBoutiques ? (
+                    <div className="alert alert-info border-0">
+                      <div className="d-flex align-items-center">
+                        <div className="spinner-border spinner-border-sm me-2"></div>
+                        Chargement des boutiques...
+                      </div>
+                    </div>
+                  ) : boutiqueInputMode ? (
+                    <div>
+                      <input
+                        type="text"
+                        className="form-control form-control-lg border-light"
+                        placeholder="Nom de votre nouvelle boutique"
+                        value={nouvelleBoutiqueNom}
+                        onChange={handleNouvelleBoutiqueNomChange}
+                      />
+                      {nouvelleBoutiqueNom && (
+                        <div className="mt-2 p-2 bg-info bg-opacity-10 rounded-3">
+                          <small className="text-info">
+                            <FontAwesomeIcon
+                              icon={faInfoCircle}
+                              className="me-1"
+                            />
+                            Une nouvelle boutique sera créée avec le nom "
+                            {nouvelleBoutiqueNom}"
+                          </small>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
                     <select
-                      className="form-select border-light"
+                      className="form-select form-select-lg border-light"
                       value={venteData.boutiqueUuid}
-                      onChange={(e) => {
-                        console.log(`🔄 Sélection boutique: ${e.target.value}`);
-                        onChange({
-                          ...venteData,
-                          boutiqueUuid: e.target.value,
-                        });
-                        if (onBoutiqueChange) {
-                          onBoutiqueChange(e.target.value);
-                        }
-                      }}
-                      required={user?.role?.toLowerCase() === "vendeur"}
+                      onChange={handleBoutiqueSelect}
                     >
                       <option value="">
-                        {user?.role?.toLowerCase() === "vendeur"
-                          ? "Sélectionnez votre boutique"
-                          : "Sélectionnez une boutique (optionnel)"}
+                        Sélectionnez une boutique (optionnel)
                       </option>
                       {boutiques.map((boutique) => (
                         <option key={boutique.uuid} value={boutique.uuid}>
-                          🛒 {boutique.nom} {getBoutiqueStatusText(boutique)}
+                          🏪 {boutique.nom} -{" "}
+                          {boutique.statut === "actif"
+                            ? "✓ Active"
+                            : `⏳ ${boutique.statut}`}
+                          {boutique.vendeurUuid === user?.uuid
+                            ? " (Votre boutique)"
+                            : ""}
                         </option>
                       ))}
                     </select>
+                  )}
 
-                    {selectedBoutique && (
-                      <div className="mt-3 card border-0 bg-success bg-opacity-10 p-3">
-                        <div className="d-flex align-items-center">
-                          {selectedBoutique.logo ? (
-                            <SafeImage
-                              src={selectedBoutique.logo}
-                              alt={selectedBoutique.nom}
-                              className="rounded-circle me-3"
-                              style={{
-                                width: "50px",
-                                height: "50px",
-                                objectFit: "cover",
-                              }}
-                              fallbackIcon={faBuilding}
-                              fallbackSize="20px"
-                            />
-                          ) : (
-                            <div className="bg-white rounded-circle p-3 me-3">
-                              <FontAwesomeIcon
-                                icon={faBuilding}
-                                className="text-success fs-4"
-                              />
-                            </div>
-                          )}
-                          <div>
-                            <h6 className="fw-bold mb-1 d-flex align-items-center">
-                              {selectedBoutique.nom}
-                              <span className="ms-2">
-                                {getBoutiqueStatusBadge(selectedBoutique)}
-                              </span>
-                            </h6>
-                            <p className="text-muted small mb-0">
-                              {selectedBoutique.description ||
-                                "Aucune description"}
-                            </p>
-                            <div className="d-flex gap-2 mt-2">
-                              <small className="badge bg-light text-dark">
-                                {selectedBoutique.type_boutique?.libelle ||
-                                  "Type inconnu"}
-                              </small>
-                              <small className="text-muted">
-                                <FontAwesomeIcon
-                                  icon={faBuilding}
-                                  className="me-1"
-                                />
-                                Vente via boutique
-                              </small>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+                  {venteData.boutiqueUuid && (
+                    <div className="mt-3 p-3 bg-success bg-opacity-10 rounded-3">
+                      <small className="text-success">
+                        <FontAwesomeIcon
+                          icon={faCheckCircle}
+                          className="me-1"
+                        />
+                        Produit associé à une boutique existante
+                      </small>
+                    </div>
+                  )}
 
-                {/* Message de débogage temporaire si aucune boutique */}
-                {(!boutiques || boutiques.length === 0) && (
-                  <div className="alert alert-info mt-3">
-                    <small>
-                      <strong>Debug:</strong> Aucune boutique disponible.
-                      {boutiques
-                        ? `boutiques.length = ${boutiques.length}`
-                        : "boutiques est null/undefined"}
-                    </small>
-                  </div>
-                )}
+                  {boutiqueInputMode && nouvelleBoutiqueNom && (
+                    <div className="mt-3 p-3 bg-info bg-opacity-10 rounded-3">
+                      <small className="text-info">
+                        <FontAwesomeIcon icon={faInfoCircle} className="me-1" />
+                        Nouvelle boutique à créer : "{nouvelleBoutiqueNom}"
+                      </small>
+                    </div>
+                  )}
+                </div>
 
                 <div className="mb-4">
                   <label className="form-label fw-semibold">
@@ -632,6 +378,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
                     </div>
                   )}
                 </div>
+
                 <div className="row g-3">
                   <div className="col-md-6">
                     <div className="mb-3">
@@ -729,6 +476,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
                     </div>
                   </div>
                 </div>
+
                 <div className="mb-3">
                   <label className="form-label fw-semibold">
                     Description détaillée
@@ -753,6 +501,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
               </div>
             </div>
           </div>
+
           <div className="col-lg-4">
             <div
               className="card border-0 shadow-sm sticky-top"
@@ -820,6 +569,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
                     </label>
                   </div>
                 </div>
+
                 <div className="mb-4">
                   <label className="form-label fw-semibold">Catégorie *</label>
                   {loading ? (
@@ -859,6 +609,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
                     </div>
                   )}
                 </div>
+
                 <div className="mb-4">
                   <label className="form-label fw-semibold">
                     État du produit
@@ -877,6 +628,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
                     ))}
                   </select>
                 </div>
+
                 <div className="alert alert-success border-0">
                   <small className="d-flex align-items-center">
                     <FontAwesomeIcon icon={faInfoCircle} className="me-2" />
@@ -894,6 +646,11 @@ const VenteForm: React.FC<VenteFormProps> = ({
   };
 
   const renderVenteStep3 = () => {
+    // Trouver la boutique sélectionnée
+    const selectedBoutique = boutiques.find(
+      (b) => b.uuid === venteData.boutiqueUuid,
+    );
+
     return (
       <div className="p-4">
         <div className="text-center mb-5">
@@ -908,6 +665,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
             Vérifiez les informations avant publication
           </p>
         </div>
+
         <div className="row g-4">
           <div className="col-lg-8">
             <div className="card border-0 shadow-sm">
@@ -921,41 +679,28 @@ const VenteForm: React.FC<VenteFormProps> = ({
                   </div>
                   <div className="badge bg-success bg-opacity-10 text-success fs-6 p-2">
                     <FontAwesomeIcon icon={faTag} className="me-2" />
-                    {selectedBoutique || vendeurBoutique
+                    {selectedBoutique || nouvelleBoutiqueNom
                       ? "Vente via boutique"
                       : "En vente"}
                   </div>
                 </div>
 
                 {/* Section boutique */}
-                {(selectedBoutique || vendeurBoutique) && (
+                {(selectedBoutique || nouvelleBoutiqueNom) && (
                   <div className="mb-4">
                     <h6 className="fw-bold text-dark mb-2 d-flex align-items-center">
                       <FontAwesomeIcon
                         icon={faStore}
                         className="me-2 text-success"
                       />
-                      {vendeurBoutique
-                        ? "Vente via VOTRE boutique"
-                        : "Vente via boutique"}
+                      Vente via boutique
                     </h6>
-                    <div
-                      className={`card border-0 ${
-                        vendeurBoutique
-                          ? "bg-primary bg-opacity-10 border-primary"
-                          : "bg-success bg-opacity-10"
-                      } p-3`}
-                    >
+                    <div className="card border-0 bg-success bg-opacity-10 p-3">
                       <div className="d-flex align-items-center">
-                        {selectedBoutique?.logo || vendeurBoutique?.logo ? (
+                        {selectedBoutique?.logo ? (
                           <SafeImage
-                            src={
-                              (vendeurBoutique || selectedBoutique)?.logo || ""
-                            }
-                            alt={
-                              (vendeurBoutique || selectedBoutique)?.nom ||
-                              "Boutique"
-                            }
+                            src={selectedBoutique.logo}
+                            alt={selectedBoutique.nom}
                             className="rounded-circle me-3"
                             style={{
                               width: "60px",
@@ -966,49 +711,30 @@ const VenteForm: React.FC<VenteFormProps> = ({
                             fallbackSize="24px"
                           />
                         ) : (
-                          <div
-                            className={`rounded-circle p-3 me-3 ${
-                              vendeurBoutique
-                                ? "bg-primary text-white"
-                                : "bg-white"
-                            }`}
-                          >
+                          <div className="bg-white rounded-circle p-3 me-3">
                             <FontAwesomeIcon
                               icon={faBuilding}
-                              className={
-                                vendeurBoutique
-                                  ? "text-white fs-3"
-                                  : "text-success fs-3"
-                              }
+                              className="text-success fs-3"
                             />
                           </div>
                         )}
                         <div>
                           <h5 className="fw-bold mb-1">
-                            {(vendeurBoutique || selectedBoutique)?.nom}
-                            {vendeurBoutique && (
-                              <span className="badge bg-primary ms-2">
-                                Votre boutique
+                            {selectedBoutique?.nom || nouvelleBoutiqueNom}
+                            {!selectedBoutique && nouvelleBoutiqueNom && (
+                              <span className="badge bg-info ms-2">
+                                Nouvelle boutique
                               </span>
                             )}
                           </h5>
-                          <div className="d-flex align-items-center gap-2 mb-2">
-                            {(vendeurBoutique || selectedBoutique) && (
-                              <>
-                                {getBoutiqueStatusBadge(
-                                  vendeurBoutique || selectedBoutique!,
-                                )}
-                                <span className="badge bg-light text-dark">
-                                  {(vendeurBoutique || selectedBoutique)
-                                    ?.type_boutique?.libelle || "Type inconnu"}
-                                </span>
-                              </>
-                            )}
-                          </div>
-                          <p className="text-muted small mb-0">
-                            {(vendeurBoutique || selectedBoutique)
-                              ?.description || "Aucune description fournie"}
-                          </p>
+                          {selectedBoutique && (
+                            <div className="d-flex align-items-center gap-2 mb-2">
+                              <span className="badge bg-light text-dark">
+                                {selectedBoutique.type_boutique?.libelle ||
+                                  "Boutique"}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1032,28 +758,8 @@ const VenteForm: React.FC<VenteFormProps> = ({
                       </div>
                     </div>
                   </div>
-                  <div className="col-md-4 text-end">
-                    <div className="bg-success bg-opacity-10 rounded-3 p-3">
-                      <div className="fs-1 fw-bold text-success">
-                        {venteData.etoile}
-                      </div>
-                      <div className="text-warning">
-                        {[...Array(5)].map((_, i) => (
-                          <FontAwesomeIcon
-                            key={i}
-                            icon={faStar}
-                            className={
-                              i < parseInt(venteData.etoile)
-                                ? "text-warning"
-                                : "text-light"
-                            }
-                          />
-                        ))}
-                      </div>
-                      <p className="text-muted small mb-0 mt-1">Note moyenne</p>
-                    </div>
-                  </div>
                 </div>
+
                 <div className="row g-4">
                   <div className="col-md-6">
                     <div className="mb-3">
@@ -1087,6 +793,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
                     </div>
                   </div>
                 </div>
+
                 {venteData.description && (
                   <div className="mt-4">
                     <p className="text-muted mb-2">Description</p>
@@ -1095,37 +802,10 @@ const VenteForm: React.FC<VenteFormProps> = ({
                     </div>
                   </div>
                 )}
-                <div className="mt-4 pt-3 border-top">
-                  <div className="row">
-                    <div className="col-md-6">
-                      <div className="form-check form-switch">
-                        <input
-                          className="form-check-input"
-                          type="checkbox"
-                          role="switch"
-                          id="disponibleSwitch"
-                          checked={venteData.disponible}
-                          readOnly
-                        />
-                        <label
-                          className="form-check-label fw-semibold"
-                          htmlFor="disponibleSwitch"
-                        >
-                          Produit disponible
-                        </label>
-                      </div>
-                    </div>
-                    <div className="col-md-6">
-                      <p className="text-muted mb-1">Garantie</p>
-                      <p className="fw-bold text-dark">
-                        {venteData.garantie === "oui" ? "Oui" : "Non"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
+
           <div className="col-lg-4">
             <div className="card border-0 shadow-sm">
               <div className="card-body">
@@ -1151,28 +831,6 @@ const VenteForm: React.FC<VenteFormProps> = ({
                     <p className="text-muted small mb-0">Aucune photo</p>
                   </div>
                 )}
-                <div className="alert alert-success border-0">
-                  <h6 className="fw-bold mb-2">
-                    <FontAwesomeIcon icon={faInfoCircle} className="me-2" />
-                    Prêt à vendre
-                  </h6>
-                  <p className="small mb-0">
-                    {selectedBoutique || vendeurBoutique
-                      ? "Votre produit sera publié dans votre boutique."
-                      : "Votre produit sera visible par tous les acheteurs."}
-                  </p>
-                </div>
-                <div className="alert alert-info border-0 mt-3">
-                  <h6 className="fw-bold mb-2">
-                    Conseils pour vendre rapidement
-                  </h6>
-                  <ul className="small mb-0 ps-3">
-                    <li>Répondez rapidement aux messages</li>
-                    <li>Soyez transparent sur l'état du produit</li>
-                    <li>Proposez un prix compétitif</li>
-                    <li>Organisez les rencontres en lieu sûr</li>
-                  </ul>
-                </div>
               </div>
             </div>
           </div>

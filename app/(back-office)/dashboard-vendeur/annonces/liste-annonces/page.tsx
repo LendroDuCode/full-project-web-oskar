@@ -8,6 +8,7 @@ import FilterBar from "../components/FilterBar";
 import DataTable from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
 import ViewModal from "../components/ViewModal";
+import DeleteConfirmModal from "../components/DeleteConfirmModal";
 
 interface AnnonceData {
   uuid: string;
@@ -47,6 +48,15 @@ export default function AnnoncesPage() {
     data: any;
     type: string;
   } | null>(null);
+
+  // États pour le modal de confirmation de suppression
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<{
+    uuid: string;
+    type: string;
+    title: string;
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Fonction pour transformer les données selon le type
   const transformAnnonceData = useCallback(
@@ -413,29 +423,66 @@ export default function AnnoncesPage() {
     [],
   );
 
-  const handleDelete = useCallback(async (uuid: string, type: string) => {
-    if (!confirm("Êtes-vous sûr de vouloir supprimer cette annonce ?")) {
-      return;
-    }
+  // Nouvelle fonction pour ouvrir le modal de confirmation de suppression
+  const openDeleteModal = useCallback(
+    (uuid: string, type: string, title: string) => {
+      setItemToDelete({ uuid, type, title });
+      setDeleteModalOpen(true);
+    },
+    [],
+  );
+
+  // Fonction pour confirmer la suppression
+  const confirmDelete = useCallback(async () => {
+    if (!itemToDelete) return;
 
     try {
+      setIsDeleting(true);
       setError(null);
-      const endpoint = getDeleteEndpoint(type, uuid);
+      const endpoint = getDeleteEndpoint(itemToDelete.type, itemToDelete.uuid);
 
       if (!endpoint) {
-        throw new Error(`Endpoint non défini pour le type: ${type}`);
+        throw new Error(
+          `Endpoint non défini pour le type: ${itemToDelete.type}`,
+        );
       }
 
       await api.delete(endpoint);
 
       // Mise à jour optimiste de l'UI
-      setAnnonces((prev) => prev.filter((item) => item.uuid !== uuid));
+      setAnnonces((prev) =>
+        prev.filter((item) => item.uuid !== itemToDelete.uuid),
+      );
+      setFilteredAnnonces((prev) =>
+        prev.filter((item) => item.uuid !== itemToDelete.uuid),
+      );
+
+      // Fermer le modal
+      setDeleteModalOpen(false);
+      setItemToDelete(null);
     } catch (err: any) {
       console.error("Erreur lors de la suppression:", err);
       setError(err.response?.data?.message || "Erreur lors de la suppression");
       alert(err.response?.data?.message || "Erreur lors de la suppression");
+    } finally {
+      setIsDeleting(false);
     }
+  }, [itemToDelete]);
+
+  // Annuler la suppression
+  const cancelDelete = useCallback(() => {
+    setDeleteModalOpen(false);
+    setItemToDelete(null);
   }, []);
+
+  const handleDelete = useCallback(
+    (uuid: string, type: string) => {
+      // Trouver l'annonce pour obtenir le titre
+      const annonce = annonces.find((item) => item.uuid === uuid);
+      openDeleteModal(uuid, type, annonce?.title || "cette annonce");
+    },
+    [annonces, openDeleteModal],
+  );
 
   const handleValidate = useCallback(async (uuid: string, type: string) => {
     try {
@@ -704,6 +751,16 @@ export default function AnnoncesPage() {
                 onDelete={handleDelete}
               />
             )}
+
+            {/* Modal de confirmation de suppression */}
+            <DeleteConfirmModal
+              isOpen={deleteModalOpen}
+              onClose={cancelDelete}
+              onConfirm={confirmDelete}
+              itemTitle={itemToDelete?.title || ""}
+              itemType={itemToDelete?.type || ""}
+              isDeleting={isDeleting}
+            />
           </>
         ) : (
           <EmptyState

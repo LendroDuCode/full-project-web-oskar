@@ -1,4 +1,3 @@
-// lib/api-client.ts
 "use client";
 
 import { API_ENDPOINTS } from "@/config/api-endpoints";
@@ -59,10 +58,14 @@ class ApiClient {
     }
   }
 
+  /**
+   * ✅ Récupère le token d'authentification depuis différentes sources
+   * Gère tous les formats de token : oskar_token, temp_token, tempToken, access_token, token
+   */
   private getAuthToken(): string | null {
     if (typeof window === "undefined") return null;
 
-    // Priorité 1: Token spécifique Oskar
+    // Priorité 1: Token spécifique Oskar (stocké après connexion)
     const oskarToken = localStorage.getItem("oskar_token");
     if (oskarToken) {
       if (!this.isProduction) {
@@ -74,7 +77,31 @@ class ApiClient {
       return oskarToken;
     }
 
-    // Priorité 2: Cookies
+    // Priorité 2: temp_token (utilisé par vendeur, admin, agent)
+    const tempToken = localStorage.getItem("temp_token");
+    if (tempToken) {
+      if (!this.isProduction) {
+        console.log(
+          "🔑 Token temporaire trouvé (temp_token):",
+          tempToken.substring(0, 20) + "...",
+        );
+      }
+      return tempToken;
+    }
+
+    // Priorité 3: tempToken (utilisé par utilisateur)
+    const tempTokenAlt = localStorage.getItem("tempToken");
+    if (tempTokenAlt) {
+      if (!this.isProduction) {
+        console.log(
+          "🔑 Token temporaire trouvé (tempToken):",
+          tempTokenAlt.substring(0, 20) + "...",
+        );
+      }
+      return tempTokenAlt;
+    }
+
+    // Priorité 4: Cookies
     const getCookie = (name: string) => {
       const value = `; ${document.cookie}`;
       const parts = value.split(`; ${name}=`);
@@ -85,7 +112,9 @@ class ApiClient {
     const cookieToken =
       getCookie("oskar_token") ||
       getCookie("access_token") ||
-      getCookie("token");
+      getCookie("token") ||
+      getCookie("temp_token") ||
+      getCookie("tempToken");
     if (cookieToken) {
       if (!this.isProduction) {
         console.log("🍪 Token cookie trouvé");
@@ -93,12 +122,14 @@ class ApiClient {
       return cookieToken;
     }
 
-    // Priorité 3: Autres local storage
+    // Priorité 5: Autres local storage
     const otherTokens = [
       localStorage.getItem("access_token"),
       localStorage.getItem("token"),
       sessionStorage.getItem("oskar_token"),
       sessionStorage.getItem("access_token"),
+      sessionStorage.getItem("temp_token"),
+      sessionStorage.getItem("tempToken"),
     ];
 
     const foundToken = otherTokens.find((token) => token !== null);
@@ -115,9 +146,28 @@ class ApiClient {
     return null;
   }
 
+  /**
+   * ✅ Récupère le type d'utilisateur depuis localStorage
+   */
   private getUserType(): string | null {
     if (typeof window === "undefined") return null;
-    return localStorage.getItem("oskar_user_type");
+
+    // Essayer d'abord avec oskar_user_type
+    const userType = localStorage.getItem("oskar_user_type");
+    if (userType) return userType;
+
+    // Sinon, essayer d'extraire de oskar_user
+    try {
+      const userStr = localStorage.getItem("oskar_user");
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        return user.type || null;
+      }
+    } catch (e) {
+      console.error("❌ Erreur parsing user:", e);
+    }
+
+    return null;
   }
 
   public getToken(): string | null {
@@ -288,10 +338,21 @@ class ApiClient {
         setTimeout(() => {
           if (
             typeof window !== "undefined" &&
-            !window.location.pathname.includes("connexion")
+            !window.location.pathname.includes("connexion") &&
+            !window.location.pathname.includes("login")
           ) {
             console.log("🔐 Redirection vers la page de connexion...");
-            window.location.href = "/connexion";
+            // Rediriger vers la page de connexion appropriée
+            const userType = this.getUserType();
+            if (userType === "admin") {
+              window.location.href = "/auth/admin/login";
+            } else if (userType === "vendeur") {
+              window.location.href = "/auth/vendeur/login";
+            } else if (userType === "agent") {
+              window.location.href = "/auth/agent/login";
+            } else {
+              window.location.href = "/connexion";
+            }
           }
         }, 1000);
       }
@@ -306,21 +367,36 @@ class ApiClient {
     console.log("🧹 Nettoyage des tokens d'authentification...");
 
     // Cookies
-    const cookies = ["oskar_token", "access_token", "token"];
+    const cookies = [
+      "oskar_token",
+      "access_token",
+      "token",
+      "temp_token",
+      "tempToken",
+    ];
     cookies.forEach((cookie) => {
       document.cookie = `${cookie}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=${window.location.hostname};`;
     });
 
-    // LocalStorage - on ne nettoie que les tokens, pas toute la configuration
-    localStorage.removeItem("oskar_token");
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("token");
-    // On garde le type d'utilisateur pour le diagnostic
-    // localStorage.removeItem("oskar_user_type");
+    // LocalStorage - tous les tokens
+    const tokenKeys = [
+      "oskar_token",
+      "access_token",
+      "token",
+      "temp_token",
+      "tempToken",
+      "oskar_user",
+      "oskar_user_type",
+    ];
+    tokenKeys.forEach((key) => {
+      localStorage.removeItem(key);
+    });
 
     // SessionStorage
     sessionStorage.removeItem("oskar_token");
     sessionStorage.removeItem("access_token");
+    sessionStorage.removeItem("temp_token");
+    sessionStorage.removeItem("tempToken");
   }
 
   /**
@@ -365,10 +441,6 @@ class ApiClient {
       throw error;
     }
   }
-
-  // lib/api-client.ts - CORRECTION de la ligne 442
-
-  // ... votre code existant ...
 
   private async request<T = any>(
     endpoint: string,
@@ -498,8 +570,6 @@ class ApiClient {
       this.requestCount--;
     }
   }
-
-  // ... reste de votre code ...
 
   // Méthodes HTTP avec gestion FormData
   postFormData<T = any>(
@@ -649,6 +719,26 @@ class ApiClient {
       baseApiUrl: this.baseApiUrl,
       isProduction: this.isProduction,
     };
+  }
+
+  // ✅ Nouvelle méthode pour sauvegarder le token après connexion
+  saveAuthData(token: string, user: any, userType: string) {
+    // Sauvegarder le token sous toutes ses formes pour compatibilité
+    localStorage.setItem("oskar_token", token);
+    localStorage.setItem("temp_token", token);
+    localStorage.setItem("tempToken", token);
+
+    // Sauvegarder l'utilisateur
+    localStorage.setItem("oskar_user", JSON.stringify(user));
+
+    // Sauvegarder le type d'utilisateur
+    localStorage.setItem("oskar_user_type", userType);
+
+    console.log("✅ Données d'authentification sauvegardées:", {
+      token: token.substring(0, 20) + "...",
+      userType,
+      email: user.email,
+    });
   }
 }
 

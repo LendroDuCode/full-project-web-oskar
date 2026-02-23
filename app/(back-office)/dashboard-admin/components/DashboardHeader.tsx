@@ -20,41 +20,14 @@ import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { api } from "@/lib/api-client";
 import PublishAdModal from "@/app/(front-office)/publication-annonce/page";
 import HelpModal from "./HelpModal";
+import { buildImageUrl } from "@/app/shared/utils/image-utils"; // ← Import centralisé
 
 // ============================================
-// FONCTION DE CONSTRUCTION D'URL D'IMAGE ROBUSTE
+// FONCTION POUR LE FALLBACK AVATAR
 // ============================================
-const buildImageUrl = (imagePath: string | null): string | null => {
-  if (!imagePath) return null;
-
-  // Nettoyer le chemin des espaces indésirables
-  let cleanPath = imagePath
-    .replace(/\s+/g, "") // Supprimer tous les espaces
-    .replace(/-/g, "-") // Normaliser les tirets
-    .trim();
-
-  const apiUrl =
-    process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
-  const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
-
-  // ✅ CAS 1: Déjà une URL complète
-  if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
-    if (cleanPath.includes("localhost")) {
-      const productionUrl = apiUrl.replace(/\/api$/, "");
-      return cleanPath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
-    }
-    return cleanPath;
-  }
-
-  // ✅ CAS 2: Chemin avec %2F (déjà encodé)
-  if (cleanPath.includes("%2F")) {
-    // Nettoyer les espaces autour de %2F
-    const finalPath = cleanPath.replace(/%2F\s+/, "%2F");
-    return `${apiUrl}${filesUrl}/${finalPath}`;
-  }
-
-  // ✅ CAS 3: Chemin simple
-  return `${apiUrl}${filesUrl}/${cleanPath}`;
+const getDefaultAvatar = (nom: string = "A", size: number = 40) => {
+  const initials = nom ? nom.charAt(0).toUpperCase() : "A";
+  return `https://ui-avatars.com/api/?name=${initials}&background=16a34a&color=fff&size=${size}`;
 };
 
 interface HeaderProps {
@@ -487,32 +460,18 @@ export default function DashboardHeader({
     return profile.nom || "Administrateur";
   }, [profile]);
 
-  // ✅ Fonction getAvatarUrl améliorée avec buildImageUrl
-  const getAvatarUrl = useCallback(() => {
-    if (!profile) return getDefaultAvatar("A");
-
-    if (avatarError) {
-      return getDefaultAvatar(profile.nom || "A");
-    }
-
-    // Essayer d'abord avec avatar_key si disponible
-    if ((profile as any).avatar_key) {
-      const url = buildImageUrl((profile as any).avatar_key);
-      if (url) return url;
-    }
-
-    // Sinon avec avatar
-    if (profile.avatar) {
-      const url = buildImageUrl(profile.avatar);
-      if (url) return url;
-    }
-
-    return getDefaultAvatar(profile.nom || "A");
-  }, [profile, getDefaultAvatar, avatarError]);
-
+  // ✅ AJOUT : Fonction getRoleDisplay manquante
   const getRoleDisplay = useCallback(() => {
     if (!profile) return "Admin";
     return profile.isSuperAdmin ? "Super Admin" : profile.role || "Admin";
+  }, [profile]);
+
+  // ✅ FONCTION SIMPLIFIÉE (comme dans Header)
+  const getAvatarUrl = useCallback(() => {
+    if (!profile?.avatar) {
+      return getDefaultAvatar(profile?.nom || profile?.prenoms || "U");
+    }
+    return buildImageUrl(profile.avatar);
   }, [profile]);
 
   // Gestion des touches clavier
@@ -526,33 +485,13 @@ export default function DashboardHeader({
     [],
   );
 
-  // ✅ Gestionnaire d'erreur d'image amélioré
+  // ✅ Gestionnaire d'erreur d'image simplifié
   const handleImageError = useCallback(
     (e: React.SyntheticEvent<HTMLImageElement>) => {
-      const target = e.target as HTMLImageElement;
-
-      // Si l'URL contient localhost, essayer de la corriger
-      if (target.src.includes("localhost")) {
-        const productionUrl =
-          process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
-          "https://oskar-api.mysonec.pro";
-        target.src = target.src.replace(
-          /http:\/\/localhost(:\d+)?/g,
-          productionUrl,
-        );
-        return;
-      }
-
-      // Si l'URL contient des espaces, essayer de les nettoyer
-      if (target.src.includes("%20")) {
-        target.src = target.src.replace(/%20/g, "");
-        return;
-      }
-
+      console.log("🖼️ Erreur de chargement d'image, fallback aux initiales");
       setAvatarError(true);
-      target.src = getDefaultAvatar(profile?.nom || "A");
     },
-    [profile, getDefaultAvatar],
+    [],
   );
 
   const toggleMobileMenu = () => {
@@ -573,6 +512,15 @@ export default function DashboardHeader({
       );
     }
   }, [profile, addNotification]);
+
+  // ✅ DEBUG - Afficher l'URL
+  useEffect(() => {
+    if (profile) {
+      console.log("🔍 Avatar URL:", getAvatarUrl());
+      console.log("🔍 Avatar brut:", profile.avatar);
+      console.log("🔍 Avatar_key:", (profile as any).avatar_key);
+    }
+  }, [profile, getAvatarUrl]);
 
   return (
     <>

@@ -20,8 +20,8 @@ export const API_ENDPOINTS = {
     ADMIN: {
       LOGIN: withBaseUrl("/auth/admin/login"),
       LOGOUT: withBaseUrl("/auth/admin/logout"),
-      PROFILE: withBaseUrl("/auth/admin/profile"),
-      MODIFIER_PROFILE: withBaseUrl("/auth/admin/modifier/profile"),
+      PROFILE: withBaseUrl("/admin/auth/profile"),
+      MODIFIER_PROFILE: withBaseUrl("/admin/modifier/profile"),
       OTP: withBaseUrl("/auth/admin/otp"),
       RESEND_OTP: withBaseUrl("/auth/admin/resend/otp"),
       FORGOT_PASSWORD: withBaseUrl("/auth/admin/generate/forget/link"),

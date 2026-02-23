@@ -21,6 +21,7 @@ import {
   faCopy,
   faShare,
   faDownload,
+  faExclamationTriangle,
 } from "@fortawesome/free-solid-svg-icons";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
@@ -44,6 +45,8 @@ interface EchangeDetails {
   quantite: number;
   message: string;
   image: string;
+  images?: string[];
+  photo?: string;
   statut: string;
   createdAt: string;
   updatedAt: string;
@@ -64,6 +67,26 @@ export default function ViewEchangeModal({
     null,
   );
   const [error, setError] = useState<string | null>(null);
+  const [imageError, setImageError] = useState(false);
+
+  // Fonction pour obtenir l'URL de l'image correcte
+  const getImageUrl = () => {
+    // Vérifier toutes les sources possibles d'image
+    const imageUrl =
+      echangeDetails?.image ||
+      echangeDetails?.photo ||
+      echangeDetails?.images?.[0] ||
+      echange?.image ||
+      echange?.photo ||
+      echange?.images?.[0];
+
+    return imageUrl || null;
+  };
+
+  // Fonction pour obtenir le titre correct
+  const getTitle = () => {
+    return echangeDetails?.titre || echange?.titre || "Échange";
+  };
 
   // Charger les détails de l'échange
   useEffect(() => {
@@ -73,6 +96,7 @@ export default function ViewEchangeModal({
       try {
         setLoading(true);
         setError(null);
+        setImageError(false); // Réinitialiser l'erreur d'image
 
         // Essayer d'abord l'endpoint détaillé, sinon utiliser les données existantes
         try {
@@ -85,13 +109,30 @@ export default function ViewEchangeModal({
           console.log("Utilisation des données de base");
           setEchangeDetails({
             ...echange,
-            objet_propose: echange.objet_propose || echange.titre,
+            uuid: echange.uuid,
+            titre: echange.titre || echange.nomElementEchange || "Échange",
+            description: echange.description || echange.message || "",
+            objet_propose:
+              echange.objet_propose ||
+              echange.titre ||
+              echange.nomElementEchange ||
+              "Non spécifié",
             objet_demande: echange.objet_demande || "Non spécifié",
             type_echange: echange.type_echange || "produit",
+            prix: echange.prix || "0",
+            numero: echange.numero || echange.contact || "Non renseigné",
             quantite: echange.quantite || 1,
             message: echange.message || "",
-            createdAt: echange.createdAt || new Date().toISOString(),
+            image: echange.image || echange.photo || echange.images?.[0],
+            images: echange.images || (echange.image ? [echange.image] : []),
+            statut: echange.statut || echange.status || "en_attente",
+            createdAt:
+              echange.createdAt ||
+              echange.dateProposition ||
+              new Date().toISOString(),
             updatedAt: echange.updatedAt || new Date().toISOString(),
+            estPublie: echange.estPublie || false,
+            est_bloque: echange.est_bloque || echange.estBloque || false,
           });
         }
       } catch (err: any) {
@@ -125,7 +166,7 @@ export default function ViewEchangeModal({
   };
 
   const formatPrice = (price: string) => {
-    if (!price || price === "0") return "Gratuit";
+    if (!price || price === "0" || price === "0.00") return "Gratuit";
     const num = parseFloat(price);
     if (isNaN(num)) return price;
     return new Intl.NumberFormat("fr-FR", {
@@ -135,49 +176,54 @@ export default function ViewEchangeModal({
   };
 
   const getStatusInfo = (statut: string) => {
-    switch (statut?.toLowerCase()) {
-      case "en_attente":
-        return {
-          icon: faHourglassHalf,
-          color: "warning",
-          label: "En attente",
-          className: "bg-warning bg-opacity-10 text-warning",
-        };
-      case "disponible":
-        return {
-          icon: faCheckCircle,
-          color: "success",
-          label: "Disponible",
-          className: "bg-success bg-opacity-10 text-success",
-        };
-      case "accepte":
-        return {
-          icon: faCheckCircle,
-          color: "primary",
-          label: "Accepté",
-          className: "bg-primary bg-opacity-10 text-primary",
-        };
-      case "refuse":
-        return {
-          icon: faTimesCircle,
-          color: "danger",
-          label: "Refusé",
-          className: "bg-danger bg-opacity-10 text-danger",
-        };
-      case "indisponible":
-        return {
-          icon: faBan,
-          color: "secondary",
-          label: "Indisponible",
-          className: "bg-secondary bg-opacity-10 text-secondary",
-        };
-      default:
-        return {
-          icon: faInfoCircle,
-          color: "info",
-          label: statut || "Inconnu",
-          className: "bg-info bg-opacity-10 text-info",
-        };
+    const status = statut?.toLowerCase() || "";
+
+    if (status.includes("attente") || status === "pending") {
+      return {
+        icon: faHourglassHalf,
+        color: "warning",
+        label: "En attente",
+        className: "bg-warning bg-opacity-10 text-warning",
+      };
+    } else if (
+      status.includes("disponible") ||
+      status === "available" ||
+      status === "publie"
+    ) {
+      return {
+        icon: faCheckCircle,
+        color: "success",
+        label: "Disponible",
+        className: "bg-success bg-opacity-10 text-success",
+      };
+    } else if (status.includes("accept") || status === "valide") {
+      return {
+        icon: faCheckCircle,
+        color: "primary",
+        label: "Accepté",
+        className: "bg-primary bg-opacity-10 text-primary",
+      };
+    } else if (status.includes("refus")) {
+      return {
+        icon: faTimesCircle,
+        color: "danger",
+        label: "Refusé",
+        className: "bg-danger bg-opacity-10 text-danger",
+      };
+    } else if (status.includes("indisponible") || status.includes("bloque")) {
+      return {
+        icon: faBan,
+        color: "secondary",
+        label: status.includes("bloque") ? "Bloqué" : "Indisponible",
+        className: "bg-secondary bg-opacity-10 text-secondary",
+      };
+    } else {
+      return {
+        icon: faInfoCircle,
+        color: "info",
+        label: statut || "Inconnu",
+        className: "bg-info bg-opacity-10 text-info",
+      };
     }
   };
 
@@ -191,6 +237,8 @@ export default function ViewEchangeModal({
   if (!isOpen || !echange) return null;
 
   const statusInfo = getStatusInfo(echangeDetails?.statut || echange.statut);
+  const imageUrl = getImageUrl();
+  const title = getTitle();
 
   return (
     <div
@@ -198,7 +246,7 @@ export default function ViewEchangeModal({
       style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1050 }}
       tabIndex={-1}
     >
-      <div className="modal-dialog modal-dialog-centered modal-lg">
+      <div className="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
         <div className="modal-content border-0 shadow-lg">
           {/* En-tête */}
           <div className="modal-header border-0 bg-info text-white rounded-top-3 position-relative">
@@ -210,15 +258,16 @@ export default function ViewEchangeModal({
                 </h5>
                 <button
                   type="button"
-                  className="btn btn-close btn-close-white"
+                  className="btn-close btn-close-white"
                   onClick={onClose}
+                  aria-label="Fermer"
                 ></button>
               </div>
 
               <div className="d-flex align-items-center justify-content-between">
-                <div className="d-flex align-items-center gap-2">
+                <div className="d-flex align-items-center gap-2 flex-wrap">
                   <span className={`badge ${statusInfo.className} border-0`}>
-                    <FontAwesomeIcon icon={statusInfo.icon} className="me-2" />
+                    <FontAwesomeIcon icon={statusInfo.icon} className="me-1" />
                     {statusInfo.label}
                   </span>
 
@@ -238,7 +287,7 @@ export default function ViewEchangeModal({
                 </div>
 
                 <small className="text-white-50">
-                  ID: {echange.uuid.substring(0, 8)}...
+                  ID: {echange.uuid?.substring(0, 8) || "N/A"}...
                 </small>
               </div>
             </div>
@@ -260,37 +309,64 @@ export default function ViewEchangeModal({
               </div>
             ) : (
               <div className="p-0">
-                {/* Image principale */}
-                {(echangeDetails?.image || echange.image) && (
-                  <div className="position-relative">
+                {/* Image principale - CORRIGÉ */}
+                <div className="position-relative">
+                  {imageUrl && !imageError ? (
                     <img
-                      src={echangeDetails?.image || echange.image}
-                      alt={echangeDetails?.titre || echange.titre}
+                      src={imageUrl}
+                      alt={title}
                       className="img-fluid w-100"
                       style={{
                         maxHeight: "300px",
+                        minHeight: "200px",
                         objectFit: "cover",
-                        borderTopLeftRadius: "12px",
-                        borderTopRightRadius: "12px",
+                        backgroundColor: "#f8f9fa",
                       }}
                       onError={(e) => {
-                        (e.target as HTMLImageElement).src =
-                          `https://via.placeholder.com/800x300/4A90E2/FFFFFF?text=${(echangeDetails?.titre || echange.titre || "E").charAt(0)}`;
+                        console.error(
+                          "Erreur de chargement d'image:",
+                          imageUrl,
+                        );
+                        setImageError(true);
+                        // Fallback immédiat
+                        const imgElement = e.target as HTMLImageElement;
+                        imgElement.style.display = "none";
                       }}
                     />
+                  ) : (
                     <div
-                      className="position-absolute bottom-0 start-0 end-0 p-3"
+                      className="w-100 d-flex flex-column align-items-center justify-content-center bg-light"
                       style={{
+                        height: "250px",
                         background:
-                          "linear-gradient(transparent, rgba(0,0,0,0.7))",
+                          "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
                       }}
                     >
-                      <h4 className="text-white fw-bold mb-0">
-                        {echangeDetails?.titre || echange.titre}
-                      </h4>
+                      <FontAwesomeIcon
+                        icon={imageError ? faExclamationTriangle : faImage}
+                        size="3x"
+                        className="text-white mb-3"
+                        style={{ opacity: 0.8 }}
+                      />
+                      <span className="text-white fw-semibold">
+                        {imageError
+                          ? "Image non disponible"
+                          : title?.charAt(0)?.toUpperCase() || "E"}
+                      </span>
                     </div>
+                  )}
+
+                  {/* Overlay avec titre */}
+                  <div
+                    className="position-absolute bottom-0 start-0 end-0 p-3"
+                    style={{
+                      background:
+                        "linear-gradient(transparent, rgba(0,0,0,0.8))",
+                    }}
+                  >
+                    <h4 className="text-white fw-bold mb-0">{title}</h4>
                   </div>
-                )}
+                </div>
 
                 <div className="p-4">
                   <div className="row g-4">
@@ -316,7 +392,7 @@ export default function ViewEchangeModal({
                                 Objet proposé
                               </p>
                               <p className="fw-bold text-dark fs-5">
-                                {echangeDetails?.objet_propose || echange.titre}
+                                {echangeDetails?.objet_propose || title}
                               </p>
                             </div>
 
@@ -393,20 +469,22 @@ export default function ViewEchangeModal({
                                     echange.numero ||
                                     "Non renseigné"}
                                 </p>
-                                <button
-                                  type="button"
-                                  className="btn btn-sm btn-outline-primary"
-                                  onClick={() =>
-                                    copyToClipboard(
-                                      echangeDetails?.numero ||
-                                        echange.numero ||
-                                        "",
-                                    )
-                                  }
-                                  title="Copier le numéro"
-                                >
-                                  <FontAwesomeIcon icon={faCopy} />
-                                </button>
+                                {(echangeDetails?.numero || echange.numero) && (
+                                  <button
+                                    type="button"
+                                    className="btn btn-sm btn-outline-primary"
+                                    onClick={() =>
+                                      copyToClipboard(
+                                        echangeDetails?.numero ||
+                                          echange.numero ||
+                                          "",
+                                      )
+                                    }
+                                    title="Copier le numéro"
+                                  >
+                                    <FontAwesomeIcon icon={faCopy} />
+                                  </button>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -554,13 +632,13 @@ export default function ViewEchangeModal({
                                     className="text-muted text-truncate"
                                     style={{ maxWidth: "100px" }}
                                   >
-                                    {echange.uuid.substring(0, 8)}...
+                                    {echange.uuid?.substring(0, 8) || "N/A"}...
                                   </small>
                                   <button
                                     type="button"
                                     className="btn btn-sm btn-outline-primary"
                                     onClick={() =>
-                                      copyToClipboard(echange.uuid)
+                                      copyToClipboard(echange.uuid || "")
                                     }
                                     title="Copier l'ID"
                                   >
@@ -588,7 +666,9 @@ export default function ViewEchangeModal({
                                 </div>
                                 <div>
                                   <div className="fw-bold">
-                                    {echangeDetails.categorie.libelle}
+                                    {echangeDetails.categorie.libelle ||
+                                      echangeDetails.categorie.nom ||
+                                      "Non catégorisé"}
                                   </div>
                                   {echangeDetails.categorie.description && (
                                     <small className="text-muted">
@@ -601,6 +681,47 @@ export default function ViewEchangeModal({
                           </div>
                         )}
 
+                        {/* Galerie d'images */}
+                        {echangeDetails?.images &&
+                          echangeDetails.images.length > 0 && (
+                            <div className="card border-0 shadow-sm mb-4">
+                              <div className="card-body">
+                                <h6 className="fw-bold text-dark mb-3">
+                                  <FontAwesomeIcon
+                                    icon={faImage}
+                                    className="me-2 text-primary"
+                                  />
+                                  Galerie ({echangeDetails.images.length})
+                                </h6>
+                                <div className="d-flex flex-wrap gap-2">
+                                  {echangeDetails.images.map((img, index) => (
+                                    <div
+                                      key={index}
+                                      className="rounded overflow-hidden border"
+                                      style={{
+                                        width: "50px",
+                                        height: "50px",
+                                        cursor: "pointer",
+                                      }}
+                                      onClick={() => window.open(img, "_blank")}
+                                    >
+                                      <img
+                                        src={img}
+                                        alt={`Image ${index + 1}`}
+                                        className="w-100 h-100 object-fit-cover"
+                                        onError={(e) => {
+                                          (
+                                            e.target as HTMLImageElement
+                                          ).style.display = "none";
+                                        }}
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
                         {/* Actions rapides */}
                         <div className="card border-0 shadow-sm">
                           <div className="card-body">
@@ -609,7 +730,9 @@ export default function ViewEchangeModal({
                               <button
                                 type="button"
                                 className="btn btn-outline-primary d-flex align-items-center justify-content-center gap-2"
-                                onClick={() => copyToClipboard(echange.uuid)}
+                                onClick={() =>
+                                  copyToClipboard(echange.uuid || "")
+                                }
                               >
                                 <FontAwesomeIcon icon={faCopy} />
                                 Copier l'ID
@@ -631,7 +754,7 @@ export default function ViewEchangeModal({
                                   const url = URL.createObjectURL(blob);
                                   const a = document.createElement("a");
                                   a.href = url;
-                                  a.download = `echange-${echange.uuid}.json`;
+                                  a.download = `echange-${echange.uuid || "export"}.json`;
                                   a.click();
                                   URL.revokeObjectURL(url);
                                 }}
@@ -662,16 +785,21 @@ export default function ViewEchangeModal({
 
             <button
               type="button"
-              className="btn btn-info"
+              className="btn btn-info text-white"
               onClick={() => {
                 // Action de contact ou autre
-                if (echangeDetails?.numero || echange.numero) {
-                  window.open(
-                    `tel:${echangeDetails?.numero || echange.numero}`,
-                  );
+                const phone = echangeDetails?.numero || echange.numero;
+                if (phone && phone !== "Non renseigné") {
+                  window.open(`tel:${phone}`);
+                } else {
+                  alert("Aucun numéro de contact disponible");
                 }
               }}
-              disabled={!(echangeDetails?.numero || echange.numero)}
+              disabled={
+                !(echangeDetails?.numero || echange.numero) ||
+                echangeDetails?.numero === "Non renseigné" ||
+                echange.numero === "Non renseigné"
+              }
             >
               <FontAwesomeIcon icon={faPhone} className="me-2" />
               Contacter

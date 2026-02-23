@@ -5,14 +5,46 @@ import { useRouter } from "next/navigation";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { api } from "@/lib/api-client";
 
+// ============================================
+// FONCTION DE CONSTRUCTION D'URL D'IMAGE ROBUSTE
+// ============================================
+const buildImageUrl = (imagePath: string | null): string | null => {
+  if (!imagePath) return null;
+
+  let cleanPath = imagePath.replace(/\s+/g, "").replace(/-/g, "-").trim();
+
+  const apiUrl =
+    process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+  const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+
+  if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
+    if (cleanPath.includes("localhost")) {
+      const productionUrl = apiUrl.replace(/\/api$/, "");
+      return cleanPath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
+    }
+    return cleanPath;
+  }
+
+  if (cleanPath.includes("%2F")) {
+    const finalPath = cleanPath.replace(/%2F\s+/, "%2F");
+    return `${apiUrl}${filesUrl}/${finalPath}`;
+  }
+
+  return `${apiUrl}${filesUrl}/${cleanPath}`;
+};
+
 interface ProfileData {
+  uuid?: string;
   nom: string;
   prenoms: string;
   email: string;
   telephone: string | null;
   date_naissance: string | null;
   avatar: string | null;
-  type?: "standard" | "premium"; // Champ spécifique au vendeur
+  photo?: string | null;
+  type?: "standard" | "premium";
+  is_verified?: boolean;
+  created_at?: string;
 }
 
 interface Civilité {
@@ -22,6 +54,7 @@ interface Civilité {
 
 export default function ProfileVendeurPage() {
   const router = useRouter();
+  const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,10 +70,13 @@ export default function ProfileVendeurPage() {
     telephone: null,
     date_naissance: null,
     avatar: null,
-    type: "standard", // Valeur par défaut pour le vendeur
+    photo: null,
+    type: "standard",
+    is_verified: false,
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [avatarError, setAvatarError] = useState(false);
 
   // Récupérer les civilités
   useEffect(() => {
@@ -55,40 +91,141 @@ export default function ProfileVendeurPage() {
     fetchCivilites();
   }, []);
 
+  // ✅ FONCTION CORRIGÉE: Récupérer l'URL de l'avatar (comme dans l'admin)
+  const getAvatarUrl = useCallback(() => {
+    if (!profile) return getDefaultAvatar();
+
+    if (avatarError) {
+      return getDefaultAvatar();
+    }
+
+    // Essayer d'abord avec avatar (c'est le champ principal comme dans l'admin)
+    if (formData.avatar) {
+      console.log("🖼️ Avatar trouvé:", formData.avatar);
+      const url = buildImageUrl(formData.avatar);
+      console.log("🖼️ URL construite:", url);
+      if (url) return url;
+    }
+
+    // Essayer avec photo (fallback)
+    if (formData.photo) {
+      console.log("🖼️ Photo trouvée:", formData.photo);
+      const url = buildImageUrl(formData.photo);
+      console.log("🖼️ URL construite depuis photo:", url);
+      if (url) return url;
+    }
+
+    console.log("🖼️ Aucune image trouvée, retour default");
+    return getDefaultAvatar();
+  }, [profile, formData.avatar, formData.photo, avatarError]);
+
+  // ✅ Avatar par défaut (comme dans l'admin)
+  const getDefaultAvatar = useCallback(() => {
+    const firstName = formData.prenoms?.charAt(0) || "";
+    const lastName = formData.nom?.charAt(0) || "";
+    const initials = `${firstName}${lastName}`.toUpperCase() || "V";
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=16a34a&color=fff&size=150&bold=true`;
+  }, [formData.prenoms, formData.nom]);
+
+  // ✅ Gestionnaire d'erreur d'image (comme dans l'admin)
+  const handleImageError = useCallback(
+    (e: React.SyntheticEvent<HTMLImageElement>) => {
+      const target = e.target as HTMLImageElement;
+      console.log("❌ Erreur de chargement d'image:", target.src);
+
+      if (target.src.includes("localhost")) {
+        const productionUrl =
+          process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
+          "https://oskar-api.mysonec.pro";
+        target.src = target.src.replace(
+          /http:\/\/localhost(:\d+)?/g,
+          productionUrl,
+        );
+        return;
+      }
+
+      if (target.src.includes("%20")) {
+        target.src = target.src.replace(/%20/g, "");
+        return;
+      }
+
+      if (target.src.includes("%2F") && !target.src.includes("/api/files/")) {
+        const pathMatch = target.src.match(/([^\/]+%2F[^\/]+)$/);
+        if (pathMatch && pathMatch[1]) {
+          const newUrl = buildImageUrl(pathMatch[1]);
+          if (newUrl) {
+            target.src = newUrl;
+            return;
+          }
+        }
+      }
+
+      console.log("🖼️ Échec du chargement, affichage des initiales");
+      setAvatarError(true);
+      target.src = getDefaultAvatar();
+    },
+    [getDefaultAvatar],
+  );
+
   // Récupérer le profil VENDEUR
   const fetchProfile = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      // ✅ Endpoint spécifique au vendeur
+      setAvatarError(false);
+
+      const token = localStorage.getItem("oskar_token");
+      if (!token) {
+        throw new Error("Session expirée. Veuillez vous reconnecter.");
+      }
+
       const response = await api.get(API_ENDPOINTS.AUTH.VENDEUR.PROFILE);
       const data = response.data?.data || response.data;
 
       if (data) {
-        setFormData({
+        console.log("📦 Données du profil vendeur reçues:", {
+          nom: data.nom,
+          prenoms: data.prenoms,
+          email: data.email,
+          avatar: data.avatar,
+          photo: data.photo,
+          type: data.type,
+        });
+
+        const profileData = {
+          uuid: data.uuid || "",
           nom: data.nom || "",
           prenoms: data.prenoms || "",
           email: data.email || "",
           telephone: data.telephone || null,
           date_naissance: data.date_naissance || null,
           avatar: data.avatar || data.photo || null,
-          type: (data.type as "standard" | "premium") || "standard", // Champ spécifique au vendeur
-        });
+          photo: data.photo || null,
+          type: (data.type as "standard" | "premium") || "standard",
+          is_verified: data.is_verified || false,
+          created_at: data.created_at || data.date_creation,
+        };
 
-        if (data.avatar || data.photo) {
-          setPreviewUrl(data.avatar || data.photo);
-        }
+        setProfile(profileData);
+        setFormData(profileData);
       }
     } catch (err: any) {
       console.error("Erreur lors du chargement du profil vendeur:", err);
       setError(
         err.response?.data?.message ||
+          err.message ||
           "Impossible de charger le profil vendeur",
       );
+
+      if (err.message?.includes("token") || err.message?.includes("Session")) {
+        setTimeout(() => {
+          router.push("/connexion");
+        }, 2000);
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     fetchProfile();
@@ -123,6 +260,7 @@ export default function ProfileVendeurPage() {
     }
 
     setSelectedFile(file);
+    setAvatarError(false);
     const reader = new FileReader();
     reader.onloadend = () => {
       setPreviewUrl(reader.result as string);
@@ -142,6 +280,11 @@ export default function ProfileVendeurPage() {
       setError(null);
       setSuccess(null);
 
+      const token = localStorage.getItem("oskar_token");
+      if (!token) {
+        throw new Error("Session expirée. Veuillez vous reconnecter.");
+      }
+
       if (!formData.nom.trim()) throw new Error("Le nom est requis");
       if (!formData.prenoms.trim()) throw new Error("Le prénom est requis");
       if (!formData.email.trim()) throw new Error("L'email est requis");
@@ -150,13 +293,13 @@ export default function ProfileVendeurPage() {
       formDataToSend.append("nom", formData.nom);
       formDataToSend.append("prenoms", formData.prenoms);
       formDataToSend.append("email", formData.email);
+
       if (formData.telephone) {
         formDataToSend.append("telephone", formData.telephone);
       }
       if (formData.date_naissance) {
         formDataToSend.append("date_naissance", formData.date_naissance);
       }
-      // ✅ Ajout du champ type spécifique au vendeur
       if (formData.type) {
         formDataToSend.append("type", formData.type);
       }
@@ -164,20 +307,34 @@ export default function ProfileVendeurPage() {
         formDataToSend.append("avatar", selectedFile);
       }
 
-      // ✅ Endpoint de mise à jour spécifique au vendeur
-      const response = await api.put(
-        API_ENDPOINTS.AUTH.VENDEUR.UPDATE_PROFILE,
-        formDataToSend,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
-        },
-      );
+      console.log("📤 Envoi vers:", API_ENDPOINTS.AUTH.VENDEUR.UPDATE_PROFILE);
 
-      setSuccess(response.data?.message || "Profil mis à jour avec succès");
+      const response = await fetch(API_ENDPOINTS.AUTH.VENDEUR.UPDATE_PROFILE, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formDataToSend,
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("Session expirée. Veuillez vous reconnecter.");
+        }
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Erreur ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log("✅ Profil mis à jour avec succès:", result);
+
+      setSuccess(result.message || "Profil mis à jour avec succès");
+
       setTimeout(() => {
         fetchProfile();
+        setSelectedFile(null);
+        setPreviewUrl(null);
+        setAvatarError(false);
       }, 1000);
     } catch (err: any) {
       console.error("Erreur lors de la mise à jour du profil vendeur:", err);
@@ -186,16 +343,34 @@ export default function ProfileVendeurPage() {
           err.message ||
           "Une erreur est survenue lors de la mise à jour",
       );
+
+      if (err.message?.includes("Session") || err.message?.includes("token")) {
+        setTimeout(() => {
+          router.push("/connexion");
+        }, 2000);
+      }
     } finally {
       setSaving(false);
     }
   };
 
-  // Avatar par défaut
-  const getDefaultAvatar = () => {
-    const initials =
-      `${formData.prenoms?.charAt(0) || ""}${formData.nom?.charAt(0) || ""}`.toUpperCase();
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=16a34a&color=fff&size=150`;
+  // Formater la date d'inscription
+  const getMemberSince = () => {
+    if (!formData.created_at) return "N/A";
+    try {
+      return new Date(formData.created_at).toLocaleDateString("fr-FR", {
+        month: "long",
+        year: "numeric",
+      });
+    } catch {
+      return "N/A";
+    }
+  };
+
+  // Obtenir le prénom pour l'affichage
+  const getFirstName = () => {
+    if (!profile) return "Vendeur";
+    return formData.prenoms || profile.prenoms || "Vendeur";
   };
 
   return (
@@ -344,7 +519,7 @@ export default function ProfileVendeurPage() {
                     ) : (
                       <form onSubmit={handleSubmit}>
                         <div className="row">
-                          {/* Colonne gauche - Avatar */}
+                          {/* Colonne gauche - Avatar (version admin) */}
                           <div className="col-12 col-md-4 mb-4 mb-md-0">
                             <div className="sticky-top" style={{ top: "20px" }}>
                               <div className="card border-0 shadow-sm h-100">
@@ -353,7 +528,7 @@ export default function ProfileVendeurPage() {
                                     <div className="position-relative d-inline-block">
                                       <div className="avatar-upload-wrapper">
                                         <img
-                                          src={previewUrl || getDefaultAvatar()}
+                                          src={previewUrl || getAvatarUrl()}
                                           alt="Avatar"
                                           className="rounded-circle border border-4 border-success shadow"
                                           style={{
@@ -361,12 +536,20 @@ export default function ProfileVendeurPage() {
                                             height: "180px",
                                             objectFit: "cover",
                                           }}
-                                          onError={(e) => {
-                                            const target =
-                                              e.target as HTMLImageElement;
-                                            target.src = getDefaultAvatar();
-                                          }}
+                                          onError={handleImageError}
                                         />
+                                        {formData.is_verified && (
+                                          <div
+                                            className="position-absolute bottom-0 end-0 bg-success rounded-circle border border-2 border-white d-flex align-items-center justify-content-center"
+                                            style={{
+                                              width: "36px",
+                                              height: "36px",
+                                            }}
+                                            title="Compte vérifié"
+                                          >
+                                            <i className="fa-solid fa-check text-white"></i>
+                                          </div>
+                                        )}
                                         <div className="avatar-overlay rounded-circle">
                                           <label
                                             htmlFor="avatar-upload"
@@ -613,7 +796,9 @@ export default function ProfileVendeurPage() {
                                                   Statut du compte
                                                 </p>
                                                 <p className="text-muted small mb-0">
-                                                  Actif
+                                                  {formData.is_verified
+                                                    ? "Vérifié ✓"
+                                                    : "En attente"}
                                                 </p>
                                               </div>
                                             </div>
@@ -628,7 +813,7 @@ export default function ProfileVendeurPage() {
                                                   Membre depuis
                                                 </p>
                                                 <p className="text-muted small mb-0">
-                                                  Janvier 2024
+                                                  {getMemberSince()}
                                                 </p>
                                               </div>
                                             </div>
@@ -713,7 +898,7 @@ export default function ProfileVendeurPage() {
                 </div>
               </div>
 
-              {/* Onglet Sécurité (identique à l'utilisateur) */}
+              {/* Onglet Sécurité */}
               <div
                 className={`tab-pane fade ${activeTab === "security" ? "show active" : ""}`}
               >

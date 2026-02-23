@@ -1,10 +1,32 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { api } from "@/lib/api-client";
 import colors from "@/app/shared/constants/colors";
+
+// ============================================
+// FONCTION DE CONSTRUCTION D'URL D'IMAGE - SIMPLIFIÉE
+// ============================================
+const buildImageUrl = (imagePath: string | null): string | null => {
+  if (!imagePath) return null;
+
+  // Nettoyer le chemin
+  let cleanPath = imagePath.trim();
+
+  // ✅ Si c'est déjà une URL complète, la retourner
+  if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
+    return cleanPath;
+  }
+
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
+  const filesUrl = "/api/files";
+
+  // ✅ Construire l'URL avec le chemin tel quel (sans encodage)
+  // Le navigateur encodera automatiquement
+  return `${apiUrl}${filesUrl}/${cleanPath}`;
+};
 
 interface AdminProfile {
   uuid: string;
@@ -13,7 +35,10 @@ interface AdminProfile {
   nom_complet?: string;
   email: string;
   telephone?: string;
-  avatar?: string;
+  avatar: string | null;
+  avatar_key: string | null;
+  photo: string | null;
+  photo_key: string | null;
   civilite?: {
     uuid: string;
     libelle: string;
@@ -25,7 +50,6 @@ interface AdminProfile {
   updated_at: string;
   indicatif?: string;
   birth_date?: string;
-  photo?: string;
 }
 
 interface Civilite {
@@ -47,8 +71,9 @@ export default function ModifierProfile() {
   const [success, setSuccess] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("profile");
+  const [avatarError, setAvatarError] = useState(false);
 
-  // États du formulaire avec valeurs par défaut
+  // États du formulaire
   const [formData, setFormData] = useState({
     nom: "",
     prenoms: "",
@@ -57,7 +82,8 @@ export default function ModifierProfile() {
     indicatif: "225",
     civilite_uuid: "",
     birth_date: "",
-    photo: "",
+    avatar: "",
+    avatar_key: "",
   });
 
   // Récupérer le profil et les civilités
@@ -70,31 +96,31 @@ export default function ModifierProfile() {
     try {
       setLoading(true);
       setError(null);
+      setAvatarError(false);
 
       const response = await api.get(API_ENDPOINTS.AUTH.ADMIN.PROFILE);
 
-      console.log("Données du profil admin:", response.data);
+      console.log("📥 Données du profil admin reçues:", response.data);
 
       // Gérer différents formats de réponse
       let profileData = response.data;
-
-      // Si la réponse a une structure { data: {...} }
       if (response.data?.data) {
         profileData = response.data.data;
-      }
-      // Si la réponse a une structure { status: "success", data: {...} }
-      else if (response.data?.status === "success" && response.data.data) {
+      } else if (response.data?.status === "success" && response.data.data) {
         profileData = response.data.data;
       }
+
+      console.log("✅ Avatar (chemin relatif):", profileData.avatar);
+      console.log("✅ Avatar_key (chemin relatif):", profileData.avatar_key);
+      console.log("⚠️ Photo (URL complète):", profileData.photo);
 
       setProfile(profileData);
 
-      // Extraire les numéros de téléphone si nécessaire
+      // Traitement du téléphone
       let telephone = profileData.telephone || "";
-      let indicatif = "225"; // Par défaut pour la Côte d'Ivoire
+      let indicatif = "225";
 
       if (telephone) {
-        // Si le téléphone commence par l'indicatif
         if (telephone.startsWith("225")) {
           indicatif = "225";
           telephone = telephone.substring(3);
@@ -102,24 +128,22 @@ export default function ModifierProfile() {
           indicatif = "225";
           telephone = telephone.substring(4);
         }
-        // Nettoyer le numéro
         telephone = telephone.replace(/\D/g, "");
       }
 
-      // Déterminer nom et prénoms
+      // Traitement du nom
       let nom = profileData.nom || "";
       let prenoms = profileData.prenoms || "";
 
-      // Si l'API retourne nom_complet mais pas nom/prenoms séparés
       if ((!nom || !prenoms) && profileData.nom_complet) {
         const parts = profileData.nom_complet.split(" ");
         if (parts.length > 0) {
-          nom = parts[parts.length - 1]; // Dernier mot = nom
-          prenoms = parts.slice(0, -1).join(" "); // Tout sauf dernier = prénoms
+          nom = parts[parts.length - 1];
+          prenoms = parts.slice(0, -1).join(" ");
         }
       }
 
-      // Formater la date de naissance
+      // Date de naissance
       let birth_date = "";
       if (profileData.birth_date) {
         try {
@@ -132,13 +156,15 @@ export default function ModifierProfile() {
         }
       }
 
-      // Récupérer l'ID de la civilité
+      // Civilité
       let civilite_uuid = "";
       if (profileData.civilite?.uuid) {
         civilite_uuid = profileData.civilite.uuid;
       }
 
-      // Pré-remplir le formulaire
+      // ✅ PRIORITÉ AU CHEMIN RELATIF (avatar plutôt que photo)
+      const avatarPath = profileData.avatar || profileData.avatar_key || "";
+
       setFormData({
         nom: nom.trim(),
         prenoms: prenoms.trim(),
@@ -147,16 +173,11 @@ export default function ModifierProfile() {
         indicatif: indicatif,
         civilite_uuid: civilite_uuid,
         birth_date: birth_date,
-        photo: profileData.photo || profileData.avatar || "",
+        avatar: avatarPath,
+        avatar_key: profileData.avatar_key || profileData.avatar || "",
       });
-
-      // Prévisualisation de l'avatar
-      if (profileData.avatar || profileData.photo) {
-        const avatarUrl = getAvatarUrl(profileData.avatar || profileData.photo);
-        setPreviewImage(avatarUrl);
-      }
     } catch (err: any) {
-      console.error("Erreur lors de la récupération du profil admin:", err);
+      console.error("❌ Erreur lors de la récupération du profil admin:", err);
       setError(
         err.response?.data?.message ||
           err.message ||
@@ -172,7 +193,6 @@ export default function ModifierProfile() {
       const response = await api.get(API_ENDPOINTS.CIVILITES.ACTIVES);
       let civilitesData = response.data;
 
-      // Gérer différents formats de réponse
       if (response.data?.data) {
         civilitesData = response.data.data;
       } else if (response.data?.status === "success" && response.data.data) {
@@ -187,22 +207,30 @@ export default function ModifierProfile() {
     }
   };
 
-  const getAvatarUrl = (avatarPath: string | undefined) => {
-    if (!avatarPath) return "";
+  // ✅ VERSION SIMPLIFIÉE - PLUS D'ENCODAGE MANUEL
+  const getAvatarUrl = useCallback(() => {
+    if (!profile) return getDefaultAvatar("A");
 
-    // Si c'est déjà une URL complète
-    if (avatarPath.startsWith("http")) {
-      return avatarPath;
+    if (avatarError) {
+      return getDefaultAvatar(profile.nom || "A");
     }
 
-    // Si c'est un chemin local
-    return `${process.env.NEXT_PUBLIC_API_URL}${avatarPath}`;
-  };
+    // ✅ Utiliser le chemin relatif directement
+    const imagePath =
+      formData.avatar || formData.avatar_key || profile.photo || "";
 
-  const getDefaultAvatar = (nom: string, prenoms: string) => {
-    const initials =
-      `${prenoms?.charAt(0) || ""}${nom?.charAt(0) || ""}`.toUpperCase();
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=${encodeURIComponent(colors.oskar.green)}&color=fff&size=200&bold=true`;
+    if (imagePath) {
+      const url = buildImageUrl(imagePath);
+      console.log("🖼️ URL construite:", url);
+      return url;
+    }
+
+    return getDefaultAvatar(profile.nom || "A");
+  }, [profile, formData.avatar, formData.avatar_key, avatarError]);
+
+  const getDefaultAvatar = (nom: string) => {
+    const initials = nom ? nom.charAt(0).toUpperCase() : "A";
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=${encodeURIComponent(colors.oskar.green.replace("#", ""))}&color=fff&size=200&bold=true`;
   };
 
   const handleInputChange = (
@@ -219,7 +247,6 @@ export default function ModifierProfile() {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
-        // 5MB max
         setError("L'image ne doit pas dépasser 5MB");
         return;
       }
@@ -234,18 +261,34 @@ export default function ModifierProfile() {
         setPreviewImage(reader.result as string);
       };
       reader.readAsDataURL(file);
-
-      // Mettre à jour le champ photo
-      setFormData((prev) => ({
-        ...prev,
-        photo: file.name,
-      }));
     }
   };
 
   const triggerFileInput = () => {
     fileInputRef.current?.click();
   };
+
+  const handleImageError = useCallback(
+    (e: React.SyntheticEvent<HTMLImageElement>) => {
+      const target = e.target as HTMLImageElement;
+
+      // ✅ Correction simple pour localhost
+      if (target.src.includes("localhost")) {
+        const productionUrl =
+          process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
+          "https://oskar-api.mysonec.pro";
+        target.src = target.src.replace(
+          /http:\/\/localhost(:\d+)?/g,
+          productionUrl,
+        );
+        return;
+      }
+
+      setAvatarError(true);
+      target.src = getDefaultAvatar(profile?.nom || "A");
+    },
+    [profile],
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -254,25 +297,26 @@ export default function ModifierProfile() {
     setSuccess(null);
 
     try {
-      const formDataToSend = new FormData();
+      const token = localStorage.getItem("oskar_token");
+      console.log("🔑 Token récupéré:", token ? "Présent" : "Absent");
 
-      // Construire le numéro de téléphone complet
+      if (!token) {
+        throw new Error("Session expirée. Veuillez vous reconnecter.");
+      }
+
+      const formDataToSend = new FormData();
       const telephoneComplet = `${formData.indicatif}${formData.telephone}`;
 
-      // Validation des champs obligatoires
       if (!formData.nom.trim()) {
         throw new Error("Le nom est requis");
       }
-
       if (!formData.prenoms.trim()) {
         throw new Error("Le prénom est requis");
       }
-
       if (!formData.email.trim()) {
         throw new Error("L'email est requis");
       }
 
-      // Ajouter les champs obligatoires
       formDataToSend.append("nom", formData.nom);
       formDataToSend.append("prenoms", formData.prenoms);
       formDataToSend.append("email", formData.email);
@@ -289,46 +333,48 @@ export default function ModifierProfile() {
         formDataToSend.append("birth_date", formData.birth_date);
       }
 
-      // Ajouter l'image si une nouvelle a été sélectionnée
       if (fileInputRef.current?.files?.[0]) {
         formDataToSend.append("photo", fileInputRef.current.files[0]);
       }
 
-      console.log("Données envoyées pour mise à jour:", {
-        nom: formData.nom,
-        prenoms: formData.prenoms,
-        email: formData.email,
-        telephone: telephoneComplet,
-        civilite_uuid: formData.civilite_uuid,
-        birth_date: formData.birth_date,
+      console.log("📤 Envoi vers:", API_ENDPOINTS.AUTH.ADMIN.MODIFIER_PROFILE);
+
+      const response = await fetch(API_ENDPOINTS.AUTH.ADMIN.MODIFIER_PROFILE, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formDataToSend,
       });
 
-      const response = await api.put(
-        API_ENDPOINTS.AUTH.ADMIN.MODIFIER_PROFILE,
-        formDataToSend,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
-        },
-      );
+      console.log("📥 Statut réponse:", response.status);
 
-      let responseData = response.data;
-      if (response.data?.data) {
-        responseData = response.data.data;
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("Session expirée. Veuillez vous reconnecter.");
+        }
+
+        let errorMessage = `Erreur ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch (e) {}
+        throw new Error(errorMessage);
       }
+
+      const result = await response.json();
+      console.log("✅ Réponse du serveur:", result);
 
       setSuccess("Profil administrateur mis à jour avec succès !");
 
-      // Rafraîchir les données du profil
       setTimeout(() => {
         fetchProfile();
+        setPreviewImage(null);
       }, 1000);
     } catch (err: any) {
-      console.error("Erreur lors de la mise à jour du profil admin:", err);
+      console.error("❌ Erreur lors de la mise à jour du profil admin:", err);
       setError(
-        err.response?.data?.message ||
-          err.message ||
+        err.message ||
           "Une erreur est survenue lors de la mise à jour du profil. Veuillez réessayer.",
       );
     } finally {
@@ -336,19 +382,11 @@ export default function ModifierProfile() {
     }
   };
 
-  // Obtenir le nom complet pour l'affichage
-  const getFullName = () => {
+  const getFirstName = () => {
     if (!profile) return "Administrateur";
-
-    if (profile.nom) {
-      return profile.nom_complet;
-    }
-
-    const fullName = `${formData.prenoms} ${formData.nom}`.trim();
-    return fullName || "Administrateur";
+    return formData.prenoms || profile.prenoms || "Administrateur";
   };
 
-  // Obtenir les stats du profil
   const getProfileStats = () => {
     const stats = [
       {
@@ -393,7 +431,7 @@ export default function ModifierProfile() {
 
   if (loading) {
     return (
-      <div className="container-fluid py-5">
+      <div className="container py-5">
         <div className="row justify-content-center">
           <div className="col-12 col-lg-10 col-xl-8">
             <div className="card border-0 shadow-lg">
@@ -445,118 +483,103 @@ export default function ModifierProfile() {
   }
 
   return (
-    <div className="container-fluid py-4">
+    <div className="container py-4">
       <div className="row justify-content-center">
         <div className="col-12 col-lg-10 col-xl-8">
-          {/* En-tête avec navigation */}
-          <div className="mb-4">
-            <nav aria-label="breadcrumb">
-              <ol className="breadcrumb p-3 bg-white rounded-4 shadow-sm">
-                <li className="breadcrumb-item">
-                  <a
-                    href="/dashboard-admin"
-                    className="text-decoration-none fw-semibold d-flex align-items-center gap-2"
-                    style={{ color: colors.oskar.green }}
-                  >
-                    <i
-                      className="fa-solid fa-gauge-high fa-lg"
-                      style={{ color: colors.oskar.green }}
-                    ></i>
-                    <span className="d-none d-md-inline">Tableau de bord</span>
-                  </a>
-                </li>
-                <li
-                  className="breadcrumb-item active fw-bold"
+          {/* Fil d'Ariane */}
+          <nav aria-label="breadcrumb" className="mb-4">
+            <ol className="breadcrumb bg-white p-3 rounded-4 shadow-sm">
+              <li className="breadcrumb-item">
+                <a
+                  href="/dashboard-admin"
+                  className="text-decoration-none fw-semibold d-flex align-items-center gap-2"
                   style={{ color: colors.oskar.green }}
                 >
                   <i
-                    className="fa-solid fa-user-gear me-2"
+                    className="fa-solid fa-gauge-high"
                     style={{ color: colors.oskar.green }}
                   ></i>
-                  Profil Administrateur
-                </li>
-              </ol>
-            </nav>
-
-            {/* En-tête principal avec gradient vert */}
-            <div className="card border-0 shadow-lg overflow-hidden mb-4">
-              <div
-                className="card-header py-4 border-0 text-white"
-                style={{ backgroundColor: colors.oskar.green }}
+                  <span className="d-none d-md-inline">Tableau de bord</span>
+                </a>
+              </li>
+              <li
+                className="breadcrumb-item active fw-bold"
+                style={{ color: colors.oskar.green }}
               >
-                <div className="row align-items-center">
-                  <div className="col-md-8">
-                    <h1 className="h2 fw-bold mb-2">
-                      <i className="fa-solid fa-user-shield me-3"></i>
-                      Gestion du Profil Administrateur
-                    </h1>
-                    <p className="mb-0 opacity-75">
-                      Gérez vos informations personnelles et votre compte
-                      administrateur
-                    </p>
-                  </div>
-                  <div className="col-md-4 text-md-end mt-3 mt-md-0">
-                    <button
-                      onClick={() => router.push("/dashboard-admin")}
-                      className="btn btn-light btn-lg rounded-pill px-4"
-                      style={{ color: colors.oskar.green }}
-                    >
-                      <i className="fa-solid fa-arrow-left me-2"></i>
-                      Retour au dashboard
-                    </button>
-                  </div>
+                <i className="fa-solid fa-user-gear me-2"></i>
+                Profil Administrateur
+              </li>
+            </ol>
+          </nav>
+
+          {/* En-tête principal */}
+          <div className="card border-0 shadow-lg overflow-hidden mb-4">
+            <div
+              className="card-header py-4 border-0 text-white"
+              style={{ backgroundColor: colors.oskar.green }}
+            >
+              <div className="row align-items-center">
+                <div className="col-md-8">
+                  <h1 className="h2 fw-bold mb-2">
+                    <i className="fa-solid fa-user-shield me-3"></i>
+                    Gestion du Profil Administrateur
+                  </h1>
+                  <p className="mb-0 opacity-75">
+                    Gérez vos informations personnelles et votre compte
+                    administrateur
+                  </p>
+                </div>
+                <div className="col-md-4 text-md-end mt-3 mt-md-0">
+                  <button
+                    onClick={() => router.push("/dashboard-admin")}
+                    className="btn btn-light btn-lg rounded-pill px-4"
+                    style={{ color: colors.oskar.green }}
+                  >
+                    <i className="fa-solid fa-arrow-left me-2"></i>
+                    Retour
+                  </button>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Messages d'alerte améliorés */}
+          {/* Messages d'alerte */}
           {error && (
-            <div className="toast-container position-fixed top-0 end-0 p-3">
-              <div
-                className="toast show"
-                role="alert"
-                aria-live="assertive"
-                aria-atomic="true"
-              >
-                <div
-                  className="toast-header text-white"
-                  style={{ backgroundColor: colors.oskar.red }}
-                >
-                  <i className="fa-solid fa-circle-exclamation me-2"></i>
-                  <strong className="me-auto">Erreur</strong>
-                  <button
-                    type="button"
-                    className="btn-close btn-close-white"
-                    onClick={() => setError(null)}
-                  ></button>
+            <div
+              className="alert alert-danger alert-dismissible fade show position-fixed top-0 end-0 m-4 shadow-lg"
+              style={{ zIndex: 9999, maxWidth: "400px" }}
+            >
+              <div className="d-flex align-items-center">
+                <i className="fa-solid fa-circle-exclamation fs-4 me-3"></i>
+                <div>
+                  <strong className="fw-bold">Erreur</strong>
+                  <p className="mb-0 small">{error}</p>
                 </div>
-                <div className="toast-body">{error}</div>
+                <button
+                  type="button"
+                  className="btn-close ms-3"
+                  onClick={() => setError(null)}
+                ></button>
               </div>
             </div>
           )}
 
           {success && (
-            <div className="toast-container position-fixed top-0 end-0 p-3">
-              <div
-                className="toast show"
-                role="alert"
-                aria-live="assertive"
-                aria-atomic="true"
-              >
-                <div
-                  className="toast-header text-white"
-                  style={{ backgroundColor: colors.oskar.green }}
-                >
-                  <i className="fa-solid fa-circle-check me-2"></i>
-                  <strong className="me-auto">Succès</strong>
-                  <button
-                    type="button"
-                    className="btn-close btn-close-white"
-                    onClick={() => setSuccess(null)}
-                  ></button>
+            <div
+              className="alert alert-success alert-dismissible fade show position-fixed top-0 end-0 m-4 shadow-lg"
+              style={{ zIndex: 9999, maxWidth: "400px" }}
+            >
+              <div className="d-flex align-items-center">
+                <i className="fa-solid fa-circle-check fs-4 me-3"></i>
+                <div>
+                  <strong className="fw-bold">Succès</strong>
+                  <p className="mb-0 small">{success}</p>
                 </div>
-                <div className="toast-body">{success}</div>
+                <button
+                  type="button"
+                  className="btn-close ms-3"
+                  onClick={() => setSuccess(null)}
+                ></button>
               </div>
             </div>
           )}
@@ -593,9 +616,9 @@ export default function ModifierProfile() {
                     style={
                       activeTab === "security"
                         ? {
-                            backgroundColor: colors.oskar.warning,
+                            backgroundColor: colors.oskar.green,
                             color: "white",
-                            borderColor: colors.oskar.warning,
+                            borderColor: colors.oskar.green,
                           }
                         : {
                             color: "#374151",
@@ -632,22 +655,19 @@ export default function ModifierProfile() {
             </div>
           </div>
 
-          {/* Contenu des onglets */}
+          {/* Contenu de l'onglet Profil */}
           {activeTab === "profile" && (
             <>
-              {/* Section de présentation avec stats */}
+              {/* Section de présentation avec avatar */}
               <div className="row mb-4">
                 <div className="col-12">
                   <div className="card border-0 shadow-sm">
                     <div className="card-body p-4">
                       <div className="row align-items-center">
-                        <div className="col-md-3 text-center">
-                          <div className="position-relative">
+                        <div className="col-md-auto text-center mb-3 mb-md-0">
+                          <div className="position-relative d-inline-block">
                             <img
-                              src={
-                                previewImage ||
-                                getDefaultAvatar(formData.nom, formData.prenoms)
-                              }
+                              src={previewImage || getAvatarUrl()}
                               alt="Photo administrateur"
                               className="rounded-circle border border-4 border-white shadow-lg"
                               style={{
@@ -655,17 +675,11 @@ export default function ModifierProfile() {
                                 height: "150px",
                                 objectFit: "cover",
                               }}
-                              onError={(e) => {
-                                const target = e.target as HTMLImageElement;
-                                target.src = getDefaultAvatar(
-                                  formData.nom,
-                                  formData.prenoms,
-                                );
-                              }}
+                              onError={handleImageError}
                             />
                             <button
                               onClick={triggerFileInput}
-                              className="btn rounded-circle position-absolute bottom-0 end-0 shadow-lg"
+                              className="btn rounded-circle position-absolute bottom-0 end-0 shadow-lg d-flex align-items-center justify-content-center"
                               style={{
                                 width: "48px",
                                 height: "48px",
@@ -687,9 +701,9 @@ export default function ModifierProfile() {
                             />
                           </div>
                         </div>
-                        <div className="col-md-9">
+                        <div className="col-md">
                           <h2 className="fw-bold mb-2">
-                            {getFullName()}
+                            👋 Bonjour, {getFirstName()} !
                             <span
                               className="badge ms-3"
                               style={{
@@ -705,18 +719,18 @@ export default function ModifierProfile() {
                             <i className="fa-solid fa-envelope me-2"></i>
                             {formData.email}
                           </p>
-                          <div className="row">
+                          <div className="row g-3">
                             {getProfileStats().map((stat, index) => (
-                              <div key={index} className="col-6 col-md-3 mb-3">
+                              <div key={index} className="col-sm-6 col-md-3">
                                 <div className="d-flex align-items-center">
                                   <div
-                                    className="rounded-circle p-3 me-3"
+                                    className="rounded-circle p-2 me-2"
                                     style={{
                                       backgroundColor: `${stat.color}20`,
                                     }}
                                   >
                                     <i
-                                      className={`fa-solid fa-${stat.icon} fa-lg`}
+                                      className={`fa-solid fa-${stat.icon}`}
                                       style={{ color: stat.color }}
                                     ></i>
                                   </div>
@@ -724,7 +738,7 @@ export default function ModifierProfile() {
                                     <div className="small text-muted">
                                       {stat.title}
                                     </div>
-                                    <div className="fw-semibold">
+                                    <div className="fw-semibold small">
                                       {stat.value}
                                     </div>
                                   </div>
@@ -757,210 +771,202 @@ export default function ModifierProfile() {
                         <div className="row g-4">
                           {/* Prénoms */}
                           <div className="col-md-6">
-                            <div className="form-floating">
-                              <input
-                                type="text"
-                                className="form-control"
-                                id="prenoms"
-                                name="prenoms"
-                                value={formData.prenoms}
-                                onChange={handleInputChange}
-                                required
-                                placeholder=" "
-                                disabled={saving}
-                              />
-                              <label htmlFor="prenoms" className="text-muted">
-                                <i className="fa-solid fa-user me-2"></i>
-                                Prénom(s)
-                                <span className="text-danger">*</span>
-                              </label>
-                            </div>
+                            <label
+                              htmlFor="prenoms"
+                              className="form-label fw-semibold"
+                            >
+                              <i className="fa-solid fa-user me-2 text-success"></i>
+                              Prénom(s) <span className="text-danger">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              className="form-control form-control-lg"
+                              id="prenoms"
+                              name="prenoms"
+                              value={formData.prenoms}
+                              onChange={handleInputChange}
+                              required
+                              disabled={saving}
+                              placeholder="Votre prénom"
+                            />
                           </div>
 
                           {/* Nom */}
                           <div className="col-md-6">
-                            <div className="form-floating">
-                              <input
-                                type="text"
-                                className="form-control"
-                                id="nom"
-                                name="nom"
-                                value={formData.nom}
-                                onChange={handleInputChange}
-                                required
-                                placeholder=" "
-                                disabled={saving}
-                              />
-                              <label htmlFor="nom" className="text-muted">
-                                <i className="fa-solid fa-user-tag me-2"></i>
-                                Nom <span className="text-danger">*</span>
-                              </label>
-                            </div>
+                            <label
+                              htmlFor="nom"
+                              className="form-label fw-semibold"
+                            >
+                              <i className="fa-solid fa-user-tag me-2 text-success"></i>
+                              Nom <span className="text-danger">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              className="form-control form-control-lg"
+                              id="nom"
+                              name="nom"
+                              value={formData.nom}
+                              onChange={handleInputChange}
+                              required
+                              disabled={saving}
+                              placeholder="Votre nom"
+                            />
                           </div>
 
                           {/* Civilité */}
                           <div className="col-md-6">
-                            <div className="form-floating">
-                              <select
-                                className="form-select"
-                                id="civilite_uuid"
-                                name="civilite_uuid"
-                                value={formData.civilite_uuid}
-                                onChange={handleInputChange}
-                                disabled={saving}
-                              >
-                                <option value=""></option>
-                                {civilites.map((civilite) => (
-                                  <option
-                                    key={civilite.uuid}
-                                    value={civilite.uuid}
-                                  >
-                                    {civilite.libelle}
-                                  </option>
-                                ))}
-                              </select>
-                              <label
-                                htmlFor="civilite_uuid"
-                                className="text-muted"
-                              >
-                                <i className="fa-solid fa-venus-mars me-2"></i>
-                                Civilité
-                              </label>
-                            </div>
+                            <label
+                              htmlFor="civilite_uuid"
+                              className="form-label fw-semibold"
+                            >
+                              <i className="fa-solid fa-venus-mars me-2 text-success"></i>
+                              Civilité
+                            </label>
+                            <select
+                              className="form-select form-select-lg"
+                              id="civilite_uuid"
+                              name="civilite_uuid"
+                              value={formData.civilite_uuid}
+                              onChange={handleInputChange}
+                              disabled={saving}
+                            >
+                              <option value="">
+                                Sélectionnez une civilité
+                              </option>
+                              {civilites.map((civilite) => (
+                                <option
+                                  key={civilite.uuid}
+                                  value={civilite.uuid}
+                                >
+                                  {civilite.libelle}
+                                </option>
+                              ))}
+                            </select>
                           </div>
 
                           {/* Date de naissance */}
                           <div className="col-md-6">
-                            <div className="form-floating">
-                              <input
-                                type="date"
-                                className="form-control"
-                                id="birth_date"
-                                name="birth_date"
-                                value={formData.birth_date}
-                                onChange={handleInputChange}
-                                disabled={saving}
-                                max={new Date().toISOString().split("T")[0]}
-                              />
-                              <label
-                                htmlFor="birth_date"
-                                className="text-muted"
-                              >
-                                <i className="fa-solid fa-cake-candles me-2"></i>
-                                Date de naissance
-                              </label>
-                            </div>
+                            <label
+                              htmlFor="birth_date"
+                              className="form-label fw-semibold"
+                            >
+                              <i className="fa-solid fa-cake-candles me-2 text-success"></i>
+                              Date de naissance
+                            </label>
+                            <input
+                              type="date"
+                              className="form-control form-control-lg"
+                              id="birth_date"
+                              name="birth_date"
+                              value={formData.birth_date}
+                              onChange={handleInputChange}
+                              disabled={saving}
+                              max={new Date().toISOString().split("T")[0]}
+                            />
                           </div>
 
                           {/* Email */}
                           <div className="col-12">
-                            <div className="form-floating">
-                              <input
-                                type="email"
-                                className="form-control"
-                                id="email"
-                                name="email"
-                                value={formData.email}
-                                onChange={handleInputChange}
-                                required
-                                placeholder=" "
-                                disabled={saving}
-                              />
-                              <label htmlFor="email" className="text-muted">
-                                <i className="fa-solid fa-envelope me-2"></i>
-                                Adresse email
-                                <span className="text-danger">*</span>
-                              </label>
-                            </div>
+                            <label
+                              htmlFor="email"
+                              className="form-label fw-semibold"
+                            >
+                              <i className="fa-solid fa-envelope me-2 text-success"></i>
+                              Adresse email{" "}
+                              <span className="text-danger">*</span>
+                            </label>
+                            <input
+                              type="email"
+                              className="form-control form-control-lg"
+                              id="email"
+                              name="email"
+                              value={formData.email}
+                              onChange={handleInputChange}
+                              required
+                              disabled={saving}
+                              placeholder="exemple@email.com"
+                            />
                           </div>
 
                           {/* Téléphone */}
                           <div className="col-12">
-                            <div className="form-floating">
-                              <div className="input-group">
-                                <div className="input-group-text bg-light">
-                                  <span className="fw-semibold">+</span>
-                                </div>
-                                <input
-                                  type="text"
-                                  className="form-control"
-                                  style={{ maxWidth: "100px" }}
-                                  id="indicatif"
-                                  name="indicatif"
-                                  placeholder="225"
-                                  value={formData.indicatif}
-                                  onChange={handleInputChange}
-                                  maxLength={3}
-                                  disabled={saving}
-                                />
-                                <input
-                                  type="tel"
-                                  className="form-control"
-                                  id="telephone"
-                                  name="telephone"
-                                  placeholder="07 00 00 00 00"
-                                  value={formData.telephone}
-                                  onChange={handleInputChange}
-                                  disabled={saving}
-                                />
-                              </div>
-                              <label htmlFor="telephone" className="text-muted">
-                                <i className="fa-solid fa-phone me-2"></i>
-                                Téléphone
-                              </label>
+                            <label
+                              htmlFor="telephone"
+                              className="form-label fw-semibold"
+                            >
+                              <i className="fa-solid fa-phone me-2 text-success"></i>
+                              Téléphone
+                            </label>
+                            <div className="input-group">
+                              <span className="input-group-text bg-light">
+                                +
+                              </span>
+                              <input
+                                type="text"
+                                className="form-control"
+                                style={{ maxWidth: "100px" }}
+                                id="indicatif"
+                                name="indicatif"
+                                value={formData.indicatif}
+                                onChange={handleInputChange}
+                                maxLength={3}
+                                disabled={saving}
+                                placeholder="225"
+                              />
+                              <input
+                                type="tel"
+                                className="form-control"
+                                id="telephone"
+                                name="telephone"
+                                value={formData.telephone}
+                                onChange={handleInputChange}
+                                disabled={saving}
+                                placeholder="0700000000"
+                              />
                             </div>
                             <div className="form-text">
-                              <i className="fa-solid fa-circle-info me-1"></i>
-                              Format: indicatif + numéro (ex: +225 0700000000)
+                              <i className="fa-solid fa-circle-info me-1 text-success"></i>
+                              Format: +225 0700000000
                             </div>
                           </div>
                         </div>
 
                         {/* Boutons d'action */}
-                        <div className="row mt-5 pt-4 border-top">
-                          <div className="col-12">
-                            <div className="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
-                              <div className="text-center text-md-start">
-                                <p className="text-muted mb-0 small">
-                                  <i className="fa-solid fa-circle-info me-2"></i>
-                                  Les champs marqués d'un * sont obligatoires
-                                </p>
-                              </div>
-                              <div className="d-flex flex-wrap justify-content-center gap-3">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    router.push("/dashboard-admin")
-                                  }
-                                  className="btn btn-outline-secondary px-4 rounded-pill"
-                                  disabled={saving}
-                                >
-                                  <i className="fa-solid fa-times me-2"></i>
-                                  Annuler
-                                </button>
-                                <button
-                                  type="submit"
-                                  className="btn px-4 rounded-pill shadow-sm"
-                                  style={{
-                                    backgroundColor: colors.oskar.green,
-                                    color: "white",
-                                  }}
-                                  disabled={saving}
-                                >
-                                  {saving ? (
-                                    <>
-                                      <span className="spinner-border spinner-border-sm me-2"></span>
-                                      Enregistrement...
-                                    </>
-                                  ) : (
-                                    <>
-                                      <i className="fa-solid fa-floppy-disk me-2"></i>
-                                      Enregistrer les modifications
-                                    </>
-                                  )}
-                                </button>
-                              </div>
-                            </div>
+                        <div className="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3 mt-5 pt-4 border-top">
+                          <p className="text-muted small mb-0">
+                            <i className="fa-solid fa-circle-info me-2 text-success"></i>
+                            Les champs marqués d'un{" "}
+                            <span className="text-danger">*</span> sont
+                            obligatoires
+                          </p>
+                          <div className="d-flex gap-3">
+                            <button
+                              type="button"
+                              onClick={() => router.push("/dashboard-admin")}
+                              className="btn btn-outline-secondary px-4 rounded-pill"
+                              disabled={saving}
+                            >
+                              <i className="fa-solid fa-times me-2"></i>
+                              Annuler
+                            </button>
+                            <button
+                              type="submit"
+                              className="btn px-4 rounded-pill shadow-sm text-white"
+                              style={{ backgroundColor: colors.oskar.green }}
+                              disabled={saving}
+                            >
+                              {saving ? (
+                                <>
+                                  <span className="spinner-border spinner-border-sm me-2"></span>
+                                  Enregistrement...
+                                </>
+                              ) : (
+                                <>
+                                  <i className="fa-solid fa-floppy-disk me-2"></i>
+                                  Enregistrer
+                                </>
+                              )}
+                            </button>
                           </div>
                         </div>
                       </form>
@@ -971,167 +977,95 @@ export default function ModifierProfile() {
             </>
           )}
 
+          {/* Onglet Sécurité */}
           {activeTab === "security" && (
-            <div className="row">
-              <div className="col-12">
-                <div className="card border-0 shadow-sm">
-                  <div className="card-header bg-white py-3 border-bottom">
-                    <h5 className="fw-bold mb-0 d-flex align-items-center">
-                      <i
-                        className="fa-solid fa-shield-halved me-3"
-                        style={{ color: colors.oskar.warning }}
-                      ></i>
-                      Sécurité du compte
-                    </h5>
-                  </div>
-                  <div className="card-body p-4">
-                    <div className="row g-4">
-                      {/* Section mot de passe */}
-                      <div className="col-md-6">
-                        <div
-                          className="card h-100"
-                          style={{ borderColor: colors.oskar.warning }}
-                        >
-                          <div className="card-body">
-                            <div className="d-flex align-items-start mb-3">
-                              <div
-                                className="rounded-circle p-3 me-3"
-                                style={{
-                                  backgroundColor: `${colors.oskar.warning}20`,
-                                }}
-                              >
-                                <i
-                                  className="fa-solid fa-key fa-xl"
-                                  style={{ color: colors.oskar.warning }}
-                                ></i>
-                              </div>
-                              <div>
-                                <h6 className="fw-bold mb-2">
-                                  Gestion du mot de passe
-                                </h6>
-                                <p className="text-muted small mb-0">
-                                  Pour des raisons de sécurité, la modification
-                                  du mot de passe nécessite une procédure
-                                  spécifique.
-                                </p>
-                              </div>
-                            </div>
-                            <button
-                              onClick={() =>
-                                router.push("/auth/admin/forgot-password")
-                              }
-                              className="btn w-100"
-                              style={{
-                                color: colors.oskar.warning,
-                                borderColor: colors.oskar.warning,
-                              }}
-                            >
-                              <i className="fa-solid fa-key me-2"></i>
-                              Réinitialiser le mot de passe
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Section authentification à deux facteurs */}
-                      <div className="col-md-6">
-                        <div
-                          className="card h-100"
-                          style={{ borderColor: colors.oskar.green }}
-                        >
-                          <div className="card-body">
-                            <div className="d-flex align-items-start mb-3">
-                              <div
-                                className="rounded-circle p-3 me-3"
-                                style={{
-                                  backgroundColor: `${colors.oskar.green}20`,
-                                }}
-                              >
-                                <i
-                                  className="fa-solid fa-mobile-screen fa-xl"
-                                  style={{ color: colors.oskar.green }}
-                                ></i>
-                              </div>
-                              <div>
-                                <h6 className="fw-bold mb-2">
-                                  Authentification à deux facteurs
-                                </h6>
-                                <p className="text-muted small mb-0">
-                                  Ajoutez une couche de sécurité supplémentaire
-                                  à votre compte.
-                                </p>
-                              </div>
-                            </div>
-                            <div className="form-check form-switch">
-                              <input
-                                className="form-check-input"
-                                type="checkbox"
-                                role="switch"
-                                id="2faSwitch"
-                              />
-                              <label
-                                className="form-check-label"
-                                htmlFor="2faSwitch"
-                              >
-                                Activer la 2FA
-                              </label>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Section sessions actives */}
-                      <div className="col-12">
-                        <div
-                          className="card"
-                          style={{ borderColor: colors.oskar.green }}
-                        >
+            <div className="card border-0 shadow-sm">
+              <div className="card-header bg-white py-3 border-bottom">
+                <h5 className="fw-bold mb-0 d-flex align-items-center">
+                  <i
+                    className="fa-solid fa-shield-halved me-3"
+                    style={{ color: colors.oskar.green }}
+                  ></i>
+                  Sécurité du compte
+                </h5>
+              </div>
+              <div className="card-body p-4">
+                <div className="row g-4">
+                  <div className="col-md-6">
+                    <div className="card h-100 border-0 shadow-sm">
+                      <div className="card-body">
+                        <div className="d-flex align-items-center mb-3">
                           <div
-                            className="card-header"
+                            className="rounded-circle p-3 me-3"
                             style={{
-                              backgroundColor: `${colors.oskar.green}10`,
+                              backgroundColor: `${colors.oskar.green}20`,
                             }}
                           >
-                            <h6
-                              className="fw-bold mb-0"
+                            <i
+                              className="fa-solid fa-key fa-xl"
                               style={{ color: colors.oskar.green }}
-                            >
-                              <i className="fa-solid fa-computer-mouse me-2"></i>
-                              Sessions actives
+                            ></i>
+                          </div>
+                          <div>
+                            <h6 className="fw-bold mb-1">Mot de passe</h6>
+                            <p className="text-muted small mb-0">
+                              Modifiez votre mot de passe
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() =>
+                            router.push("/auth/admin/forgot-password")
+                          }
+                          className="btn w-100"
+                          style={{
+                            borderColor: colors.oskar.green,
+                            color: colors.oskar.green,
+                          }}
+                        >
+                          <i className="fa-solid fa-key me-2"></i>
+                          Changer le mot de passe
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="col-md-6">
+                    <div className="card h-100 border-0 shadow-sm">
+                      <div className="card-body">
+                        <div className="d-flex align-items-center mb-3">
+                          <div
+                            className="rounded-circle p-3 me-3"
+                            style={{
+                              backgroundColor: `${colors.oskar.green}20`,
+                            }}
+                          >
+                            <i
+                              className="fa-solid fa-mobile-screen fa-xl"
+                              style={{ color: colors.oskar.green }}
+                            ></i>
+                          </div>
+                          <div>
+                            <h6 className="fw-bold mb-1">
+                              Authentification à deux facteurs
                             </h6>
+                            <p className="text-muted small mb-0">
+                              Sécurisez votre compte
+                            </p>
                           </div>
-                          <div className="card-body">
-                            <div className="d-flex justify-content-between align-items-center mb-3">
-                              <div>
-                                <div className="fw-semibold">
-                                  Session actuelle
-                                </div>
-                                <small className="text-muted">
-                                  Navigateur Chrome • Abidjan, CI
-                                </small>
-                              </div>
-                              <span
-                                className="badge"
-                                style={{
-                                  backgroundColor: colors.oskar.green,
-                                  color: "white",
-                                }}
-                              >
-                                <i className="fa-solid fa-circle-check me-1"></i>
-                                Actif maintenant
-                              </span>
-                            </div>
-                            <button
-                              className="btn w-100"
-                              style={{
-                                color: colors.oskar.red,
-                                borderColor: colors.oskar.red,
-                              }}
-                            >
-                              <i className="fa-solid fa-sign-out me-2"></i>
-                              Déconnecter toutes les autres sessions
-                            </button>
-                          </div>
+                        </div>
+                        <div className="form-check form-switch">
+                          <input
+                            className="form-check-input"
+                            type="checkbox"
+                            role="switch"
+                            id="2faSwitch"
+                          />
+                          <label
+                            className="form-check-label"
+                            htmlFor="2faSwitch"
+                          >
+                            Activer la 2FA
+                          </label>
                         </div>
                       </div>
                     </div>
@@ -1141,365 +1075,53 @@ export default function ModifierProfile() {
             </div>
           )}
 
+          {/* Onglet Préférences */}
           {activeTab === "preferences" && (
-            <div className="row">
-              <div className="col-12">
-                <div className="card border-0 shadow-sm">
-                  <div className="card-header bg-white py-3 border-bottom">
-                    <h5 className="fw-bold mb-0 d-flex align-items-center">
-                      <i
-                        className="fa-solid fa-sliders me-3"
-                        style={{ color: colors.oskar.green }}
-                      ></i>
-                      Préférences du compte
-                    </h5>
-                  </div>
-                  <div className="card-body p-4">
-                    <div className="row g-4">
-                      {/* Langue */}
-                      <div className="col-md-6">
-                        <div className="form-floating">
-                          <select className="form-select" id="language">
-                            <option value="fr">Français</option>
-                            <option value="en">English</option>
-                            <option value="es">Español</option>
-                          </select>
-                          <label htmlFor="language" className="text-muted">
-                            <i className="fa-solid fa-language me-2"></i>
-                            Langue préférée
-                          </label>
-                        </div>
-                      </div>
-
-                      {/* Fuseau horaire */}
-                      <div className="col-md-6">
-                        <div className="form-floating">
-                          <select className="form-select" id="timezone">
-                            <option value="Africa/Abidjan">
-                              Abidjan (UTC+0)
-                            </option>
-                            <option value="Europe/Paris">Paris (UTC+1)</option>
-                            <option value="America/New_York">
-                              New York (UTC-5)
-                            </option>
-                          </select>
-                          <label htmlFor="timezone" className="text-muted">
-                            <i className="fa-solid fa-clock me-2"></i>
-                            Fuseau horaire
-                          </label>
-                        </div>
-                      </div>
-
-                      {/* Notifications */}
-                      <div className="col-12">
-                        <div
-                          className="card"
-                          style={{ borderColor: colors.oskar.green }}
-                        >
-                          <div
-                            className="card-header"
-                            style={{
-                              backgroundColor: `${colors.oskar.green}10`,
-                            }}
-                          >
-                            <h6
-                              className="fw-bold mb-0"
-                              style={{ color: colors.oskar.green }}
-                            >
-                              <i className="fa-solid fa-bell me-2"></i>
-                              Préférences de notifications
-                            </h6>
-                          </div>
-                          <div className="card-body">
-                            <div className="mb-3">
-                              <div className="form-check form-switch">
-                                <input
-                                  className="form-check-input"
-                                  type="checkbox"
-                                  role="switch"
-                                  id="emailNotifications"
-                                  defaultChecked
-                                />
-                                <label
-                                  className="form-check-label"
-                                  htmlFor="emailNotifications"
-                                >
-                                  Notifications par email
-                                </label>
-                              </div>
-                            </div>
-                            <div className="mb-3">
-                              <div className="form-check form-switch">
-                                <input
-                                  className="form-check-input"
-                                  type="checkbox"
-                                  role="switch"
-                                  id="pushNotifications"
-                                  defaultChecked
-                                />
-                                <label
-                                  className="form-check-label"
-                                  htmlFor="pushNotifications"
-                                >
-                                  Notifications push
-                                </label>
-                              </div>
-                            </div>
-                            <div className="mb-0">
-                              <div className="form-check form-switch">
-                                <input
-                                  className="form-check-input"
-                                  type="checkbox"
-                                  role="switch"
-                                  id="smsNotifications"
-                                />
-                                <label
-                                  className="form-check-label"
-                                  htmlFor="smsNotifications"
-                                >
-                                  Notifications par SMS
-                                </label>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Bouton de sauvegarde */}
-                      <div className="col-12">
-                        <div className="d-flex justify-content-end">
-                          <button
-                            className="btn px-4 rounded-pill shadow-sm"
-                            style={{
-                              backgroundColor: colors.oskar.green,
-                              color: "white",
-                            }}
-                          >
-                            <i className="fa-solid fa-save me-2"></i>
-                            Sauvegarder les préférences
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+            <div className="card border-0 shadow-sm">
+              <div className="card-header bg-white py-3 border-bottom">
+                <h5 className="fw-bold mb-0 d-flex align-items-center">
+                  <i
+                    className="fa-solid fa-sliders me-3"
+                    style={{ color: colors.oskar.green }}
+                  ></i>
+                  Préférences
+                </h5>
+              </div>
+              <div className="card-body p-4">
+                <p className="text-center text-muted">
+                  <i className="fa-solid fa-sliders me-2"></i>
+                  Page de préférences en cours de développement...
+                </p>
               </div>
             </div>
           )}
-
-          {/* Footer avec informations */}
-          <div className="row mt-4">
-            <div className="col-12">
-              <div
-                className="card border-0 shadow-sm"
-                style={{ backgroundColor: `${colors.oskar.green}10` }}
-              >
-                <div className="card-body text-center p-4">
-                  <div className="row align-items-center">
-                    <div className="col-md-8 text-md-start">
-                      <h6
-                        className="fw-bold mb-2"
-                        style={{ color: colors.oskar.green }}
-                      >
-                        <i className="fa-solid fa-circle-info me-2"></i>
-                        Support Administrateur
-                      </h6>
-                      <p className="text-muted mb-0 small">
-                        Pour toute assistance technique concernant votre compte
-                        administrateur, notre équipe de support est disponible
-                        24h/24 et 7j/7.
-                      </p>
-                    </div>
-                    <div className="col-md-4 text-md-end mt-3 mt-md-0">
-                      <a
-                        href="mailto:support@admin.com"
-                        className="btn"
-                        style={{
-                          color: colors.oskar.green,
-                          borderColor: colors.oskar.green,
-                        }}
-                      >
-                        <i className="fa-solid fa-envelope me-2"></i>
-                        Contact Support
-                      </a>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
       <style jsx>{`
-        /* Utilisation des couleurs du fichier colors.ts */
-        .bg-gradient-success {
-          background: linear-gradient(
-            135deg,
-            ${colors.oskar.green} 0%,
-            ${colors.oskar.darkGreen} 100%
-          );
-        }
-
-        .card {
-          border-radius: 12px;
-          transition: all 0.3s ease;
-        }
-
-        .card:hover {
-          transform: translateY(-3px);
-          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1) !important;
-        }
-
-        .nav-pills .nav-link {
-          border-radius: 50px;
-          padding: 12px 24px;
-          transition: all 0.3s ease;
-          color: #374151;
-          border: 1px solid #e5e7eb;
-        }
-
-        .nav-pills .nav-link.active {
-          border-color: transparent;
-          box-shadow: 0 4px 15px ${colors.oskar.green}30;
-          color: white;
-        }
-
-        .nav-pills .nav-link:not(.active):hover {
-          background-color: ${colors.oskar.green}10;
-          border-color: ${colors.oskar.green};
-          color: ${colors.oskar.green};
-        }
-
         .form-control:focus,
         .form-select:focus {
           border-color: ${colors.oskar.green};
           box-shadow: 0 0 0 0.25rem ${colors.oskar.green}25;
         }
 
-        .btn-success {
-          background: linear-gradient(
-            135deg,
-            ${colors.oskar.green} 0%,
-            ${colors.oskar.darkGreen} 100%
-          );
-          border: none;
-          font-weight: 500;
+        .nav-pills .nav-link.active {
+          background-color: ${colors.oskar.green} !important;
         }
 
-        .btn-success:hover {
-          background: linear-gradient(
-            135deg,
-            ${colors.oskar.greenHover} 0%,
-            ${colors.oskar.darkGreen} 100%
-          );
+        .btn[style*="background-color: ${colors.oskar.green}"]:hover {
+          background-color: ${colors.oskar.greenHover} !important;
           transform: translateY(-2px);
-          box-shadow: 0 6px 20px ${colors.oskar.green}30;
-        }
-
-        .btn-outline-success {
-          color: ${colors.oskar.green};
-          border-color: ${colors.oskar.green};
-        }
-
-        .btn-outline-success:hover {
-          background: linear-gradient(
-            135deg,
-            ${colors.oskar.green} 0%,
-            ${colors.oskar.darkGreen} 100%
-          );
-          color: white;
-          border-color: transparent;
-        }
-
-        .toast {
-          border-radius: 10px;
-          border: none;
-          box-shadow: 0 5px 20px rgba(0, 0, 0, 0.15);
-        }
-
-        .progress-bar {
-          background: linear-gradient(
-            135deg,
-            ${colors.oskar.green} 0%,
-            ${colors.oskar.darkGreen} 100%
-          );
+          box-shadow: 0 4px 12px rgba(0, 100, 0, 0.2);
         }
 
         .breadcrumb {
           background: ${colors.oskar.green}10;
-          border-radius: 10px;
         }
 
         .breadcrumb-item.active {
           color: ${colors.oskar.green};
           font-weight: 600;
-        }
-
-        .form-floating > .form-control:focus ~ label,
-        .form-floating > .form-control:not(:placeholder-shown) ~ label {
-          color: ${colors.oskar.green};
-        }
-
-        .badge {
-          padding: 8px 16px;
-          font-weight: 500;
-          border-radius: 50px;
-        }
-
-        .badge.bg-gradient-success {
-          background: linear-gradient(
-            135deg,
-            ${colors.oskar.green} 0%,
-            ${colors.oskar.darkGreen} 100%
-          );
-        }
-
-        .form-check-input:checked {
-          background-color: ${colors.oskar.green};
-          border-color: ${colors.oskar.green};
-        }
-
-        .form-switch .form-check-input:focus {
-          background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='${encodeURIComponent(
-            colors.oskar.green,
-          )}'/%3e%3c/svg%3e");
-        }
-
-        .form-switch .form-check-input:checked {
-          background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23fff'/%3e%3c/svg%3e");
-        }
-
-        /* Animation pour le spinner */
-        .spinner-border.text-success {
-          border-color: ${colors.oskar.green};
-          border-right-color: transparent;
-        }
-
-        /* Animation hover pour les cartes */
-        .card.border-success:hover {
-          border-color: ${colors.oskar.green} !important;
-          box-shadow: 0 5px 15px ${colors.oskar.green}15 !important;
-        }
-
-        /* Style pour les icônes vertes */
-        .fa-solid.text-success {
-          color: ${colors.oskar.green} !important;
-        }
-
-        /* Style pour les bordures vertes */
-        .border-success {
-          border-color: ${colors.oskar.lightGreen} !important;
-        }
-
-        /* Style pour les en-têtes de carte */
-        .card-header.bg-success-subtle {
-          background: linear-gradient(
-            135deg,
-            ${colors.oskar.green}10 0%,
-            ${colors.oskar.darkGreen}10 100%
-          );
-          border-bottom: 2px solid ${colors.oskar.lightGreen};
         }
       `}</style>
     </div>

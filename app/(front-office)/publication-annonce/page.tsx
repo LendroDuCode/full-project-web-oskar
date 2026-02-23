@@ -1,6 +1,7 @@
+// app/(front-office)/publication-annonce/page.tsx
 "use client";
 
-import { useState, ChangeEvent, useEffect } from "react";
+import { useState, ChangeEvent, useEffect, useCallback } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faStore,
@@ -13,6 +14,7 @@ import {
   faInfoCircle,
   faExclamationCircle,
   faTimes,
+  faExclamationTriangle,
 } from "@fortawesome/free-solid-svg-icons";
 import colors from "../../shared/constants/colors";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
@@ -24,9 +26,8 @@ import {
   EchangeData,
   PublishAdModalProps,
   VenteData,
-  Boutique,
   SaleMode,
-  ConditionOption, // ← IMPORT THIS
+  ConditionOption,
 } from "./components/constantes/types";
 import DonForm from "./components/DonForm";
 import EchangeForm from "./components/ExchangeForm";
@@ -48,8 +49,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [boutiqueCreated] = useState(false);
-  const [createdBoutiqueUuid] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // États initiaux
   const [donData, setDonData] = useState<DonData>({
@@ -84,6 +84,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
 
   const [venteData, setVenteData] = useState<VenteData>({
     boutiqueUuid: "",
+    boutiqueNom: "",
     libelle: "",
     type: "",
     disponible: true,
@@ -99,11 +100,6 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     garantie: "non",
     saleMode: "particulier",
   });
-
-  const [boutiques, setBoutiques] = useState<Boutique[]>([]);
-  const [selectedBoutique, setSelectedBoutique] = useState<Boutique | null>(
-    null,
-  );
 
   const adTypeOptions: AdTypeOption[] = [
     {
@@ -186,7 +182,6 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     },
   ];
 
-  // ✅ FIXED: Properly typed conditions array
   const conditions: ConditionOption[] = [
     { value: "neuf", label: "Neuf (jamais utilisé)" },
     { value: "tresbon", label: "Très bon état" },
@@ -195,83 +190,47 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     { value: "areparer", label: "À réparer" },
   ];
 
-  // Charger les boutiques
-  useEffect(() => {
-    const fetchBoutiques = async () => {
-      if (!isLoggedIn || adType !== "sale") {
-        setBoutiques([]);
-        return;
-      }
+  // Fonction pour parser les erreurs de l'API
+  const parseApiError = (error: any) => {
+    console.log("🔍 Parsing error:", error);
 
-      try {
-        const token = localStorage.getItem("oskar_token");
-        if (!token) return;
+    // Erreur de boutique non autorisée
+    if (
+      error.message?.includes("Boutique non trouvée") ||
+      error.message?.includes("boutique non autorisée")
+    ) {
+      return {
+        type: "boutique",
+        message:
+          "❌ Cette boutique ne vous appartient pas, vous n'êtes pas autorisé à y ajouter des produits",
+      };
+    }
 
-        const url = API_ENDPOINTS.BOUTIQUES.LISTE_BOUTIQUES_CREE_PAR_VENDEUR;
-        console.log("🛍️ Chargement des boutiques:", url);
+    // Erreur de catégorie obligatoire
+    if (
+      error.message?.includes("catégorie est obligatoire") ||
+      error.message?.includes("categorie_uuid")
+    ) {
+      return {
+        type: "categorie",
+        message:
+          "⚠️ La catégorie est obligatoire. Veuillez sélectionner une catégorie pour votre annonce.",
+      };
+    }
 
-        const response = await fetch(url, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+    // Erreur de champ obligatoire
+    if (error.message?.includes("obligatoire")) {
+      return {
+        type: "generic",
+        message: error.message,
+      };
+    }
 
-        if (!response.ok) {
-          throw new Error(`Erreur ${response.status}`);
-        }
-
-        const data = await response.json();
-        let boutiquesData: Boutique[] = [];
-
-        if (Array.isArray(data)) {
-          boutiquesData = data;
-        } else if (data && Array.isArray(data.data)) {
-          boutiquesData = data.data;
-        } else if (data && data.data && Array.isArray(data.data.data)) {
-          boutiquesData = data.data.data;
-        } else if (data && data.success && Array.isArray(data.data)) {
-          boutiquesData = data.data;
-        }
-
-        const boutiquesActives = boutiquesData.filter(
-          (boutique) =>
-            !boutique.est_bloque &&
-            !boutique.est_ferme &&
-            (boutique.statut === "actif" || boutique.statut === "en_review"),
-        );
-
-        console.log(`📊 ${boutiquesActives.length} boutique(s) active(s)`);
-        setBoutiques(boutiquesActives);
-
-        // Si l'utilisateur est un vendeur et n'a pas de boutique sélectionnée,
-        // présélectionner la première boutique active
-        if (
-          user?.type === "vendeur" &&
-          !venteData.boutiqueUuid &&
-          boutiquesActives.length > 0
-        ) {
-          const premiereBoutique = boutiquesActives[0];
-          handleBoutiqueChange(premiereBoutique.uuid);
-          console.log(`✅ Boutique présélectionnée: ${premiereBoutique.nom}`);
-        }
-      } catch (err) {
-        console.error("❌ Erreur chargement boutiques:", err);
-        setBoutiques([]);
-      }
+    return {
+      type: "generic",
+      message: error.message || "Une erreur est survenue. Veuillez réessayer.",
     };
-
-    if (visible && isLoggedIn && adType === "sale") {
-      fetchBoutiques();
-    }
-  }, [visible, isLoggedIn, adType, user?.type, venteData.boutiqueUuid]);
-
-  // Mettre à jour selectedBoutique quand boutiqueUuid change
-  useEffect(() => {
-    if (venteData.boutiqueUuid && boutiques.length > 0) {
-      const boutique = boutiques.find((b) => b.uuid === venteData.boutiqueUuid);
-      setSelectedBoutique(boutique || null);
-    } else {
-      setSelectedBoutique(null);
-    }
-  }, [venteData.boutiqueUuid, boutiques]);
+  };
 
   const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -312,7 +271,6 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     setTimeout(() => setSuccessMessage(null), 5000);
   };
 
-  // ✅ Soumission DON
   const submitDon = async (): Promise<void> => {
     const formData = new FormData();
     formData.append("nom", donData.titre.trim());
@@ -331,7 +289,6 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     await sendFormData(formData, API_ENDPOINTS.DONS.CREATE, "don");
   };
 
-  // ✅ Soumission ÉCHANGE
   const submitEchange = async (): Promise<void> => {
     const formData = new FormData();
     formData.append("nomElementEchange", echangeData.nomElementEchange.trim());
@@ -350,31 +307,18 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     await sendFormData(formData, API_ENDPOINTS.ECHANGES.CREATE, "échange");
   };
 
-  // ✅ Soumission VENTE - CORRIGÉE
   const submitVente = async (): Promise<void> => {
-    console.log("🚀 Début submitVente");
-    console.log("📊 État venteData:", venteData);
-    console.log("👤 Type utilisateur:", user?.type);
+    console.log("🚀 Début submitVente", venteData);
 
     const formData = new FormData();
 
-    // CORRECTION IMPORTANTE : Utiliser "boutiqueUuid" (camelCase)
-    const boutiqueId = venteData.boutiqueUuid;
-    console.log("📝 boutiqueUuid à envoyer:", boutiqueId);
-
-    if (boutiqueId) {
-      formData.append("boutiqueUuid", boutiqueId);
-    } else if (user?.type === "vendeur") {
-      // Si l'utilisateur est un vendeur mais n'a pas de boutique
-      console.error("❌ ERREUR: Vendeur sans boutiqueUuid!");
-      setSubmitError(
-        "Veuillez sélectionner une boutique pour vendre ce produit",
-      );
-      setLoading(false);
-      return;
+    // Si c'est une nouvelle boutique, on envoie le nom, sinon l'UUID
+    if (venteData.boutiqueUuid === "new" && venteData.boutiqueNom) {
+      formData.append("boutiqueNom", venteData.boutiqueNom);
+    } else if (venteData.boutiqueUuid) {
+      formData.append("boutiqueUuid", venteData.boutiqueUuid);
     }
 
-    // Ajouter les autres champs
     formData.append("libelle", venteData.libelle.trim());
     formData.append("type", venteData.type.trim());
     formData.append("disponible", String(venteData.disponible));
@@ -395,7 +339,6 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     await sendFormData(formData, API_ENDPOINTS.PRODUCTS.CREATE, "vente");
   };
 
-  // ✅ Fonction générique pour envoyer FormData - CORRIGÉE
   const sendFormData = async (
     formData: FormData,
     endpoint: string,
@@ -403,20 +346,12 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
   ) => {
     setLoading(true);
     setSubmitError(null);
+    setFieldErrors({});
 
     try {
       console.log(`📤 Envoi ${type} vers:`, endpoint);
-      console.log("📋 Données FormData:");
-      for (let [key, value] of formData.entries()) {
-        console.log(
-          `  ${key}:`,
-          value instanceof File ? `File(${value.name})` : value,
-        );
-      }
 
-      // CORRECTION : Utiliser api.post() au lieu de api()
       const result = await api.post(endpoint, formData);
-
       console.log(`✅ ${type} créé avec succès:`, result);
 
       resetForm();
@@ -437,24 +372,15 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     } catch (err: any) {
       console.error(`❌ Erreur publication ${type}:`, err);
 
-      let errorMessage = err.message;
+      // Parser l'erreur
+      const parsedError = parseApiError(err);
 
-      // Messages d'erreur spécifiques
-      if (
-        errorMessage.includes("boutiqueUuid") ||
-        errorMessage.includes("boutique_uuid")
-      ) {
-        errorMessage =
-          "Veuillez sélectionner une boutique pour vendre ce produit";
-      } else if (errorMessage.includes("400")) {
-        errorMessage = "Veuillez vérifier les informations du formulaire";
-      } else if (errorMessage.includes("401")) {
-        errorMessage = "Session expirée. Veuillez vous reconnecter";
-      } else if (errorMessage.includes("vendeur")) {
-        errorMessage = "Les vendeurs doivent vendre via une boutique";
+      // Si c'est une erreur de catégorie, on peut la passer au formulaire
+      if (parsedError.type === "categorie") {
+        setFieldErrors({ categorie: parsedError.message });
       }
 
-      setSubmitError(errorMessage);
+      setSubmitError(parsedError.message);
     } finally {
       setLoading(false);
     }
@@ -468,14 +394,10 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       return;
     }
 
-    // Validation supplémentaire pour les vendeurs
-    if (
-      adType === "sale" &&
-      user?.type === "vendeur" &&
-      !venteData.boutiqueUuid
-    ) {
+    // Validation basique avant envoi
+    if (adType === "sale" && !venteData.categorie_uuid) {
       setSubmitError(
-        "Veuillez sélectionner une boutique pour vendre ce produit",
+        "⚠️ La catégorie est obligatoire. Veuillez sélectionner une catégorie pour votre annonce.",
       );
       return;
     }
@@ -530,6 +452,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     });
     setVenteData({
       boutiqueUuid: "",
+      boutiqueNom: "",
       libelle: "",
       type: "",
       disponible: true,
@@ -548,8 +471,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     setImagePreview(null);
     setStep(1);
     setSubmitError(null);
-    setBoutiques([]);
-    setSelectedBoutique(null);
+    setFieldErrors({});
   };
 
   const nextStep = () => step < 3 && setStep(step + 1);
@@ -558,11 +480,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     setAdType(type);
     setStep(2);
     setSubmitError(null);
-  };
-
-  const handleBoutiqueChange = (boutiqueUuid: string) => {
-    console.log(`🔄 Changement de boutique: ${boutiqueUuid}`);
-    setVenteData({ ...venteData, boutiqueUuid });
+    setFieldErrors({});
   };
 
   const renderStep1 = () => (
@@ -648,7 +566,6 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
 
   return (
     <>
-      {/* Notification de succès */}
       {successMessage && (
         <div
           className="position-fixed top-0 start-50 translate-middle-x mt-4"
@@ -678,7 +595,6 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
               className="btn-close btn-close-white opacity-75"
               onClick={() => setSuccessMessage(null)}
               aria-label="Close"
-              style={{ background: "transparent", border: "none" }}
             >
               <FontAwesomeIcon icon={faTimes} />
             </button>
@@ -738,12 +654,30 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
                 </div>
 
                 {submitError && (
-                  <div className="alert alert-danger border-0 mb-3">
+                  <div
+                    className="alert alert-danger border-0 mb-3 d-flex align-items-start shadow-sm"
+                    style={{
+                      borderRadius: "10px",
+                      background: "#fff2f0",
+                      borderLeft: "4px solid #dc3545",
+                    }}
+                  >
                     <FontAwesomeIcon
-                      icon={faExclamationCircle}
-                      className="me-2"
-                    />{" "}
-                    {submitError}
+                      icon={faExclamationTriangle}
+                      className="me-3 mt-1"
+                      style={{ color: "#dc3545", fontSize: "1.2rem" }}
+                    />
+                    <div>
+                      <strong
+                        className="d-block mb-1"
+                        style={{ color: "#58151c" }}
+                      >
+                        Erreur
+                      </strong>
+                      <p className="mb-0" style={{ color: "#842029" }}>
+                        {submitError}
+                      </p>
+                    </div>
                   </div>
                 )}
 
@@ -781,30 +715,26 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
 
                 {adType === "don" && (
                   <DonForm
-                    {...{
-                      donData,
-                      categories,
-                      conditions,
-                      imagePreview,
-                      onChange: setDonData,
-                      onImageUpload: handleImageUpload,
-                      onRemoveImage: removeImage,
-                      step,
-                    }}
+                    donData={donData}
+                    categories={categories}
+                    conditions={conditions}
+                    imagePreview={imagePreview}
+                    onChange={setDonData}
+                    onImageUpload={handleImageUpload}
+                    onRemoveImage={removeImage}
+                    step={step}
                   />
                 )}
                 {adType === "exchange" && (
                   <EchangeForm
-                    {...{
-                      echangeData,
-                      categories,
-                      conditions,
-                      imagePreview,
-                      onChange: setEchangeData,
-                      onImageUpload: handleImageUpload,
-                      onRemoveImage: removeImage,
-                      step,
-                    }}
+                    echangeData={echangeData}
+                    categories={categories}
+                    conditions={conditions}
+                    imagePreview={imagePreview}
+                    onChange={setEchangeData}
+                    onImageUpload={handleImageUpload}
+                    onRemoveImage={removeImage}
+                    step={step}
                   />
                 )}
                 {adType === "sale" && (
@@ -816,13 +746,10 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
                     onImageUpload={handleImageUpload}
                     onRemoveImage={removeImage}
                     step={step}
-                    boutiques={boutiques}
-                    selectedBoutique={selectedBoutique}
-                    onBoutiqueChange={handleBoutiqueChange}
-                    user={user || null}
+                    user={user}
                     saleMode={saleMode}
-                    boutiqueCreated={boutiqueCreated}
-                    createdBoutiqueUuid={createdBoutiqueUuid}
+                    validationErrors={fieldErrors}
+                    // Les props boutiques, selectedBoutique, onBoutiqueChange sont optionnelles maintenant
                   />
                 )}
 
@@ -1029,6 +956,20 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         }
         .card {
           border-radius: 16px !important;
+        }
+
+        /* Styles pour les erreurs de validation */
+        .is-invalid {
+          border-color: #dc3545 !important;
+        }
+        .is-invalid:focus {
+          box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.25) !important;
+        }
+        .invalid-feedback {
+          color: #dc3545;
+          font-size: 0.875rem;
+          margin-top: 0.25rem;
+          display: block;
         }
       `}</style>
     </>

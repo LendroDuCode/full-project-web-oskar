@@ -8,41 +8,14 @@ import { useAuth } from "@/app/(front-office)/auth/AuthContext";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import PublishAdModal from "@/app/(front-office)/publication-annonce/page";
 import { api } from "@/lib/api-client";
+import { buildImageUrl } from "../../utils/image-utils";
 
 // ============================================
-// FONCTION DE CONSTRUCTION D'URL D'IMAGE ROBUSTE
+// FONCTION POUR LE FALLBACK AVATAR
 // ============================================
-const buildImageUrl = (imagePath: string | null): string | null => {
-  if (!imagePath) return null;
-
-  // Nettoyer le chemin des espaces indésirables
-  let cleanPath = imagePath
-    .replace(/\s+/g, "") // Supprimer tous les espaces
-    .replace(/-/g, "-") // Normaliser les tirets
-    .trim();
-
-  const apiUrl =
-    process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
-  const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
-
-  // ✅ CAS 1: Déjà une URL complète
-  if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
-    if (cleanPath.includes("localhost")) {
-      const productionUrl = apiUrl.replace(/\/api$/, "");
-      return cleanPath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
-    }
-    return cleanPath;
-  }
-
-  // ✅ CAS 2: Chemin avec %2F (déjà encodé)
-  if (cleanPath.includes("%2F")) {
-    // Nettoyer les espaces autour de %2F
-    const finalPath = cleanPath.replace(/%2F\s+/, "%2F");
-    return `${apiUrl}${filesUrl}/${finalPath}`;
-  }
-
-  // ✅ CAS 3: Chemin simple
-  return `${apiUrl}${filesUrl}/${cleanPath}`;
+const getDefaultAvatar = (nom: string = "U", size: number = 40) => {
+  const initials = nom ? nom.charAt(0).toUpperCase() : "U";
+  return `https://ui-avatars.com/api/?name=${initials}&background=16a34a&color=fff&size=${size}`;
 };
 
 interface NavLink {
@@ -632,7 +605,110 @@ const Header: FC = () => {
     };
   }, [mobileMenuOpen]);
 
-  // HOOKS useCallback
+  // ✅ DÉFINIR LES TAILLES RESPONSIVES EN PREMIER
+  const logoSize = getResponsiveSize({
+    xs: 28,
+    sm: 32,
+    md: 36,
+    lg: 40,
+    xl: 44,
+    xxl: 48,
+  });
+  const logoFontSize = getResponsiveSize({
+    xs: 14,
+    sm: 16,
+    md: 18,
+    lg: 20,
+    xl: 22,
+    xxl: 24,
+  });
+  const brandFontSize = getResponsiveSize({
+    xs: 18,
+    sm: 22,
+    md: 28,
+    lg: 32,
+    xl: 36,
+    xxl: 40,
+  });
+  const iconSize = getResponsiveSize({
+    xs: 32,
+    sm: 36,
+    md: 40,
+    lg: 44,
+    xl: 48,
+    xxl: 52,
+  });
+  const iconFontSize = getResponsiveSize({
+    xs: 14,
+    sm: 16,
+    md: 18,
+    lg: 20,
+    xl: 22,
+    xxl: 24,
+  });
+  const buttonPadding = getResponsiveSize({
+    xs: "0.25rem 0.5rem",
+    sm: "0.3rem 0.75rem",
+    md: "0.4rem 1rem",
+    lg: "0.5rem 1.25rem",
+    xl: "0.6rem 1.5rem",
+    xxl: "0.7rem 1.75rem",
+  });
+  const buttonFontSize = getResponsiveSize({
+    xs: 11,
+    sm: 12,
+    md: 13,
+    lg: 14,
+    xl: 15,
+    xxl: 16,
+  });
+  const navFontSize = getResponsiveSize({
+    xs: 11,
+    sm: 12,
+    md: 13,
+    lg: 14,
+    xl: 15,
+    xxl: 16,
+  });
+  const containerPadding = getResponsiveSize({
+    xs: 0.5,
+    sm: 1,
+    md: 1.5,
+    lg: 2,
+    xl: 2.5,
+    xxl: 3,
+  });
+
+  // ✅ FONCTION AVEC buildImageUrl CENTRALISÉ
+  const getAvatarUrl = useCallback(() => {
+    if (!userProfile?.avatar) {
+      return getDefaultAvatar(user?.nom || user?.prenoms || "U", iconSize);
+    }
+    return buildImageUrl(userProfile.avatar);
+  }, [userProfile, user, iconSize]);
+
+  // ✅ GESTIONNAIRE D'ERREUR D'IMAGE
+  const handleImageError = useCallback(
+    (e: React.SyntheticEvent<HTMLImageElement>) => {
+      console.log("🖼️ Erreur de chargement d'image, fallback aux initiales");
+      setAvatarError(true);
+    },
+    [],
+  );
+
+  // ✅ DEBUG - Afficher l'URL
+  useEffect(() => {
+    if (isLoggedIn && (user || userProfile)) {
+      console.log("🔍 Avatar URL:", getAvatarUrl());
+      console.log("🔍 Avatar brut:", user?.avatar || userProfile?.avatar);
+      console.log(
+        "🔍 Avatar_key:",
+        (user as any)?.avatar_key || (userProfile as any)?.avatar_key,
+      );
+    }
+  }, [isLoggedIn, user, userProfile, getAvatarUrl]);
+
+  // ✅ AUTRES CALLBACKS
   const handleLoginClick = useCallback(() => {
     closeModals();
     setTimeout(() => {
@@ -652,21 +728,14 @@ const Header: FC = () => {
     console.log("🔴 Header - Logging out...");
 
     try {
-      // Appeler la méthode logout du contexte
       await logout();
 
-      // Fermer tous les menus
       setDropdownOpen(false);
       setMobileMenuOpen(false);
-
-      // Vider le profil utilisateur
       setUserProfile(null);
       setAvatarError(false);
-
-      // Forcer une mise à jour
       setForceUpdate((prev) => prev + 1);
 
-      // Déclencher un événement personnalisé pour notifier les autres composants
       const logoutEvent = new CustomEvent("oskar-logout", {
         detail: { timestamp: Date.now() },
       });
@@ -797,28 +866,6 @@ const Header: FC = () => {
     return userType === "vendeur" || userType === "utilisateur";
   }, [user, userProfile]);
 
-  // ✅ Fonction getAvatarToDisplay améliorée avec buildImageUrl
-  const getAvatarToDisplay = useCallback(() => {
-    const profile = user || userProfile;
-    if (!profile) return null;
-
-    if (avatarError) return null;
-
-    // Essayer d'abord avec avatar_key
-    if ((profile as any).avatar_key) {
-      const url = buildImageUrl((profile as any).avatar_key);
-      if (url) return url;
-    }
-
-    // Sinon avec avatar
-    if (profile.avatar) {
-      const url = buildImageUrl(profile.avatar);
-      if (url) return url;
-    }
-
-    return null;
-  }, [user, userProfile, avatarError]);
-
   const getEmailToDisplay = useCallback(() => {
     return user?.email || userProfile?.email;
   }, [user, userProfile]);
@@ -842,7 +889,6 @@ const Header: FC = () => {
     const links: NavLink[] = [{ name: "Accueil", href: "/", exact: true }];
 
     if (!loadingCategories && categories.length > 0) {
-      // Limiter le nombre de catégories affichées selon la taille d'écran
       let maxCategories = categories.length;
       if (isXs) maxCategories = 3;
       else if (isSm) maxCategories = 4;
@@ -866,7 +912,6 @@ const Header: FC = () => {
           };
 
           if (category.enfants && category.enfants.length > 0) {
-            // Limiter le nombre d'enfants affichés selon la taille d'écran
             let maxChildren = category.enfants.length;
             if (isXs) maxChildren = 2;
             else if (isSm) maxChildren = 3;
@@ -936,128 +981,9 @@ const Header: FC = () => {
     },
   });
 
-  // Tailles responsives pour les différents éléments - DÉFINIES AVANT LEURS UTILISATIONS
-  const logoSize = getResponsiveSize({
-    xs: 28,
-    sm: 32,
-    md: 36,
-    lg: 40,
-    xl: 44,
-    xxl: 48,
-  });
-  const logoFontSize = getResponsiveSize({
-    xs: 14,
-    sm: 16,
-    md: 18,
-    lg: 20,
-    xl: 22,
-    xxl: 24,
-  });
-  const brandFontSize = getResponsiveSize({
-    xs: 18,
-    sm: 22,
-    md: 28,
-    lg: 32,
-    xl: 36,
-    xxl: 40,
-  });
-  const iconSize = getResponsiveSize({
-    xs: 32,
-    sm: 36,
-    md: 40,
-    lg: 44,
-    xl: 48,
-    xxl: 52,
-  });
-  const iconFontSize = getResponsiveSize({
-    xs: 14,
-    sm: 16,
-    md: 18,
-    lg: 20,
-    xl: 22,
-    xxl: 24,
-  });
-  const buttonPadding = getResponsiveSize({
-    xs: "0.25rem 0.5rem",
-    sm: "0.3rem 0.75rem",
-    md: "0.4rem 1rem",
-    lg: "0.5rem 1.25rem",
-    xl: "0.6rem 1.5rem",
-    xxl: "0.7rem 1.75rem",
-  });
-  const buttonFontSize = getResponsiveSize({
-    xs: 11,
-    sm: 12,
-    md: 13,
-    lg: 14,
-    xl: 15,
-    xxl: 16,
-  });
-  const navFontSize = getResponsiveSize({
-    xs: 11,
-    sm: 12,
-    md: 13,
-    lg: 14,
-    xl: 15,
-    xxl: 16,
-  });
-  const containerPadding = getResponsiveSize({
-    xs: 0.5,
-    sm: 1,
-    md: 1.5,
-    lg: 2,
-    xl: 2.5,
-    xxl: 3,
-  });
-
-  // ✅ Gestionnaire d'erreur d'image amélioré - DÉFINI APRÈS LES VARIABLES DONT IL DÉPEND
-  const handleImageError = useCallback(
-    (e: React.SyntheticEvent<HTMLImageElement>) => {
-      const target = e.target as HTMLImageElement;
-
-      // Si l'URL contient localhost, essayer de la corriger
-      if (target.src.includes("localhost")) {
-        const productionUrl =
-          process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
-          "https://oskar-api.mysonec.pro";
-        target.src = target.src.replace(
-          /http:\/\/localhost(:\d+)?/g,
-          productionUrl,
-        );
-        return;
-      }
-
-      // Si l'URL contient des espaces, essayer de les nettoyer
-      if (target.src.includes("%20")) {
-        target.src = target.src.replace(/%20/g, "");
-        return;
-      }
-
-      setAvatarError(true);
-      target.style.display = "none";
-
-      // Remplacer par les initiales
-      const parent = target.parentElement;
-      if (parent) {
-        const initialsDiv = document.createElement("div");
-        initialsDiv.className =
-          "d-flex align-items-center justify-content-center w-100 h-100";
-        initialsDiv.style.backgroundColor = colors.oskar.green;
-        initialsDiv.style.color = "white";
-        initialsDiv.style.fontSize = `${iconFontSize * 0.5}px`;
-        initialsDiv.style.fontWeight = "bold";
-        initialsDiv.textContent = getUserInitials();
-        parent.innerHTML = "";
-        parent.appendChild(initialsDiv);
-      }
-    },
-    [getUserInitials, iconFontSize],
-  );
-
-  // DÉTERMINER SI C'EST UNE PAGE DASHBOARD APRÈS TOUS LES HOOKS
+  // DÉTERMINER SI C'EST UNE PAGE DASHBOARD
   const isDashboardPage = pathname.startsWith("/dashboard-");
 
-  // NE PAS RENDRE LE HEADER SUR LES PAGES DASHBOARD
   if (isDashboardPage) {
     return null;
   }
@@ -1073,7 +999,6 @@ const Header: FC = () => {
           <div className="d-flex align-items-center justify-content-between py-2 py-md-3">
             {/* Logo et Bouton Menu Mobile */}
             <div className="d-flex align-items-center">
-              {/* Bouton Menu Mobile - visible seulement sur mobile/tablette */}
               {isMobile && (
                 <button
                   className="btn btn-link border-0 p-0 me-2 me-sm-3 d-lg-none mobile-menu-toggle"
@@ -1099,7 +1024,6 @@ const Header: FC = () => {
                 </button>
               )}
 
-              {/* Logo - s'adapte à toutes les tailles */}
               <Link
                 href="/"
                 className="d-flex align-items-center text-decoration-none"
@@ -1141,7 +1065,7 @@ const Header: FC = () => {
                 </span>
               </Link>
 
-              {/* Navigation Desktop - visible seulement sur desktop */}
+              {/* Navigation Desktop */}
               {isDesktop && (
                 <>
                   {loadingCategories ? (
@@ -1271,7 +1195,6 @@ const Header: FC = () => {
                             )}
                           </Link>
 
-                          {/* Sous-menu déroulant */}
                           {link.hasChildren &&
                             link.children &&
                             categoriesDropdownOpen === link.name && (
@@ -1341,10 +1264,9 @@ const Header: FC = () => {
               )}
             </div>
 
-            {/* Actions Desktop - visible seulement sur desktop */}
+            {/* Actions Desktop */}
             {isDesktop && (
               <div className="d-flex align-items-center">
-                {/* Icône Messagerie */}
                 <Link href={isLoggedIn ? getUserMessagesUrl() : "#"}>
                   <button
                     className="btn btn-link border-0 position-relative me-2 me-xl-3"
@@ -1418,7 +1340,6 @@ const Header: FC = () => {
                   </button>
                 </Link>
 
-                {/* Icône Téléphone/Contact */}
                 <Link href="/contact">
                   <button
                     className="btn btn-link border-0 me-2 me-xl-3"
@@ -1452,7 +1373,6 @@ const Header: FC = () => {
                   </button>
                 </Link>
 
-                {/* Icône Favoris */}
                 <Link href="/liste-favoris">
                   <button
                     className="btn btn-link border-0 me-3 me-xl-4"
@@ -1531,16 +1451,16 @@ const Header: FC = () => {
                         </div>
                       ) : (
                         <div
-                          className="rounded-circle overflow-hidden"
+                          className="rounded-circle overflow-hidden position-relative"
                           style={{
                             width: iconSize,
                             height: iconSize,
                             border: `2px solid ${colors.oskar.green}`,
                           }}
                         >
-                          {getAvatarToDisplay() ? (
+                          {getAvatarUrl() && !avatarError ? (
                             <img
-                              src={getAvatarToDisplay()!}
+                              src={getAvatarUrl()}
                               alt={getUserFullName()}
                               style={{
                                 width: "100%",
@@ -1586,7 +1506,7 @@ const Header: FC = () => {
                         <div className="p-3 border-bottom">
                           <div className="d-flex align-items-center">
                             <div
-                              className="rounded-circle overflow-hidden me-3 flex-shrink-0"
+                              className="rounded-circle overflow-hidden me-3 flex-shrink-0 position-relative"
                               style={{
                                 width: getResponsiveSize({
                                   lg: 44,
@@ -1601,9 +1521,9 @@ const Header: FC = () => {
                                 border: `2px solid ${colors.oskar.green}`,
                               }}
                             >
-                              {getAvatarToDisplay() ? (
+                              {getAvatarUrl() && !avatarError ? (
                                 <img
-                                  src={getAvatarToDisplay()!}
+                                  src={getAvatarUrl()}
                                   alt={getUserFullName()}
                                   style={{
                                     width: "100%",
@@ -1886,7 +1806,6 @@ const Header: FC = () => {
                   </button>
                 )}
 
-                {/* Bouton Publier */}
                 <button
                   className="btn d-flex align-items-center ms-3 ms-xl-4"
                   style={{
@@ -1916,10 +1835,9 @@ const Header: FC = () => {
               </div>
             )}
 
-            {/* Actions Mobile/Tablette - visible sur < 992px */}
+            {/* Actions Mobile/Tablette */}
             {isMobile && (
               <div className="d-flex align-items-center">
-                {/* Icône Messagerie Mobile */}
                 <Link href={isLoggedIn ? getUserMessagesUrl() : "#"}>
                   <button
                     className="btn btn-link border-0 position-relative"
@@ -1965,53 +1883,50 @@ const Header: FC = () => {
                   </button>
                 </Link>
 
-                {/* Icône Favoris Mobile - visible sur tablettes et grands mobiles */}
                 {!isXs && (
-                  <Link href="/liste-favoris">
-                    <button
-                      className="btn btn-link border-0"
-                      style={{
-                        color: colors.oskar.grey,
-                        fontSize: iconFontSize * 0.9,
-                        width: iconSize * 0.9,
-                        height: iconSize * 0.9,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        padding: 0,
-                      }}
-                      aria-label="Favoris"
-                      type="button"
-                    >
-                      <i className="fa-solid fa-heart"></i>
-                    </button>
-                  </Link>
+                  <>
+                    <Link href="/liste-favoris">
+                      <button
+                        className="btn btn-link border-0"
+                        style={{
+                          color: colors.oskar.grey,
+                          fontSize: iconFontSize * 0.9,
+                          width: iconSize * 0.9,
+                          height: iconSize * 0.9,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: 0,
+                        }}
+                        aria-label="Favoris"
+                        type="button"
+                      >
+                        <i className="fa-solid fa-heart"></i>
+                      </button>
+                    </Link>
+
+                    <Link href="/contact">
+                      <button
+                        className="btn btn-link border-0"
+                        style={{
+                          color: colors.oskar.grey,
+                          fontSize: iconFontSize * 0.9,
+                          width: iconSize * 0.9,
+                          height: iconSize * 0.9,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: 0,
+                        }}
+                        aria-label="Contact"
+                        type="button"
+                      >
+                        <i className="fa-solid fa-phone"></i>
+                      </button>
+                    </Link>
+                  </>
                 )}
 
-                {/* Icône Téléphone/Contact Mobile - visible sur tablettes et grands mobiles */}
-                {!isXs && (
-                  <Link href="/contact">
-                    <button
-                      className="btn btn-link border-0"
-                      style={{
-                        color: colors.oskar.grey,
-                        fontSize: iconFontSize * 0.9,
-                        width: iconSize * 0.9,
-                        height: iconSize * 0.9,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        padding: 0,
-                      }}
-                      aria-label="Contact"
-                      type="button"
-                    >
-                      <i className="fa-solid fa-phone"></i>
-                    </button>
-                  </Link>
-                )}
-
-                {/* Bouton Publier Mobile - version compacte */}
                 <button
                   className="btn ms-1"
                   style={{
@@ -2040,7 +1955,7 @@ const Header: FC = () => {
             )}
           </div>
 
-          {/* Barre de navigation mobile défilante - visible sur tablette et mobile */}
+          {/* Barre de navigation mobile défilante */}
           {isMobile && !loadingCategories && categories.length > 0 && (
             <div className="border-top">
               <div className="scrollable-nav py-2 px-1">
@@ -2440,7 +2355,6 @@ const Header: FC = () => {
           }
         }
 
-        /* Optimisations responsives */
         @media (max-width: 375px) {
           .btn-link {
             min-width: auto !important;
@@ -2494,7 +2408,6 @@ const Header: FC = () => {
           }
         }
 
-        /* Amélioration du touch pour mobile */
         @media (max-width: 991px) {
           .btn,
           .dropdown-item,
@@ -2510,7 +2423,6 @@ const Header: FC = () => {
           }
         }
 
-        /* Optimisation pour les très grands écrans */
         @media (min-width: 1600px) {
           .container-fluid {
             max-width: 1600px;

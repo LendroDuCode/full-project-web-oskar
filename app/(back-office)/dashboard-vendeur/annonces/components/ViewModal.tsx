@@ -55,7 +55,7 @@ import {
   faUsers,
   faHandshake,
   faBullseye,
-  faBullhorn, // AJOUTÉ pour les annonces
+  faBullhorn,
 } from "@fortawesome/free-solid-svg-icons";
 import colors from "@/app/shared/constants/colors";
 import {
@@ -120,6 +120,7 @@ export default function ViewModal({
   onDelete,
 }: ViewModalProps) {
   const [processingAction, setProcessingAction] = useState<string | null>(null);
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (isOpen) {
@@ -127,6 +128,7 @@ export default function ViewModal({
     } else {
       document.body.style.overflow = "auto";
       setProcessingAction(null);
+      setImageErrors({});
     }
 
     return () => {
@@ -136,6 +138,113 @@ export default function ViewModal({
 
   if (!isOpen || !annonce) return null;
 
+  // Fonction pour obtenir l'URL de l'image correcte selon le type
+  const getImageUrl = (item: any = annonce) => {
+    // Pour les échanges, vérifier toutes les sources possibles
+    if (type === "echange") {
+      console.log("Item échange:", item); // Pour debug
+      console.log("Image disponible:", item.image);
+      console.log("Image_key disponible:", item.image_key);
+
+      return (
+        item.image ||
+        item.image_key || // AJOUT IMPORTANT : Chercher dans image_key
+        item.photo ||
+        item.images?.[0] ||
+        item.photos?.[0] ||
+        item.image_url ||
+        item.imageUrl ||
+        item.photo_url ||
+        item.photoUrl ||
+        item.imagePrincipale ||
+        item.image_principale ||
+        item.url_image ||
+        item.urlImage ||
+        item.media?.image ||
+        item.media?.url ||
+        item.attachments?.[0]?.url ||
+        item.fichiers?.[0]?.url ||
+        `https://via.placeholder.com/800x800?text=E`
+      );
+    }
+
+    // Pour les produits
+    if (type === "produit") {
+      return (
+        item.image ||
+        item.photo ||
+        item.images?.[0] ||
+        item.photos?.[0] ||
+        item.image_url ||
+        item.imageUrl ||
+        item.imagePrincipale ||
+        `https://via.placeholder.com/800x800?text=P`
+      );
+    }
+
+    // Pour les dons
+    if (type === "don") {
+      return (
+        item.image ||
+        item.photo ||
+        item.images?.[0] ||
+        item.photos?.[0] ||
+        item.image_url ||
+        item.imageUrl ||
+        `https://via.placeholder.com/800x800?text=D`
+      );
+    }
+
+    // Pour les annonces
+    return (
+      item.image ||
+      item.photo ||
+      item.images?.[0] ||
+      item.photos?.[0] ||
+      `https://via.placeholder.com/800x800?text=A`
+    );
+  };
+
+  // Fonction pour obtenir toutes les images
+  const getAllImages = (item: any = annonce) => {
+    if (type === "echange") {
+      // Pour les échanges, vérifier toutes les sources possibles
+      const images = [
+        ...(item.images || []),
+        ...(item.photos || []),
+        ...(item.attachments?.map((a: any) => a.url) || []),
+        ...(item.fichiers?.map((f: any) => f.url) || []),
+      ].filter(Boolean); // Filtrer les valeurs null/undefined
+
+      const mainImage = getImageUrl(item);
+
+      // Ajouter l'image principale si elle n'est pas déjà dans la liste
+      if (
+        mainImage &&
+        !mainImage.includes("placeholder") &&
+        !images.includes(mainImage)
+      ) {
+        return [mainImage, ...images];
+      }
+
+      return images.length > 0 ? images : [mainImage];
+    }
+
+    // Pour les autres types
+    const images = item.images || item.photos || [];
+    const mainImage = getImageUrl(item);
+
+    if (
+      mainImage &&
+      !mainImage.includes("placeholder") &&
+      !images.includes(mainImage)
+    ) {
+      return [mainImage, ...images];
+    }
+
+    return images.length > 0 ? images : [mainImage];
+  };
+
   const getTypeConfig = () => {
     const configs = {
       produit: {
@@ -143,32 +252,32 @@ export default function ViewModal({
         color: colors.type.product,
         label: "Produit",
         bgColor: `${colors.type.product}15`,
-        gradient: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-        accentColor: "#667eea",
+        gradient: "linear-gradient(135deg, #0061a8 0%, #0d6efd 100%)",
+        accentColor: "#0d6efd",
       },
       don: {
         icon: faGift,
         color: colors.type.don,
         label: "Don",
         bgColor: `${colors.type.don}15`,
-        gradient: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
-        accentColor: "#f5576c",
+        gradient: "linear-gradient(135deg, #0061a8 0%, #0d6efd 100%)",
+        accentColor: "#0d6efd",
       },
       echange: {
         icon: faArrowRightArrowLeft,
         color: colors.type.exchange,
         label: "Échange",
         bgColor: `${colors.type.exchange}15`,
-        gradient: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
-        accentColor: "#4facfe",
+        gradient: "linear-gradient(135deg, #0061a8 0%, #0d6efd 100%)",
+        accentColor: "#0d6efd",
       },
       annonce: {
         icon: faBullhorn,
         color: colors.oskar.warning,
         label: "Annonce",
         bgColor: `${colors.oskar.warning}15`,
-        gradient: "linear-gradient(135deg, #f6d365 0%, #fda085 100%)",
-        accentColor: "#f6d365",
+        gradient: "linear-gradient(135deg, #0061a8 0%, #0d6efd 100%)",
+        accentColor: "#0d6efd",
       },
     };
     return configs[type];
@@ -255,6 +364,10 @@ export default function ViewModal({
     }
   };
 
+  const handleImageError = (imageUrl: string) => {
+    setImageErrors((prev) => ({ ...prev, [imageUrl]: true }));
+  };
+
   const renderInfoCard = (
     icon: any,
     title: string,
@@ -288,6 +401,7 @@ export default function ViewModal({
 
   const renderProduitDetails = () => {
     const typeConfig = getTypeConfig();
+    const mainImage = getImageUrl();
 
     return (
       <div className="row g-4">
@@ -298,14 +412,23 @@ export default function ViewModal({
               {/* Image principale */}
               <div className="col-md-5 position-relative">
                 <div className="ratio ratio-1x1 h-100">
-                  <img
-                    src={annonce.image || annonce.photo || annonce.images?.[0]}
-                    alt={annonce.title || annonce.nom || "Produit"}
-                    className="img-fluid object-fit-cover"
-                    onError={(e) => {
-                      e.currentTarget.src = `https://via.placeholder.com/800x800?text=${type.charAt(0).toUpperCase()}`;
-                    }}
-                  />
+                  {mainImage && !imageErrors[mainImage] ? (
+                    <img
+                      src={mainImage}
+                      alt={annonce.title || annonce.nom || "Produit"}
+                      className="img-fluid object-fit-cover"
+                      onError={() => handleImageError(mainImage)}
+                    />
+                  ) : (
+                    <div className="w-100 h-100 d-flex flex-column align-items-center justify-content-center bg-light">
+                      <FontAwesomeIcon
+                        icon={faImage}
+                        size="3x"
+                        className="text-muted mb-2"
+                      />
+                      <span className="text-muted">Image non disponible</span>
+                    </div>
+                  )}
                 </div>
                 {annonce.images && annonce.images.length > 1 && (
                   <div className="position-absolute bottom-0 start-0 end-0 p-3 bg-dark bg-opacity-50">
@@ -573,6 +696,7 @@ export default function ViewModal({
 
   const renderDonDetails = () => {
     const typeConfig = getTypeConfig();
+    const mainImage = getImageUrl();
 
     return (
       <div className="row g-4">
@@ -583,14 +707,23 @@ export default function ViewModal({
               {/* Image principale */}
               <div className="col-md-5 position-relative">
                 <div className="ratio ratio-1x1 h-100">
-                  <img
-                    src={annonce.image || annonce.photo || annonce.images?.[0]}
-                    alt={annonce.title || "Don"}
-                    className="img-fluid object-fit-cover"
-                    onError={(e) => {
-                      e.currentTarget.src = `https://via.placeholder.com/800x800?text=D`;
-                    }}
-                  />
+                  {mainImage && !imageErrors[mainImage] ? (
+                    <img
+                      src={mainImage}
+                      alt={annonce.title || "Don"}
+                      className="img-fluid object-fit-cover"
+                      onError={() => handleImageError(mainImage)}
+                    />
+                  ) : (
+                    <div className="w-100 h-100 d-flex flex-column align-items-center justify-content-center bg-light">
+                      <FontAwesomeIcon
+                        icon={faImage}
+                        size="3x"
+                        className="text-muted mb-2"
+                      />
+                      <span className="text-muted">Image non disponible</span>
+                    </div>
+                  )}
                 </div>
                 {annonce.images && annonce.images.length > 1 && (
                   <div className="position-absolute bottom-0 start-0 end-0 p-3 bg-dark bg-opacity-50">
@@ -682,156 +815,14 @@ export default function ViewModal({
             </div>
           </div>
         </div>
-
-        {/* Section 1: Détails du don */}
-        <div className="col-md-4">
-          {renderInfoCard(
-            faBox,
-            "Détails du Don",
-            <div className="text-center py-3">
-              <div className="display-4 fw-bold text-primary mb-2">
-                {annonce.quantite || 1}
-              </div>
-              <div className="text-muted">
-                <FontAwesomeIcon icon={faCube} className="me-1" />
-                {annonce.unite || "Pièce(s)"}
-              </div>
-              <div className="mt-3">
-                <div className="fw-semibold">
-                  {annonce.condition || "Bon état"}
-                </div>
-                <small className="text-muted">Condition</small>
-              </div>
-            </div>,
-            "primary",
-          )}
-        </div>
-
-        {/* Section 2: Localisation */}
-        <div className="col-md-4">
-          {renderInfoCard(
-            faMapMarkerAlt,
-            "Localisation",
-            <div className="text-center py-4">
-              <FontAwesomeIcon
-                icon={faMapMarkerAlt}
-                size="2x"
-                className="text-danger mb-3"
-              />
-              <h5 className="fw-bold mb-2">
-                {annonce.ville || annonce.localisation || "Non spécifiée"}
-              </h5>
-              <p className="text-muted mb-0">
-                Zone: {annonce.zone_don || "Toute la ville"}
-              </p>
-            </div>,
-            "danger",
-          )}
-        </div>
-
-        {/* Section 3: Disponibilité */}
-        <div className="col-md-4">
-          {renderInfoCard(
-            faCalendarAlt,
-            "Disponibilité",
-            <div className="space-y-2">
-              <div className="d-flex justify-content-between">
-                <span className="text-muted">Date début</span>
-                <span className="fw-medium">
-                  {formatDate(annonce.date_debut) || "Immédiate"}
-                </span>
-              </div>
-              <div className="d-flex justify-content-between">
-                <span className="text-muted">Date fin</span>
-                <span className="fw-medium">
-                  {formatDate(annonce.date_fin) || "Illimitée"}
-                </span>
-              </div>
-              <div className="d-flex justify-content-between mt-3">
-                <span className="text-muted">Mode de retrait</span>
-                <span className="badge bg-info">
-                  {annonce.mode_retrait || "À convenir"}
-                </span>
-              </div>
-            </div>,
-            "warning",
-          )}
-        </div>
-
-        {/* Section 4: Conditions spécifiques */}
-        {annonce.conditions_retrait && (
-          <div className="col-md-6">
-            {renderInfoCard(
-              faInfoCircle,
-              "Conditions de Retrait",
-              <div className="alert alert-warning mb-0">
-                {annonce.conditions_retrait}
-              </div>,
-              "warning",
-            )}
-          </div>
-        )}
-
-        {/* Section 5: Informations supplémentaires */}
-        <div className="col-md-6">
-          {renderInfoCard(
-            faShieldAlt,
-            "Informations Supplémentaires",
-            <div className="space-y-2">
-              <div className="d-flex justify-content-between">
-                <span className="text-muted">Type de don</span>
-                <span className="fw-medium">
-                  {annonce.type_don || "Standard"}
-                </span>
-              </div>
-              <div className="d-flex justify-content-between">
-                <span className="text-muted">État général</span>
-                <span className="badge bg-success">
-                  {annonce.condition || "Bon état"}
-                </span>
-              </div>
-              <div className="d-flex justify-content-between">
-                <span className="text-muted">Garantie</span>
-                <span className="fw-medium">
-                  {annonce.garantie_don || "Sans garantie"}
-                </span>
-              </div>
-            </div>,
-            "info",
-          )}
-        </div>
-
-        {/* Métadonnées */}
-        <div className="col-12">
-          <div className="card border-0 shadow-sm bg-light">
-            <div className="card-body">
-              <div className="d-flex flex-wrap gap-4 justify-content-center text-muted small">
-                <span>
-                  <FontAwesomeIcon icon={faCertificate} className="me-1" />
-                  UUID: {annonce.uuid}
-                </span>
-                <span>
-                  <FontAwesomeIcon icon={faCalendarAlt} className="me-1" />
-                  Créé: {formatDate(annonce.createdAt)}
-                </span>
-                <span>
-                  <FontAwesomeIcon icon={faClock} className="me-1" />
-                  Modifié: {formatDate(annonce.updatedAt)}
-                </span>
-                <span>
-                  <FontAwesomeIcon icon={faHeart} className="me-1" />
-                  {annonce.nombre_favoris || 0} favori(s)
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     );
   };
 
   const renderEchangeDetails = () => {
     const typeConfig = getTypeConfig();
+    const mainImage = getImageUrl();
+    const allImages = getAllImages();
 
     return (
       <div className="row g-4">
@@ -842,19 +833,30 @@ export default function ViewModal({
               {/* Image principale */}
               <div className="col-md-5 position-relative">
                 <div className="ratio ratio-1x1 h-100">
-                  <img
-                    src={annonce.image || annonce.photo || annonce.images?.[0]}
-                    alt={annonce.title || "Échange"}
-                    className="img-fluid object-fit-cover"
-                    onError={(e) => {
-                      e.currentTarget.src = `https://via.placeholder.com/800x800?text=E`;
-                    }}
-                  />
+                  {mainImage && !imageErrors[mainImage] ? (
+                    <img
+                      src={mainImage}
+                      alt={
+                        annonce.title || annonce.nomElementEchange || "Échange"
+                      }
+                      className="img-fluid object-fit-cover"
+                      onError={() => handleImageError(mainImage)}
+                    />
+                  ) : (
+                    <div className="w-100 h-100 d-flex flex-column align-items-center justify-content-center bg-light">
+                      <FontAwesomeIcon
+                        icon={faImage}
+                        size="3x"
+                        className="text-muted mb-2"
+                      />
+                      <span className="text-muted">Image non disponible</span>
+                    </div>
+                  )}
                 </div>
-                {annonce.images && annonce.images.length > 1 && (
+                {allImages.length > 1 && (
                   <div className="position-absolute bottom-0 start-0 end-0 p-3 bg-dark bg-opacity-50">
                     <small className="text-white">
-                      {annonce.images.length} image(s) disponible(s)
+                      {allImages.length} image(s) disponible(s)
                     </small>
                   </div>
                 )}
@@ -867,6 +869,7 @@ export default function ViewModal({
                     <div>
                       <h2 className="h3 fw-bold mb-2">
                         {annonce.nomElementEchange ||
+                          annonce.titre ||
                           annonce.title ||
                           "Échange"}
                       </h2>
@@ -940,6 +943,46 @@ export default function ViewModal({
                       </p>
                     </div>
                   </div>
+
+                  {/* Mini-galerie si plusieurs images */}
+                  {allImages.length > 1 && (
+                    <div className="d-flex gap-2 mt-3">
+                      {allImages
+                        .slice(0, 4)
+                        .map((img: string, index: number) => (
+                          <div
+                            key={index}
+                            className="rounded overflow-hidden border"
+                            style={{
+                              width: "50px",
+                              height: "50px",
+                              cursor: "pointer",
+                            }}
+                            onClick={() => window.open(img, "_blank")}
+                          >
+                            <img
+                              src={img}
+                              alt={`Miniature ${index + 1}`}
+                              className="w-100 h-100 object-fit-cover"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display =
+                                  "none";
+                              }}
+                            />
+                          </div>
+                        ))}
+                      {allImages.length > 4 && (
+                        <div
+                          className="rounded bg-light d-flex align-items-center justify-content-center"
+                          style={{ width: "50px", height: "50px" }}
+                        >
+                          <small className="text-muted">
+                            +{allImages.length - 4}
+                          </small>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -960,7 +1003,9 @@ export default function ViewModal({
                 {annonce.unite || "Pièce(s)"}
               </div>
               <div className="mt-3">
-                <div className="fw-semibold">{annonce.etat || "Bon état"}</div>
+                <div className="fw-semibold">
+                  {annonce.etat || annonce.condition || "Bon état"}
+                </div>
                 <small className="text-muted">État de l'objet</small>
               </div>
             </div>,
@@ -1053,7 +1098,7 @@ export default function ViewModal({
               </div>
               <div className="col-4">
                 <div className="display-6 fw-bold text-warning">
-                  {annonce.statut || "En attente"}
+                  {annonce.statut || annonce.status || "En attente"}
                 </div>
                 <small className="text-muted">Statut</small>
               </div>
@@ -1092,13 +1137,9 @@ export default function ViewModal({
   };
 
   const renderImages = () => {
-    const images = annonce.images || annonce.photos || [];
-    const mainImage = annonce.image || annonce.photo || annonce.images?.[0];
-    const allImages = mainImage
-      ? [mainImage, ...images.filter((img: string) => img !== mainImage)]
-      : images;
+    const allImages = getAllImages();
 
-    if (allImages.length === 0) {
+    if (allImages.length === 0 || allImages[0].includes("placeholder")) {
       return (
         <div className="text-center py-5">
           <div className="display-1 text-muted mb-3">
@@ -1112,12 +1153,12 @@ export default function ViewModal({
     return (
       <div className="row g-3">
         {/* Image principale en grand */}
-        {mainImage && (
+        {allImages[0] && (
           <div className="col-12">
             <div className="card border-0 shadow-lg overflow-hidden">
               <div className="ratio ratio-21x9">
                 <img
-                  src={mainImage}
+                  src={allImages[0]}
                   alt="Image principale"
                   className="img-fluid object-fit-cover"
                   onError={(e) => {
@@ -1133,46 +1174,47 @@ export default function ViewModal({
         )}
 
         {/* Galerie d'images */}
-        <div className="col-12">
-          <div className="card border-0 shadow-sm">
-            <div className="card-body">
-              <h5 className="card-title d-flex align-items-center mb-4">
-                <FontAwesomeIcon
-                  icon={faImages}
-                  className="me-3 text-primary"
-                />
-                Galerie d'images ({allImages.length})
-              </h5>
-              <div className="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-4">
-                {allImages.map((img: string, index: number) => (
-                  <div key={index} className="col">
-                    <div
-                      className="card border-0 shadow-sm hover-shadow transition-all cursor-pointer h-100"
-                      onClick={() => window.open(img, "_blank")}
-                    >
-                      <div className="ratio ratio-1x1">
-                        <img
-                          src={img}
-                          alt={`Image ${index + 1}`}
-                          className="img-fluid object-fit-cover rounded-top"
-                          onError={(e) => {
-                            e.currentTarget.src = `https://via.placeholder.com/300x300?text=Img+${index + 1}`;
-                          }}
-                        />
-                      </div>
-                      <div className="card-footer bg-white text-center py-2">
-                        <small className="text-muted">
-                          Image {index + 1}
-                          {index === 0 && " (principale)"}
-                        </small>
+        {allImages.length > 1 && (
+          <div className="col-12">
+            <div className="card border-0 shadow-sm">
+              <div className="card-body">
+                <h5 className="card-title d-flex align-items-center mb-4">
+                  <FontAwesomeIcon
+                    icon={faImages}
+                    className="me-3 text-primary"
+                  />
+                  Galerie d'images ({allImages.length})
+                </h5>
+                <div className="row row-cols-2 row-cols-md-3 row-cols-lg-4 g-4">
+                  {allImages.slice(1).map((img: string, index: number) => (
+                    <div key={index} className="col">
+                      <div
+                        className="card border-0 shadow-sm hover-shadow transition-all cursor-pointer h-100"
+                        onClick={() => window.open(img, "_blank")}
+                      >
+                        <div className="ratio ratio-1x1">
+                          <img
+                            src={img}
+                            alt={`Image ${index + 2}`}
+                            className="img-fluid object-fit-cover rounded-top"
+                            onError={(e) => {
+                              e.currentTarget.src = `https://via.placeholder.com/300x300?text=Img+${index + 2}`;
+                            }}
+                          />
+                        </div>
+                        <div className="card-footer bg-white text-center py-2">
+                          <small className="text-muted">
+                            Image {index + 2}
+                          </small>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     );
   };
@@ -1186,8 +1228,6 @@ export default function ViewModal({
       case "echange":
         return renderEchangeDetails();
       case "annonce":
-        // Vous pouvez créer une fonction renderAnnonceDetails() si nécessaire
-        // Pour l'instant, afficher les informations de base
         return (
           <div className="text-center py-5">
             <div className="display-1 text-muted mb-3">
@@ -1239,11 +1279,11 @@ export default function ViewModal({
       >
         <div className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
           <div className="modal-content border-0 shadow-lg overflow-hidden">
-            {/* En-tête avec gradient */}
+            {/* En-tête avec gradient bleu */}
             <div
               className="modal-header text-white border-0 position-relative"
               style={{
-                background: typeConfig.gradient,
+                background: "linear-gradient(135deg, #0061a8 0%, #0d6efd 100%)",
                 padding: "1.5rem 2rem",
               }}
             >
@@ -1270,6 +1310,7 @@ export default function ViewModal({
                       {annonce.title ||
                         annonce.nom ||
                         annonce.libelle ||
+                        annonce.nomElementEchange ||
                         "Sans titre"}
                     </h4>
                     <div className="d-flex align-items-center gap-2">
@@ -1313,7 +1354,7 @@ export default function ViewModal({
               </div>
             </div>
 
-            {/* Corps du modal - Tous les détails affichés */}
+            {/* Corps du modal */}
             <div className="modal-body p-0">
               <div
                 className="container-fluid p-4"
