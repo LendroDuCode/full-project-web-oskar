@@ -1,9 +1,11 @@
+// app/(back-office)/dashboard-utilisateur/profile/page.tsx
+
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
-import { api } from "@/lib/api-client";
+import { useAuth } from "@/app/(front-office)/auth/AuthContext";
 
 interface ProfileData {
   nom: string;
@@ -12,6 +14,7 @@ interface ProfileData {
   telephone: string | null;
   date_naissance: string | null;
   avatar: string | null;
+  created_at?: string;
 }
 
 interface Civilité {
@@ -21,6 +24,8 @@ interface Civilité {
 
 export default function ProfilePage() {
   const router = useRouter();
+  const { isLoggedIn, user, openLoginModal } = useAuth();
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,61 +42,150 @@ export default function ProfilePage() {
     telephone: null,
     date_naissance: null,
     avatar: null,
+    created_at: undefined,
   });
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-  // Récupérer les civilités
+  // Vérifier si l'utilisateur est connecté
+  useEffect(() => {
+    if (!isLoggedIn) {
+      openLoginModal();
+      router.push("/login");
+    }
+  }, [isLoggedIn, openLoginModal, router]);
+
+  // 🔴 Récupérer les civilités - CORRIGÉ
   useEffect(() => {
     const fetchCivilites = async () => {
       try {
-        const response = await api.get(API_ENDPOINTS.CIVILITES.ACTIVES);
-        setCivilites(response.data?.data || response.data || []);
+        console.log("📥 Chargement des civilités...");
+        const response = await fetch(API_ENDPOINTS.CIVILITES.ACTIVES);
+        const data = await response.json();
+
+        console.log("✅ Réponse civilités:", data);
+
+        // Extraire le tableau de données selon la structure
+        let civilitesData: Civilité[] = [];
+
+        if (data?.data && Array.isArray(data.data)) {
+          // Structure: { data: [...] }
+          civilitesData = data.data;
+        } else if (data?.data?.data && Array.isArray(data.data.data)) {
+          // Structure: { data: { data: [...] } }
+          civilitesData = data.data.data;
+        } else if (Array.isArray(data)) {
+          // Structure directe: [...]
+          civilitesData = data;
+        } else if (data?.civilites && Array.isArray(data.civilites)) {
+          // Structure: { civilites: [...] }
+          civilitesData = data.civilites;
+        }
+
+        console.log("📋 Civilités extraites:", civilitesData);
+        setCivilites(civilitesData);
       } catch (err) {
-        console.error("Erreur lors du chargement des civilités:", err);
+        console.error("❌ Erreur lors du chargement des civilités:", err);
+        setCivilites([]); // Mettre un tableau vide en cas d'erreur
       }
     };
 
     fetchCivilites();
   }, []);
 
+  // Fonction pour faire des appels API authentifiés
+  const authFetch = async (url: string, options: RequestInit = {}) => {
+    const token = localStorage.getItem("oskar_token");
+
+    if (!token) {
+      throw new Error("Token manquant");
+    }
+
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Erreur ${response.status}`);
+    }
+
+    return response.json();
+  };
+
+  // Fonction pour uploader avec FormData
+  const authUpload = async (url: string, formData: FormData) => {
+    const token = localStorage.getItem("oskar_token");
+
+    if (!token) {
+      throw new Error("Token manquant");
+    }
+
+    const response = await fetch(url, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `Erreur ${response.status}`);
+    }
+
+    return response.json();
+  };
+
   // Récupérer le profil
   const fetchProfile = useCallback(async () => {
+    if (!isLoggedIn) return;
+
     try {
       setLoading(true);
       setError(null);
 
-      const response = await api.get(API_ENDPOINTS.AUTH.UTILISATEUR.PROFILE);
-      const data = response.data?.data || response.data;
+      const data = await authFetch(API_ENDPOINTS.AUTH.UTILISATEUR.PROFILE);
+      const profileData = data.data || data;
 
-      if (data) {
+      if (profileData) {
         setFormData({
-          nom: data.nom || "",
-          prenoms: data.prenoms || "",
-          email: data.email || "",
-          telephone: data.telephone || null,
-          date_naissance: data.date_naissance || null,
-          avatar: data.avatar || data.photo || null,
+          nom: profileData.nom || "",
+          prenoms: profileData.prenoms || "",
+          email: profileData.email || "",
+          telephone: profileData.telephone || null,
+          date_naissance: profileData.date_naissance || null,
+          avatar: profileData.avatar || profileData.photo || null,
+          created_at: profileData.created_at || profileData.createdAt,
         });
 
-        if (data.avatar || data.photo) {
-          setPreviewUrl(data.avatar || data.photo);
+        if (profileData.avatar || profileData.photo) {
+          setPreviewUrl(profileData.avatar || profileData.photo);
         }
       }
     } catch (err: any) {
       console.error("Erreur lors du chargement du profil:", err);
-      setError(
-        err.response?.data?.message || "Impossible de charger le profil",
-      );
+      setError(err.message || "Impossible de charger le profil");
+
+      if (err.message.includes("Token") || err.message.includes("401")) {
+        openLoginModal();
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isLoggedIn, openLoginModal]);
 
   useEffect(() => {
-    fetchProfile();
-  }, [fetchProfile]);
+    if (isLoggedIn) {
+      fetchProfile();
+    }
+  }, [isLoggedIn, fetchProfile]);
 
   // Gestion des changements de formulaire
   const handleInputChange = (
@@ -140,7 +234,7 @@ export default function ProfilePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (saving) return;
+    if (saving || !isLoggedIn) return;
 
     try {
       setSaving(true);
@@ -178,41 +272,71 @@ export default function ProfilePage() {
         formDataToSend.append("avatar", selectedFile);
       }
 
-      // Envoyer les données
-      const response = await api.put(
+      // Utiliser authUpload au lieu de api.put
+      const response = await authUpload(
         API_ENDPOINTS.AUTH.UTILISATEUR.UPDATE_PROFILE,
         formDataToSend,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
-        },
       );
 
-      setSuccess(response.data?.message || "Profil mis à jour avec succès");
+      setSuccess(response.message || "Profil mis à jour avec succès");
 
       // Rafraîchir les données
       setTimeout(() => {
         fetchProfile();
+        setSelectedFile(null);
       }, 1000);
     } catch (err: any) {
       console.error("Erreur lors de la mise à jour du profil:", err);
-      setError(
-        err.response?.data?.message ||
-          err.message ||
-          "Une erreur est survenue lors de la mise à jour",
-      );
+      setError(err.message || "Une erreur est survenue lors de la mise à jour");
+
+      if (err.message.includes("Token") || err.message.includes("401")) {
+        openLoginModal();
+      }
     } finally {
       setSaving(false);
     }
   };
 
+  // Formater la date d'inscription
+  const formatMemberSince = (dateString: string | undefined) => {
+    if (!dateString) return "Janvier 2024";
+
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString("fr-FR", {
+        month: "long",
+        year: "numeric",
+      });
+    } catch {
+      return "Janvier 2024";
+    }
+  };
+
   // Avatar par défaut
   const getDefaultAvatar = () => {
-    const initials =
-      `${formData.prenoms?.charAt(0) || ""}${formData.nom?.charAt(0) || ""}`.toUpperCase();
+    const firstChar = formData.prenoms?.charAt(0) || "";
+    const secondChar = formData.nom?.charAt(0) || "";
+
+    if (!firstChar && !secondChar) {
+      return "https://ui-avatars.com/api/?name=User&background=16a34a&color=fff&size=150";
+    }
+
+    const initials = `${firstChar}${secondChar}`.toUpperCase() || "U";
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=16a34a&color=fff&size=150`;
   };
+
+  if (!isLoggedIn) {
+    return (
+      <div className="min-vh-100 d-flex align-items-center justify-content-center bg-light">
+        <div className="text-center">
+          <div className="spinner-border text-success mb-3" role="status">
+            <span className="visually-hidden">Chargement...</span>
+          </div>
+          <p className="text-muted">Redirection vers la page de connexion...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-vh-100 bg-light">
@@ -470,23 +594,38 @@ export default function ProfilePage() {
                                       Civilité
                                     </label>
                                     <select
-                                      id="civilite"
-                                      name="civilite"
                                       className="form-select form-select-lg"
                                       disabled={saving}
+                                      name="civilite"
+                                      value=""
                                     >
                                       <option value="">
                                         Sélectionnez une civilité
                                       </option>
-                                      {civilites.map((civilite) => (
-                                        <option
-                                          key={civilite.uuid}
-                                          value={civilite.uuid}
-                                        >
-                                          {civilite.libelle}
+                                      {/* 🔴 Vérification que civilites est un tableau */}
+                                      {Array.isArray(civilites) &&
+                                      civilites.length > 0 ? (
+                                        civilites.map((civilite) => (
+                                          <option
+                                            key={civilite.uuid}
+                                            value={civilite.uuid}
+                                          >
+                                            {civilite.libelle}
+                                          </option>
+                                        ))
+                                      ) : (
+                                        <option disabled>
+                                          Chargement des civilités...
                                         </option>
-                                      ))}
+                                      )}
                                     </select>
+                                    {/* Message de debug (à retirer en production) */}
+                                    {!Array.isArray(civilites) && (
+                                      <p className="text-danger small mt-1">
+                                        Erreur: les civilités ne sont pas un
+                                        tableau
+                                      </p>
+                                    )}
                                   </div>
 
                                   {/* Nom */}
@@ -655,7 +794,9 @@ export default function ProfilePage() {
                                                   Membre depuis
                                                 </p>
                                                 <p className="text-muted small mb-0">
-                                                  Janvier 2024
+                                                  {formatMemberSince(
+                                                    formData.created_at,
+                                                  )}
                                                 </p>
                                               </div>
                                             </div>

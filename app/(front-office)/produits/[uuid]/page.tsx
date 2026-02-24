@@ -118,7 +118,7 @@ interface BoutiqueAPI {
   agentUuid: string | null;
   est_bloque: boolean;
   est_ferme: boolean;
-  vendeur?: CreateurInfo;
+  vendeur?: CreateurInfo; // Le vendeur peut être inclus dans la boutique
 }
 
 interface CategorieAPI {
@@ -296,7 +296,7 @@ interface Boutique {
   est_ferme: boolean;
   created_at: string;
   updated_at: string;
-  vendeur?: CreateurInfo;
+  vendeur?: CreateurInfo; // Ajout du vendeur dans la boutique
   type_boutique_uuid?: string;
   politique_retour?: string | null;
   conditions_utilisation?: string | null;
@@ -650,13 +650,16 @@ export default function ProduitDetailPage() {
 
     const cleanUrl = url.trim();
 
-    if (cleanUrl.includes("localhost:3005/api/files/")) {
-      if (cleanUrl.includes("http:localhost")) {
-        return cleanUrl.replace("http:localhost", "http://localhost");
+    // Si l'URL utilise déjà le proxy /api/files/
+    if (cleanUrl.includes("/api/files/")) {
+      if (cleanUrl.startsWith("http")) {
+        return cleanUrl;
       }
-      return cleanUrl;
+      // Si c'est un chemin relatif vers /api/files/, ajouter la base
+      return `${API_CONFIG.BASE_URL || "http://localhost:3005"}${cleanUrl}`;
     }
 
+    // Gestion des URLs MinIO
     if (cleanUrl.includes("15.236.142.141:9000/oskar-bucket/")) {
       try {
         const key = cleanUrl.replace(
@@ -671,13 +674,12 @@ export default function ProduitDetailPage() {
       }
     }
 
+    // URLs HTTP/HTTPS normales
     if (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://")) {
-      if (cleanUrl.includes("http:localhost")) {
-        return cleanUrl.replace("http:localhost", "http://localhost");
-      }
       return cleanUrl;
     }
 
+    // Chemins relatifs
     if (cleanUrl.startsWith("/")) {
       return `${API_CONFIG.BASE_URL || "http://localhost:3005"}${cleanUrl}`;
     }
@@ -957,16 +959,19 @@ export default function ProduitDetailPage() {
     };
   };
 
+  // ✅ FONCTION TRANSFORM BOUTIQUE AMÉLIORÉE - Inclut le vendeur
   const transformBoutiqueData = (apiBoutique: BoutiqueAPI): Boutique => {
-    const logoUrl = normalizeImageUrl(
-      apiBoutique.logo_key ? null : apiBoutique.logo,
-      apiBoutique.logo_key,
-    );
+    const logoUrl = normalizeImageUrl(apiBoutique.logo, apiBoutique.logo_key);
 
     const banniereUrl = normalizeImageUrl(
-      apiBoutique.banniere_key ? null : apiBoutique.banniere,
+      apiBoutique.banniere,
       apiBoutique.banniere_key,
     );
+
+    // Transformer le vendeur de la boutique s'il existe
+    const vendeurBoutique = apiBoutique.vendeur
+      ? transformCreateurInfo(apiBoutique.vendeur)
+      : undefined;
 
     return {
       uuid: apiBoutique.uuid,
@@ -985,9 +990,7 @@ export default function ProduitDetailPage() {
       type_boutique_uuid: apiBoutique.type_boutique_uuid,
       politique_retour: apiBoutique.politique_retour,
       conditions_utilisation: apiBoutique.conditions_utilisation,
-      ...(apiBoutique.vendeur && {
-        vendeur: transformCreateurInfo(apiBoutique.vendeur),
-      }),
+      vendeur: vendeurBoutique, // Ajout du vendeur de la boutique
     };
   };
 
@@ -1203,11 +1206,21 @@ export default function ProduitDetailPage() {
       const estFavori = favorisLocaux.has(uuid);
       setFavori(estFavori);
 
+      // ✅ IMPORTANT: Récupérer le créateur depuis le produit ou la boutique
       if (response.produit.createur) {
+        // Si le créateur est directement dans le produit
         const createurData = transformCreateurInfo(response.produit.createur);
         createurData.userType = response.produit.createurType || "utilisateur";
         setCreateur(createurData);
+      } else if (response.produit.boutique?.vendeur) {
+        // Si le créateur est dans la boutique (vendeur de la boutique)
+        const createurData = transformCreateurInfo(
+          response.produit.boutique.vendeur,
+        );
+        createurData.userType = "vendeur";
+        setCreateur(createurData);
       } else if (response.produit.vendeur_uuid) {
+        // Fallback: charger le vendeur par UUID
         try {
           const vendeurResponse = await api.get(
             API_ENDPOINTS.AUTH.VENDEUR.DETAIL(response.produit.vendeur_uuid),
@@ -1242,6 +1255,7 @@ export default function ProduitDetailPage() {
         }
       }
 
+      // Transformer la boutique (inclut maintenant le vendeur)
       if (response.produit.boutique) {
         const boutiqueData = transformBoutiqueData(response.produit.boutique);
         setBoutique(boutiqueData);
@@ -2486,7 +2500,7 @@ export default function ProduitDetailPage() {
                 </button>
               </div>
 
-              {/* Informations de la boutique et du créateur */}
+              {/* ✅ Informations de la boutique et du créateur - CORRIGÉ */}
               <div className="bg-info bg-opacity-10 rounded-4 p-4 mb-4">
                 <div className="d-flex align-items-center gap-3 mb-3">
                   <div className="bg-warning rounded-circle p-3">
@@ -2503,74 +2517,93 @@ export default function ProduitDetailPage() {
                   </div>
                 </div>
 
-                {boutique && boutique.logo ? (
+                {/* ✅ AFFICHAGE DE LA BOUTIQUE AVEC SON LOGO */}
+                {boutique && (
                   <div className="d-flex align-items-center gap-3 mt-3">
-                    <SecureImage
-                      src={boutique.logo}
-                      alt={boutique.nom}
-                      fallbackSrc={getDefaultAvatarUrl()}
-                      className="rounded-3"
-                      style={{
-                        width: "60px",
-                        height: "60px",
-                        objectFit: "cover",
-                      }}
-                      onClick={handleVisitBoutique}
-                    />
+                    {boutique.logo ? (
+                      <SecureImage
+                        src={boutique.logo}
+                        alt={boutique.nom}
+                        fallbackSrc={getDefaultAvatarUrl()}
+                        className="rounded-3 cursor-pointer"
+                        style={{
+                          width: "60px",
+                          height: "60px",
+                          objectFit: "cover",
+                        }}
+                        onClick={handleVisitBoutique}
+                      />
+                    ) : (
+                      <div
+                        className="bg-white rounded-3 d-flex align-items-center justify-content-center cursor-pointer"
+                        style={{
+                          width: "60px",
+                          height: "60px",
+                        }}
+                        onClick={handleVisitBoutique}
+                      >
+                        <FontAwesomeIcon
+                          icon={faStore}
+                          className="fa-2x text-muted"
+                        />
+                      </div>
+                    )}
                     <div>
                       <p className="fw-semibold mb-1 small">
                         <Link
-                          href={`/boutiques/${boutique?.uuid}`}
+                          href={`/boutiques/${boutique.uuid}`}
                           className="text-decoration-none text-dark"
                         >
-                          {boutique?.nom || "Boutique OSKAR"}
+                          {boutique.nom}
                         </Link>
                       </p>
+                      {boutique.vendeur && (
+                        <p className="text-muted small mb-0">
+                          {boutique.vendeur.prenoms} {boutique.vendeur.nom}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ✅ AFFICHAGE DU CRÉATEUR SI PAS DE BOUTIQUE */}
+                {!boutique && createur && (
+                  <div className="d-flex align-items-center gap-3 mt-3">
+                    {createur.avatar ? (
+                      <SecureImage
+                        src={createur.avatar}
+                        alt={`${createur.prenoms} ${createur.nom}`}
+                        fallbackSrc={getDefaultAvatarUrl()}
+                        className="rounded-circle cursor-pointer"
+                        style={{
+                          width: "50px",
+                          height: "50px",
+                          objectFit: "cover",
+                        }}
+                        onClick={handleVisitUtilisateur}
+                      />
+                    ) : (
+                      <div
+                        className="bg-white rounded-circle d-flex align-items-center justify-content-center cursor-pointer"
+                        style={{
+                          width: "50px",
+                          height: "50px",
+                        }}
+                        onClick={handleVisitUtilisateur}
+                      >
+                        <FontAwesomeIcon
+                          icon={faUserCircle}
+                          className="fa-2x text-muted"
+                        />
+                      </div>
+                    )}
+                    <div>
+                      <p className="fw-semibold small mb-1">Créateur</p>
                       <p className="text-muted small mb-0">
-                        {createur?.prenoms} {createur?.nom}
+                        {createur.prenoms} {createur.nom}
                       </p>
                     </div>
                   </div>
-                ) : (
-                  createur && (
-                    <div className="d-flex align-items-center gap-3 mt-3">
-                      {createur.avatar ? (
-                        <SecureImage
-                          src={createur.avatar}
-                          alt={`${createur.prenoms} ${createur.nom}`}
-                          fallbackSrc={getDefaultAvatarUrl()}
-                          className="rounded-circle"
-                          style={{
-                            width: "50px",
-                            height: "50px",
-                            objectFit: "cover",
-                          }}
-                          onClick={handleVisitUtilisateur}
-                        />
-                      ) : (
-                        <div
-                          className="bg-white rounded-circle d-flex align-items-center justify-content-center"
-                          style={{
-                            width: "50px",
-                            height: "50px",
-                            cursor: "pointer",
-                          }}
-                          onClick={handleVisitUtilisateur}
-                        >
-                          <FontAwesomeIcon
-                            icon={faUserCircle}
-                            className="fa-2x text-muted"
-                          />
-                        </div>
-                      )}
-                      <div>
-                        <p className="fw-semibold small mb-1">Créateur</p>
-                        <p className="text-muted small mb-0">
-                          {createur.prenoms} {createur.nom}
-                        </p>
-                      </div>
-                    </div>
-                  )
                 )}
 
                 {createur?.est_verifie && (
@@ -2636,22 +2669,37 @@ export default function ProduitDetailPage() {
               </div>
             </div>
 
-            {/* Carte vendeur */}
-            {createur && (
+            {/* ✅ Carte vendeur (fallback si pas de boutique) */}
+            {!boutique && createur && (
               <div className="card border-0 shadow-lg rounded-4 p-4 mt-4">
                 <h5 className="fw-bold mb-4">Informations sur le vendeur</h5>
                 <div className="d-flex align-items-center gap-3 mb-4">
-                  <SecureImage
-                    src={createur.avatar}
-                    alt={`${createur.prenoms} ${createur.nom}`}
-                    fallbackSrc={getDefaultAvatarUrl()}
-                    className="rounded-circle"
-                    style={{
-                      width: "64px",
-                      height: "64px",
-                      objectFit: "cover",
-                    }}
-                  />
+                  {createur.avatar ? (
+                    <SecureImage
+                      src={createur.avatar}
+                      alt={`${createur.prenoms} ${createur.nom}`}
+                      fallbackSrc={getDefaultAvatarUrl()}
+                      className="rounded-circle"
+                      style={{
+                        width: "64px",
+                        height: "64px",
+                        objectFit: "cover",
+                      }}
+                    />
+                  ) : (
+                    <div
+                      className="bg-light rounded-circle d-flex align-items-center justify-content-center"
+                      style={{
+                        width: "64px",
+                        height: "64px",
+                      }}
+                    >
+                      <FontAwesomeIcon
+                        icon={faUserCircle}
+                        className="fa-3x text-muted"
+                      />
+                    </div>
+                  )}
                   <div>
                     <p className="fw-bold mb-1">
                       {createur.prenoms} {createur.nom}
@@ -2810,17 +2858,33 @@ export default function ProduitDetailPage() {
                         </div>
                         <div className="mt-auto d-flex justify-content-between align-items-center">
                           <div className="d-flex align-items-center">
-                            <SecureImage
-                              src={item.createur?.avatar || null}
-                              alt={item.createur?.prenoms || "Vendeur"}
-                              fallbackSrc={getDefaultAvatarUrl()}
-                              className="rounded-circle me-2"
-                              style={{
-                                width: "30px",
-                                height: "30px",
-                                objectFit: "cover",
-                              }}
-                            />
+                            {item.createur?.avatar ? (
+                              <SecureImage
+                                src={item.createur.avatar}
+                                alt={item.createur?.prenoms || "Vendeur"}
+                                fallbackSrc={getDefaultAvatarUrl()}
+                                className="rounded-circle me-2"
+                                style={{
+                                  width: "30px",
+                                  height: "30px",
+                                  objectFit: "cover",
+                                }}
+                              />
+                            ) : (
+                              <div
+                                className="bg-light rounded-circle me-2 d-flex align-items-center justify-content-center"
+                                style={{
+                                  width: "30px",
+                                  height: "30px",
+                                }}
+                              >
+                                <FontAwesomeIcon
+                                  icon={faUserCircle}
+                                  className="text-muted"
+                                  style={{ fontSize: "18px" }}
+                                />
+                              </div>
+                            )}
                             <span
                               className="small text-dark text-truncate"
                               style={{ maxWidth: "80px" }}

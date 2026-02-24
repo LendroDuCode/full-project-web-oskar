@@ -1,8 +1,9 @@
 // app/(front-office)/boutiques/[uuid]/page.tsx
+
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation"; // 🔴 IMPORTANT: utiliser useParams
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faStore,
@@ -96,6 +97,7 @@ interface Boutique {
 }
 
 export default function BoutiquePremium() {
+  const params = useParams(); // 🔴 Récupérer les paramètres d'URL
   const router = useRouter();
   const [boutique, setBoutique] = useState<Boutique | null>(null);
   const [loading, setLoading] = useState(true);
@@ -106,13 +108,21 @@ export default function BoutiquePremium() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
 
-  // ID de la boutique
-  const boutiqueUuid = "bb2789fe-d015-4947-bfe1-eb0239e1a8d1";
+  // 🔴 Récupérer l'UUID depuis les paramètres d'URL
+  const boutiqueUuid = params?.uuid as string;
 
   const fetchBoutique = async () => {
+    if (!boutiqueUuid) {
+      setError("UUID de boutique non fourni");
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
+
+      console.log(`📥 Chargement de la boutique: ${boutiqueUuid}`);
 
       const response = await fetch(
         `http://localhost:3005/boutiques/${boutiqueUuid}`,
@@ -123,9 +133,10 @@ export default function BoutiquePremium() {
       }
 
       const data = await response.json();
+      console.log("✅ Boutique chargée:", data);
       setBoutique(data);
     } catch (err) {
-      console.error("Erreur lors du chargement de la boutique:", err);
+      console.error("❌ Erreur lors du chargement de la boutique:", err);
       setError(
         err instanceof Error
           ? err.message
@@ -138,7 +149,9 @@ export default function BoutiquePremium() {
   };
 
   useEffect(() => {
-    fetchBoutique();
+    if (boutiqueUuid) {
+      fetchBoutique();
+    }
 
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 50);
@@ -158,7 +171,7 @@ export default function BoutiquePremium() {
     }, 300);
 
     return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  }, [boutiqueUuid]); // 🔴 Dépendance à boutiqueUuid
 
   const handleRefresh = () => {
     setRefreshing(true);

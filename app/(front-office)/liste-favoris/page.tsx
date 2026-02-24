@@ -85,7 +85,7 @@ const formatDate = (dateString?: string | null) => {
 const PLACEHOLDER_IMAGE =
   "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2YzZjRmNiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM2NjY2NjYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5BdWN1bmUgaW1hZ2U8L3RleHQ+PC9zdmc+";
 
-// Composant pour la page de connexion
+// Composant pour la page de connexion (inchangé)
 function LoginRequiredPage() {
   const { openLoginModal, openRegisterModal } = useAuth();
 
@@ -403,7 +403,7 @@ function LoginRequiredPage() {
   );
 }
 
-// Composant de carte de favori
+// Composant de carte de favori (inchangé)
 const FavoriCard = ({
   item,
   onRemove,
@@ -659,13 +659,14 @@ const FavoriCard = ({
 
 export default function ListeFavorisPage() {
   const { isLoggedIn, openLoginModal, user } = useAuth();
-  const [viewMode] = useState<"grid" | "list">("grid"); // Forcé en grid pour correspondre au design
+  const [viewMode] = useState<"grid" | "list">("grid");
   const [activeFilter, setActiveFilter] = useState<TabType>("all");
   const [showFilters, setShowFilters] = useState(false);
   const [favoris, setFavoris] = useState<FavoriItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [initialLoad, setInitialLoad] = useState(true);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
   const [stats, setStats] = useState({
     totalProduits: 0,
     totalDons: 0,
@@ -678,7 +679,7 @@ export default function ListeFavorisPage() {
     return user?.type?.toLowerCase() || "utilisateur";
   }, [user]);
 
-  // ✅ FONCTION RÉCUPÉRER LES FAVORIS
+  // ✅ FONCTION RÉCUPÉRER LES FAVORIS - AVEC LOGS DÉTAILLÉS
   const fetchAllFavoris = useCallback(async () => {
     if (!isLoggedIn) {
       setLoading(false);
@@ -688,34 +689,56 @@ export default function ListeFavorisPage() {
 
     setLoading(true);
     setError(null);
+    setDebugInfo(null);
 
     try {
       console.log("📥 Récupération des favoris...");
 
       const userType = getUserType();
-      console.log(`👤 Type d'utilisateur: ${userType}`);
+      console.log(`👤 Type d'utilisateur détecté: ${userType}`);
 
       let produitsEndpoint = "";
       let donsEndpoint = "";
       let echangesEndpoint = "";
 
+      // Définir les endpoints selon le type d'utilisateur
       if (userType === "vendeur") {
-        produitsEndpoint = API_ENDPOINTS.PRODUCTS.LIST_PRODUITS_FAVORIS_VENDEUR;
-        donsEndpoint = API_ENDPOINTS.DONS.LIST_FAVORIS_DON_VENDEUR;
-        echangesEndpoint = API_ENDPOINTS.ECHANGES.LIST_ECHANGES_FAVORIS_VENDEUR;
+        produitsEndpoint = "/favoris/vendeur/produits";
+        donsEndpoint = "/favoris/vendeur/dons";
+        echangesEndpoint = "/favoris/vendeur/echanges";
       } else {
-        produitsEndpoint =
-          API_ENDPOINTS.PRODUCTS.LIST_PRODUITS_FAVORIS_UTILISATEUR;
-        donsEndpoint = API_ENDPOINTS.DONS.LIST_FAVORIS_DON_UTILISATEUR;
-        echangesEndpoint =
-          API_ENDPOINTS.ECHANGES.LIST_ECHANGES_FAVORIS_UTILISATEUR;
+        produitsEndpoint = "/favoris/utilisateur/produits";
+        donsEndpoint = "/favoris/utilisateur/dons";
+        echangesEndpoint = "/favoris/utilisateur/echanges";
       }
 
-      const [produitsRes, donsRes, echangesRes] = await Promise.allSettled([
-        api.get<any>(produitsEndpoint),
-        api.get<any>(donsEndpoint),
-        api.get<any>(echangesEndpoint),
-      ]);
+      console.log("📌 Endpoints à appeler:");
+      console.log("   Produits:", produitsEndpoint);
+      console.log("   Dons:", donsEndpoint);
+      console.log("   Échanges:", echangesEndpoint);
+
+      // Appels API
+      const produitsRes = await api.get<any>(produitsEndpoint).catch((err) => {
+        console.error("❌ Erreur produits:", err);
+        return null;
+      });
+
+      const donsRes = await api.get<any>(donsEndpoint).catch((err) => {
+        console.error("❌ Erreur dons:", err);
+        return null;
+      });
+
+      const echangesRes = await api.get<any>(echangesEndpoint).catch((err) => {
+        console.error("❌ Erreur échanges:", err);
+        return null;
+      });
+
+      // Stocker les infos de debug
+      setDebugInfo({
+        produits: produitsRes ? "Succès" : "Échec",
+        dons: donsRes ? "Succès" : "Échec",
+        echanges: echangesRes ? "Succès" : "Échec",
+      });
 
       const allFavoris: FavoriItem[] = [];
       let produitsCount = 0;
@@ -723,21 +746,21 @@ export default function ListeFavorisPage() {
       let echangesCount = 0;
 
       // Traiter les produits
-      if (produitsRes.status === "fulfilled") {
-        const response = produitsRes.value;
+      if (produitsRes) {
         let produitsData = [];
-
-        if (response.data && Array.isArray(response.data)) {
-          produitsData = response.data;
+        if (produitsRes.data && Array.isArray(produitsRes.data)) {
+          produitsData = produitsRes.data;
         } else if (
-          response.data &&
-          response.data.data &&
-          Array.isArray(response.data.data)
+          produitsRes.data &&
+          produitsRes.data.data &&
+          Array.isArray(produitsRes.data.data)
         ) {
-          produitsData = response.data.data;
-        } else if (Array.isArray(response)) {
-          produitsData = response;
+          produitsData = produitsRes.data.data;
+        } else if (Array.isArray(produitsRes)) {
+          produitsData = produitsRes;
         }
+
+        console.log(`📊 Produits reçus: ${produitsData.length}`);
 
         produitsData.forEach((item: any) => {
           allFavoris.push({
@@ -758,21 +781,21 @@ export default function ListeFavorisPage() {
       }
 
       // Traiter les dons
-      if (donsRes.status === "fulfilled") {
-        const response = donsRes.value;
+      if (donsRes) {
         let donsData = [];
-
-        if (response.data && Array.isArray(response.data)) {
-          donsData = response.data;
+        if (donsRes.data && Array.isArray(donsRes.data)) {
+          donsData = donsRes.data;
         } else if (
-          response.data &&
-          response.data.data &&
-          Array.isArray(response.data.data)
+          donsRes.data &&
+          donsRes.data.data &&
+          Array.isArray(donsRes.data.data)
         ) {
-          donsData = response.data.data;
-        } else if (Array.isArray(response)) {
-          donsData = response;
+          donsData = donsRes.data.data;
+        } else if (Array.isArray(donsRes)) {
+          donsData = donsRes;
         }
+
+        console.log(`📊 Dons reçus: ${donsData.length}`);
 
         donsData.forEach((item: any) => {
           allFavoris.push({
@@ -795,21 +818,21 @@ export default function ListeFavorisPage() {
       }
 
       // Traiter les échanges
-      if (echangesRes.status === "fulfilled") {
-        const response = echangesRes.value;
+      if (echangesRes) {
         let echangesData = [];
-
-        if (response.data && Array.isArray(response.data)) {
-          echangesData = response.data;
+        if (echangesRes.data && Array.isArray(echangesRes.data)) {
+          echangesData = echangesRes.data;
         } else if (
-          response.data &&
-          response.data.data &&
-          Array.isArray(response.data.data)
+          echangesRes.data &&
+          echangesRes.data.data &&
+          Array.isArray(echangesRes.data.data)
         ) {
-          echangesData = response.data.data;
-        } else if (Array.isArray(response)) {
-          echangesData = response;
+          echangesData = echangesRes.data.data;
+        } else if (Array.isArray(echangesRes)) {
+          echangesData = echangesRes;
         }
+
+        console.log(`📊 Échanges reçus: ${echangesData.length}`);
 
         echangesData.forEach((item: any) => {
           allFavoris.push({
@@ -851,12 +874,15 @@ export default function ListeFavorisPage() {
     } catch (err: any) {
       console.error("❌ Erreur lors de la récupération des favoris:", err);
 
+      let errorMessage = err.message || "Impossible de charger vos favoris";
+
       if (err.response?.status === 401) {
-        setError("Votre session a expiré. Veuillez vous reconnecter.");
-      } else {
-        setError(err.message || "Impossible de charger vos favoris");
+        errorMessage = "Votre session a expiré. Veuillez vous reconnecter.";
+      } else if (err.response?.status === 404) {
+        errorMessage = "Les endpoints de favoris n'ont pas été trouvés.";
       }
 
+      setError(errorMessage);
       setFavoris([]);
       setStats({
         totalProduits: 0,
@@ -892,7 +918,13 @@ export default function ListeFavorisPage() {
 
       switch (type) {
         case "produit":
-          endpoint = API_ENDPOINTS.FAVORIS.REMOVE(uuid);
+          endpoint = `/favoris/produit/${uuid}`;
+          break;
+        case "don":
+          endpoint = `/favoris/don/${uuid}`;
+          break;
+        case "echange":
+          endpoint = `/favoris/echange/${uuid}`;
           break;
         default:
           endpoint = `/favoris/${uuid}`;
@@ -993,6 +1025,20 @@ export default function ListeFavorisPage() {
         </div>
       </section>
 
+      {/* Debug info - À retirer en production */}
+      {process.env.NODE_ENV === "development" && debugInfo && (
+        <div className="container mt-3">
+          <div className="alert alert-info small p-2">
+            <details>
+              <summary>🔍 Debug Info</summary>
+              <pre className="mt-2 mb-0 small">
+                {JSON.stringify(debugInfo, null, 2)}
+              </pre>
+            </details>
+          </div>
+        </div>
+      )}
+
       {/* Statistiques */}
       <section className="py-3 border-bottom">
         <div className="container">
@@ -1052,7 +1098,9 @@ export default function ListeFavorisPage() {
                     <h6 className="mb-0 fw-semibold">
                       <i
                         className="fas fa-filter me-1"
-                        style={{ color: colors.oskar.purple || "#9C27B0" }}
+                        style={{
+                          color: colors.oskar.purple || "#9C27B0",
+                        }}
                       ></i>
                       Filtrer par type
                     </h6>
@@ -1183,7 +1231,9 @@ export default function ListeFavorisPage() {
                       <p className="small text-muted mb-0">
                         <i
                           className="fas fa-sync-alt me-1"
-                          style={{ color: colors.oskar.purple || "#9C27B0" }}
+                          style={{
+                            color: colors.oskar.purple || "#9C27B0",
+                          }}
                         ></i>
                         <strong>Mise à jour :</strong> Cliquez sur "Actualiser"
                         pour voir les derniers favoris

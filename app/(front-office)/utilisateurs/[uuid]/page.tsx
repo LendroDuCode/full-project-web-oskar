@@ -101,6 +101,7 @@ interface ProduitUtilisateur {
   libelle: string;
   slug: string;
   image: string | null;
+  image_key?: string | null;
   prix: string | number | null;
   description: string | null;
   statut: string;
@@ -147,44 +148,111 @@ interface APIResponse {
 }
 
 // ============================================
-// COMPOSANT D'IMAGE SÉCURISÉ
+// COMPOSANT D'IMAGE SÉCURISÉ AVEC NORMALISATION
 // ============================================
+const getDefaultAvatarUrl = (): string => {
+  return `${API_CONFIG.BASE_URL || "http://localhost:3005"}/images/default-avatar.png`;
+};
+
+const getDefaultProductImage = (): string => {
+  return `${API_CONFIG.BASE_URL || "http://localhost:3005"}/images/default-product.png`;
+};
+
+const normalizeImageUrl = (
+  url: string | null,
+  key: string | null = null,
+): string => {
+  if (!url || url === "null" || url === "undefined" || url.trim() === "") {
+    return getDefaultProductImage();
+  }
+
+  const cleanUrl = url.trim();
+
+  // ✅ Si l'URL est déjà complète avec le proxy
+  if (cleanUrl.includes("/api/files/")) {
+    if (cleanUrl.startsWith("http")) {
+      return cleanUrl;
+    }
+    return `${API_CONFIG.BASE_URL || "http://localhost:3005"}${cleanUrl}`;
+  }
+
+  // ✅ Si c'est une clé (comme "produits%2F1771901822213-2208100.jpg")
+  if (
+    cleanUrl.includes("%2F") ||
+    cleanUrl.startsWith("produits%2F") ||
+    cleanUrl.startsWith("categories%2F") ||
+    cleanUrl.startsWith("utilisateurs%2F")
+  ) {
+    try {
+      const encodedKey = encodeURIComponent(cleanUrl);
+      return `${API_CONFIG.BASE_URL || "http://localhost:3005"}/api/files/${encodedKey}`;
+    } catch (err) {
+      console.debug("Erreur conversion clé:", err);
+      return getDefaultProductImage();
+    }
+  }
+
+  // ✅ Si c'est un chemin avec slash
+  if (cleanUrl.startsWith("/")) {
+    return `${API_CONFIG.BASE_URL || "http://localhost:3005"}${cleanUrl}`;
+  }
+
+  // ✅ Si c'est une URL HTTP/HTTPS
+  if (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://")) {
+    return cleanUrl;
+  }
+
+  return getDefaultProductImage();
+};
+
 const SecureImage = ({
   src,
   alt,
   fallbackSrc,
   className = "",
   style = {},
+  imageKey = null,
 }: {
   src: string | null;
   alt: string;
   fallbackSrc: string;
   className?: string;
   style?: React.CSSProperties;
+  imageKey?: string | null;
 }) => {
-  const [currentSrc, setCurrentSrc] = useState(src);
+  const [currentSrc, setCurrentSrc] = useState<string>(() => {
+    if (!src && !imageKey) return fallbackSrc;
+    return normalizeImageUrl(src, imageKey);
+  });
   const [hasError, setHasError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
-    setCurrentSrc(src);
+    setCurrentSrc(normalizeImageUrl(src, imageKey));
     setHasError(false);
-  }, [src]);
+    setRetryCount(0);
+  }, [src, imageKey]);
 
   const handleError = () => {
-    if (!hasError) {
-      setHasError(true);
-      if (fallbackSrc) {
-        setCurrentSrc(fallbackSrc);
+    if (retryCount < 2) {
+      setRetryCount((prev) => prev + 1);
+      // Réessayer avec l'URL directe
+      if (src && src.includes("%2F")) {
+        const directUrl = `${API_CONFIG.BASE_URL || "http://localhost:3005"}/api/files/${src}`;
+        setCurrentSrc(directUrl);
       }
+    } else {
+      setHasError(true);
+      setCurrentSrc(fallbackSrc);
     }
   };
 
   return (
     <img
-      src={currentSrc || fallbackSrc}
+      src={currentSrc}
       alt={alt}
       className={className}
-      style={style}
+      style={{ ...style, objectFit: "cover" }}
       onError={handleError}
       loading="lazy"
     />
@@ -348,7 +416,7 @@ const StatCard = ({
 };
 
 // ============================================
-// COMPOSANT PRODUIT CARD
+// COMPOSANT PRODUIT CARD - CORRIGÉ
 // ============================================
 const ProduitCard = ({ produit }: { produit: ProduitUtilisateur }) => {
   const router = useRouter();
@@ -358,10 +426,6 @@ const ProduitCard = ({ produit }: { produit: ProduitUtilisateur }) => {
     const numericPrice = typeof price === "string" ? parseFloat(price) : price;
     if (isNaN(numericPrice)) return "Prix sur demande";
     return numericPrice.toLocaleString("fr-FR") + " FCFA";
-  };
-
-  const getDefaultProductImage = (): string => {
-    return `${API_CONFIG.BASE_URL || "http://localhost:3005"}/images/default-product.png`;
   };
 
   const getStatusBadge = () => {
@@ -393,8 +457,17 @@ const ProduitCard = ({ produit }: { produit: ProduitUtilisateur }) => {
     return <div className="d-flex">{stars}</div>;
   };
 
+  // ✅ Fonction pour naviguer vers le détail du produit
+  const handleViewProduct = () => {
+    router.push(`/produits/${produit.uuid}`);
+  };
+
   return (
-    <div className="card h-100 border-0 shadow-sm product-card">
+    <div
+      className="card h-100 border-0 shadow-sm product-card"
+      onClick={handleViewProduct}
+      style={{ cursor: "pointer" }}
+    >
       <div className="position-relative">
         <div style={{ height: "180px", overflow: "hidden" }}>
           <SecureImage
@@ -403,6 +476,7 @@ const ProduitCard = ({ produit }: { produit: ProduitUtilisateur }) => {
             fallbackSrc={getDefaultProductImage()}
             className="img-fluid w-100 h-100"
             style={{ objectFit: "cover" }}
+            imageKey={produit.image_key}
           />
         </div>
         <div className="position-absolute top-0 start-0 m-2">
@@ -442,7 +516,10 @@ const ProduitCard = ({ produit }: { produit: ProduitUtilisateur }) => {
               color: colors.oskar.green,
               border: `1px solid ${colors.oskar.green}30`,
             }}
-            onClick={() => router.push(`/produits/${produit.uuid}`)}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleViewProduct();
+            }}
           >
             <FontAwesomeIcon icon={faEye} className="me-1" />
             Voir
@@ -476,10 +553,6 @@ export default function UtilisateurDetailPage() {
   // ============================================
   // FONCTIONS UTILITAIRES
   // ============================================
-  const getDefaultAvatarUrl = (): string => {
-    return `${API_CONFIG.BASE_URL || "http://localhost:3005"}/images/default-avatar.png`;
-  };
-
   const formatDate = (dateString?: string) => {
     if (!dateString) return "Non renseigné";
     try {
@@ -513,6 +586,15 @@ export default function UtilisateurDetailPage() {
     }
   };
 
+  // ✅ Fonction pour transformer les produits et normaliser les images
+  const transformProduits = (produits: any[]): ProduitUtilisateur[] => {
+    return produits.map((p) => ({
+      ...p,
+      image: p.image || p.image_key || null,
+      image_key: p.image_key || null,
+    }));
+  };
+
   // ============================================
   // CHARGEMENT DES DONNÉES
   // ============================================
@@ -530,7 +612,12 @@ export default function UtilisateurDetailPage() {
       console.log("✅ Réponse API utilisateur:", response);
 
       if (response && response.data) {
-        setUtilisateur(response.data);
+        // Transformer les produits pour normaliser les images
+        const dataWithNormalizedProduits = {
+          ...response.data,
+          produits: transformProduits(response.data.produits || []),
+        };
+        setUtilisateur(dataWithNormalizedProduits);
       } else {
         throw new Error("Utilisateur non trouvé");
       }
