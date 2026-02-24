@@ -1,3 +1,4 @@
+// app/(back-office)/dashboard-agent/profile/page.tsx
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -173,7 +174,7 @@ export default function AgentProfilePage() {
     setSuccess(null);
   };
 
-  // Soumission du formulaire
+  // Soumission du formulaire - VERSION CORRIGÉE
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -219,15 +220,11 @@ export default function AgentProfilePage() {
         formDataToSend.append("avatar", selectedFile);
       }
 
-      // Envoyer les données
+      // ✅ CORRECTION : Laisser l'api-client gérer les headers
       const response = await api.put(
         API_ENDPOINTS.AUTH.AGENT.UPDATE_PROFILE,
         formDataToSend,
-        {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
-        },
+        // Pas de troisième paramètre avec headers
       );
 
       setSuccess(response.data?.message || "Profil mis à jour avec succès");
@@ -235,6 +232,7 @@ export default function AgentProfilePage() {
       // Rafraîchir les données
       setTimeout(() => {
         fetchProfile();
+        setSelectedFile(null); // Réinitialiser le fichier sélectionné
       }, 1000);
     } catch (err: any) {
       console.error("Erreur lors de la mise à jour du profil:", err);
@@ -251,7 +249,8 @@ export default function AgentProfilePage() {
   // Avatar par défaut
   const getDefaultAvatar = () => {
     const initials =
-      `${formData.prenoms?.charAt(0) || ""}${formData.nom?.charAt(0) || ""}`.toUpperCase();
+      `${formData.prenoms?.charAt(0) || ""}${formData.nom?.charAt(0) || ""}`.toUpperCase() ||
+      "A";
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=16a34a&color=fff&size=150`;
   };
 

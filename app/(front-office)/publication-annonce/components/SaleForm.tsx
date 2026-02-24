@@ -1,4 +1,3 @@
-// app/(front-office)/publication-annonce/components/SaleForm.tsx
 "use client";
 
 import { useState, useEffect, ChangeEvent, useCallback } from "react";
@@ -217,6 +216,13 @@ const VenteForm: React.FC<VenteFormProps> = ({
     }
   };
 
+  const handlePrixChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    // Accepter uniquement les chiffres
+    const numericValue = value.replace(/[^0-9]/g, "");
+    onChange({ ...venteData, prix: numericValue });
+  };
+
   const renderVenteStep2 = () => {
     return (
       <div className="p-4">
@@ -393,15 +399,13 @@ const VenteForm: React.FC<VenteFormProps> = ({
                           />
                         </span>
                         <input
-                          type="number"
+                          type="text"
                           className={`form-control border-light ${
                             validationErrors.prix ? "is-invalid" : ""
                           }`}
                           placeholder="Ex: 250000"
                           value={venteData.prix}
-                          onChange={(e) =>
-                            onChange({ ...venteData, prix: e.target.value })
-                          }
+                          onChange={handlePrixChange}
                           required
                         />
                       </div>
@@ -410,6 +414,9 @@ const VenteForm: React.FC<VenteFormProps> = ({
                           {validationErrors.prix}
                         </div>
                       )}
+                      <small className="text-muted">
+                        Saisissez uniquement des chiffres
+                      </small>
                     </div>
                   </div>
                   <div className="col-md-6">

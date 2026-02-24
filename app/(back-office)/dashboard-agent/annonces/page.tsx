@@ -1,5 +1,5 @@
-// app/(back-office)/page.tsx
-// Fichier test
+// app/(back-office)/dashboard-agent/annonces/page.tsx
+
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
@@ -91,7 +91,7 @@ export default function Annonces() {
     // Afficher les alertes flash
     const totalCount = newNonPublie.length;
 
-    // Alerte principale - CORRIGÉ : icon est maintenant un élément JSX
+    // Alerte principale
     toast.info(
       <div style={{ padding: "8px" }}>
         <div
@@ -232,7 +232,6 @@ export default function Annonces() {
         closeOnClick: true,
         pauseOnHover: true,
         draggable: true,
-        // CORRIGÉ : Supprimer la propriété icon ou utiliser un élément JSX
         style: {
           width: "450px",
           background: "white",
@@ -243,7 +242,7 @@ export default function Annonces() {
       },
     );
 
-    // Alertes individuelles pour chaque type - CORRIGÉ : icon est maintenant un élément JSX
+    // Alertes individuelles pour chaque type
     if (groupedByType.produits.length > 0) {
       toast.success(
         <div>
@@ -476,7 +475,6 @@ export default function Annonces() {
           closeOnClick: false,
           pauseOnHover: true,
           draggable: true,
-          // CORRIGÉ : Supprimer la propriété icon
           style: {
             width: "400px",
             background: "white",
@@ -545,7 +543,44 @@ export default function Annonces() {
     [showCreationAlert, showNonPublieAlert],
   );
 
-  // Fonction pour charger TOUTES les données
+  // ============================================
+  // FONCTION POUR EXTRAIRE UN TABLEAU D'UNE RÉPONSE API
+  // ============================================
+  const extractArrayFromResponse = (response: any): any[] => {
+    if (!response) return [];
+
+    // Si c'est déjà un tableau
+    if (Array.isArray(response)) {
+      return response;
+    }
+
+    // Si la réponse a une propriété 'data' qui est un tableau
+    if (response.data && Array.isArray(response.data)) {
+      return response.data;
+    }
+
+    // Si la réponse a une propriété 'results' qui est un tableau
+    if (response.results && Array.isArray(response.results)) {
+      return response.results;
+    }
+
+    // Si la réponse a une propriété 'items' qui est un tableau
+    if (response.items && Array.isArray(response.items)) {
+      return response.items;
+    }
+
+    // Si la réponse a une propriété 'content' qui est un tableau
+    if (response.content && Array.isArray(response.content)) {
+      return response.content;
+    }
+
+    console.warn("Structure de réponse inattendue:", response);
+    return [];
+  };
+
+  // ============================================
+  // FONCTION DE CHARGEMENT DES DONNÉES - CORRIGÉE
+  // ============================================
   const fetchAllData = useCallback(
     async (isInitial = false, force = false) => {
       try {
@@ -555,29 +590,37 @@ export default function Annonces() {
         // Sauvegarder les anciennes données pour détecter les nouveaux items
         const oldData = [...allData];
 
-        // Charger les produits
-        const produits = await api.get<any[]>(API_ENDPOINTS.PRODUCTS.ALL);
+        // Charger les produits - avec extraction du tableau
+        const produitsResponse = await api.get<any>(API_ENDPOINTS.PRODUCTS.ALL);
+        const produits = extractArrayFromResponse(produitsResponse);
+        console.log("Produits chargés:", produits.length);
 
         // Charger les dons
-        const dons = await api.get<any[]>(API_ENDPOINTS.DONS.LIST);
+        const donsResponse = await api.get<any>(API_ENDPOINTS.DONS.LIST);
+        const dons = extractArrayFromResponse(donsResponse);
+        console.log("Dons chargés:", dons.length);
 
         // Charger les échanges
-        const echanges = await api.get<any[]>(API_ENDPOINTS.ECHANGES.LIST);
+        const echangesResponse = await api.get<any>(
+          API_ENDPOINTS.ECHANGES.LIST,
+        );
+        const echanges = extractArrayFromResponse(echangesResponse);
+        console.log("Échanges chargés:", echanges.length);
 
         // Ajouter le type à chaque élément
-        const produitsWithType = (produits || []).map((item) => ({
+        const produitsWithType = (produits || []).map((item: any) => ({
           ...item,
           type: "produit",
           uuid: item.uuid || `prod-${Date.now()}-${Math.random()}`,
         }));
 
-        const donsWithType = (dons || []).map((item) => ({
+        const donsWithType = (dons || []).map((item: any) => ({
           ...item,
           type: "don",
           uuid: item.uuid || `don-${Date.now()}-${Math.random()}`,
         }));
 
-        const echangesWithType = (echanges || []).map((item) => ({
+        const echangesWithType = (echanges || []).map((item: any) => ({
           ...item,
           type: "echange",
           uuid: item.uuid || `ech-${Date.now()}-${Math.random()}`,
@@ -589,6 +632,8 @@ export default function Annonces() {
           ...donsWithType,
           ...echangesWithType,
         ];
+
+        console.log("Total combiné:", combinedData.length);
 
         // Détecter les nouveaux items (sauf au chargement initial)
         if (!isInitial && oldData.length > 0) {

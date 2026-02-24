@@ -14,7 +14,7 @@ interface FavoriItem {
   uuid: string;
   title: string;
   description?: string;
-  image: string | null; // Changé pour accepter null
+  image: string | null;
   image_key?: string;
   type: "produit" | "don" | "echange" | "annonce";
   status: string;
@@ -39,7 +39,6 @@ interface FavoriItem {
 
 export default function FavorisPage() {
   const [favoris, setFavoris] = useState<FavoriItem[]>([]);
-  const [filteredFavoris, setFilteredFavoris] = useState<FavoriItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState("tous");
@@ -52,26 +51,58 @@ export default function FavorisPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [fullDetails, setFullDetails] = useState<any>(null);
 
-  // Fonction pour construire l'URL d'une image
-  const buildImageUrl = (imagePath: string | null): string | null => {
-    if (!imagePath) return null;
+  // ✅ FILTRAGE AVEC useMemo (pas de boucle infinie)
+  const filteredFavoris = useMemo(() => {
+    let filtered = [...favoris];
 
-    const apiUrl =
-      process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
-    const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
-
-    // Déjà une URL complète
-    if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
-      if (imagePath.includes("localhost")) {
-        const productionUrl = apiUrl.replace(/\/api$/, "");
-        return imagePath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
-      }
-      return imagePath;
+    // Filtrer par type
+    if (selectedType !== "tous") {
+      filtered = filtered.filter((item) => item.type === selectedType);
     }
 
-    // Chemin simple
-    return `${apiUrl}${filesUrl}/${imagePath}`;
-  };
+    // Filtrer par recherche
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter((item) => {
+        const title = item.title?.toLowerCase() || "";
+        const description = item.description?.toLowerCase() || "";
+        const category = item.category?.toLowerCase() || "";
+
+        return (
+          title.includes(query) ||
+          description.includes(query) ||
+          category.includes(query)
+        );
+      });
+    }
+
+    console.log("Favoris filtrés:", filtered.length);
+    return filtered;
+  }, [favoris, selectedType, searchQuery]);
+
+  // Fonction pour construire l'URL d'une image
+  const buildImageUrl = useCallback(
+    (imagePath: string | null): string | null => {
+      if (!imagePath) return null;
+
+      const apiUrl =
+        process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+      const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+
+      // Déjà une URL complète
+      if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
+        if (imagePath.includes("localhost")) {
+          const productionUrl = apiUrl.replace(/\/api$/, "");
+          return imagePath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
+        }
+        return imagePath;
+      }
+
+      // Chemin simple
+      return `${apiUrl}${filesUrl}/${imagePath}`;
+    },
+    [],
+  );
 
   // Fonction pour transformer les données de favoris selon le type
   const transformFavoriData = useCallback(
@@ -341,15 +372,6 @@ export default function FavorisPage() {
   const handleView = useCallback(
     (favoriteId: string) => {
       console.log("handleView appelé avec favoriteId:", favoriteId);
-      console.log(
-        "Liste des favoris disponibles:",
-        favoris.map((f) => ({
-          favoriteId: f.favoriteId,
-          itemUuid: f.itemUuid,
-          title: f.title,
-          uuid: f.uuid,
-        })),
-      );
 
       // Chercher le favori par favoriteId
       const favori = favoris.find((f) => f.favoriteId === favoriteId);
@@ -445,31 +467,15 @@ export default function FavorisPage() {
       // Essayer différentes structures de données
       if (responseData?.favoris && Array.isArray(responseData.favoris)) {
         favorisData = responseData.favoris;
-        console.log(
-          "Données extraites de responseData.favoris:",
-          favorisData.length,
-        );
       } else if (Array.isArray(responseData)) {
         favorisData = responseData;
-        console.log(
-          "Données extraites de responseData (array):",
-          favorisData.length,
-        );
       } else if (
         responseData?.data?.favoris &&
         Array.isArray(responseData.data.favoris)
       ) {
         favorisData = responseData.data.favoris;
-        console.log(
-          "Données extraites de responseData.data.favoris:",
-          favorisData.length,
-        );
       } else if (Array.isArray(responseData?.data)) {
         favorisData = responseData.data;
-        console.log(
-          "Données extraites de responseData.data (array):",
-          favorisData.length,
-        );
       } else if (
         responseData?.produits &&
         Array.isArray(responseData.produits)
@@ -481,20 +487,14 @@ export default function FavorisPage() {
           produit: produit,
           uuid: produit.uuid,
         }));
-        console.log(
-          "Données extraites de responseData.produits:",
-          favorisData.length,
-        );
       } else {
         // Essayer de trouver un tableau quelque part dans l'objet
         const findArrayInObject = (obj: any): any[] => {
           for (const key in obj) {
             if (Array.isArray(obj[key])) {
-              console.log("Tableau trouvé dans la clé:", key);
               return obj[key];
             }
           }
-          console.log("Aucun tableau trouvé dans l'objet");
           return [];
         };
         favorisData = findArrayInObject(responseData);
@@ -521,7 +521,6 @@ export default function FavorisPage() {
         .filter((item): item is FavoriItem => item !== null);
 
       console.log("Données transformées:", transformedData);
-
       setFavoris(transformedData);
     } catch (err: any) {
       console.error("Erreur lors du chargement des favoris:", err);
@@ -535,35 +534,6 @@ export default function FavorisPage() {
       setLoading(false);
     }
   }, [transformFavoriData]);
-
-  // Filtrer par type et recherche
-  useEffect(() => {
-    let filtered = [...favoris];
-
-    // Filtrer par type
-    if (selectedType !== "tous") {
-      filtered = filtered.filter((item) => item.type === selectedType);
-    }
-
-    // Filtrer par recherche
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
-      filtered = filtered.filter((item) => {
-        const title = item.title?.toLowerCase() || "";
-        const description = item.description?.toLowerCase() || "";
-        const category = item.category?.toLowerCase() || "";
-
-        return (
-          title.includes(query) ||
-          description.includes(query) ||
-          category.includes(query)
-        );
-      });
-    }
-
-    console.log("Favoris filtrés:", filtered.length);
-    setFilteredFavoris(filtered);
-  }, [favoris, selectedType, searchQuery]);
 
   // Charger les données au montage
   useEffect(() => {

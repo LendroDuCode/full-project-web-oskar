@@ -1,7 +1,6 @@
-// app/(front-office)/publication-annonce/page.tsx
 "use client";
 
-import { useState, ChangeEvent, useEffect, useCallback } from "react";
+import { useState, ChangeEvent, useEffect } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faStore,
@@ -14,7 +13,6 @@ import {
   faInfoCircle,
   faExclamationCircle,
   faTimes,
-  faExclamationTriangle,
 } from "@fortawesome/free-solid-svg-icons";
 import colors from "../../shared/constants/colors";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
@@ -26,6 +24,7 @@ import {
   EchangeData,
   PublishAdModalProps,
   VenteData,
+  Boutique,
   SaleMode,
   ConditionOption,
 } from "./components/constantes/types";
@@ -49,7 +48,8 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [boutiqueCreated] = useState(false);
+  const [createdBoutiqueUuid] = useState<string | null>(null);
 
   // États initiaux
   const [donData, setDonData] = useState<DonData>({
@@ -82,9 +82,10 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     type_destinataire: "autre",
   });
 
+  // 🔴 CORRECTION ICI - Ajout de boutiqueNom
   const [venteData, setVenteData] = useState<VenteData>({
     boutiqueUuid: "",
-    boutiqueNom: "",
+    boutiqueNom: "", // ✅ AJOUTÉ - propriété manquante
     libelle: "",
     type: "",
     disponible: true,
@@ -100,6 +101,11 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     garantie: "non",
     saleMode: "particulier",
   });
+
+  const [boutiques, setBoutiques] = useState<Boutique[]>([]);
+  const [selectedBoutique, setSelectedBoutique] = useState<Boutique | null>(
+    null,
+  );
 
   const adTypeOptions: AdTypeOption[] = [
     {
@@ -182,6 +188,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     },
   ];
 
+  // Conditions pour les produits
   const conditions: ConditionOption[] = [
     { value: "neuf", label: "Neuf (jamais utilisé)" },
     { value: "tresbon", label: "Très bon état" },
@@ -190,53 +197,102 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     { value: "areparer", label: "À réparer" },
   ];
 
-  // Fonction pour parser les erreurs de l'API
-  const parseApiError = (error: any) => {
-    console.log("🔍 Parsing error:", error);
+  // Charger les boutiques
+  useEffect(() => {
+    const fetchBoutiques = async () => {
+      if (!isLoggedIn || adType !== "sale") {
+        setBoutiques([]);
+        return;
+      }
 
-    // Erreur de boutique non autorisée
-    if (
-      error.message?.includes("Boutique non trouvée") ||
-      error.message?.includes("boutique non autorisée")
-    ) {
-      return {
-        type: "boutique",
-        message:
-          "❌ Cette boutique ne vous appartient pas, vous n'êtes pas autorisé à y ajouter des produits",
-      };
-    }
+      try {
+        const token = localStorage.getItem("oskar_token");
+        if (!token) return;
 
-    // Erreur de catégorie obligatoire
-    if (
-      error.message?.includes("catégorie est obligatoire") ||
-      error.message?.includes("categorie_uuid")
-    ) {
-      return {
-        type: "categorie",
-        message:
-          "⚠️ La catégorie est obligatoire. Veuillez sélectionner une catégorie pour votre annonce.",
-      };
-    }
+        const url = API_ENDPOINTS.BOUTIQUES.LISTE_BOUTIQUES_CREE_PAR_VENDEUR;
+        console.log("🛍️ Chargement des boutiques:", url);
 
-    // Erreur de champ obligatoire
-    if (error.message?.includes("obligatoire")) {
-      return {
-        type: "generic",
-        message: error.message,
-      };
-    }
+        const response = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
 
-    return {
-      type: "generic",
-      message: error.message || "Une erreur est survenue. Veuillez réessayer.",
+        if (!response.ok) {
+          throw new Error(`Erreur ${response.status}`);
+        }
+
+        const data = await response.json();
+        let boutiquesData: Boutique[] = [];
+
+        if (Array.isArray(data)) {
+          boutiquesData = data;
+        } else if (data && Array.isArray(data.data)) {
+          boutiquesData = data.data;
+        } else if (data && data.data && Array.isArray(data.data.data)) {
+          boutiquesData = data.data.data;
+        } else if (data && data.success && Array.isArray(data.data)) {
+          boutiquesData = data.data;
+        }
+
+        const boutiquesActives = boutiquesData.filter(
+          (boutique) =>
+            !boutique.est_bloque &&
+            !boutique.est_ferme &&
+            (boutique.statut === "actif" || boutique.statut === "en_review"),
+        );
+
+        console.log(`📊 ${boutiquesActives.length} boutique(s) active(s)`);
+        setBoutiques(boutiquesActives);
+
+        // Si l'utilisateur est un vendeur et n'a pas de boutique sélectionnée,
+        // présélectionner la première boutique active
+        if (
+          user?.type === "vendeur" &&
+          !venteData.boutiqueUuid &&
+          boutiquesActives.length > 0
+        ) {
+          const premiereBoutique = boutiquesActives[0];
+          handleBoutiqueChange(premiereBoutique.uuid, premiereBoutique.nom);
+          console.log(`✅ Boutique présélectionnée: ${premiereBoutique.nom}`);
+        }
+      } catch (err) {
+        console.error("❌ Erreur chargement boutiques:", err);
+        setBoutiques([]);
+      }
     };
-  };
+
+    if (visible && isLoggedIn && adType === "sale") {
+      fetchBoutiques();
+    }
+  }, [visible, isLoggedIn, adType, user?.type]);
+
+  // Mettre à jour selectedBoutique quand boutiqueUuid change
+  useEffect(() => {
+    if (venteData.boutiqueUuid && boutiques.length > 0) {
+      const boutique = boutiques.find((b) => b.uuid === venteData.boutiqueUuid);
+      setSelectedBoutique(boutique || null);
+    } else {
+      setSelectedBoutique(null);
+    }
+  }, [venteData.boutiqueUuid, boutiques]);
 
   const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Validation de la taille (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setSubmitError("L'image ne doit pas dépasser 5MB");
+        return;
+      }
+
+      // Validation du type
+      if (!file.type.startsWith("image/")) {
+        setSubmitError("Veuillez sélectionner une image valide");
+        return;
+      }
+
       const preview = URL.createObjectURL(file);
       setImagePreview(preview);
+
       switch (adType) {
         case "don":
           setDonData({ ...donData, image: file });
@@ -271,10 +327,13 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     setTimeout(() => setSuccessMessage(null), 5000);
   };
 
+  // ✅ Soumission DON - CORRIGÉE
   const submitDon = async (): Promise<void> => {
     const formData = new FormData();
-    formData.append("nom", donData.titre.trim());
+
+    // Champs obligatoires pour l'API
     formData.append("type_don", donData.type_don.trim());
+    formData.append("nom", donData.titre.trim());
     formData.append("localisation", donData.localisation.trim());
     formData.append("description", donData.description.trim());
     formData.append("lieu_retrait", donData.lieu_retrait.trim());
@@ -282,15 +341,38 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     formData.append("quantite", donData.quantite);
     formData.append("numero", donData.numero.trim());
     formData.append("nom_donataire", donData.nom_donataire.trim());
-    formData.append("condition", donData.condition);
-    formData.append("disponibilite", donData.disponibilite);
-    if (donData.image) formData.append("image", donData.image);
+
+    // Champs optionnels
+    if (donData.condition) {
+      formData.append("condition", donData.condition);
+    }
+
+    if (donData.disponibilite) {
+      formData.append("disponibilite", donData.disponibilite);
+    }
+
+    // Image
+    if (donData.image) {
+      formData.append("image", donData.image);
+    }
+
+    // Log pour déboguer
+    console.log("📤 Données envoyées pour DON:");
+    for (let [key, value] of formData.entries()) {
+      console.log(
+        `  ${key}:`,
+        value instanceof File ? `File(${value.name})` : value,
+      );
+    }
 
     await sendFormData(formData, API_ENDPOINTS.DONS.CREATE, "don");
   };
 
+  // ✅ Soumission ÉCHANGE
   const submitEchange = async (): Promise<void> => {
     const formData = new FormData();
+
+    // Champs obligatoires
     formData.append("nomElementEchange", echangeData.nomElementEchange.trim());
     formData.append("numero", echangeData.numero.trim());
     formData.append("nom_initiateur", echangeData.nom_initiateur);
@@ -298,27 +380,61 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     formData.append("objetPropose", echangeData.objetPropose.trim());
     formData.append("objetDemande", echangeData.objetDemande.trim());
     formData.append("message", echangeData.message.trim());
-    formData.append("prix", echangeData.prix);
     formData.append("categorie_uuid", echangeData.categorie_uuid);
     formData.append("quantite", echangeData.quantite);
     formData.append("type_destinataire", echangeData.type_destinataire);
-    if (echangeData.image) formData.append("image", echangeData.image);
+
+    // Prix (optionnel)
+    if (echangeData.prix) {
+      formData.append("prix", echangeData.prix);
+    }
+
+    // Image
+    if (echangeData.image) {
+      formData.append("image", echangeData.image);
+    }
+
+    console.log("📤 Données envoyées pour ÉCHANGE:");
+    for (let [key, value] of formData.entries()) {
+      console.log(
+        `  ${key}:`,
+        value instanceof File ? `File(${value.name})` : value,
+      );
+    }
 
     await sendFormData(formData, API_ENDPOINTS.ECHANGES.CREATE, "échange");
   };
 
+  // ✅ Soumission VENTE
   const submitVente = async (): Promise<void> => {
-    console.log("🚀 Début submitVente", venteData);
+    console.log("🚀 Début submitVente");
+    console.log("📊 État venteData:", venteData);
+    console.log("👤 Type utilisateur:", user?.type);
 
     const formData = new FormData();
 
-    // Si c'est une nouvelle boutique, on envoie le nom, sinon l'UUID
-    if (venteData.boutiqueUuid === "new" && venteData.boutiqueNom) {
-      formData.append("boutiqueNom", venteData.boutiqueNom);
-    } else if (venteData.boutiqueUuid) {
-      formData.append("boutiqueUuid", venteData.boutiqueUuid);
+    // Utiliser "boutiqueUuid" (camelCase)
+    const boutiqueId = venteData.boutiqueUuid;
+    console.log("📝 boutiqueUuid à envoyer:", boutiqueId);
+
+    if (boutiqueId) {
+      formData.append("boutiqueUuid", boutiqueId);
+
+      // 🔴 AJOUT - Envoyer aussi le nom de la boutique si disponible
+      if (venteData.boutiqueNom) {
+        formData.append("boutiqueNom", venteData.boutiqueNom);
+      }
+    } else if (user?.type === "vendeur") {
+      // Si l'utilisateur est un vendeur mais n'a pas de boutique
+      console.error("❌ ERREUR: Vendeur sans boutiqueUuid!");
+      setSubmitError(
+        "Veuillez sélectionner une boutique pour vendre ce produit",
+      );
+      setLoading(false);
+      return;
     }
 
+    // Ajouter les autres champs
     formData.append("libelle", venteData.libelle.trim());
     formData.append("type", venteData.type.trim());
     formData.append("disponible", String(venteData.disponible));
@@ -336,9 +452,18 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       formData.append("image", venteData.image);
     }
 
+    console.log("📤 Données envoyées pour VENTE:");
+    for (let [key, value] of formData.entries()) {
+      console.log(
+        `  ${key}:`,
+        value instanceof File ? `File(${value.name})` : value,
+      );
+    }
+
     await sendFormData(formData, API_ENDPOINTS.PRODUCTS.CREATE, "vente");
   };
 
+  // ✅ Fonction générique pour envoyer FormData
   const sendFormData = async (
     formData: FormData,
     endpoint: string,
@@ -346,12 +471,41 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
   ) => {
     setLoading(true);
     setSubmitError(null);
-    setFieldErrors({});
 
     try {
       console.log(`📤 Envoi ${type} vers:`, endpoint);
 
-      const result = await api.post(endpoint, formData);
+      // Récupérer le token
+      const token = localStorage.getItem("oskar_token");
+
+      if (!token) {
+        throw new Error("Session expirée. Veuillez vous reconnecter.");
+      }
+
+      // Utiliser fetch directement pour plus de contrôle
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      console.log("📥 Statut réponse:", response.status);
+
+      if (!response.ok) {
+        let errorMessage = `Erreur ${response.status}`;
+        try {
+          const errorData = await response.json();
+          console.error("❌ Détails de l'erreur:", errorData);
+          errorMessage = errorData.message || errorData.error || errorMessage;
+        } catch (e) {
+          // Ignorer
+        }
+        throw new Error(errorMessage);
+      }
+
+      const result = await response.json();
       console.log(`✅ ${type} créé avec succès:`, result);
 
       resetForm();
@@ -372,15 +526,30 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     } catch (err: any) {
       console.error(`❌ Erreur publication ${type}:`, err);
 
-      // Parser l'erreur
-      const parsedError = parseApiError(err);
+      let errorMessage = err.message;
 
-      // Si c'est une erreur de catégorie, on peut la passer au formulaire
-      if (parsedError.type === "categorie") {
-        setFieldErrors({ categorie: parsedError.message });
+      // Messages d'erreur spécifiques
+      if (
+        errorMessage.includes("boutiqueUuid") ||
+        errorMessage.includes("boutique_uuid")
+      ) {
+        errorMessage =
+          "Veuillez sélectionner une boutique pour vendre ce produit";
+      } else if (errorMessage.includes("400")) {
+        errorMessage = "Veuillez vérifier les informations du formulaire";
+      } else if (errorMessage.includes("401")) {
+        errorMessage = "Session expirée. Veuillez vous reconnecter";
+      } else if (errorMessage.includes("vendeur")) {
+        errorMessage = "Les vendeurs doivent vendre via une boutique";
+      } else if (
+        errorMessage.includes("type_don") ||
+        errorMessage.includes("localisation")
+      ) {
+        errorMessage =
+          "Les champs 'Type de don' et 'Localisation' sont obligatoires";
       }
 
-      setSubmitError(parsedError.message);
+      setSubmitError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -394,12 +563,28 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       return;
     }
 
-    // Validation basique avant envoi
-    if (adType === "sale" && !venteData.categorie_uuid) {
+    // Validation supplémentaire pour les vendeurs
+    if (
+      adType === "sale" &&
+      user?.type === "vendeur" &&
+      !venteData.boutiqueUuid
+    ) {
       setSubmitError(
-        "⚠️ La catégorie est obligatoire. Veuillez sélectionner une catégorie pour votre annonce.",
+        "Veuillez sélectionner une boutique pour vendre ce produit",
       );
       return;
+    }
+
+    // Validation pour les dons
+    if (adType === "don") {
+      if (!donData.type_don?.trim()) {
+        setSubmitError("Le champ 'Type de don' est obligatoire");
+        return;
+      }
+      if (!donData.localisation?.trim()) {
+        setSubmitError("Le champ 'Localisation' est obligatoire");
+        return;
+      }
     }
 
     try {
@@ -452,7 +637,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     });
     setVenteData({
       boutiqueUuid: "",
-      boutiqueNom: "",
+      boutiqueNom: "", // ✅ AJOUTÉ
       libelle: "",
       type: "",
       disponible: true,
@@ -471,16 +656,30 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     setImagePreview(null);
     setStep(1);
     setSubmitError(null);
-    setFieldErrors({});
+    setBoutiques([]);
+    setSelectedBoutique(null);
   };
 
   const nextStep = () => step < 3 && setStep(step + 1);
   const prevStep = () => step > 1 && setStep(step - 1);
+
   const selectAdType = (type: "don" | "exchange" | "sale") => {
     setAdType(type);
     setStep(2);
     setSubmitError(null);
-    setFieldErrors({});
+  };
+
+  // 🔴 MODIFICATION - Ajout du paramètre boutiqueNom
+  const handleBoutiqueChange = (
+    boutiqueUuid: string,
+    boutiqueNom: string = "",
+  ) => {
+    console.log(`🔄 Changement de boutique: ${boutiqueUuid} - ${boutiqueNom}`);
+    setVenteData({
+      ...venteData,
+      boutiqueUuid,
+      boutiqueNom, // ✅ AJOUTÉ
+    });
   };
 
   const renderStep1 = () => (
@@ -566,6 +765,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
 
   return (
     <>
+      {/* Notification de succès */}
       {successMessage && (
         <div
           className="position-fixed top-0 start-50 translate-middle-x mt-4"
@@ -595,6 +795,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
               className="btn-close btn-close-white opacity-75"
               onClick={() => setSuccessMessage(null)}
               aria-label="Close"
+              style={{ background: "transparent", border: "none" }}
             >
               <FontAwesomeIcon icon={faTimes} />
             </button>
@@ -654,30 +855,12 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
                 </div>
 
                 {submitError && (
-                  <div
-                    className="alert alert-danger border-0 mb-3 d-flex align-items-start shadow-sm"
-                    style={{
-                      borderRadius: "10px",
-                      background: "#fff2f0",
-                      borderLeft: "4px solid #dc3545",
-                    }}
-                  >
+                  <div className="alert alert-danger border-0 mb-3">
                     <FontAwesomeIcon
-                      icon={faExclamationTriangle}
-                      className="me-3 mt-1"
-                      style={{ color: "#dc3545", fontSize: "1.2rem" }}
-                    />
-                    <div>
-                      <strong
-                        className="d-block mb-1"
-                        style={{ color: "#58151c" }}
-                      >
-                        Erreur
-                      </strong>
-                      <p className="mb-0" style={{ color: "#842029" }}>
-                        {submitError}
-                      </p>
-                    </div>
+                      icon={faExclamationCircle}
+                      className="me-2"
+                    />{" "}
+                    {submitError}
                   </div>
                 )}
 
@@ -716,7 +899,6 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
                 {adType === "don" && (
                   <DonForm
                     donData={donData}
-                    categories={categories}
                     conditions={conditions}
                     imagePreview={imagePreview}
                     onChange={setDonData}
@@ -725,6 +907,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
                     step={step}
                   />
                 )}
+
                 {adType === "exchange" && (
                   <EchangeForm
                     echangeData={echangeData}
@@ -737,6 +920,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
                     step={step}
                   />
                 )}
+
                 {adType === "sale" && (
                   <VenteForm
                     venteData={venteData}
@@ -746,10 +930,13 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
                     onImageUpload={handleImageUpload}
                     onRemoveImage={removeImage}
                     step={step}
-                    user={user}
+                    boutiques={boutiques}
+                    selectedBoutique={selectedBoutique}
+                    onBoutiqueChange={handleBoutiqueChange}
+                    user={user || null}
                     saleMode={saleMode}
-                    validationErrors={fieldErrors}
-                    // Les props boutiques, selectedBoutique, onBoutiqueChange sont optionnelles maintenant
+                    boutiqueCreated={boutiqueCreated}
+                    createdBoutiqueUuid={createdBoutiqueUuid}
                   />
                 )}
 
@@ -957,19 +1144,8 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         .card {
           border-radius: 16px !important;
         }
-
-        /* Styles pour les erreurs de validation */
-        .is-invalid {
-          border-color: #dc3545 !important;
-        }
-        .is-invalid:focus {
-          box-shadow: 0 0 0 0.25rem rgba(220, 53, 69, 0.25) !important;
-        }
-        .invalid-feedback {
-          color: #dc3545;
-          font-size: 0.875rem;
-          margin-top: 0.25rem;
-          display: block;
+        .border-dashed {
+          border-style: dashed !important;
         }
       `}</style>
     </>
