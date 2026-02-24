@@ -1,4 +1,5 @@
 // app/(front-office)/liste-favoris/page.tsx
+
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -11,6 +12,7 @@ import { api } from "@/lib/api-client";
 // Types pour les favoris
 interface FavoriItem {
   uuid: string;
+  favoriteId: string; // ID du favori lui-même
   type: "produit" | "echange" | "don";
   titre: string;
   description?: string | null;
@@ -20,6 +22,8 @@ interface FavoriItem {
   disponible?: boolean;
   statut?: string;
   isFavoris?: boolean;
+  localisation?: string;
+  lieu_retrait?: string;
   createur?: {
     uuid: string;
     nom: string;
@@ -31,13 +35,13 @@ interface FavoriItem {
   // Propriétés spécifiques
   libelle?: string;
   type_don?: string;
-  lieu_retrait?: string;
   nomElementEchange?: string;
   typeEchange?: string;
   objetPropose?: string;
   objetDemande?: string;
   message?: string;
-  localisation?: string;
+  // Pour stocker les données brutes
+  originalData?: any;
 }
 
 type TabType = "all" | "produits" | "dons" | "echanges";
@@ -84,6 +88,29 @@ const formatDate = (dateString?: string | null) => {
 // Image placeholder
 const PLACEHOLDER_IMAGE =
   "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2YzZjRmNiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM2NjY2NjYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5BdWN1bmUgaW1hZ2U8L3RleHQ+PC9zdmc+";
+
+// Fonction pour construire l'URL de l'image
+const buildImageUrl = (imagePath: string | null): string => {
+  if (!imagePath) return PLACEHOLDER_IMAGE;
+
+  // Si c'est déjà une URL complète
+  if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
+    return imagePath;
+  }
+
+  // Si c'est un chemin avec %2F (encodé)
+  if (imagePath.includes("%2F")) {
+    return `http://localhost:3005/api/files/${imagePath}`;
+  }
+
+  // Si c'est un chemin avec slash
+  if (imagePath.startsWith("/")) {
+    return `http://localhost:3005${imagePath}`;
+  }
+
+  // Sinon, construire l'URL
+  return `http://localhost:3005/api/files/${imagePath}`;
+};
 
 // Composant pour la page de connexion (inchangé)
 function LoginRequiredPage() {
@@ -403,13 +430,13 @@ function LoginRequiredPage() {
   );
 }
 
-// Composant de carte de favori (inchangé)
+// Composant de carte de favori
 const FavoriCard = ({
   item,
   onRemove,
 }: {
   item: FavoriItem;
-  onRemove: (uuid: string, type: "produit" | "echange" | "don") => void;
+  onRemove: (favoriteId: string, type: "produit" | "echange" | "don") => void;
 }) => {
   const [isFavorite, setIsFavorite] = useState(true);
   const [imageError, setImageError] = useState(false);
@@ -485,15 +512,14 @@ const FavoriCard = ({
 
   const getImageSrc = () => {
     if (imageError || !item.image) return PLACEHOLDER_IMAGE;
-    if (item.image.startsWith("http")) return item.image;
-    return `${process.env.NEXT_PUBLIC_API_URL || ""}${item.image}`;
+    return item.image;
   };
 
   const handleRemoveClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsFavorite(false);
-    onRemove(item.uuid, item.type);
+    onRemove(item.favoriteId, item.type);
   };
 
   return (
@@ -574,7 +600,7 @@ const FavoriCard = ({
           <div className="d-flex align-items-center">
             {item.createur?.avatar ? (
               <img
-                src={item.createur.avatar}
+                src={buildImageUrl(item.createur.avatar)}
                 alt={`${item.createur.prenoms} ${item.createur.nom}`}
                 className="rounded-circle object-fit-cover me-2"
                 style={{ width: "32px", height: "32px" }}
@@ -674,12 +700,7 @@ export default function ListeFavorisPage() {
     totalFavoris: 0,
   });
 
-  // ✅ Déterminer le type d'utilisateur
-  const getUserType = useCallback(() => {
-    return user?.type?.toLowerCase() || "utilisateur";
-  }, [user]);
-
-  // ✅ FONCTION RÉCUPÉRER LES FAVORIS - AVEC LOGS DÉTAILLÉS
+  // ✅ FONCTION RÉCUPÉRER LES FAVORIS - CORRIGÉE SELON VOS APPELS API
   const fetchAllFavoris = useCallback(async () => {
     if (!isLoggedIn) {
       setLoading(false);
@@ -694,166 +715,106 @@ export default function ListeFavorisPage() {
     try {
       console.log("📥 Récupération des favoris...");
 
-      const userType = getUserType();
-      console.log(`👤 Type d'utilisateur détecté: ${userType}`);
+      // Appel à l'endpoint unique qui retourne tous les favoris
+      const response = await api.get<any>("/favoris");
 
-      let produitsEndpoint = "";
-      let donsEndpoint = "";
-      let echangesEndpoint = "";
-
-      // Définir les endpoints selon le type d'utilisateur
-      if (userType === "vendeur") {
-        produitsEndpoint = "/favoris/vendeur/produits";
-        donsEndpoint = "/favoris/vendeur/dons";
-        echangesEndpoint = "/favoris/vendeur/echanges";
-      } else {
-        produitsEndpoint = "/favoris/utilisateur/produits";
-        donsEndpoint = "/favoris/utilisateur/dons";
-        echangesEndpoint = "/favoris/utilisateur/echanges";
-      }
-
-      console.log("📌 Endpoints à appeler:");
-      console.log("   Produits:", produitsEndpoint);
-      console.log("   Dons:", donsEndpoint);
-      console.log("   Échanges:", echangesEndpoint);
-
-      // Appels API
-      const produitsRes = await api.get<any>(produitsEndpoint).catch((err) => {
-        console.error("❌ Erreur produits:", err);
-        return null;
-      });
-
-      const donsRes = await api.get<any>(donsEndpoint).catch((err) => {
-        console.error("❌ Erreur dons:", err);
-        return null;
-      });
-
-      const echangesRes = await api.get<any>(echangesEndpoint).catch((err) => {
-        console.error("❌ Erreur échanges:", err);
-        return null;
-      });
+      console.log("✅ Réponse brute:", response);
 
       // Stocker les infos de debug
       setDebugInfo({
-        produits: produitsRes ? "Succès" : "Échec",
-        dons: donsRes ? "Succès" : "Échec",
-        echanges: echangesRes ? "Succès" : "Échec",
+        status: response.statusCode,
+        message: response.message,
+        total: response.meta?.total,
+        dataLength: response.data?.length || 0,
       });
 
+      // Extraire les données
+      let favorisData = [];
+
+      if (response.data && Array.isArray(response.data)) {
+        favorisData = response.data;
+      } else if (Array.isArray(response)) {
+        favorisData = response;
+      } else if (response.data?.data && Array.isArray(response.data.data)) {
+        favorisData = response.data.data;
+      }
+
+      console.log(`📊 Favoris reçus: ${favorisData.length}`);
+
+      // Transformer les données
       const allFavoris: FavoriItem[] = [];
       let produitsCount = 0;
       let donsCount = 0;
       let echangesCount = 0;
 
-      // Traiter les produits
-      if (produitsRes) {
-        let produitsData = [];
-        if (produitsRes.data && Array.isArray(produitsRes.data)) {
-          produitsData = produitsRes.data;
-        } else if (
-          produitsRes.data &&
-          produitsRes.data.data &&
-          Array.isArray(produitsRes.data.data)
-        ) {
-          produitsData = produitsRes.data.data;
-        } else if (Array.isArray(produitsRes)) {
-          produitsData = produitsRes;
-        }
+      favorisData.forEach((favori: any) => {
+        const type = favori.type;
 
-        console.log(`📊 Produits reçus: ${produitsData.length}`);
-
-        produitsData.forEach((item: any) => {
+        if (type === "produit" && favori.produit) {
+          const produit = favori.produit;
           allFavoris.push({
-            uuid: item.uuid,
+            uuid: produit.uuid,
+            favoriteId: favori.uuid,
             type: "produit",
-            titre: item.libelle || item.titre || "Produit sans nom",
-            description: item.description,
-            prix: item.prix,
-            image: item.image,
-            date: item.createdAt || item.updatedAt,
-            statut: item.statut,
-            disponible: item.disponible,
-            localisation: item.localisation || item.ville,
-            createur: item.createur || item.vendeur || item.utilisateur,
+            titre: produit.libelle || produit.nom || "Produit sans nom",
+            description: produit.description,
+            prix: produit.prix,
+            image: buildImageUrl(produit.image || produit.image_key),
+            date: produit.createdAt || produit.updatedAt,
+            statut: produit.statut,
+            disponible: produit.disponible,
+            localisation: produit.localisation,
+            createur: produit.createur || produit.vendeur,
+            originalData: produit,
           });
           produitsCount++;
-        });
-      }
-
-      // Traiter les dons
-      if (donsRes) {
-        let donsData = [];
-        if (donsRes.data && Array.isArray(donsRes.data)) {
-          donsData = donsRes.data;
-        } else if (
-          donsRes.data &&
-          donsRes.data.data &&
-          Array.isArray(donsRes.data.data)
-        ) {
-          donsData = donsRes.data.data;
-        } else if (Array.isArray(donsRes)) {
-          donsData = donsRes;
-        }
-
-        console.log(`📊 Dons reçus: ${donsData.length}`);
-
-        donsData.forEach((item: any) => {
+        } else if (type === "don" && favori.don) {
+          const don = favori.don;
           allFavoris.push({
-            uuid: item.uuid,
+            uuid: don.uuid,
+            favoriteId: favori.uuid,
             type: "don",
-            titre: item.titre || item.nom || "Don sans titre",
-            description: item.description,
-            prix: item.prix,
-            image: item.image,
-            date: item.createdAt,
-            statut: item.statut,
-            disponible: item.disponible,
-            localisation: item.localisation || item.lieu_retrait,
-            type_don: item.type_don,
-            lieu_retrait: item.lieu_retrait,
-            createur: item.createur,
+            titre: don.nom || don.titre || "Don sans nom",
+            description: don.description,
+            prix: don.prix,
+            image: buildImageUrl(don.image || don.image_key),
+            date: don.date_debut || don.createdAt,
+            statut: don.statut,
+            disponible: don.disponible,
+            localisation: don.localisation,
+            lieu_retrait: don.lieu_retrait,
+            createur: don.createur,
+            originalData: don,
           });
           donsCount++;
-        });
-      }
-
-      // Traiter les échanges
-      if (echangesRes) {
-        let echangesData = [];
-        if (echangesRes.data && Array.isArray(echangesRes.data)) {
-          echangesData = echangesRes.data;
-        } else if (
-          echangesRes.data &&
-          echangesRes.data.data &&
-          Array.isArray(echangesRes.data.data)
-        ) {
-          echangesData = echangesRes.data.data;
-        } else if (Array.isArray(echangesRes)) {
-          echangesData = echangesRes;
-        }
-
-        console.log(`📊 Échanges reçus: ${echangesData.length}`);
-
-        echangesData.forEach((item: any) => {
+        } else if (type === "echange" && favori.echange) {
+          const echange = favori.echange;
           allFavoris.push({
-            uuid: item.uuid,
+            uuid: echange.uuid,
+            favoriteId: favori.uuid,
             type: "echange",
-            titre: item.nomElementEchange || item.titre || "Échange sans titre",
-            description: item.message || item.description,
-            prix: item.prix,
-            image: item.image,
-            date: item.dateProposition || item.createdAt,
-            statut: item.statut,
-            localisation: item.localisation || item.lieu_rencontre,
-            typeEchange: item.typeEchange,
-            objetPropose: item.objetPropose,
-            objetDemande: item.objetDemande,
+            titre:
+              echange.nomElementEchange ||
+              echange.objetPropose ||
+              "Échange sans nom",
+            description: echange.message || echange.description,
+            prix: echange.prix,
+            image: buildImageUrl(echange.image || echange.image_key),
+            date: echange.dateProposition || echange.createdAt,
+            statut: echange.statut,
+            disponible: echange.disponible,
+            localisation: echange.localisation,
+            objetPropose: echange.objetPropose,
+            objetDemande: echange.objetDemande,
+            typeEchange: echange.typeEchange,
+            createur: echange.utilisateur || echange.vendeur,
+            originalData: echange,
           });
           echangesCount++;
-        });
-      }
+        }
+      });
 
-      console.log(`📊 Total favoris trouvés: ${allFavoris.length}`);
+      console.log(`📊 Total favoris transformés: ${allFavoris.length}`);
 
       setStats({
         totalProduits: produitsCount,
@@ -894,7 +855,7 @@ export default function ListeFavorisPage() {
       setLoading(false);
       setInitialLoad(false);
     }
-  }, [isLoggedIn, getUserType]);
+  }, [isLoggedIn]);
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -906,33 +867,20 @@ export default function ListeFavorisPage() {
     }
   }, [fetchAllFavoris, isLoggedIn]);
 
-  // ✅ Fonction pour supprimer un favori
+  // ✅ Fonction pour supprimer un favori - CORRIGÉE
   const handleRemoveFavori = async (
-    uuid: string,
+    favoriteId: string,
     type: "produit" | "echange" | "don",
   ) => {
     try {
-      console.log(`🗑️ Suppression du favori ${type}: ${uuid}`);
+      console.log(`🗑️ Suppression du favori: ${favoriteId}`);
 
-      let endpoint = "";
+      // Endpoint de suppression selon vos appels API
+      await api.delete(`/favoris/${favoriteId}`);
 
-      switch (type) {
-        case "produit":
-          endpoint = `/favoris/produit/${uuid}`;
-          break;
-        case "don":
-          endpoint = `/favoris/don/${uuid}`;
-          break;
-        case "echange":
-          endpoint = `/favoris/echange/${uuid}`;
-          break;
-        default:
-          endpoint = `/favoris/${uuid}`;
-      }
-
-      await api.delete(endpoint);
-
-      setFavoris((prev) => prev.filter((item) => item.uuid !== uuid));
+      setFavoris((prev) =>
+        prev.filter((item) => item.favoriteId !== favoriteId),
+      );
       setStats((prev) => ({
         ...prev,
         totalFavoris: prev.totalFavoris - 1,
@@ -1024,20 +972,6 @@ export default function ListeFavorisPage() {
           </div>
         </div>
       </section>
-
-      {/* Debug info - À retirer en production */}
-      {process.env.NODE_ENV === "development" && debugInfo && (
-        <div className="container mt-3">
-          <div className="alert alert-info small p-2">
-            <details>
-              <summary>🔍 Debug Info</summary>
-              <pre className="mt-2 mb-0 small">
-                {JSON.stringify(debugInfo, null, 2)}
-              </pre>
-            </details>
-          </div>
-        </div>
-      )}
 
       {/* Statistiques */}
       <section className="py-3 border-bottom">
@@ -1490,7 +1424,7 @@ export default function ListeFavorisPage() {
                     <div className="row g-4">
                       {filteredFavoris.map((item) => (
                         <div
-                          key={`${item.type}-${item.uuid}`}
+                          key={item.favoriteId}
                           className="col-lg-4 col-md-6"
                         >
                           <FavoriCard

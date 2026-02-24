@@ -1,4 +1,5 @@
 // app/(front-office)/echanges/[uuid]/page.tsx
+
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -630,7 +631,7 @@ export default function EchangeDetailPage() {
   const [loadingRecents, setLoadingRecents] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [quantite, setQuantite] = useState(1);
-  const [favori, setFavori] = useState(false);
+  const [favori, setFavori] = useState(false); // État basé sur la réponse API
   const [showMoreComments, setShowMoreComments] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
   const [commentairesFetched, setCommentairesFetched] = useState(false);
@@ -651,8 +652,7 @@ export default function EchangeDetailPage() {
   const [contactVisible, setContactVisible] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
 
-  // Stockage local des favoris
-  const [favorisLocaux, setFavorisLocaux] = useState<Set<string>>(new Set());
+  // 🔴 SUPPRIMER LE STOCKAGE LOCAL DES FAVORIS - On utilise uniquement l'API
 
   // Timer pour le toast
   useEffect(() => {
@@ -663,30 +663,6 @@ export default function EchangeDetailPage() {
       return () => clearTimeout(timer);
     }
   }, [toast]);
-
-  // Charger les favoris depuis localStorage au démarrage
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const storedFavoris = localStorage.getItem("oskar_favoris");
-      if (storedFavoris) {
-        try {
-          setFavorisLocaux(new Set(JSON.parse(storedFavoris)));
-        } catch (e) {
-          console.error("Erreur lors du chargement des favoris:", e);
-        }
-      }
-    }
-  }, []);
-
-  // Sauvegarder les favoris dans localStorage
-  const sauvegarderFavoris = useCallback((nouveauxFavoris: Set<string>) => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem(
-        "oskar_favoris",
-        JSON.stringify([...nouveauxFavoris]),
-      );
-    }
-  }, []);
 
   // FAQ
   const faqs = [
@@ -1117,9 +1093,8 @@ export default function EchangeDetailPage() {
       setEchange(echangeData);
       setEchangesSimilaires(similairesData);
 
-      // Vérifier si l'échange est dans les favoris locaux
-      const estFavori = favorisLocaux.has(uuid);
-      setFavori(estFavori);
+      // 🔴 Utiliser l'état is_favoris de l'API, pas localStorage
+      setFavori(response.echange.is_favoris || false);
 
       if (response.echange.createur) {
         const createurData = transformCreateurInfo(response.echange.createur);
@@ -1162,7 +1137,7 @@ export default function EchangeDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [uuid, fetchCommentaires, fetchEchangesRecents, favorisLocaux]);
+  }, [uuid, fetchCommentaires, fetchEchangesRecents]);
 
   useEffect(() => {
     if (uuid && loading && !echange) {
@@ -1357,7 +1332,7 @@ export default function EchangeDetailPage() {
     router.push(`${dashboardPath}/messages?${params.toString()}`);
   };
 
-  // ✅ FONCTION POUR LES FAVORIS
+  // ✅ FONCTION POUR LES FAVORIS - CORRIGÉE (SANS LOCALSTORAGE)
   const handleAddToFavorites = async () => {
     if (!echange) return;
 
@@ -1370,25 +1345,27 @@ export default function EchangeDetailPage() {
       console.log(`🔄 ${favori ? "Retrait" : "Ajout"} aux favoris...`);
 
       if (favori) {
-        // Retrait des favoris (uniquement côté frontend)
-        const nouveauxFavoris = new Set(favorisLocaux);
-        nouveauxFavoris.delete(echange.uuid);
-        setFavorisLocaux(nouveauxFavoris);
-        sauvegarderFavoris(nouveauxFavoris);
+        // 🔴 RETRAIT DES FAVORIS - Utiliser REMOVE_ECHANGE
+        const endpoint = API_ENDPOINTS.FAVORIS.REMOVE_ECHANGE(echange.uuid);
+        console.log(`📤 Appel API: DELETE ${endpoint}`);
+
+        await api.delete(endpoint);
+
+        // Mise à jour de l'état local uniquement
         setFavori(false);
         showToast("success", "Échange retiré des favoris");
       } else {
-        // Ajout aux favoris (appel API + frontend)
-        const response = await api.post(
-          API_ENDPOINTS.ECHANGES.AJOUT_ECHANGE_FAVORIS(echange.uuid),
-          {},
-        );
+        // 🔴 AJOUT AUX FAVORIS - Utiliser ADD
+        const payload = {
+          itemUuid: echange.uuid,
+          type: "echange",
+        };
+        console.log(`📤 Appel API: POST ${API_ENDPOINTS.FAVORIS.ADD}`, payload);
+
+        const response = await api.post(API_ENDPOINTS.FAVORIS.ADD, payload);
         console.log("✅ Réponse favoris:", response);
 
-        const nouveauxFavoris = new Set(favorisLocaux);
-        nouveauxFavoris.add(echange.uuid);
-        setFavorisLocaux(nouveauxFavoris);
-        sauvegarderFavoris(nouveauxFavoris);
+        // Mise à jour de l'état local uniquement
         setFavori(true);
         showToast("success", "Échange ajouté aux favoris");
       }

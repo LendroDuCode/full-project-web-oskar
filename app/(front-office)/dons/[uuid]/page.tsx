@@ -1,4 +1,5 @@
 // app/(front-office)/dons/[uuid]/page.tsx
+
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -594,7 +595,7 @@ export default function DonDetailPage() {
   const [loadingRecents, setLoadingRecents] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [quantite, setQuantite] = useState(1);
-  const [favori, setFavori] = useState(false);
+  const [favori, setFavori] = useState(false); // État basé sur la réponse API, pas localStorage
   const [showMoreComments, setShowMoreComments] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
   const [commentairesFetched, setCommentairesFetched] = useState(false);
@@ -615,8 +616,7 @@ export default function DonDetailPage() {
   const [contactVisible, setContactVisible] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
 
-  // Stockage local des favoris
-  const [favorisLocaux, setFavorisLocaux] = useState<Set<string>>(new Set());
+  // 🔴 SUPPRIMER LE STOCKAGE LOCAL DES FAVORIS - On utilise uniquement l'API
 
   // Timer pour le toast
   useEffect(() => {
@@ -627,30 +627,6 @@ export default function DonDetailPage() {
       return () => clearTimeout(timer);
     }
   }, [toast]);
-
-  // Charger les favoris depuis localStorage au démarrage
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const storedFavoris = localStorage.getItem("oskar_favoris");
-      if (storedFavoris) {
-        try {
-          setFavorisLocaux(new Set(JSON.parse(storedFavoris)));
-        } catch (e) {
-          console.error("Erreur lors du chargement des favoris:", e);
-        }
-      }
-    }
-  }, []);
-
-  // Sauvegarder les favoris dans localStorage
-  const sauvegarderFavoris = useCallback((nouveauxFavoris: Set<string>) => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem(
-        "oskar_favoris",
-        JSON.stringify([...nouveauxFavoris]),
-      );
-    }
-  }, []);
 
   // FAQ
   const faqs = [
@@ -1055,9 +1031,8 @@ export default function DonDetailPage() {
       setDon(donData);
       setDonsSimilaires(similairesData);
 
-      // Vérifier si le don est dans les favoris locaux
-      const estFavori = favorisLocaux.has(uuid);
-      setFavori(estFavori);
+      // 🔴 Utiliser l'état is_favoris de l'API, pas localStorage
+      setFavori(response.don.is_favoris || false);
 
       if (response.don.createur) {
         const createurData = transformCreateurInfo(response.don.createur);
@@ -1100,7 +1075,7 @@ export default function DonDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [uuid, fetchCommentaires, fetchDonsRecents, favorisLocaux]);
+  }, [uuid, fetchCommentaires, fetchDonsRecents]);
 
   useEffect(() => {
     if (uuid && loading && !don) {
@@ -1305,7 +1280,7 @@ export default function DonDetailPage() {
     router.push(`${dashboardPath}/messages?${params.toString()}`);
   };
 
-  // ✅ FONCTION POUR LES FAVORIS
+  // ✅ FONCTION POUR LES FAVORIS - CORRIGÉE (SANS LOCALSTORAGE)
   const handleAddToFavorites = async () => {
     if (!don) return;
 
@@ -1318,26 +1293,30 @@ export default function DonDetailPage() {
       console.log(`🔄 ${favori ? "Retrait" : "Ajout"} aux favoris...`);
 
       if (favori) {
-        // Retrait des favoris (uniquement côté frontend)
-        const nouveauxFavoris = new Set(favorisLocaux);
-        nouveauxFavoris.delete(don.uuid);
-        setFavorisLocaux(nouveauxFavoris);
-        sauvegarderFavoris(nouveauxFavoris);
+        // 🔴 RETRAIT DES FAVORIS - Utiliser REMOVE_DON
+        const endpoint = API_ENDPOINTS.FAVORIS.REMOVE_DON(don.uuid);
+        console.log(`📤 Appel API: DELETE ${endpoint}`);
+
+        await api.delete(endpoint);
+
+        // Mise à jour de l'état local uniquement
         setFavori(false);
+
         showToast("success", "Don retiré des favoris");
       } else {
-        // Ajout aux favoris (appel API + frontend)
-        const response = await api.post(
-          API_ENDPOINTS.DONS.AJOUT_DON_FAVORIS(don.uuid),
-          {},
-        );
+        // 🔴 AJOUT AUX FAVORIS - Utiliser ADD
+        const payload = {
+          itemUuid: don.uuid,
+          type: "don",
+        };
+        console.log(`📤 Appel API: POST ${API_ENDPOINTS.FAVORIS.ADD}`, payload);
+
+        const response = await api.post(API_ENDPOINTS.FAVORIS.ADD, payload);
         console.log("✅ Réponse favoris:", response);
 
-        const nouveauxFavoris = new Set(favorisLocaux);
-        nouveauxFavoris.add(don.uuid);
-        setFavorisLocaux(nouveauxFavoris);
-        sauvegarderFavoris(nouveauxFavoris);
+        // Mise à jour de l'état local uniquement
         setFavori(true);
+
         showToast("success", "Don ajouté aux favoris");
       }
     } catch (err: any) {

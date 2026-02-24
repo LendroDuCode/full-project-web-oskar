@@ -21,6 +21,8 @@ import {
   faCheckCircle,
   faArrowRight,
   faPlus,
+  faInfoCircle,
+  faBuilding,
 } from "@fortawesome/free-solid-svg-icons";
 import { faGoogle, faFacebook } from "@fortawesome/free-brands-svg-icons";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
@@ -38,7 +40,7 @@ interface RegisterModalProps {
     token?: string;
     userData?: any;
   }) => void;
-  // AJOUT: Props pour la création de boutique
+  // Props pour la création de boutique
   onCreateBoutique?: (vendeurData: any) => void;
 }
 
@@ -91,10 +93,11 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
   >(null);
   const [passwordStrength, setPasswordStrength] = useState(0);
 
-  // AJOUT: État pour le modal de création de boutique
+  // État pour le modal de création de boutique
   const [showBoutiqueModal, setShowBoutiqueModal] = useState(false);
   const [newVendeurData, setNewVendeurData] = useState<any>(null);
 
+  // ✅ Nettoyage des previews
   useEffect(() => {
     return () => {
       if (registreCommercePreview) {
@@ -103,6 +106,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
     };
   }, [registreCommercePreview]);
 
+  // ✅ Gestion du scroll et fermeture avec Echap
   useEffect(() => {
     if (visible) {
       document.body.style.overflow = "hidden";
@@ -116,14 +120,15 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && visible && !loading) {
+      if (e.key === "Escape" && visible && !loading && !showBoutiqueModal) {
         onHide();
       }
     };
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
-  }, [visible, loading, onHide]);
+  }, [visible, loading, showBoutiqueModal, onHide]);
 
+  // ✅ Calcul de la force du mot de passe
   useEffect(() => {
     const calculatePasswordStrength = (password: string) => {
       let strength = 0;
@@ -229,12 +234,13 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
       return false;
     }
 
-    if (accountType === "vendeur") {
-      if (!registreCommerceFile) {
-        setError("Le registre de commerce est obligatoire pour les vendeurs");
-        return false;
-      }
-    }
+    // ✅ Le registre de commerce n'est plus obligatoire
+    // if (accountType === "vendeur") {
+    //   if (!registreCommerceFile) {
+    //     setError("Le registre de commerce est obligatoire pour les vendeurs");
+    //     return false;
+    //   }
+    // }
 
     return true;
   };
@@ -341,27 +347,36 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
       URL.revokeObjectURL(registreCommercePreview);
     }
 
-    // SI C'EST UN VENDEUR, ON PROPOSE LA CRÉATION DE BOUTIQUE
+    // ✅ SI C'EST UN VENDEUR, ON PROPOSE LA CRÉATION DE BOUTIQUE
     if (type === "vendeur") {
       setNewVendeurData(successData);
-      setShowBoutiqueModal(true);
+      // ✅ FERMER LE MODAL D'INSCRIPTION D'ABORD
+      onHide();
+      // ✅ OUVRIR LE MODAL DE BOUTIQUE APRÈS UN COURT DÉLAI
+      setTimeout(() => {
+        setShowBoutiqueModal(true);
+      }, 300);
     } else {
       // POUR LES UTILISATEURS NORMALS, APPELER LE CALLBACK STANDARD
       resetForm();
-      onRegisterSuccess(successData);
+      onHide();
+      setTimeout(() => {
+        onRegisterSuccess(successData);
+      }, 100);
     }
   };
 
-  // AJOUT: Fonction pour démarrer la création de boutique
+  // ✅ Fonction pour démarrer la création de boutique
   const handleStartBoutiqueCreation = () => {
     setShowBoutiqueModal(false);
     if (onCreateBoutique && newVendeurData) {
+      // ✅ S'ASSURER QUE LE MODAL D'INSCRIPTION EST FERMÉ
       onCreateBoutique(newVendeurData);
     }
     resetForm();
   };
 
-  // AJOUT: Fonction pour ignorer la création de boutique
+  // ✅ Fonction pour ignorer la création de boutique
   const handleSkipBoutiqueCreation = () => {
     setShowBoutiqueModal(false);
     if (newVendeurData) {
@@ -451,7 +466,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
     return "Excellent";
   };
 
-  // AJOUT: Composant modal pour la proposition de création de boutique
+  // ✅ Composant modal pour la proposition de création de boutique
   const BoutiqueCreationPromptModal = () => {
     if (!showBoutiqueModal) return null;
 
@@ -464,12 +479,13 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
           right: 0,
           bottom: 0,
           backgroundColor: "rgba(0, 0, 0, 0.7)",
-          zIndex: 20000,
+          zIndex: 20000, // ✅ Z-index très élevé pour être au-dessus de tout
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           padding: "1rem",
         }}
+        onClick={(e) => e.stopPropagation()}
       >
         <div
           style={{
@@ -685,7 +701,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
                   "Commencez à vendre immédiatement",
                   "Accédez aux outils professionnels",
                   "Atteignez des milliers de clients",
-                  "Génez vos premiers revenus",
+                  "Gérez vos premiers revenus",
                 ].map((benefit, index) => (
                   <div
                     key={index}
@@ -839,957 +855,705 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
     );
   };
 
-  if (!visible) return null;
+  if (!visible && !showBoutiqueModal) return null;
 
   return (
     <>
-      {/* Modal de proposition de création de boutique */}
+      {/* ✅ Modal de proposition de création de boutique (toujours en premier) */}
       <BoutiqueCreationPromptModal />
 
-      {/* Modal d'inscription original */}
-      <div
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: "rgba(0, 0, 0, 0.5)",
-          zIndex: 9999,
-        }}
-        onClick={handleClose}
-      />
-
-      <div
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 10000,
-          overflowY: "auto",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "1rem",
-        }}
-      >
-        <div
-          style={{
-            backgroundColor: "white",
-            borderRadius: "1rem",
-            boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.2)",
-            width: "100%",
-            maxWidth: "1000px",
-            overflow: "hidden",
-            position: "relative",
-            display: "flex",
-            flexDirection: "row",
-            minHeight: "500px",
-            maxHeight: "90vh",
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            onClick={handleClose}
-            disabled={loading}
+      {/* ✅ Modal d'inscription original (masqué quand le modal boutique est ouvert) */}
+      {visible && !showBoutiqueModal && (
+        <>
+          <div
             style={{
-              position: "absolute",
-              top: "1rem",
-              right: "1rem",
-              zIndex: 10,
-              width: "2rem",
-              height: "2rem",
-              backgroundColor: "#f3f4f6",
-              borderRadius: "50%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              border: "none",
-              cursor: loading ? "not-allowed" : "pointer",
-              transition: "background-color 0.2s",
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(0, 0, 0, 0.5)",
+              zIndex: 9999,
             }}
-            onMouseOver={(e) => {
-              if (!loading) e.currentTarget.style.backgroundColor = "#e5e7eb";
-            }}
-            onMouseOut={(e) => {
-              if (!loading) e.currentTarget.style.backgroundColor = "#f3f4f6";
-            }}
-            aria-label="Fermer"
-          >
-            <FontAwesomeIcon
-              icon={faXmark}
-              style={{ color: "#4b5563", fontSize: "1rem" }}
-            />
-          </button>
+            onClick={handleClose}
+          />
 
           <div
             style={{
-              flex: "0 0 40%",
-              backgroundColor:
-                accountType === "vendeur" ? "#0ea5e9" : "#16a34a",
-              color: "white",
-              padding: "2rem",
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 10000,
+              overflowY: "auto",
               display: "flex",
-              flexDirection: "column",
+              alignItems: "center",
               justifyContent: "center",
-              position: "relative",
-              overflow: "hidden",
+              padding: "1rem",
             }}
           >
             <div
               style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundImage: `radial-gradient(circle at 20% 80%, rgba(255,255,255,0.1) 0%, transparent 50%)`,
-                zIndex: 0,
+                backgroundColor: "white",
+                borderRadius: "1rem",
+                boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.2)",
+                width: "100%",
+                maxWidth: "1000px",
+                overflow: "hidden",
+                position: "relative",
+                display: "flex",
+                flexDirection: "row",
+                minHeight: "500px",
+                maxHeight: "90vh",
               }}
-            />
-
-            <div style={{ position: "relative", zIndex: 1 }}>
-              <div
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={handleClose}
+                disabled={loading}
                 style={{
-                  marginBottom: "2rem",
+                  position: "absolute",
+                  top: "1rem",
+                  right: "1rem",
+                  zIndex: 10,
+                  width: "2rem",
+                  height: "2rem",
+                  backgroundColor: "#f3f4f6",
+                  borderRadius: "50%",
                   display: "flex",
                   alignItems: "center",
-                  gap: "1rem",
+                  justifyContent: "center",
+                  border: "none",
+                  cursor: loading ? "not-allowed" : "pointer",
+                  transition: "background-color 0.2s",
                 }}
+                onMouseOver={(e) => {
+                  if (!loading)
+                    e.currentTarget.style.backgroundColor = "#e5e7eb";
+                }}
+                onMouseOut={(e) => {
+                  if (!loading)
+                    e.currentTarget.style.backgroundColor = "#f3f4f6";
+                }}
+                aria-label="Fermer"
               >
-                <div
-                  style={{
-                    width: "4rem",
-                    height: "4rem",
-                    backgroundColor: "white",
-                    borderRadius: "1rem",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.2)",
-                  }}
-                >
-                  <span
-                    style={{
-                      color: accountType === "vendeur" ? "#0ea5e9" : "#16a34a",
-                      fontWeight: "bold",
-                      fontSize: "1.5rem",
-                    }}
-                  >
-                    OS
-                  </span>
-                </div>
-                <div>
-                  <h2
-                    style={{
-                      fontSize: "1.5rem",
-                      fontWeight: "bold",
-                      margin: 0,
-                    }}
-                  >
-                    OskarStore
-                  </h2>
-                  <p style={{ opacity: 0.9, fontSize: "0.875rem", margin: 0 }}>
-                    {accountType === "vendeur"
-                      ? "Plateforme de vente"
-                      : "Marketplace"}
-                  </p>
-                </div>
-              </div>
+                <FontAwesomeIcon
+                  icon={faXmark}
+                  style={{ color: "#4b5563", fontSize: "1rem" }}
+                />
+              </button>
 
               <div
                 style={{
-                  marginBottom: "2rem",
-                  backgroundColor: "rgba(255, 255, 255, 0.1)",
-                  borderRadius: "0.75rem",
-                  padding: "0.5rem",
-                  display: "flex",
-                  backdropFilter: "blur(10px)",
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => handleAccountTypeChange("utilisateur")}
-                  style={{
-                    flex: 1,
-                    padding: "0.75rem",
-                    backgroundColor:
-                      accountType === "utilisateur" ? "white" : "transparent",
-                    color: accountType === "utilisateur" ? "#16a34a" : "white",
-                    border: "none",
-                    borderRadius: "0.5rem",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    transition: "all 0.2s",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "0.5rem",
-                    fontSize: "0.875rem",
-                  }}
-                >
-                  <FontAwesomeIcon icon={faUser} />
-                  <span>Utilisateur</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAccountTypeChange("vendeur")}
-                  style={{
-                    flex: 1,
-                    padding: "0.75rem",
-                    backgroundColor:
-                      accountType === "vendeur" ? "white" : "transparent",
-                    color: accountType === "vendeur" ? "#0ea5e9" : "white",
-                    border: "none",
-                    borderRadius: "0.5rem",
-                    fontWeight: 600,
-                    cursor: "pointer",
-                    transition: "all 0.2s",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "0.5rem",
-                    fontSize: "0.875rem",
-                  }}
-                >
-                  <FontAwesomeIcon icon={faStore} />
-                  <span>Vendeur</span>
-                </button>
-              </div>
-
-              <h1
-                style={{
-                  fontSize: "1.75rem",
-                  fontWeight: "bold",
-                  marginBottom: "1rem",
-                }}
-              >
-                {accountType === "vendeur"
-                  ? "Devenez vendeur sur OskarStore"
-                  : "Rejoignez notre communauté"}
-              </h1>
-              <p
-                style={{
-                  fontSize: "0.875rem",
-                  color: accountType === "vendeur" ? "#bae6fd" : "#bbf7d0",
-                  marginBottom: "2rem",
-                  lineHeight: "1.6",
-                }}
-              >
-                {accountType === "vendeur"
-                  ? "Créez votre boutique en ligne, atteignez des milliers de clients et gérez vos ventes simplement."
-                  : "Découvrez des produits uniques, échangez avec la communauté et profitez d'une expérience shopping exceptionnelle."}
-              </p>
-
-              <div
-                style={{
+                  flex: "0 0 40%",
+                  backgroundColor:
+                    accountType === "vendeur" ? "#0ea5e9" : "#16a34a",
+                  color: "white",
+                  padding: "2rem",
                   display: "flex",
                   flexDirection: "column",
-                  gap: "1.25rem",
+                  justifyContent: "center",
+                  position: "relative",
+                  overflow: "hidden",
                 }}
               >
-                {accountType === "vendeur" ? (
-                  <>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: "0.75rem",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: "2.5rem",
-                          height: "2.5rem",
-                          backgroundColor: "rgba(255, 255, 255, 0.2)",
-                          borderRadius: "0.5rem",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <FontAwesomeIcon
-                          icon={faStore}
-                          style={{ fontSize: "1.125rem" }}
-                        />
-                      </div>
-                      <div>
-                        <h3
-                          style={{
-                            fontSize: "0.875rem",
-                            fontWeight: 600,
-                            marginBottom: "0.25rem",
-                          }}
-                        >
-                          Boutique personnalisée
-                        </h3>
-                        <p style={{ color: "#bae6fd", fontSize: "0.75rem" }}>
-                          Design et configuration selon vos besoins
-                        </p>
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: "0.75rem",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: "2.5rem",
-                          height: "2.5rem",
-                          backgroundColor: "rgba(255, 255, 255, 0.2)",
-                          borderRadius: "0.5rem",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <FontAwesomeIcon
-                          icon={faUsers}
-                          style={{ fontSize: "1.125rem" }}
-                        />
-                      </div>
-                      <div>
-                        <h3
-                          style={{
-                            fontSize: "0.875rem",
-                            fontWeight: 600,
-                            marginBottom: "0.25rem",
-                          }}
-                        >
-                          Clients qualifiés
-                        </h3>
-                        <p style={{ color: "#bae6fd", fontSize: "0.75rem" }}>
-                          Accédez à une audience engagée
-                        </p>
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: "0.75rem",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: "2.5rem",
-                          height: "2.5rem",
-                          backgroundColor: "rgba(255, 255, 255, 0.2)",
-                          borderRadius: "0.5rem",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <FontAwesomeIcon
-                          icon={faShieldHalved}
-                          style={{ fontSize: "1.125rem" }}
-                        />
-                      </div>
-                      <div>
-                        <h3
-                          style={{
-                            fontSize: "0.875rem",
-                            fontWeight: 600,
-                            marginBottom: "0.25rem",
-                          }}
-                        >
-                          Paiements sécurisés
-                        </h3>
-                        <p style={{ color: "#bae6fd", fontSize: "0.75rem" }}>
-                          Transactions protégées et garanties
-                        </p>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: "0.75rem",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: "2.5rem",
-                          height: "2.5rem",
-                          backgroundColor: "rgba(255, 255, 255, 0.2)",
-                          borderRadius: "0.5rem",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <FontAwesomeIcon
-                          icon={faShieldHalved}
-                          style={{ fontSize: "1.125rem" }}
-                        />
-                      </div>
-                      <div>
-                        <h3
-                          style={{
-                            fontSize: "0.875rem",
-                            fontWeight: 600,
-                            marginBottom: "0.25rem",
-                          }}
-                        >
-                          Compte sécurisé
-                        </h3>
-                        <p style={{ color: "#bbf7d0", fontSize: "0.75rem" }}>
-                          Vos données personnelles sont protégées
-                        </p>
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: "0.75rem",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: "2.5rem",
-                          height: "2.5rem",
-                          backgroundColor: "rgba(255, 255, 255, 0.2)",
-                          borderRadius: "0.5rem",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <FontAwesomeIcon
-                          icon={faBolt}
-                          style={{ fontSize: "1.125rem" }}
-                        />
-                      </div>
-                      <div>
-                        <h3
-                          style={{
-                            fontSize: "0.875rem",
-                            fontWeight: 600,
-                            marginBottom: "0.25rem",
-                          }}
-                        >
-                          Achats rapides
-                        </h3>
-                        <p style={{ color: "#bbf7d0", fontSize: "0.75rem" }}>
-                          Processus d'achat simplifié et efficace
-                        </p>
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: "0.75rem",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: "2.5rem",
-                          height: "2.5rem",
-                          backgroundColor: "rgba(255, 255, 255, 0.2)",
-                          borderRadius: "0.5rem",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <FontAwesomeIcon
-                          icon={faUsers}
-                          style={{ fontSize: "1.125rem" }}
-                        />
-                      </div>
-                      <div>
-                        <h3
-                          style={{
-                            fontSize: "0.875rem",
-                            fontWeight: 600,
-                            marginBottom: "0.25rem",
-                          }}
-                        >
-                          Communauté active
-                        </h3>
-                        <p style={{ color: "#bbf7d0", fontSize: "0.75rem" }}>
-                          Échangez avec d'autres passionnés
-                        </p>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div
-            style={{
-              flex: "0 0 60%",
-              padding: "2rem",
-              overflowY: "auto",
-              maxHeight: "90vh",
-            }}
-          >
-            <form
-              onSubmit={handleSubmit}
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "1rem",
-              }}
-            >
-              <div style={{ marginBottom: "1.5rem" }}>
-                <h2
-                  style={{
-                    fontSize: "1.5rem",
-                    fontWeight: "bold",
-                    color: "#1f2937",
-                    marginBottom: "0.5rem",
-                  }}
-                >
-                  Créer un compte{" "}
-                  {accountType === "vendeur" ? "vendeur" : "utilisateur"}
-                </h2>
-                <p style={{ color: "#6b7280", fontSize: "0.875rem" }}>
-                  Remplissez les informations requises pour créer votre compte
-                </p>
-              </div>
-
-              {error && (
                 <div
                   style={{
-                    padding: "0.75rem",
-                    borderRadius: "0.5rem",
-                    backgroundColor: "#fef2f2",
-                    border: "1px solid #fecaca",
-                    fontSize: "0.875rem",
-                    color: "#dc2626",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                  }}
-                >
-                  <FontAwesomeIcon icon={faXmark} />
-                  <span>{error}</span>
-                </div>
-              )}
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "1rem",
-                }}
-              >
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "0.875rem",
-                      fontWeight: 600,
-                      color: "#374151",
-                      marginBottom: "0.5rem",
-                    }}
-                  >
-                    Prénom *
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Jean"
-                    value={formData.prenoms}
-                    onChange={(e) =>
-                      setFormData({ ...formData, prenoms: e.target.value })
-                    }
-                    disabled={loading}
-                    required
-                    style={{
-                      width: "100%",
-                      padding: "0.75rem",
-                      border: "1px solid #d1d5db",
-                      borderRadius: "0.5rem",
-                      outline: "none",
-                      transition: "all 0.2s",
-                      backgroundColor: loading ? "#f9fafb" : "white",
-                      color: "#1f2937",
-                      fontSize: "0.875rem",
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor =
-                        accountType === "vendeur" ? "#0ea5e9" : "#16a34a";
-                      e.currentTarget.style.boxShadow = `0 0 0 3px ${accountType === "vendeur" ? "rgba(14, 165, 233, 0.1)" : "rgba(22, 163, 74, 0.1)"}`;
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = "#d1d5db";
-                      e.currentTarget.style.boxShadow = "none";
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "0.875rem",
-                      fontWeight: 600,
-                      color: "#374151",
-                      marginBottom: "0.5rem",
-                    }}
-                  >
-                    Nom *
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Kouassi"
-                    value={formData.nom}
-                    onChange={(e) =>
-                      setFormData({ ...formData, nom: e.target.value })
-                    }
-                    disabled={loading}
-                    required
-                    style={{
-                      width: "100%",
-                      padding: "0.75rem",
-                      border: "1px solid #d1d5db",
-                      borderRadius: "0.5rem",
-                      outline: "none",
-                      transition: "all 0.2s",
-                      backgroundColor: loading ? "#f9fafb" : "white",
-                      color: "#1f2937",
-                      fontSize: "0.875rem",
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor =
-                        accountType === "vendeur" ? "#0ea5e9" : "#16a34a";
-                      e.currentTarget.style.boxShadow = `0 0 0 3px ${accountType === "vendeur" ? "rgba(14, 165, 233, 0.1)" : "rgba(22, 163, 74, 0.1)"}`;
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = "#d1d5db";
-                      e.currentTarget.style.boxShadow = "none";
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "0.875rem",
-                    fontWeight: 600,
-                    color: "#374151",
-                    marginBottom: "0.5rem",
-                  }}
-                >
-                  Email *
-                </label>
-                <input
-                  type="email"
-                  placeholder="exemple@email.com"
-                  value={formData.email}
-                  onChange={(e) =>
-                    setFormData({ ...formData, email: e.target.value })
-                  }
-                  disabled={loading}
-                  required
-                  style={{
-                    width: "100%",
-                    padding: "0.75rem",
-                    border: "1px solid #d1d5db",
-                    borderRadius: "0.5rem",
-                    outline: "none",
-                    transition: "all 0.2s",
-                    backgroundColor: loading ? "#f9fafb" : "white",
-                    color: "#1f2937",
-                    fontSize: "0.875rem",
-                  }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor =
-                      accountType === "vendeur" ? "#0ea5e9" : "#16a34a";
-                    e.currentTarget.style.boxShadow = `0 0 0 3px ${accountType === "vendeur" ? "rgba(14, 165, 233, 0.1)" : "rgba(22, 163, 74, 0.1)"}`;
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = "#d1d5db";
-                    e.currentTarget.style.boxShadow = "none";
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundImage: `radial-gradient(circle at 20% 80%, rgba(255,255,255,0.1) 0%, transparent 50%)`,
+                    zIndex: 0,
                   }}
                 />
-              </div>
 
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "1rem",
-                }}
-              >
-                <div>
-                  <label
+                <div style={{ position: "relative", zIndex: 1 }}>
+                  <div
                     style={{
-                      display: "block",
-                      fontSize: "0.875rem",
-                      fontWeight: 600,
-                      color: "#374151",
-                      marginBottom: "0.5rem",
+                      marginBottom: "2rem",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "1rem",
                     }}
                   >
-                    Téléphone *
-                  </label>
-                  <input
-                    type="tel"
-                    placeholder="+225 07 00 00 00 00"
-                    value={formData.telephone}
-                    onChange={(e) => handlePhoneChange(e.target.value)}
-                    disabled={loading}
-                    required
-                    style={{
-                      width: "100%",
-                      padding: "0.75rem",
-                      border: "1px solid #d1d5db",
-                      borderRadius: "0.5rem",
-                      outline: "none",
-                      transition: "all 0.2s",
-                      backgroundColor: loading ? "#f9fafb" : "white",
-                      color: "#1f2937",
-                      fontSize: "0.875rem",
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor =
-                        accountType === "vendeur" ? "#0ea5e9" : "#16a34a";
-                      e.currentTarget.style.boxShadow = `0 0 0 3px ${accountType === "vendeur" ? "rgba(14, 165, 233, 0.1)" : "rgba(22, 163, 74, 0.1)"}`;
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = "#d1d5db";
-                      e.currentTarget.style.boxShadow = "none";
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "0.875rem",
-                      fontWeight: 600,
-                      color: "#374151",
-                      marginBottom: "0.5rem",
-                    }}
-                  >
-                    Ville *
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Abidjan"
-                    value={formData.ville}
-                    onChange={(e) =>
-                      setFormData({ ...formData, ville: e.target.value })
-                    }
-                    disabled={loading}
-                    required
-                    style={{
-                      width: "100%",
-                      padding: "0.75rem",
-                      border: "1px solid #d1d5db",
-                      borderRadius: "0.5rem",
-                      outline: "none",
-                      transition: "all 0.2s",
-                      backgroundColor: loading ? "#f9fafb" : "white",
-                      color: "#1f2937",
-                      fontSize: "0.875rem",
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor =
-                        accountType === "vendeur" ? "#0ea5e9" : "#16a34a";
-                      e.currentTarget.style.boxShadow = `0 0 0 3px ${accountType === "vendeur" ? "rgba(14, 165, 233, 0.1)" : "rgba(22, 163, 74, 0.1)"}`;
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = "#d1d5db";
-                      e.currentTarget.style.boxShadow = "none";
-                    }}
-                  />
-                </div>
-              </div>
-
-              {accountType === "vendeur" && (
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "0.875rem",
-                      fontWeight: 600,
-                      color: "#374151",
-                      marginBottom: "0.5rem",
-                    }}
-                  >
-                    Registre de commerce *
-                    <span
-                      style={{
-                        color: "#6b7280",
-                        fontWeight: "normal",
-                        fontSize: "0.75rem",
-                        marginLeft: "0.5rem",
-                      }}
-                    >
-                      (PDF, JPG, PNG - max 10MB)
-                    </span>
-                  </label>
-
-                  {registreCommerceFile ? (
                     <div
                       style={{
-                        border: "2px solid #0ea5e9",
-                        borderRadius: "0.5rem",
-                        padding: "1rem",
-                        backgroundColor: "#f0f9ff",
+                        width: "4rem",
+                        height: "4rem",
+                        backgroundColor: "white",
+                        borderRadius: "1rem",
                         display: "flex",
                         alignItems: "center",
-                        justifyContent: "space-between",
+                        justifyContent: "center",
+                        boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.2)",
                       }}
                     >
-                      <div
+                      <span
                         style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "0.75rem",
+                          color:
+                            accountType === "vendeur" ? "#0ea5e9" : "#16a34a",
+                          fontWeight: "bold",
+                          fontSize: "1.5rem",
                         }}
                       >
-                        <FontAwesomeIcon
-                          icon={faFileAlt}
-                          style={{ fontSize: "1.5rem", color: "#0ea5e9" }}
-                        />
-                        <div>
-                          <p
-                            style={{
-                              fontWeight: 600,
-                              color: "#1e40af",
-                              margin: 0,
-                            }}
-                          >
-                            {registreCommerceFile.name}
-                          </p>
-                          <p
-                            style={{
-                              fontSize: "0.75rem",
-                              color: "#6b7280",
-                              margin: 0,
-                            }}
-                          >
-                            {(registreCommerceFile.size / 1024).toFixed(2)} KB
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={removeRegistreCommerceFile}
-                        disabled={loading}
-                        style={{
-                          padding: "0.375rem 0.75rem",
-                          backgroundColor: "#ef4444",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "0.375rem",
-                          fontWeight: 600,
-                          cursor: loading ? "not-allowed" : "pointer",
-                          transition: "background-color 0.2s",
-                          fontSize: "0.75rem",
-                          opacity: loading ? 0.5 : 1,
-                        }}
-                      >
-                        Supprimer
-                      </button>
+                        OS
+                      </span>
                     </div>
-                  ) : (
-                    <div
-                      style={{
-                        border: "2px dashed #d1d5db",
-                        borderRadius: "0.5rem",
-                        padding: "2rem",
-                        backgroundColor: "#f9fafb",
-                        textAlign: "center",
-                        transition: "all 0.2s",
-                        cursor: loading ? "not-allowed" : "pointer",
-                      }}
-                      onClick={() => {
-                        if (!loading) {
-                          const input = document.createElement("input");
-                          input.type = "file";
-                          input.accept = ".jpg,.jpeg,.png,.pdf";
-                          input.onchange = (e) => {
-                            const file = (e.target as HTMLInputElement)
-                              .files?.[0];
-                            if (file) handleImageChange(e as any);
-                          };
-                          input.click();
-                        }
-                      }}
-                    >
-                      <FontAwesomeIcon
-                        icon={faUpload}
+                    <div>
+                      <h2
                         style={{
-                          fontSize: "2rem",
-                          color: "#9ca3af",
-                          marginBottom: "0.75rem",
+                          fontSize: "1.5rem",
+                          fontWeight: "bold",
+                          margin: 0,
                         }}
-                      />
-                      <p style={{ color: "#6b7280", margin: 0 }}>
-                        Cliquez pour télécharger votre registre de commerce
+                      >
+                        OskarStore
+                      </h2>
+                      <p
+                        style={{
+                          opacity: 0.9,
+                          fontSize: "0.875rem",
+                          margin: 0,
+                        }}
+                      >
+                        {accountType === "vendeur"
+                          ? "Plateforme de vente"
+                          : "Marketplace"}
                       </p>
                     </div>
-                  )}
+                  </div>
+
+                  <div
+                    style={{
+                      marginBottom: "2rem",
+                      backgroundColor: "rgba(255, 255, 255, 0.1)",
+                      borderRadius: "0.75rem",
+                      padding: "0.5rem",
+                      display: "flex",
+                      backdropFilter: "blur(10px)",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleAccountTypeChange("utilisateur")}
+                      style={{
+                        flex: 1,
+                        padding: "0.75rem",
+                        backgroundColor:
+                          accountType === "utilisateur"
+                            ? "white"
+                            : "transparent",
+                        color:
+                          accountType === "utilisateur" ? "#16a34a" : "white",
+                        border: "none",
+                        borderRadius: "0.5rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        transition: "all 0.2s",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "0.5rem",
+                        fontSize: "0.875rem",
+                      }}
+                    >
+                      <FontAwesomeIcon icon={faUser} />
+                      <span>Utilisateur</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAccountTypeChange("vendeur")}
+                      style={{
+                        flex: 1,
+                        padding: "0.75rem",
+                        backgroundColor:
+                          accountType === "vendeur" ? "white" : "transparent",
+                        color: accountType === "vendeur" ? "#0ea5e9" : "white",
+                        border: "none",
+                        borderRadius: "0.5rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        transition: "all 0.2s",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "0.5rem",
+                        fontSize: "0.875rem",
+                      }}
+                    >
+                      <FontAwesomeIcon icon={faStore} />
+                      <span>Vendeur</span>
+                    </button>
+                  </div>
+
+                  <h1
+                    style={{
+                      fontSize: "1.75rem",
+                      fontWeight: "bold",
+                      marginBottom: "1rem",
+                    }}
+                  >
+                    {accountType === "vendeur"
+                      ? "Devenez vendeur sur OskarStore"
+                      : "Rejoignez notre communauté"}
+                  </h1>
+                  <p
+                    style={{
+                      fontSize: "0.875rem",
+                      color: accountType === "vendeur" ? "#bae6fd" : "#bbf7d0",
+                      marginBottom: "2rem",
+                      lineHeight: "1.6",
+                    }}
+                  >
+                    {accountType === "vendeur"
+                      ? "Créez votre boutique en ligne, atteignez des milliers de clients et gérez vos ventes simplement."
+                      : "Découvrez des produits uniques, échangez avec la communauté et profitez d'une expérience shopping exceptionnelle."}
+                  </p>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "1.25rem",
+                    }}
+                  >
+                    {accountType === "vendeur" ? (
+                      <>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "flex-start",
+                            gap: "0.75rem",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: "2.5rem",
+                              height: "2.5rem",
+                              backgroundColor: "rgba(255, 255, 255, 0.2)",
+                              borderRadius: "0.5rem",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              flexShrink: 0,
+                            }}
+                          >
+                            <FontAwesomeIcon
+                              icon={faStore}
+                              style={{ fontSize: "1.125rem" }}
+                            />
+                          </div>
+                          <div>
+                            <h3
+                              style={{
+                                fontSize: "0.875rem",
+                                fontWeight: 600,
+                                marginBottom: "0.25rem",
+                              }}
+                            >
+                              Boutique personnalisée
+                            </h3>
+                            <p
+                              style={{ color: "#bae6fd", fontSize: "0.75rem" }}
+                            >
+                              Design et configuration selon vos besoins
+                            </p>
+                          </div>
+                        </div>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "flex-start",
+                            gap: "0.75rem",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: "2.5rem",
+                              height: "2.5rem",
+                              backgroundColor: "rgba(255, 255, 255, 0.2)",
+                              borderRadius: "0.5rem",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              flexShrink: 0,
+                            }}
+                          >
+                            <FontAwesomeIcon
+                              icon={faUsers}
+                              style={{ fontSize: "1.125rem" }}
+                            />
+                          </div>
+                          <div>
+                            <h3
+                              style={{
+                                fontSize: "0.875rem",
+                                fontWeight: 600,
+                                marginBottom: "0.25rem",
+                              }}
+                            >
+                              Clients qualifiés
+                            </h3>
+                            <p
+                              style={{ color: "#bae6fd", fontSize: "0.75rem" }}
+                            >
+                              Accédez à une audience engagée
+                            </p>
+                          </div>
+                        </div>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "flex-start",
+                            gap: "0.75rem",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: "2.5rem",
+                              height: "2.5rem",
+                              backgroundColor: "rgba(255, 255, 255, 0.2)",
+                              borderRadius: "0.5rem",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              flexShrink: 0,
+                            }}
+                          >
+                            <FontAwesomeIcon
+                              icon={faShieldHalved}
+                              style={{ fontSize: "1.125rem" }}
+                            />
+                          </div>
+                          <div>
+                            <h3
+                              style={{
+                                fontSize: "0.875rem",
+                                fontWeight: 600,
+                                marginBottom: "0.25rem",
+                              }}
+                            >
+                              Paiements sécurisés
+                            </h3>
+                            <p
+                              style={{ color: "#bae6fd", fontSize: "0.75rem" }}
+                            >
+                              Transactions protégées et garanties
+                            </p>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "flex-start",
+                            gap: "0.75rem",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: "2.5rem",
+                              height: "2.5rem",
+                              backgroundColor: "rgba(255, 255, 255, 0.2)",
+                              borderRadius: "0.5rem",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              flexShrink: 0,
+                            }}
+                          >
+                            <FontAwesomeIcon
+                              icon={faShieldHalved}
+                              style={{ fontSize: "1.125rem" }}
+                            />
+                          </div>
+                          <div>
+                            <h3
+                              style={{
+                                fontSize: "0.875rem",
+                                fontWeight: 600,
+                                marginBottom: "0.25rem",
+                              }}
+                            >
+                              Compte sécurisé
+                            </h3>
+                            <p
+                              style={{ color: "#bbf7d0", fontSize: "0.75rem" }}
+                            >
+                              Vos données personnelles sont protégées
+                            </p>
+                          </div>
+                        </div>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "flex-start",
+                            gap: "0.75rem",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: "2.5rem",
+                              height: "2.5rem",
+                              backgroundColor: "rgba(255, 255, 255, 0.2)",
+                              borderRadius: "0.5rem",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              flexShrink: 0,
+                            }}
+                          >
+                            <FontAwesomeIcon
+                              icon={faBolt}
+                              style={{ fontSize: "1.125rem" }}
+                            />
+                          </div>
+                          <div>
+                            <h3
+                              style={{
+                                fontSize: "0.875rem",
+                                fontWeight: 600,
+                                marginBottom: "0.25rem",
+                              }}
+                            >
+                              Achats rapides
+                            </h3>
+                            <p
+                              style={{ color: "#bbf7d0", fontSize: "0.75rem" }}
+                            >
+                              Processus d'achat simplifié et efficace
+                            </p>
+                          </div>
+                        </div>
+
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "flex-start",
+                            gap: "0.75rem",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: "2.5rem",
+                              height: "2.5rem",
+                              backgroundColor: "rgba(255, 255, 255, 0.2)",
+                              borderRadius: "0.5rem",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              flexShrink: 0,
+                            }}
+                          >
+                            <FontAwesomeIcon
+                              icon={faUsers}
+                              style={{ fontSize: "1.125rem" }}
+                            />
+                          </div>
+                          <div>
+                            <h3
+                              style={{
+                                fontSize: "0.875rem",
+                                fontWeight: 600,
+                                marginBottom: "0.25rem",
+                              }}
+                            >
+                              Communauté active
+                            </h3>
+                            <p
+                              style={{ color: "#bbf7d0", fontSize: "0.75rem" }}
+                            >
+                              Échangez avec d'autres passionnés
+                            </p>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
-              )}
+              </div>
 
               <div
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "1rem",
+                  flex: "0 0 60%",
+                  padding: "2rem",
+                  overflowY: "auto",
+                  maxHeight: "90vh",
                 }}
               >
-                <div>
-                  <label
+                <form
+                  onSubmit={handleSubmit}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "1rem",
+                  }}
+                >
+                  <div style={{ marginBottom: "1.5rem" }}>
+                    <h2
+                      style={{
+                        fontSize: "1.5rem",
+                        fontWeight: "bold",
+                        color: "#1f2937",
+                        marginBottom: "0.5rem",
+                      }}
+                    >
+                      Créer un compte{" "}
+                      {accountType === "vendeur" ? "vendeur" : "utilisateur"}
+                    </h2>
+                    <p style={{ color: "#6b7280", fontSize: "0.875rem" }}>
+                      Remplissez les informations requises pour créer votre
+                      compte
+                    </p>
+                  </div>
+
+                  {error && (
+                    <div
+                      style={{
+                        padding: "0.75rem",
+                        borderRadius: "0.5rem",
+                        backgroundColor: "#fef2f2",
+                        border: "1px solid #fecaca",
+                        fontSize: "0.875rem",
+                        color: "#dc2626",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                      }}
+                    >
+                      <FontAwesomeIcon icon={faXmark} />
+                      <span>{error}</span>
+                    </div>
+                  )}
+
+                  <div
                     style={{
-                      display: "block",
-                      fontSize: "0.875rem",
-                      fontWeight: 600,
-                      color: "#374151",
-                      marginBottom: "0.5rem",
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "1rem",
                     }}
                   >
-                    Mot de passe *
-                  </label>
-                  <div style={{ position: "relative" }}>
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "0.875rem",
+                          fontWeight: 600,
+                          color: "#374151",
+                          marginBottom: "0.5rem",
+                        }}
+                      >
+                        Prénom *
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Jean"
+                        value={formData.prenoms}
+                        onChange={(e) =>
+                          setFormData({ ...formData, prenoms: e.target.value })
+                        }
+                        disabled={loading}
+                        required
+                        style={{
+                          width: "100%",
+                          padding: "0.75rem",
+                          border: "1px solid #d1d5db",
+                          borderRadius: "0.5rem",
+                          outline: "none",
+                          transition: "all 0.2s",
+                          backgroundColor: loading ? "#f9fafb" : "white",
+                          color: "#1f2937",
+                          fontSize: "0.875rem",
+                        }}
+                        onFocus={(e) => {
+                          e.currentTarget.style.borderColor =
+                            accountType === "vendeur" ? "#0ea5e9" : "#16a34a";
+                          e.currentTarget.style.boxShadow = `0 0 0 3px ${accountType === "vendeur" ? "rgba(14, 165, 233, 0.1)" : "rgba(22, 163, 74, 0.1)"}`;
+                        }}
+                        onBlur={(e) => {
+                          e.currentTarget.style.borderColor = "#d1d5db";
+                          e.currentTarget.style.boxShadow = "none";
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "0.875rem",
+                          fontWeight: 600,
+                          color: "#374151",
+                          marginBottom: "0.5rem",
+                        }}
+                      >
+                        Nom *
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Kouassi"
+                        value={formData.nom}
+                        onChange={(e) =>
+                          setFormData({ ...formData, nom: e.target.value })
+                        }
+                        disabled={loading}
+                        required
+                        style={{
+                          width: "100%",
+                          padding: "0.75rem",
+                          border: "1px solid #d1d5db",
+                          borderRadius: "0.5rem",
+                          outline: "none",
+                          transition: "all 0.2s",
+                          backgroundColor: loading ? "#f9fafb" : "white",
+                          color: "#1f2937",
+                          fontSize: "0.875rem",
+                        }}
+                        onFocus={(e) => {
+                          e.currentTarget.style.borderColor =
+                            accountType === "vendeur" ? "#0ea5e9" : "#16a34a";
+                          e.currentTarget.style.boxShadow = `0 0 0 3px ${accountType === "vendeur" ? "rgba(14, 165, 233, 0.1)" : "rgba(22, 163, 74, 0.1)"}`;
+                        }}
+                        onBlur={(e) => {
+                          e.currentTarget.style.borderColor = "#d1d5db";
+                          e.currentTarget.style.boxShadow = "none";
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label
+                      style={{
+                        display: "block",
+                        fontSize: "0.875rem",
+                        fontWeight: 600,
+                        color: "#374151",
+                        marginBottom: "0.5rem",
+                      }}
+                    >
+                      Email *
+                    </label>
                     <input
-                      type={showPassword ? "text" : "password"}
-                      placeholder="••••••••"
-                      value={formData.mot_de_passe}
+                      type="email"
+                      placeholder="exemple@email.com"
+                      value={formData.email}
                       onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          mot_de_passe: e.target.value,
-                        })
+                        setFormData({ ...formData, email: e.target.value })
                       }
                       disabled={loading}
                       required
                       style={{
                         width: "100%",
                         padding: "0.75rem",
-                        paddingRight: "2.5rem",
                         border: "1px solid #d1d5db",
                         borderRadius: "0.5rem",
                         outline: "none",
@@ -1808,295 +1572,582 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
                         e.currentTarget.style.boxShadow = "none";
                       }}
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      disabled={loading}
-                      style={{
-                        position: "absolute",
-                        right: "0.75rem",
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        background: "none",
-                        border: "none",
-                        color: "#6b7280",
-                        cursor: loading ? "not-allowed" : "pointer",
-                        padding: "0.25rem",
-                      }}
-                    >
-                      <FontAwesomeIcon
-                        icon={showPassword ? faEyeSlash : faEye}
-                      />
-                    </button>
                   </div>
 
-                  {formData.mot_de_passe && (
-                    <div style={{ marginTop: "0.5rem" }}>
-                      <div
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "1rem",
+                    }}
+                  >
+                    <div>
+                      <label
                         style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          marginBottom: "0.25rem",
+                          display: "block",
+                          fontSize: "0.875rem",
+                          fontWeight: 600,
+                          color: "#374151",
+                          marginBottom: "0.5rem",
                         }}
                       >
-                        <span style={{ fontSize: "0.75rem", color: "#6b7280" }}>
-                          Force du mot de passe:
-                        </span>
+                        Téléphone *
+                      </label>
+                      <input
+                        type="tel"
+                        placeholder="+225 07 00 00 00 00"
+                        value={formData.telephone}
+                        onChange={(e) => handlePhoneChange(e.target.value)}
+                        disabled={loading}
+                        required
+                        style={{
+                          width: "100%",
+                          padding: "0.75rem",
+                          border: "1px solid #d1d5db",
+                          borderRadius: "0.5rem",
+                          outline: "none",
+                          transition: "all 0.2s",
+                          backgroundColor: loading ? "#f9fafb" : "white",
+                          color: "#1f2937",
+                          fontSize: "0.875rem",
+                        }}
+                        onFocus={(e) => {
+                          e.currentTarget.style.borderColor =
+                            accountType === "vendeur" ? "#0ea5e9" : "#16a34a";
+                          e.currentTarget.style.boxShadow = `0 0 0 3px ${accountType === "vendeur" ? "rgba(14, 165, 233, 0.1)" : "rgba(22, 163, 74, 0.1)"}`;
+                        }}
+                        onBlur={(e) => {
+                          e.currentTarget.style.borderColor = "#d1d5db";
+                          e.currentTarget.style.boxShadow = "none";
+                        }}
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "0.875rem",
+                          fontWeight: 600,
+                          color: "#374151",
+                          marginBottom: "0.5rem",
+                        }}
+                      >
+                        Ville *
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Abidjan"
+                        value={formData.ville}
+                        onChange={(e) =>
+                          setFormData({ ...formData, ville: e.target.value })
+                        }
+                        disabled={loading}
+                        required
+                        style={{
+                          width: "100%",
+                          padding: "0.75rem",
+                          border: "1px solid #d1d5db",
+                          borderRadius: "0.5rem",
+                          outline: "none",
+                          transition: "all 0.2s",
+                          backgroundColor: loading ? "#f9fafb" : "white",
+                          color: "#1f2937",
+                          fontSize: "0.875rem",
+                        }}
+                        onFocus={(e) => {
+                          e.currentTarget.style.borderColor =
+                            accountType === "vendeur" ? "#0ea5e9" : "#16a34a";
+                          e.currentTarget.style.boxShadow = `0 0 0 3px ${accountType === "vendeur" ? "rgba(14, 165, 233, 0.1)" : "rgba(22, 163, 74, 0.1)"}`;
+                        }}
+                        onBlur={(e) => {
+                          e.currentTarget.style.borderColor = "#d1d5db";
+                          e.currentTarget.style.boxShadow = "none";
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {accountType === "vendeur" && (
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "0.875rem",
+                          fontWeight: 600,
+                          color: "#374151",
+                          marginBottom: "0.5rem",
+                        }}
+                      >
+                        Registre de commerce (Optionnel)
                         <span
                           style={{
+                            color: "#6b7280",
+                            fontWeight: "normal",
                             fontSize: "0.75rem",
-                            fontWeight: 600,
-                            color: getPasswordStrengthColor(),
+                            marginLeft: "0.5rem",
                           }}
                         >
-                          {getPasswordStrengthText()}
+                          (PDF, JPG, PNG - max 10MB)
                         </span>
-                      </div>
-                      <div style={{ display: "flex", gap: "0.25rem" }}>
-                        {[1, 2, 3, 4, 5].map((index) => (
+                      </label>
+
+                      {registreCommerceFile ? (
+                        <div
+                          style={{
+                            border: "2px solid #0ea5e9",
+                            borderRadius: "0.5rem",
+                            padding: "1rem",
+                            backgroundColor: "#f0f9ff",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                          }}
+                        >
                           <div
-                            key={index}
                             style={{
-                              flex: 1,
-                              height: "4px",
-                              backgroundColor:
-                                index <= passwordStrength
-                                  ? getPasswordStrengthColor()
-                                  : "#e5e7eb",
-                              borderRadius: "2px",
-                              transition: "background-color 0.3s",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.75rem",
+                            }}
+                          >
+                            <FontAwesomeIcon
+                              icon={faFileAlt}
+                              style={{ fontSize: "1.5rem", color: "#0ea5e9" }}
+                            />
+                            <div>
+                              <p
+                                style={{
+                                  fontWeight: 600,
+                                  color: "#1e40af",
+                                  margin: 0,
+                                }}
+                              >
+                                {registreCommerceFile.name}
+                              </p>
+                              <p
+                                style={{
+                                  fontSize: "0.75rem",
+                                  color: "#6b7280",
+                                  margin: 0,
+                                }}
+                              >
+                                {(registreCommerceFile.size / 1024).toFixed(2)}{" "}
+                                KB
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={removeRegistreCommerceFile}
+                            disabled={loading}
+                            style={{
+                              padding: "0.375rem 0.75rem",
+                              backgroundColor: "#ef4444",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "0.375rem",
+                              fontWeight: 600,
+                              cursor: loading ? "not-allowed" : "pointer",
+                              transition: "background-color 0.2s",
+                              fontSize: "0.75rem",
+                              opacity: loading ? 0.5 : 1,
+                            }}
+                          >
+                            Supprimer
+                          </button>
+                        </div>
+                      ) : (
+                        <div
+                          style={{
+                            border: "2px dashed #d1d5db",
+                            borderRadius: "0.5rem",
+                            padding: "2rem",
+                            backgroundColor: "#f9fafb",
+                            textAlign: "center",
+                            transition: "all 0.2s",
+                            cursor: loading ? "not-allowed" : "pointer",
+                          }}
+                          onClick={() => {
+                            if (!loading) {
+                              const input = document.createElement("input");
+                              input.type = "file";
+                              input.accept = ".jpg,.jpeg,.png,.pdf";
+                              input.onchange = (e) => {
+                                const file = (e.target as HTMLInputElement)
+                                  .files?.[0];
+                                if (file) handleImageChange(e as any);
+                              };
+                              input.click();
+                            }
+                          }}
+                        >
+                          <FontAwesomeIcon
+                            icon={faUpload}
+                            style={{
+                              fontSize: "2rem",
+                              color: "#9ca3af",
+                              marginBottom: "0.75rem",
                             }}
                           />
-                        ))}
-                      </div>
+                          <p style={{ color: "#6b7280", margin: 0 }}>
+                            Cliquez pour télécharger votre registre de commerce
+                          </p>
+                          <p
+                            style={{
+                              color: "#94a3b8",
+                              fontSize: "0.75rem",
+                              marginTop: "0.5rem",
+                            }}
+                          >
+                            Optionnel - Vous pourrez l'ajouter plus tard
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
-                </div>
 
-                <div>
-                  <label
+                  <div
                     style={{
-                      display: "block",
-                      fontSize: "0.875rem",
-                      fontWeight: 600,
-                      color: "#374151",
-                      marginBottom: "0.5rem",
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "1rem",
                     }}
                   >
-                    Confirmer le mot de passe *
-                  </label>
-                  <div style={{ position: "relative" }}>
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "0.875rem",
+                          fontWeight: 600,
+                          color: "#374151",
+                          marginBottom: "0.5rem",
+                        }}
+                      >
+                        Mot de passe *
+                      </label>
+                      <div style={{ position: "relative" }}>
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          placeholder="••••••••"
+                          value={formData.mot_de_passe}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              mot_de_passe: e.target.value,
+                            })
+                          }
+                          disabled={loading}
+                          required
+                          style={{
+                            width: "100%",
+                            padding: "0.75rem",
+                            paddingRight: "2.5rem",
+                            border: "1px solid #d1d5db",
+                            borderRadius: "0.5rem",
+                            outline: "none",
+                            transition: "all 0.2s",
+                            backgroundColor: loading ? "#f9fafb" : "white",
+                            color: "#1f2937",
+                            fontSize: "0.875rem",
+                          }}
+                          onFocus={(e) => {
+                            e.currentTarget.style.borderColor =
+                              accountType === "vendeur" ? "#0ea5e9" : "#16a34a";
+                            e.currentTarget.style.boxShadow = `0 0 0 3px ${accountType === "vendeur" ? "rgba(14, 165, 233, 0.1)" : "rgba(22, 163, 74, 0.1)"}`;
+                          }}
+                          onBlur={(e) => {
+                            e.currentTarget.style.borderColor = "#d1d5db";
+                            e.currentTarget.style.boxShadow = "none";
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          disabled={loading}
+                          style={{
+                            position: "absolute",
+                            right: "0.75rem",
+                            top: "50%",
+                            transform: "translateY(-50%)",
+                            background: "none",
+                            border: "none",
+                            color: "#6b7280",
+                            cursor: loading ? "not-allowed" : "pointer",
+                            padding: "0.25rem",
+                          }}
+                        >
+                          <FontAwesomeIcon
+                            icon={showPassword ? faEyeSlash : faEye}
+                          />
+                        </button>
+                      </div>
+
+                      {formData.mot_de_passe && (
+                        <div style={{ marginTop: "0.5rem" }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              marginBottom: "0.25rem",
+                            }}
+                          >
+                            <span
+                              style={{ fontSize: "0.75rem", color: "#6b7280" }}
+                            >
+                              Force du mot de passe:
+                            </span>
+                            <span
+                              style={{
+                                fontSize: "0.75rem",
+                                fontWeight: 600,
+                                color: getPasswordStrengthColor(),
+                              }}
+                            >
+                              {getPasswordStrengthText()}
+                            </span>
+                          </div>
+                          <div style={{ display: "flex", gap: "0.25rem" }}>
+                            {[1, 2, 3, 4, 5].map((index) => (
+                              <div
+                                key={index}
+                                style={{
+                                  flex: 1,
+                                  height: "4px",
+                                  backgroundColor:
+                                    index <= passwordStrength
+                                      ? getPasswordStrengthColor()
+                                      : "#e5e7eb",
+                                  borderRadius: "2px",
+                                  transition: "background-color 0.3s",
+                                }}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          fontSize: "0.875rem",
+                          fontWeight: 600,
+                          color: "#374151",
+                          marginBottom: "0.5rem",
+                        }}
+                      >
+                        Confirmer le mot de passe *
+                      </label>
+                      <div style={{ position: "relative" }}>
+                        <input
+                          type={showConfirmPassword ? "text" : "password"}
+                          placeholder="••••••••"
+                          value={confirmPassword}
+                          onChange={(e) => {
+                            setConfirmPassword(e.target.value);
+                            if (passwordMismatch) setPasswordMismatch(false);
+                          }}
+                          disabled={loading}
+                          required
+                          style={{
+                            width: "100%",
+                            padding: "0.75rem",
+                            paddingRight: "2.5rem",
+                            border: passwordMismatch
+                              ? "1px solid #ef4444"
+                              : "1px solid #d1d5db",
+                            borderRadius: "0.5rem",
+                            outline: "none",
+                            transition: "all 0.2s",
+                            backgroundColor: loading ? "#f9fafb" : "white",
+                            color: "#1f2937",
+                            fontSize: "0.875rem",
+                          }}
+                          onFocus={(e) => {
+                            e.currentTarget.style.borderColor =
+                              accountType === "vendeur" ? "#0ea5e9" : "#16a34a";
+                            e.currentTarget.style.boxShadow = `0 0 0 3px ${accountType === "vendeur" ? "rgba(14, 165, 233, 0.1)" : "rgba(22, 163, 74, 0.1)"}`;
+                          }}
+                          onBlur={(e) => {
+                            e.currentTarget.style.borderColor = passwordMismatch
+                              ? "#ef4444"
+                              : "#d1d5db";
+                            e.currentTarget.style.boxShadow = "none";
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setShowConfirmPassword(!showConfirmPassword)
+                          }
+                          disabled={loading}
+                          style={{
+                            position: "absolute",
+                            right: "0.75rem",
+                            top: "50%",
+                            transform: "translateY(-50%)",
+                            background: "none",
+                            border: "none",
+                            color: "#6b7280",
+                            cursor: loading ? "not-allowed" : "pointer",
+                            padding: "0.25rem",
+                          }}
+                        >
+                          <FontAwesomeIcon
+                            icon={showConfirmPassword ? faEyeSlash : faEye}
+                          />
+                        </button>
+                      </div>
+                      {passwordMismatch && (
+                        <p
+                          style={{
+                            color: "#ef4444",
+                            fontSize: "0.75rem",
+                            marginTop: "0.25rem",
+                          }}
+                        >
+                          Les mots de passe ne correspondent pas
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "0.75rem",
+                      padding: "1rem",
+                      borderRadius: "0.5rem",
+                      backgroundColor: "#f9fafb",
+                      marginTop: "0.5rem",
+                    }}
+                  >
                     <input
-                      type={showConfirmPassword ? "text" : "password"}
-                      placeholder="••••••••"
-                      value={confirmPassword}
-                      onChange={(e) => {
-                        setConfirmPassword(e.target.value);
-                        if (passwordMismatch) setPasswordMismatch(false);
-                      }}
+                      type="checkbox"
+                      id="terms"
+                      checked={acceptTerms}
+                      onChange={(e) => setAcceptTerms(e.target.checked)}
                       disabled={loading}
-                      required
                       style={{
-                        width: "100%",
-                        padding: "0.75rem",
-                        paddingRight: "2.5rem",
-                        border: passwordMismatch
-                          ? "1px solid #ef4444"
-                          : "1px solid #d1d5db",
-                        borderRadius: "0.5rem",
-                        outline: "none",
-                        transition: "all 0.2s",
-                        backgroundColor: loading ? "#f9fafb" : "white",
-                        color: "#1f2937",
-                        fontSize: "0.875rem",
-                      }}
-                      onFocus={(e) => {
-                        e.currentTarget.style.borderColor =
-                          accountType === "vendeur" ? "#0ea5e9" : "#16a34a";
-                        e.currentTarget.style.boxShadow = `0 0 0 3px ${accountType === "vendeur" ? "rgba(14, 165, 233, 0.1)" : "rgba(22, 163, 74, 0.1)"}`;
-                      }}
-                      onBlur={(e) => {
-                        e.currentTarget.style.borderColor = passwordMismatch
-                          ? "#ef4444"
-                          : "#d1d5db";
-                        e.currentTarget.style.boxShadow = "none";
+                        height: "1.25rem",
+                        width: "1.25rem",
+                        borderRadius: "0.25rem",
+                        border: "2px solid #d1d5db",
+                        cursor: loading ? "not-allowed" : "pointer",
+                        accentColor:
+                          accountType === "vendeur" ? "#0ea5e9" : "#16a34a",
                       }}
                     />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setShowConfirmPassword(!showConfirmPassword)
-                      }
-                      disabled={loading}
+                    <label
+                      htmlFor="terms"
                       style={{
-                        position: "absolute",
-                        right: "0.75rem",
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        background: "none",
-                        border: "none",
-                        color: "#6b7280",
-                        cursor: loading ? "not-allowed" : "pointer",
-                        padding: "0.25rem",
+                        fontSize: "0.875rem",
+                        color: "#4b5563",
+                        lineHeight: "1.5",
                       }}
                     >
-                      <FontAwesomeIcon
-                        icon={showConfirmPassword ? faEyeSlash : faEye}
-                      />
-                    </button>
+                      J'accepte les{" "}
+                      <a
+                        href="#"
+                        style={{
+                          color:
+                            accountType === "vendeur" ? "#0ea5e9" : "#16a34a",
+                          fontWeight: 600,
+                        }}
+                      >
+                        conditions d'utilisation
+                      </a>{" "}
+                      et la{" "}
+                      <a
+                        href="#"
+                        style={{
+                          color:
+                            accountType === "vendeur" ? "#0ea5e9" : "#16a34a",
+                          fontWeight: 600,
+                        }}
+                      >
+                        politique de confidentialité
+                      </a>{" "}
+                      de OskarStore.
+                    </label>
                   </div>
-                  {passwordMismatch && (
-                    <p
-                      style={{
-                        color: "#ef4444",
-                        fontSize: "0.75rem",
-                        marginTop: "0.25rem",
-                      }}
-                    >
-                      Les mots de passe ne correspondent pas
-                    </p>
-                  )}
-                </div>
-              </div>
 
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: "0.75rem",
-                  padding: "1rem",
-                  borderRadius: "0.5rem",
-                  backgroundColor: "#f9fafb",
-                  marginTop: "0.5rem",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  id="terms"
-                  checked={acceptTerms}
-                  onChange={(e) => setAcceptTerms(e.target.checked)}
-                  disabled={loading}
-                  style={{
-                    height: "1.25rem",
-                    width: "1.25rem",
-                    borderRadius: "0.25rem",
-                    border: "2px solid #d1d5db",
-                    cursor: loading ? "not-allowed" : "pointer",
-                    accentColor:
-                      accountType === "vendeur" ? "#0ea5e9" : "#16a34a",
-                  }}
-                />
-                <label
-                  htmlFor="terms"
-                  style={{
-                    fontSize: "0.875rem",
-                    color: "#4b5563",
-                    lineHeight: "1.5",
-                  }}
-                >
-                  J'accepte les{" "}
-                  <a
-                    href="#"
-                    style={{
-                      color: accountType === "vendeur" ? "#0ea5e9" : "#16a34a",
-                      fontWeight: 600,
-                    }}
-                  >
-                    conditions d'utilisation
-                  </a>{" "}
-                  et la{" "}
-                  <a
-                    href="#"
-                    style={{
-                      color: accountType === "vendeur" ? "#0ea5e9" : "#16a34a",
-                      fontWeight: 600,
-                    }}
-                  >
-                    politique de confidentialité
-                  </a>{" "}
-                  de OskarStore.
-                </label>
-              </div>
-
-              <button
-                type="submit"
-                disabled={
-                  loading ||
-                  !acceptTerms ||
-                  passwordMismatch ||
-                  (accountType === "vendeur" && !registreCommerceFile)
-                }
-                style={{
-                  width: "100%",
-                  backgroundColor:
-                    accountType === "vendeur" ? "#0ea5e9" : "#16a34a",
-                  color: "white",
-                  fontWeight: "bold",
-                  padding: "1rem",
-                  borderRadius: "0.5rem",
-                  fontSize: "1rem",
-                  border: "none",
-                  cursor:
-                    loading ||
-                    !acceptTerms ||
-                    passwordMismatch ||
-                    (accountType === "vendeur" && !registreCommerceFile)
-                      ? "not-allowed"
-                      : "pointer",
-                  transition: "all 0.3s",
-                  opacity:
-                    loading ||
-                    !acceptTerms ||
-                    passwordMismatch ||
-                    (accountType === "vendeur" && !registreCommerceFile)
-                      ? 0.5
-                      : 1,
-                  marginTop: "1rem",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "0.5rem",
-                }}
-              >
-                {loading ? (
-                  <>
-                    <FontAwesomeIcon icon={faSpinner} spin />
-                    Création en cours...
-                  </>
-                ) : (
-                  <>
-                    <FontAwesomeIcon icon={faCheckCircle} />
-                    {accountType === "vendeur"
-                      ? "Créer mon compte vendeur"
-                      : "Créer mon compte"}
-                  </>
-                )}
-              </button>
-
-              <div style={{ textAlign: "center", paddingTop: "1rem" }}>
-                <p style={{ fontSize: "0.875rem", color: "#6b7280" }}>
-                  Déjà un compte ?{" "}
                   <button
-                    type="button"
-                    onClick={onSwitchToLogin}
+                    type="submit"
+                    disabled={
+                      loading || !acceptTerms || passwordMismatch
+                      // ✅ Le registre de commerce n'est plus dans les conditions de désactivation
+                      // (accountType === "vendeur" && !registreCommerceFile)
+                    }
                     style={{
-                      color: accountType === "vendeur" ? "#0ea5e9" : "#16a34a",
-                      fontWeight: 600,
-                      background: "none",
+                      width: "100%",
+                      backgroundColor:
+                        accountType === "vendeur" ? "#0ea5e9" : "#16a34a",
+                      color: "white",
+                      fontWeight: "bold",
+                      padding: "1rem",
+                      borderRadius: "0.5rem",
+                      fontSize: "1rem",
                       border: "none",
-                      cursor: "pointer",
-                      padding: 0,
-                      fontSize: "0.875rem",
+                      cursor:
+                        loading || !acceptTerms || passwordMismatch
+                          ? "not-allowed"
+                          : "pointer",
+                      transition: "all 0.3s",
+                      opacity:
+                        loading || !acceptTerms || passwordMismatch ? 0.5 : 1,
+                      marginTop: "1rem",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "0.5rem",
                     }}
                   >
-                    Se connecter
+                    {loading ? (
+                      <>
+                        <FontAwesomeIcon icon={faSpinner} spin />
+                        Création en cours...
+                      </>
+                    ) : (
+                      <>
+                        <FontAwesomeIcon icon={faCheckCircle} />
+                        {accountType === "vendeur"
+                          ? "Créer mon compte vendeur"
+                          : "Créer mon compte"}
+                      </>
+                    )}
                   </button>
-                </p>
+
+                  <div style={{ textAlign: "center", paddingTop: "1rem" }}>
+                    <p style={{ fontSize: "0.875rem", color: "#6b7280" }}>
+                      Déjà un compte ?{" "}
+                      <button
+                        type="button"
+                        onClick={onSwitchToLogin}
+                        style={{
+                          color:
+                            accountType === "vendeur" ? "#0ea5e9" : "#16a34a",
+                          fontWeight: 600,
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          padding: 0,
+                          fontSize: "0.875rem",
+                        }}
+                      >
+                        Se connecter
+                      </button>
+                    </p>
+                  </div>
+                </form>
               </div>
-            </form>
+            </div>
           </div>
-        </div>
-      </div>
+        </>
+      )}
     </>
   );
 };

@@ -1,4 +1,5 @@
 // app/(front-office)/produits/[uuid]/page.tsx
+
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -118,7 +119,7 @@ interface BoutiqueAPI {
   agentUuid: string | null;
   est_bloque: boolean;
   est_ferme: boolean;
-  vendeur?: CreateurInfo; // Le vendeur peut être inclus dans la boutique
+  vendeur?: CreateurInfo;
 }
 
 interface CategorieAPI {
@@ -296,7 +297,7 @@ interface Boutique {
   est_ferme: boolean;
   created_at: string;
   updated_at: string;
-  vendeur?: CreateurInfo; // Ajout du vendeur dans la boutique
+  vendeur?: CreateurInfo;
   type_boutique_uuid?: string;
   politique_retour?: string | null;
   conditions_utilisation?: string | null;
@@ -542,7 +543,7 @@ export default function ProduitDetailPage() {
   const [loadingRecents, setLoadingRecents] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [quantite, setQuantite] = useState(1);
-  const [favori, setFavori] = useState(false);
+  const [favori, setFavori] = useState(false); // État basé sur la réponse API
   const [showMoreComments, setShowMoreComments] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
   const [commentairesFetched, setCommentairesFetched] = useState(false);
@@ -563,8 +564,7 @@ export default function ProduitDetailPage() {
   const [contactVisible, setContactVisible] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
 
-  // Stockage local des favoris
-  const [favorisLocaux, setFavorisLocaux] = useState<Set<string>>(new Set());
+  // 🔴 SUPPRIMER LE STOCKAGE LOCAL DES FAVORIS - On utilise uniquement l'API
 
   // Timer pour le toast
   useEffect(() => {
@@ -575,30 +575,6 @@ export default function ProduitDetailPage() {
       return () => clearTimeout(timer);
     }
   }, [toast]);
-
-  // Charger les favoris depuis localStorage au démarrage
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const storedFavoris = localStorage.getItem("oskar_favoris");
-      if (storedFavoris) {
-        try {
-          setFavorisLocaux(new Set(JSON.parse(storedFavoris)));
-        } catch (e) {
-          console.error("Erreur lors du chargement des favoris:", e);
-        }
-      }
-    }
-  }, []);
-
-  // Sauvegarder les favoris dans localStorage
-  const sauvegarderFavoris = useCallback((nouveauxFavoris: Set<string>) => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem(
-        "oskar_favoris",
-        JSON.stringify([...nouveauxFavoris]),
-      );
-    }
-  }, []);
 
   // FAQ
   const faqs = [
@@ -1202,9 +1178,13 @@ export default function ProduitDetailPage() {
       setProduit(produitData);
       setProduitsSimilaires(similairesData);
 
-      // Vérifier si le produit est dans les favoris locaux
-      const estFavori = favorisLocaux.has(uuid);
-      setFavori(estFavori);
+      // 🔴 Utiliser l'état is_favoris de l'API, pas localStorage
+      // Important: ne définir favori que si l'utilisateur est connecté
+      if (isLoggedIn) {
+        setFavori(response.produit.is_favoris || false);
+      } else {
+        setFavori(false);
+      }
 
       // ✅ IMPORTANT: Récupérer le créateur depuis le produit ou la boutique
       if (response.produit.createur) {
@@ -1299,7 +1279,7 @@ export default function ProduitDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [uuid, fetchCommentaires, fetchProduitsRecents, favorisLocaux]);
+  }, [uuid, fetchCommentaires, fetchProduitsRecents, isLoggedIn]);
 
   useEffect(() => {
     if (uuid && loading && !produit) {
@@ -1501,7 +1481,7 @@ export default function ProduitDetailPage() {
     router.push(`${dashboardPath}/messages?${params.toString()}`);
   };
 
-  // ✅ FONCTION CORRIGÉE POUR LES FAVORIS
+  // ✅ FONCTION CORRIGÉE POUR LES FAVORIS - SANS LOCALSTORAGE
   const handleAddToFavorites = async () => {
     if (!produit) return;
 
@@ -1514,23 +1494,27 @@ export default function ProduitDetailPage() {
       console.log(`🔄 ${favori ? "Retrait" : "Ajout"} aux favoris...`);
 
       if (favori) {
-        const nouveauxFavoris = new Set(favorisLocaux);
-        nouveauxFavoris.delete(produit.uuid);
-        setFavorisLocaux(nouveauxFavoris);
-        sauvegarderFavoris(nouveauxFavoris);
+        // 🔴 RETRAIT DES FAVORIS - Utiliser REMOVE_PRODUIT
+        const endpoint = API_ENDPOINTS.FAVORIS.REMOVE_PRODUIT(produit.uuid);
+        console.log(`📤 Appel API: DELETE ${endpoint}`);
+
+        await api.delete(endpoint);
+
+        // Mise à jour de l'état local uniquement
         setFavori(false);
         showToast("success", "Produit retiré des favoris");
       } else {
-        const response = await api.post(
-          API_ENDPOINTS.PRODUCTS.AJOUTER_PRODUIT_FAVORIS(produit.uuid),
-          {},
-        );
+        // 🔴 AJOUT AUX FAVORIS - Utiliser ADD
+        const payload = {
+          itemUuid: produit.uuid,
+          type: "produit",
+        };
+        console.log(`📤 Appel API: POST ${API_ENDPOINTS.FAVORIS.ADD}`, payload);
+
+        const response = await api.post(API_ENDPOINTS.FAVORIS.ADD, payload);
         console.log("✅ Réponse favoris:", response);
 
-        const nouveauxFavoris = new Set(favorisLocaux);
-        nouveauxFavoris.add(produit.uuid);
-        setFavorisLocaux(nouveauxFavoris);
-        sauvegarderFavoris(nouveauxFavoris);
+        // Mise à jour de l'état local uniquement
         setFavori(true);
         showToast("success", "Produit ajouté aux favoris");
       }
@@ -1846,20 +1830,25 @@ export default function ProduitDetailPage() {
                   fallbackSrc={getDefaultProductImage()}
                   className="w-100 h-100 object-cover"
                 />
-                <button
-                  onClick={handleAddToFavorites}
-                  className="position-absolute top-0 end-0 m-3 btn btn-light rounded-circle p-3 shadow-lg hover-bg-warning hover-text-white transition-all"
-                  style={{ width: "50px", height: "50px" }}
-                >
-                  <FontAwesomeIcon
-                    icon={favori ? FaHeartSolid : faHeartRegularIcon}
-                    className={favori ? "text-danger" : ""}
-                  />
-                </button>
+
+                {/* 🔴 BOUTON FAVORI - UNIQUEMENT SI CONNECTÉ */}
+                {isLoggedIn && (
+                  <button
+                    onClick={handleAddToFavorites}
+                    className="position-absolute top-0 end-0 m-3 btn btn-light rounded-circle p-3 shadow-lg hover-bg-warning hover-text-white transition-all"
+                    style={{ width: "50px", height: "50px" }}
+                  >
+                    <FontAwesomeIcon
+                      icon={favori ? FaHeartSolid : faHeartRegularIcon}
+                      className={favori ? "text-danger" : ""}
+                    />
+                  </button>
+                )}
+
                 <div className="position-absolute top-0 start-0 m-3 bg-success text-white px-4 py-2 rounded-pill fw-semibold d-flex align-items-center gap-2">
                   <FontAwesomeIcon icon={getTypeIcon(produit.createurType)} />
                   <span>
-                    {produit.createurType === "vendeur" ? "vente" : "don"}
+                    {produit.createurType === "vendeur" ? "Vente" : "Vente"}
                   </span>
                 </div>
                 {images.length > 1 && (
@@ -2487,18 +2476,21 @@ export default function ProduitDetailPage() {
                 </button>
               </div>
 
-              <div className="border-top pt-4 mb-4">
-                <button
-                  onClick={handleAddToFavorites}
-                  className="btn btn-light w-100 py-3 fw-semibold"
-                >
-                  <FontAwesomeIcon
-                    icon={favori ? FaHeartSolid : faHeartRegularIcon}
-                    className={`me-2 ${favori ? "text-danger" : ""}`}
-                  />
-                  {favori ? "Retirer des favoris" : "Ajouter aux favoris"}
-                </button>
-              </div>
+              {/* 🔴 BOUTON FAVORI DANS LA SIDEBAR - UNIQUEMENT SI CONNECTÉ */}
+              {isLoggedIn && (
+                <div className="border-top pt-4 mb-4">
+                  <button
+                    onClick={handleAddToFavorites}
+                    className="btn btn-light w-100 py-3 fw-semibold"
+                  >
+                    <FontAwesomeIcon
+                      icon={favori ? FaHeartSolid : faHeartRegularIcon}
+                      className={`me-2 ${favori ? "text-danger" : ""}`}
+                    />
+                    {favori ? "Retirer des favoris" : "Ajouter aux favoris"}
+                  </button>
+                </div>
+              )}
 
               {/* ✅ Informations de la boutique et du créateur - CORRIGÉ */}
               <div className="bg-info bg-opacity-10 rounded-4 p-4 mb-4">
