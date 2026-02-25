@@ -707,8 +707,8 @@ export default function Annonces() {
     };
   }, [fetchAllData]);
 
-  // Filtrer les données en fonction des sélections
-  const filteredData = useMemo(() => {
+  // Filtrer et trier les données
+  const filteredAndSortedData = useMemo(() => {
     if (!allData.length) return [];
 
     let filtered = allData;
@@ -762,18 +762,71 @@ export default function Annonces() {
       });
     }
 
-    return filtered;
+    // ✅ TRI PAR DATE (du plus récent au plus ancien) - CORRIGÉ
+    const sorted = [...filtered].sort((a, b) => {
+      // Déterminer la date de chaque élément de manière robuste
+      const getDate = (item: any): number => {
+        // Pour les produits, essayer toutes les sources possibles
+        if (item.type === "produit") {
+          // Priorité: createdAt, updatedAt, ou date par défaut
+          const dateStr =
+            item.createdAt ||
+            item.updatedAt ||
+            item.date_debut ||
+            item.dateProposition;
+          if (dateStr) {
+            const date = new Date(dateStr).getTime();
+            return isNaN(date) ? 0 : date;
+          }
+          return 0;
+        }
+        // Pour les dons
+        else if (item.type === "don") {
+          const dateStr = item.date_debut || item.createdAt || item.updatedAt;
+          if (dateStr) {
+            const date = new Date(dateStr).getTime();
+            return isNaN(date) ? 0 : date;
+          }
+          return 0;
+        }
+        // Pour les échanges
+        else if (item.type === "echange") {
+          const dateStr =
+            item.dateProposition || item.createdAt || item.updatedAt;
+          if (dateStr) {
+            const date = new Date(dateStr).getTime();
+            return isNaN(date) ? 0 : date;
+          }
+          return 0;
+        }
+
+        // Fallback: essayer createdAt ou updatedAt pour tous les types
+        const fallbackDate = item.createdAt || item.updatedAt;
+        if (fallbackDate) {
+          const date = new Date(fallbackDate).getTime();
+          return isNaN(date) ? 0 : date;
+        }
+
+        return 0;
+      };
+
+      const dateA = getDate(a);
+      const dateB = getDate(b);
+
+      // Trier du plus récent (date la plus grande) au plus ancien (date la plus petite)
+      return dateB - dateA;
+    });
+
+    return sorted;
   }, [allData, selectedType, selectedStatus, searchQuery]);
 
-  // Préparer les données pour le DataTable
+  // Préparer les données pour le DataTable (sans la colonne vendeur)
   const preparedData = useMemo(() => {
-    return filteredData.map((item) => {
+    return filteredAndSortedData.map((item) => {
       let title = "";
       let description = "";
       let image = "";
       let status = "";
-      let sellerName = "Inconnu";
-      let sellerIsPro = false;
       let date = new Date().toISOString();
 
       if (item.type === "produit") {
@@ -782,10 +835,6 @@ export default function Annonces() {
         status =
           item.statut?.toLowerCase() ||
           (item.estPublie ? "publie" : "en-attente");
-        sellerName = item.vendeur
-          ? `${item.vendeur.nom || ""} ${item.vendeur.prenoms || ""}`.trim()
-          : "Vendeur";
-        sellerIsPro = !!item.boutique?.nom;
         date = item.createdAt || item.updatedAt || new Date().toISOString();
 
         // Construction correcte de l'URL de l'image
@@ -800,7 +849,6 @@ export default function Annonces() {
         title = item.nom || "Don sans nom";
         description = item.description || "";
         status = item.statut?.toLowerCase() || "en-attente";
-        sellerName = item.nom_donataire || "Donateur";
         date = item.date_debut || new Date().toISOString();
 
         if (item.image && item.image.startsWith("/")) {
@@ -817,7 +865,6 @@ export default function Annonces() {
           "Échange sans nom";
         description = item.description || "";
         status = item.statut?.toLowerCase() || "en-attente";
-        sellerName = item.nom_initiateur || "Initié par";
         date = item.dateProposition || new Date().toISOString();
 
         if (item.image && item.image.startsWith("/")) {
@@ -838,11 +885,6 @@ export default function Annonces() {
         status,
         type: item.type,
         date,
-        seller: {
-          name: sellerName,
-          avatar: item.vendeur?.avatar,
-          isPro: sellerIsPro,
-        },
         category: item.categorie_uuid || item.categorieUuid,
         quantite: item.quantite,
         prix: item.prix,
@@ -851,7 +893,7 @@ export default function Annonces() {
         originalData: item,
       };
     });
-  }, [filteredData]);
+  }, [filteredAndSortedData]);
 
   const handleValidate = useCallback(
     async (id: string, type: string) => {
@@ -1143,6 +1185,7 @@ export default function Annonces() {
                       onValidate={handleValidate}
                       onReject={handleReject}
                       onView={handleView}
+                      hideVendeurColumn={true}
                     />
                   </div>
                 </div>
@@ -1161,6 +1204,7 @@ export default function Annonces() {
                   onView={handleView}
                   data={preparedData}
                   loading={loading}
+                  hideVendeurColumn={true}
                 />
               </div>
             </div>

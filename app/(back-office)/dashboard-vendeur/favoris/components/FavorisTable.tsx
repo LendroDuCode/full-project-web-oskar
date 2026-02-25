@@ -12,25 +12,23 @@ import {
   faBullhorn,
   faSpinner,
   faExclamationTriangle,
-  faCalendarPlus,
-  faCheckSquare,
-  faSquare,
   faChevronDown,
   faChevronUp,
   faListCheck,
-  faTrash,
   faBoxOpen,
   faUser,
   faMoneyBillWave,
   faImage,
+  faStore,
+  faCheckCircle,
+  faClock,
+  faBan,
 } from "@fortawesome/free-solid-svg-icons";
 import colors from "@/app/shared/constants/colors";
 import {
   formatPrice,
   formatRelativeTime,
   truncateText,
-  getTypeLabel,
-  getStatusLabel,
 } from "@/app/shared/utils/formatters";
 
 // ============================================
@@ -39,38 +37,29 @@ import {
 const buildImageUrl = (imagePath: string | null): string | null => {
   if (!imagePath) return null;
 
-  // Nettoyer le chemin des espaces indésirables
-  let cleanPath = imagePath
-    .replace(/\s+/g, "") // Supprimer tous les espaces
-    .replace(/-/g, "-") // Normaliser les tirets
-    .trim();
-
   const apiUrl =
     process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
   const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
 
-  // ✅ CAS 1: Déjà une URL complète
-  if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
-    if (cleanPath.includes("localhost")) {
+  if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
+    if (imagePath.includes("localhost")) {
       const productionUrl = apiUrl.replace(/\/api$/, "");
-      return cleanPath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
+      return imagePath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
     }
-    return cleanPath;
+    return imagePath;
   }
 
-  // ✅ CAS 2: Chemin avec %2F (déjà encodé)
-  if (cleanPath.includes("%2F")) {
-    // Nettoyer les espaces autour de %2F
-    const finalPath = cleanPath.replace(/%2F\s+/, "%2F");
-    return `${apiUrl}${filesUrl}/${finalPath}`;
+  if (imagePath.includes("%2F")) {
+    return `${apiUrl}${filesUrl}/${imagePath}`;
   }
 
-  // ✅ CAS 3: Chemin simple
-  return `${apiUrl}${filesUrl}/${cleanPath}`;
+  return `${apiUrl}${filesUrl}/${imagePath}`;
 };
 
 interface FavoriItem {
   uuid: string;
+  favoriteId: string;
+  itemUuid: string;
   title: string;
   description?: string;
   image: string | null;
@@ -84,16 +73,16 @@ interface FavoriItem {
   estBloque?: boolean;
   seller?: {
     name: string;
-    avatar?: string;
-    avatar_key?: string;
+    avatar?: string | null; // ✅ Peut être string, null ou undefined
+    avatar_key?: string | null; // ✅ Peut être string, null ou undefined
+    uuid?: string | null; // ✅ Peut être string, null ou undefined
     isPro?: boolean;
     type?: string;
   };
   category?: string;
+  categoryUuid?: string;
   originalData?: any;
-  favoriteId: string;
   addedAt: string;
-  itemUuid: string;
 }
 
 interface FavorisTableProps {
@@ -133,14 +122,13 @@ export default function FavorisTable({
   const startIndex = (currentPage - 1) * itemsPerPage;
   const currentItems = data.slice(startIndex, startIndex + itemsPerPage);
 
-  // ✅ Gestion des erreurs d'image
+  // Gestion des erreurs d'image
   const handleImageError = (
     favoriteId: string,
     e: React.SyntheticEvent<HTMLImageElement, Event>,
   ) => {
     const target = e.currentTarget;
 
-    // Si l'URL contient localhost, essayer de la corriger
     if (target.src.includes("localhost")) {
       const productionUrl =
         process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
@@ -152,7 +140,6 @@ export default function FavorisTable({
       return;
     }
 
-    // Si l'URL contient des espaces, essayer de les nettoyer
     if (target.src.includes("%20")) {
       target.src = target.src.replace(/%20/g, "");
       return;
@@ -162,17 +149,15 @@ export default function FavorisTable({
     target.onerror = null;
   };
 
-  // ✅ Obtenir l'URL de l'image
+  // Obtenir l'URL de l'image
   const getImageUrl = (item: FavoriItem): string | null => {
     if (imageErrors.has(item.favoriteId)) return null;
 
-    // Essayer d'abord avec image_key
     if (item.image_key) {
       const url = buildImageUrl(item.image_key);
       if (url) return url;
     }
 
-    // Sinon avec image
     if (item.image) {
       const url = buildImageUrl(item.image);
       if (url) return url;
@@ -181,7 +166,7 @@ export default function FavorisTable({
     return null;
   };
 
-  // ✅ Obtenir l'URL de l'avatar du vendeur
+  // Obtenir l'URL de l'avatar du vendeur (avec gestion null)
   const getAvatarUrl = (seller: FavoriItem["seller"]): string | null => {
     if (!seller) return null;
 
@@ -203,64 +188,77 @@ export default function FavorisTable({
         color: colors.type.product,
         bgColor: `${colors.type.product}15`,
         label: "Produit",
+        badgeColor: colors.type.product,
       },
       don: {
         icon: faGift,
         color: colors.type.don,
         bgColor: `${colors.type.don}15`,
         label: "Don",
+        badgeColor: "#9C27B0",
       },
       echange: {
         icon: faArrowRightArrowLeft,
         color: colors.type.exchange,
         bgColor: `${colors.type.exchange}15`,
         label: "Échange",
+        badgeColor: "#2196F3",
       },
       annonce: {
         icon: faBullhorn,
         color: colors.oskar.warning,
         bgColor: `${colors.oskar.warning}15`,
         label: "Annonce",
+        badgeColor: colors.oskar.warning,
       },
     };
     return configs[type as keyof typeof configs] || configs.produit;
   };
 
   const getStatusConfig = (item: FavoriItem) => {
-    let color = colors.oskar.grey;
-    let label = "Favori";
-    let icon = faHeart;
-
     if (item.estBloque) {
-      color = colors.status.blocked;
-      label = "Bloqué";
-      icon = faHeartCrack;
+      return {
+        label: "Bloqué",
+        color: colors.status.blocked,
+        icon: faBan,
+        bgColor: `${colors.status.blocked}15`,
+      };
     } else if (item.estPublie) {
-      color = colors.status.published;
-      label = "Publié";
+      return {
+        label: "Publié",
+        color: colors.status.published,
+        icon: faCheckCircle,
+        bgColor: `${colors.status.published}15`,
+      };
     } else if (item.status === "en-attente" || item.status === "en_attente") {
-      color = colors.status.pending;
-      label = "En attente";
+      return {
+        label: "En attente",
+        color: colors.status.pending,
+        icon: faClock,
+        bgColor: `${colors.status.pending}15`,
+      };
     } else {
-      label = getStatusLabel(item.status) || "Favori";
+      return {
+        label: "Favori",
+        color: colors.oskar.grey,
+        icon: faHeart,
+        bgColor: `${colors.oskar.grey}15`,
+      };
     }
-
-    return {
-      label,
-      color,
-      icon,
-    };
   };
 
   const toggleSelectAll = useCallback(() => {
     if (selectedItems.size === currentItems.length) {
-      // Tout désélectionner
-      const newSelected = new Set<string>();
-      onSelectionChange?.(Array.from(selectedItems)[0] || "");
-    } else {
-      // Sélectionner tous les éléments de la page
       currentItems.forEach((item) => {
-        onSelectionChange?.(item.favoriteId);
+        if (selectedItems.has(item.favoriteId)) {
+          onSelectionChange?.(item.favoriteId);
+        }
+      });
+    } else {
+      currentItems.forEach((item) => {
+        if (!selectedItems.has(item.favoriteId)) {
+          onSelectionChange?.(item.favoriteId);
+        }
       });
     }
   }, [currentItems, selectedItems, onSelectionChange]);
@@ -300,7 +298,7 @@ export default function FavorisTable({
   };
 
   const handleAction = useCallback(
-    async (action: string, favoriteId: string, uuid: string, type: string) => {
+    async (action: string, favoriteId: string, type: string) => {
       setProcessingItems((prev) => new Set(prev).add(favoriteId));
 
       try {
@@ -309,9 +307,7 @@ export default function FavorisTable({
             onView?.(favoriteId);
             break;
           case "remove":
-            if (confirm("Retirer cet élément de vos favoris ?")) {
-              await onRemove?.(favoriteId, type);
-            }
+            await onRemove?.(favoriteId, type);
             break;
         }
       } catch (error) {
@@ -384,9 +380,9 @@ export default function FavorisTable({
             onClick={onRefresh}
             style={{
               backgroundColor: colors.oskar.blueHover,
-              color: colors.oskar.lightGrey,
+              color: "white",
               border: "none",
-              padding: "0.375rem 0.75rem",
+              padding: "0.5rem 1rem",
               borderRadius: "6px",
             }}
           >
@@ -444,9 +440,8 @@ export default function FavorisTable({
                   backgroundColor: colors.oskar.red,
                   color: "white",
                   border: "none",
-                  padding: "0.25rem 0.5rem",
+                  padding: "0.25rem 0.75rem",
                   borderRadius: "4px",
-                  fontSize: "0.75rem",
                 }}
               >
                 <FontAwesomeIcon icon={faHeartCrack} size="xs" />
@@ -456,16 +451,20 @@ export default function FavorisTable({
               <button
                 type="button"
                 className="btn btn-sm d-flex align-items-center gap-2"
-                onClick={() =>
-                  onSelectionChange?.(Array.from(selectedItems)[0] || "")
-                }
+                onClick={() => {
+                  // Désélectionner tous les éléments
+                  currentItems.forEach((item) => {
+                    if (selectedItems.has(item.favoriteId)) {
+                      onSelectionChange?.(item.favoriteId);
+                    }
+                  });
+                }}
                 style={{
                   backgroundColor: colors.oskar.lightGrey,
                   color: colors.oskar.grey,
-                  border: "none",
-                  padding: "0.25rem 0.5rem",
+                  border: "1px solid #dee2e6",
+                  padding: "0.25rem 0.75rem",
                   borderRadius: "4px",
-                  fontSize: "0.75rem",
                 }}
               >
                 Annuler
@@ -485,8 +484,10 @@ export default function FavorisTable({
                     className="form-check-input"
                     type="checkbox"
                     checked={
-                      selectedItems.size === currentItems.length &&
-                      currentItems.length > 0
+                      currentItems.length > 0 &&
+                      currentItems.every((item) =>
+                        selectedItems.has(item.favoriteId),
+                      )
                     }
                     onChange={toggleSelectAll}
                     style={{ cursor: "pointer" }}
@@ -519,7 +520,7 @@ export default function FavorisTable({
                   key={item.favoriteId}
                   style={{
                     backgroundColor: isSelected
-                      ? `${colors.oskar.blue}05`
+                      ? `${colors.oskar.blue}10`
                       : "transparent",
                     cursor: "pointer",
                   }}
@@ -552,7 +553,8 @@ export default function FavorisTable({
                           <img
                             src={imageUrl}
                             alt={item.title}
-                            className="w-100 h-100 object-cover"
+                            className="w-100 h-100"
+                            style={{ objectFit: "cover" }}
                             onError={(e) =>
                               handleImageError(item.favoriteId, e)
                             }
@@ -568,22 +570,6 @@ export default function FavorisTable({
                             <FontAwesomeIcon icon={faImage} size="xs" />
                           </div>
                         )}
-                        <div
-                          className="position-absolute top-0 end-0 m-1"
-                          style={{
-                            backgroundColor: colors.oskar.red,
-                            color: "white",
-                            borderRadius: "50%",
-                            width: "20px",
-                            height: "20px",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: "0.6rem",
-                          }}
-                        >
-                          <FontAwesomeIcon icon={faHeart} size="xs" />
-                        </div>
                       </div>
 
                       <div className="flex-grow-1">
@@ -603,7 +589,6 @@ export default function FavorisTable({
                               toggleExpandItem(item.favoriteId);
                             }}
                             style={{ color: colors.oskar.grey }}
-                            aria-label={isExpanded ? "Réduire" : "Développer"}
                           >
                             <FontAwesomeIcon
                               icon={isExpanded ? faChevronUp : faChevronDown}
@@ -613,25 +598,34 @@ export default function FavorisTable({
                         </div>
 
                         {item.description && (
-                          <p className="text-muted x-small mb-0">
-                            {truncateText(item.description, 60)}
+                          <p className="text-muted small mb-0">
+                            {truncateText(item.description, 80)}
                           </p>
                         )}
 
                         <div className="d-flex flex-wrap gap-2 mt-2">
                           {item.category && (
-                            <span className="badge bg-light text-dark border x-small">
-                              {item.category}
+                            <span className="badge bg-light text-dark border small">
+                              {truncateText(item.category, 20)}
                             </span>
                           )}
                           {item.seller?.name && (
-                            <span className="text-muted x-small">
+                            <span className="text-muted small">
                               <FontAwesomeIcon icon={faUser} className="me-1" />
                               {truncateText(item.seller.name, 20)}
                             </span>
                           )}
+                          {item.seller?.isPro && (
+                            <span className="badge bg-primary bg-opacity-10 text-primary small">
+                              <FontAwesomeIcon
+                                icon={faStore}
+                                className="me-1"
+                              />
+                              Pro
+                            </span>
+                          )}
                           {item.quantity && item.quantity > 1 && (
-                            <span className="text-muted x-small">
+                            <span className="text-muted small">
                               <FontAwesomeIcon
                                 icon={faBoxOpen}
                                 className="me-1"
@@ -643,47 +637,50 @@ export default function FavorisTable({
 
                         {isExpanded && (
                           <div
-                            className="mt-2 p-2 border rounded bg-light"
+                            className="mt-3 p-3 bg-light rounded-3"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <div className="row g-2">
+                            <div className="row g-3">
                               <div className="col-md-6">
-                                <small className="text-muted d-block">
+                                <div className="small text-muted mb-1">
                                   ID Favori
-                                </small>
-                                <code className="fw-medium small d-block text-truncate">
+                                </div>
+                                <code className="small d-block text-break">
                                   {item.favoriteId}
                                 </code>
                               </div>
                               <div className="col-md-6">
-                                <small className="text-muted d-block">
+                                <div className="small text-muted mb-1">
                                   Date de création
-                                </small>
-                                <span className="fw-medium small d-block">
-                                  {new Date(item.addedAt).toLocaleDateString(
+                                </div>
+                                <div className="fw-medium small">
+                                  {new Date(item.addedAt).toLocaleString(
                                     "fr-FR",
                                   )}
-                                </span>
+                                </div>
                               </div>
-                              {item.seller?.isPro && (
-                                <div className="col-12">
-                                  <span className="badge bg-primary bg-opacity-10 text-primary">
-                                    Professionnel
-                                  </span>
+                              {item.seller?.uuid && (
+                                <div className="col-md-6">
+                                  <div className="small text-muted mb-1">
+                                    UUID du vendeur
+                                  </div>
+                                  <code className="small d-block text-break">
+                                    {item.seller.uuid}
+                                  </code>
                                 </div>
                               )}
                               {avatarUrl && item.seller?.name && (
-                                <div className="col-12">
-                                  <small className="text-muted d-block">
-                                    Avatar du vendeur
-                                  </small>
+                                <div className="col-md-6">
+                                  <div className="small text-muted mb-1">
+                                    Avatar
+                                  </div>
                                   <img
                                     src={avatarUrl}
                                     alt={item.seller.name}
                                     className="rounded-circle"
                                     style={{
-                                      width: "32px",
-                                      height: "32px",
+                                      width: "40px",
+                                      height: "40px",
                                       objectFit: "cover",
                                     }}
                                     onError={(e) => {
@@ -700,74 +697,72 @@ export default function FavorisTable({
                   </td>
 
                   <td>
-                    <div
+                    <span
                       className="badge rounded-pill d-inline-flex align-items-center gap-1"
                       style={{
                         backgroundColor: typeConfig.bgColor,
                         color: typeConfig.color,
-                        fontSize: "0.7rem",
-                        padding: "0.25rem 0.5rem",
+                        fontSize: "0.75rem",
+                        padding: "0.35rem 0.65rem",
                       }}
                     >
                       <FontAwesomeIcon icon={typeConfig.icon} size="xs" />
                       {typeConfig.label}
-                    </div>
+                    </span>
                   </td>
 
                   <td>
-                    <div
+                    <span
                       className="badge rounded-pill d-inline-flex align-items-center gap-1"
                       style={{
-                        backgroundColor: `${statusConfig.color}15`,
+                        backgroundColor: statusConfig.bgColor,
                         color: statusConfig.color,
-                        fontSize: "0.7rem",
-                        padding: "0.25rem 0.5rem",
+                        fontSize: "0.75rem",
+                        padding: "0.35rem 0.65rem",
                       }}
                     >
-                      {statusConfig.icon && (
-                        <FontAwesomeIcon icon={statusConfig.icon} size="xs" />
-                      )}
+                      <FontAwesomeIcon icon={statusConfig.icon} size="xs" />
                       {statusConfig.label}
-                    </div>
+                    </span>
                   </td>
 
                   <td>
-                    <div className="d-flex align-items-center gap-1">
-                      {item.price ? (
-                        <>
-                          <FontAwesomeIcon
-                            icon={faMoneyBillWave}
-                            className="text-success"
-                            size="xs"
-                          />
-                          <span
-                            className="fw-medium small"
-                            style={{ color: colors.oskar.black }}
-                          >
-                            {formatPrice(item.price)}
-                          </span>
-                        </>
-                      ) : (
-                        <span className="text-muted small">Gratuit</span>
-                      )}
-                    </div>
+                    {item.price ? (
+                      <span
+                        className="fw-medium small"
+                        style={{ color: colors.oskar.green }}
+                      >
+                        <FontAwesomeIcon
+                          icon={faMoneyBillWave}
+                          className="me-1"
+                          size="xs"
+                        />
+                        {formatPrice(item.price)}
+                      </span>
+                    ) : (
+                      <span className="text-success small">
+                        <FontAwesomeIcon
+                          icon={faGift}
+                          className="me-1"
+                          size="xs"
+                        />
+                        Gratuit
+                      </span>
+                    )}
                   </td>
 
                   <td>
-                    <div
-                      className="small"
-                      style={{ color: colors.oskar.black }}
-                    >
+                    <div className="small fw-medium">
                       {formatRelativeTime(item.addedAt)}
                     </div>
-                    <div className="text-muted x-small">
+                    <div className="text-muted small">
                       {new Date(item.addedAt).toLocaleDateString("fr-FR")}
                     </div>
                   </td>
 
                   <td>
                     <div
-                      className="d-flex justify-content-end gap-1 pe-3"
+                      className="d-flex justify-content-end gap-2 pe-3"
                       onClick={(e) => e.stopPropagation()}
                     >
                       {isProcessing ? (
@@ -781,51 +776,45 @@ export default function FavorisTable({
                         <>
                           <button
                             type="button"
-                            className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
+                            className="btn btn-sm p-2 d-flex align-items-center justify-content-center"
                             onClick={() =>
-                              handleAction(
-                                "view",
-                                item.favoriteId,
-                                item.uuid,
-                                item.type,
-                              )
+                              handleAction("view", item.favoriteId, item.type)
                             }
                             title="Voir les détails"
                             style={{
-                              width: "28px",
-                              height: "28px",
                               backgroundColor: `${colors.oskar.blueHover}15`,
                               color: colors.oskar.blueHover,
                               border: "none",
-                              borderRadius: "4px",
+                              borderRadius: "6px",
+                              width: "32px",
+                              height: "32px",
                             }}
                           >
-                            <FontAwesomeIcon icon={faEye} size="xs" />
+                            <FontAwesomeIcon icon={faEye} size="sm" />
                           </button>
 
                           {onRemove && (
                             <button
                               type="button"
-                              className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
+                              className="btn btn-sm p-2 d-flex align-items-center justify-content-center"
                               onClick={() =>
                                 handleAction(
                                   "remove",
                                   item.favoriteId,
-                                  item.uuid,
                                   item.type,
                                 )
                               }
                               title="Retirer des favoris"
                               style={{
-                                width: "28px",
-                                height: "28px",
                                 backgroundColor: `${colors.oskar.red}15`,
                                 color: colors.oskar.red,
                                 border: "none",
-                                borderRadius: "4px",
+                                borderRadius: "6px",
+                                width: "32px",
+                                height: "32px",
                               }}
                             >
-                              <FontAwesomeIcon icon={faHeartCrack} size="xs" />
+                              <FontAwesomeIcon icon={faHeartCrack} size="sm" />
                             </button>
                           )}
                         </>

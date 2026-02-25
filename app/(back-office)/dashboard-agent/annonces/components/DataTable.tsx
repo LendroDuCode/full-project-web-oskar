@@ -1,3 +1,5 @@
+// app/(back-office)/dashboard-agent/annonces/components/DataTable.tsx
+
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -10,18 +12,14 @@ import {
   faTag,
   faGift,
   faArrowRightArrowLeft,
-  faStore,
   faSpinner,
   faExclamationTriangle,
   faTrash,
-  faBan,
   faCalendarCheck,
   faCalendarXmark,
   faCheckSquare,
   faSquare,
   faCheckDouble,
-  faBan as faBlock,
-  faGlobe,
   faLock,
   faUnlock,
   faImage,
@@ -39,11 +37,6 @@ interface ContentItem {
   status: string;
   type: "produit" | "don" | "echange";
   date: string;
-  seller?: {
-    name: string;
-    avatar?: string; // ✅ Doit être string | undefined, pas null
-    isPro?: boolean;
-  };
   category?: string;
   quantite?: number;
   prix?: string;
@@ -66,6 +59,7 @@ interface DataTableProps {
   className?: string;
   data?: ContentItem[];
   loading?: boolean;
+  hideVendeurColumn?: boolean; // ✅ Nouvelle prop pour cacher la colonne vendeur
 }
 
 // ============================================
@@ -118,6 +112,7 @@ export default function DataTable({
   className = "",
   data: externalData,
   loading: externalLoading,
+  hideVendeurColumn = true, // ✅ Par défaut à true pour cacher la colonne vendeur
 }: DataTableProps) {
   const router = useRouter();
   const [data, setData] = useState<ContentItem[]>(externalData || []);
@@ -161,8 +156,6 @@ export default function DataTable({
 
       const transformedData = response.map((item) => {
         let title = "";
-        let sellerName = "Inconnu";
-        let sellerIsPro = false;
         let date = new Date().toISOString();
         let imageUrl = "";
         let status = "";
@@ -171,10 +164,6 @@ export default function DataTable({
 
         if (contentType === "produit") {
           title = item.libelle || "Produit sans nom";
-          sellerName = item.vendeur
-            ? `${item.vendeur.nom || ""} ${item.vendeur.prenoms || ""}`.trim()
-            : "Vendeur";
-          sellerIsPro = !!item.boutique?.nom;
           date = item.createdAt || item.updatedAt || new Date().toISOString();
           status =
             item.statut?.toLowerCase() ||
@@ -188,7 +177,6 @@ export default function DataTable({
             `https://via.placeholder.com/48?text=${encodeURIComponent(title?.charAt?.(0) || "P")}`;
         } else if (contentType === "don") {
           title = item.nom || "Don sans nom";
-          sellerName = item.nom_donataire || "Donateur";
           date = item.date_debut || new Date().toISOString();
           status = item.statut?.toLowerCase() || "en-attente";
           isPublished = item.estPublie || false;
@@ -203,7 +191,6 @@ export default function DataTable({
             item.nomElementEchange ||
             `${item.objetPropose || ""} vs ${item.objetDemande || ""}`.trim() ||
             "Échange sans nom";
-          sellerName = item.nom_initiateur || "Initié par";
           date = item.dateProposition || new Date().toISOString();
           status = item.statut?.toLowerCase() || "en-attente";
           isPublished = item.estPublie || false;
@@ -219,13 +206,6 @@ export default function DataTable({
           title = `${contentType.charAt(0).toUpperCase() + contentType.slice(1)} sans nom`;
         }
 
-        // ✅ CORRECTION: Gérer l'avatar pour éviter null
-        let avatarUrl: string | undefined = undefined;
-        if (item.vendeur?.avatar) {
-          const url = buildImageUrl(item.vendeur.avatar);
-          if (url) avatarUrl = url;
-        }
-
         return {
           id: item.id?.toString() || item.uuid || Math.random().toString(),
           uuid: item.uuid || Math.random().toString(),
@@ -235,11 +215,6 @@ export default function DataTable({
           status,
           type: contentType,
           date,
-          seller: {
-            name: sellerName,
-            avatar: avatarUrl, // ✅ Toujours string | undefined, jamais null
-            isPro: sellerIsPro,
-          },
           category: item.categorie_uuid || item.categorieUuid,
           quantite: item.quantite,
           prix: item.prix,
@@ -350,12 +325,9 @@ export default function DataTable({
         const query = searchQuery.toLowerCase();
         const title = item.title?.toLowerCase() || "";
         const description = item.description?.toLowerCase() || "";
-        const sellerName = item.seller?.name?.toLowerCase() || "";
 
         const matchesSearch =
-          title.includes(query) ||
-          description.includes(query) ||
-          sellerName.includes(query);
+          title.includes(query) || description.includes(query);
 
         if (!matchesSearch) return false;
       }
@@ -829,9 +801,7 @@ export default function DataTable({
               <th className="px-3 py-3 text-start text-uppercase fw-semibold text-muted small border-bottom">
                 Titre
               </th>
-              <th className="px-3 py-3 text-start text-uppercase fw-semibold text-muted small border-bottom">
-                Vendeur
-              </th>
+              {/* ✅ Colonne vendeur supprimée */}
               <th className="px-3 py-3 text-start text-uppercase fw-semibold text-muted small border-bottom">
                 Type
               </th>
@@ -882,7 +852,8 @@ export default function DataTable({
                       <img
                         src={imageUrl}
                         alt={row.title}
-                        className="w-100 h-100 object-cover"
+                        className="w-100 h-100"
+                        style={{ objectFit: "cover" }}
                         onError={(e) =>
                           handleImageError(e, row.title, row.uuid)
                         }
@@ -898,60 +869,12 @@ export default function DataTable({
                       {row.description && (
                         <p
                           className="text-muted x-small mb-0 text-truncate"
-                          style={{ maxWidth: "150px" }}
+                          style={{ maxWidth: "200px" }}
                           title={row.description}
                         >
                           {row.description}
                         </p>
                       )}
-                    </div>
-                  </td>
-
-                  <td className="px-3 py-3">
-                    <div className="d-flex align-items-center gap-2">
-                      <div
-                        className="rounded-circle overflow-hidden d-flex align-items-center justify-content-center"
-                        style={{
-                          width: "28px",
-                          height: "28px",
-                          backgroundColor: "#f8f9fa",
-                          flexShrink: 0,
-                        }}
-                      >
-                        {row.seller?.avatar ? (
-                          <img
-                            src={row.seller.avatar}
-                            alt={row.seller.name}
-                            className="w-100 h-100 object-cover"
-                            onError={(e) => {
-                              e.currentTarget.src = `https://via.placeholder.com/28?text=${encodeURIComponent(row.seller?.name?.charAt(0) || "?")}`;
-                            }}
-                          />
-                        ) : (
-                          <span className="text-muted x-small">
-                            {row.seller?.name?.charAt(0).toUpperCase() || "?"}
-                          </span>
-                        )}
-                      </div>
-                      <div>
-                        <p className="fw-medium text-dark x-small mb-0">
-                          {row.seller?.name || "Inconnu"}
-                        </p>
-                        {row.seller?.isPro && (
-                          <span
-                            className="badge rounded-pill d-inline-flex align-items-center gap-1"
-                            style={{
-                              backgroundColor: "#1D4ED8",
-                              color: "white",
-                              fontSize: "0.6rem",
-                              padding: "0.2rem 0.4rem",
-                            }}
-                          >
-                            <FontAwesomeIcon icon={faStore} size="xs" />
-                            Pro
-                          </span>
-                        )}
-                      </div>
                     </div>
                   </td>
 

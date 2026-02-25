@@ -9,9 +9,10 @@ import FavorisTable from "./components/FavorisTable";
 import ViewModal from "../annonces/components/ViewModal";
 import EmptyState from "../annonces/components/EmptyState";
 
-// Type qui correspond exactement à ce qu'attend FavorisTable
+// Type qui correspond exactement à la structure de votre API
 interface FavoriItem {
-  uuid: string;
+  uuid: string; // UUID du favori lui-même
+  itemUuid: string; // UUID de l'élément (don, produit, échange)
   title: string;
   description?: string;
   image: string | null;
@@ -25,16 +26,31 @@ interface FavoriItem {
   estBloque?: boolean;
   seller?: {
     name: string;
-    avatar?: string;
-    avatar_key?: string;
+    avatar?: string | null; // ✅ Peut être string, null ou undefined
+    avatar_key?: string | null; // ✅ Peut être string, null ou undefined
+    uuid?: string | null; // ✅ Peut être string, null ou undefined
     isPro?: boolean;
     type?: string;
   };
   category?: string;
+  categoryUuid?: string;
   originalData?: any;
-  favoriteId: string;
+  favoriteId: string; // Même que uuid (pour compatibilité)
   addedAt: string;
-  itemUuid: string;
+}
+
+// Interface pour la réponse API
+interface ApiResponse<T> {
+  statusCode: number;
+  message: string;
+  data: T[];
+  meta?: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+    type?: string;
+  };
 }
 
 export default function FavorisPage() {
@@ -51,7 +67,7 @@ export default function FavorisPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [fullDetails, setFullDetails] = useState<any>(null);
 
-  // ✅ FILTRAGE AVEC useMemo (pas de boucle infinie)
+  // ✅ FILTRAGE AVEC useMemo
   const filteredFavoris = useMemo(() => {
     let filtered = [...favoris];
 
@@ -67,16 +83,17 @@ export default function FavorisPage() {
         const title = item.title?.toLowerCase() || "";
         const description = item.description?.toLowerCase() || "";
         const category = item.category?.toLowerCase() || "";
+        const sellerName = item.seller?.name?.toLowerCase() || "";
 
         return (
           title.includes(query) ||
           description.includes(query) ||
-          category.includes(query)
+          category.includes(query) ||
+          sellerName.includes(query)
         );
       });
     }
 
-    console.log("Favoris filtrés:", filtered.length);
     return filtered;
   }, [favoris, selectedType, searchQuery]);
 
@@ -98,79 +115,51 @@ export default function FavorisPage() {
         return imagePath;
       }
 
+      // Chemin avec %2F
+      if (imagePath.includes("%2F")) {
+        return `${apiUrl}${filesUrl}/${imagePath}`;
+      }
+
+      // Chemin avec slash
+      if (imagePath.startsWith("/")) {
+        return `${apiUrl}${filesUrl}${imagePath}`;
+      }
+
       // Chemin simple
       return `${apiUrl}${filesUrl}/${imagePath}`;
     },
     [],
   );
 
-  // Fonction pour transformer les données de favoris selon le type
+  // ✅ Fonction pour transformer les données selon votre API (CORRIGÉE)
   const transformFavoriData = useCallback(
     (item: any): FavoriItem | null => {
       try {
         if (!item) return null;
 
-        // Déterminer le type et l'item correspondant
+        // Extraire les informations selon votre structure API
+        const favoriteId = item.uuid || ""; // UUID du favori
+        const type = item.type || "don"; // Type (produit, don, echange)
         let itemData: any = null;
-        let type: "produit" | "don" | "echange" | "annonce" = "produit";
 
-        // Déterminer le type basé sur les champs présents
-        if (item.produit && typeof item.produit === "object") {
+        // Récupérer les données selon le type
+        if (type === "produit" && item.produit) {
           itemData = item.produit;
-          type = "produit";
-        } else if (item.don && typeof item.don === "object") {
+        } else if (type === "don" && item.don) {
           itemData = item.don;
-          type = "don";
-        } else if (item.echange && typeof item.echange === "object") {
+        } else if (type === "echange" && item.echange) {
           itemData = item.echange;
-          type = "echange";
-        } else if (item.annonce && typeof item.annonce === "object") {
-          itemData = item.annonce;
-          type = "annonce";
         } else {
-          // Essayer de deviner le type à partir des champs UUID
-          if (item.produitUuid) {
-            type = "produit";
-            itemData = item;
-          } else if (item.donUuid) {
-            type = "don";
-            itemData = item;
-          } else if (item.echangeUuid) {
-            type = "echange";
-            itemData = item;
-          } else if (item.annonceUuid) {
-            type = "annonce";
-            itemData = item;
-          } else {
-            // Vérifier le type explicitement défini
-            if (
-              item.type === "produit" ||
-              item.type === "don" ||
-              item.type === "echange" ||
-              item.type === "annonce"
-            ) {
-              type = item.type;
-              itemData = item;
-            } else {
-              console.warn("Type inconnu pour l'item:", item);
-              return null;
-            }
-          }
+          itemData = item; // Fallback
         }
 
-        // Si itemData est null, utiliser l'item lui-même
         if (!itemData) {
-          itemData = item;
-        }
-
-        // Extraire les informations de base
-        const itemUuid = item.itemUuid || itemData.uuid || "";
-        const favoriteId = item.uuid || ""; // ← C'EST l'ID du favori lui-même
-
-        if (!favoriteId) {
-          console.warn("Pas d'ID de favori trouvé pour:", item);
+          console.warn("Pas de données pour le favori:", item);
           return null;
         }
+
+        // UUID de l'élément
+        const itemUuid = item.itemUuid || itemData.uuid || "";
 
         // Construire l'URL de l'image
         let imageUrl: string | null = null;
@@ -180,126 +169,123 @@ export default function FavorisPage() {
           imageUrl = buildImageUrl(itemData.image);
         }
 
-        // Configurations communes
-        const commonData = {
-          uuid:
-            item.produitUuid ||
-            item.donUuid ||
-            item.echangeUuid ||
-            item.annonceUuid ||
-            itemUuid,
-          itemUuid: itemUuid, // UUID original de l'élément
-          favoriteId: favoriteId, // UUID du favori lui-même
-          addedAt:
-            item.createdAt || itemData.createdAt || new Date().toISOString(),
-          type,
-          originalData: item,
+        // Informations du vendeur/créateur - AVEC TOUTES LES PROPRIÉTÉS (null autorisé)
+        let sellerInfo = {
+          name: "Annonceur",
+          type: "utilisateur",
+          avatar: undefined as string | null | undefined,
+          avatar_key: undefined as string | null | undefined,
+          uuid: undefined as string | null | undefined,
+          isPro: false,
         };
 
-        // Traitement spécifique selon le type
-        switch (type) {
-          case "produit":
-            return {
-              ...commonData,
-              title: itemData.libelle || itemData.nom || "Produit sans nom",
-              description: itemData.description || "",
-              image: imageUrl,
-              image_key: itemData.image_key,
-              status: (itemData.statut || "inconnu").toLowerCase(),
-              date:
-                itemData.createdAt || itemData.updatedAt || commonData.addedAt,
-              price: itemData.prix || null,
-              quantity: itemData.quantite || 1,
-              estPublie: itemData.estPublie || false,
-              estBloque: itemData.estBloque || itemData.est_bloque || false,
-              seller: {
-                name: item.vendeur?.nom
-                  ? `${item.vendeur.prenoms || ""} ${item.vendeur.nom}`.trim()
-                  : itemData.vendeur?.nom
-                    ? `${itemData.vendeur.prenoms || ""} ${itemData.vendeur.nom}`.trim()
-                    : "Vendeur",
-                isPro: !!item.vendeur?.boutique || !!itemData.vendeur?.boutique,
-                type: "vendeur",
-                avatar: item.vendeur?.avatar || itemData.vendeur?.avatar,
-                avatar_key:
-                  item.vendeur?.avatar_key || itemData.vendeur?.avatar_key,
-              },
-              category:
-                itemData.categorie?.libelle || itemData.categorie_uuid || "",
+        if (type === "don" && itemData.vendeur) {
+          sellerInfo = {
+            name:
+              `${itemData.vendeur.prenoms || ""} ${itemData.vendeur.nom || ""}`.trim() ||
+              "Vendeur",
+            type: "vendeur",
+            avatar: buildImageUrl(itemData.vendeur.avatar) || null,
+            avatar_key: itemData.vendeur.avatar || null,
+            uuid: itemData.vendeur.uuid || null,
+            isPro: true,
+          };
+        } else if (type === "don" && itemData.utilisateur) {
+          sellerInfo = {
+            name:
+              `${itemData.utilisateur.prenoms || ""} ${itemData.utilisateur.nom || ""}`.trim() ||
+              "Utilisateur",
+            type: "utilisateur",
+            avatar: buildImageUrl(itemData.utilisateur.avatar) || null,
+            avatar_key: itemData.utilisateur.avatar || null,
+            uuid: itemData.utilisateur.uuid || null,
+            isPro: false,
+          };
+        } else if (type === "produit" && itemData.vendeur) {
+          sellerInfo = {
+            name:
+              `${itemData.vendeur.prenoms || ""} ${itemData.vendeur.nom || ""}`.trim() ||
+              "Vendeur",
+            type: "vendeur",
+            avatar: buildImageUrl(itemData.vendeur.avatar) || null,
+            avatar_key: itemData.vendeur.avatar || null,
+            uuid: itemData.vendeur.uuid || null,
+            isPro: true,
+          };
+        } else if (type === "produit" && itemData.utilisateur) {
+          sellerInfo = {
+            name:
+              `${itemData.utilisateur.prenoms || ""} ${itemData.utilisateur.nom || ""}`.trim() ||
+              "Utilisateur",
+            type: "utilisateur",
+            avatar: buildImageUrl(itemData.utilisateur.avatar) || null,
+            avatar_key: itemData.utilisateur.avatar || null,
+            uuid: itemData.utilisateur.uuid || null,
+            isPro: false,
+          };
+        } else if (type === "echange") {
+          if (itemData.vendeur) {
+            sellerInfo = {
+              name:
+                `${itemData.vendeur.prenoms || ""} ${itemData.vendeur.nom || ""}`.trim() ||
+                "Vendeur",
+              type: "vendeur",
+              avatar: buildImageUrl(itemData.vendeur.avatar) || null,
+              avatar_key: itemData.vendeur.avatar || null,
+              uuid: itemData.vendeur.uuid || null,
+              isPro: true,
             };
-
-          case "don":
-            return {
-              ...commonData,
-              title: itemData.nom || itemData.titre || "Don sans nom",
-              description: itemData.description || "",
-              image: imageUrl,
-              image_key: itemData.image_key,
-              status: (itemData.statut || "inconnu").toLowerCase(),
-              date: itemData.date_debut || commonData.addedAt,
-              price: itemData.prix || itemData.valeur_estimee || null,
-              quantity: itemData.quantite || 1,
-              estPublie: itemData.estPublie || false,
-              estBloque: itemData.est_bloque || false,
-              seller: {
-                name: item.vendeur?.nom
-                  ? `${item.vendeur.prenoms || ""} ${item.vendeur.nom}`.trim()
-                  : itemData.nom_donataire || "Donateur",
-                type: item.vendeur ? "vendeur" : "utilisateur",
-              },
-              category: itemData.categorie?.libelle || "",
+          } else if (itemData.utilisateur) {
+            sellerInfo = {
+              name:
+                `${itemData.utilisateur.prenoms || ""} ${itemData.utilisateur.nom || ""}`.trim() ||
+                "Utilisateur",
+              type: "utilisateur",
+              avatar: buildImageUrl(itemData.utilisateur.avatar) || null,
+              avatar_key: itemData.utilisateur.avatar || null,
+              uuid: itemData.utilisateur.uuid || null,
+              isPro: false,
             };
-
-          case "echange":
-            return {
-              ...commonData,
-              title:
-                itemData.nomElementEchange ||
-                itemData.titre ||
-                "Échange sans nom",
-              description: itemData.description || itemData.message || "",
-              image: imageUrl,
-              image_key: itemData.image_key,
-              status: (itemData.statut || "inconnu").toLowerCase(),
-              date: itemData.dateProposition || commonData.addedAt,
-              price: itemData.prix || itemData.valeur_estimee || null,
-              quantity: itemData.quantite || 1,
-              estPublie: itemData.estPublie || false,
-              estBloque: itemData.estBloque || false,
-              seller: {
-                name: item.vendeur?.nom
-                  ? `${item.vendeur.prenoms || ""} ${item.vendeur.nom}`.trim()
-                  : itemData.nom_initiateur || "Initiateur",
-                type: item.vendeur ? "vendeur" : "utilisateur",
-              },
-              category: itemData.categorie?.libelle || "",
-            };
-
-          case "annonce":
-            return {
-              ...commonData,
-              title: itemData.titre || itemData.nom || "Annonce sans nom",
-              description: itemData.description || "",
-              image: imageUrl,
-              image_key: itemData.image_key,
-              status: (itemData.statut || "inconnu").toLowerCase(),
-              date: itemData.created_at || commonData.addedAt,
-              price: itemData.prix || null,
-              quantity: itemData.quantite || 1,
-              estPublie: itemData.estPublie || false,
-              estBloque: itemData.est_bloque || false,
-              seller: {
-                name: item.vendeur?.nom
-                  ? `${item.vendeur.prenoms || ""} ${item.vendeur.nom}`.trim()
-                  : "Annonceur",
-                type: "annonceur",
-              },
-              category: itemData.categorie?.libelle || itemData.type || "",
-            };
-
-          default:
-            return null;
+          }
         }
+
+        // Catégorie
+        let category = "";
+        let categoryUuid = "";
+        if (itemData.categorie) {
+          category = itemData.categorie.libelle || "";
+          categoryUuid = itemData.categorie.uuid || "";
+        } else if (itemData.categorie_uuid) {
+          categoryUuid = itemData.categorie_uuid;
+        }
+
+        return {
+          uuid: favoriteId,
+          favoriteId: favoriteId,
+          itemUuid: itemUuid,
+          title:
+            itemData.nom || itemData.libelle || itemData.titre || "Sans titre",
+          description: itemData.description || itemData.message || "",
+          image: imageUrl,
+          image_key: itemData.image_key,
+          type: type as "produit" | "don" | "echange" | "annonce",
+          status: itemData.statut || "inconnu",
+          date:
+            itemData.date_debut ||
+            itemData.createdAt ||
+            itemData.updatedAt ||
+            new Date().toISOString(),
+          price: itemData.prix || null,
+          quantity: itemData.quantite || 1,
+          estPublie: itemData.estPublie || false,
+          estBloque: itemData.est_bloque || false,
+          seller: sellerInfo,
+          category: category,
+          categoryUuid: categoryUuid,
+          addedAt:
+            item.createdAt || itemData.createdAt || new Date().toISOString(),
+          originalData: item,
+        };
       } catch (err) {
         console.error("Erreur lors de la transformation de l'item:", err, item);
         return null;
@@ -361,7 +347,6 @@ export default function FavorisPage() {
       }
     } catch (err: any) {
       console.error("Erreur lors du chargement des détails:", err);
-      // Utiliser les données de base si l'API échoue
       setFullDetails(favori.originalData);
     } finally {
       setDetailLoading(false);
@@ -371,38 +356,14 @@ export default function FavorisPage() {
   // Gérer l'ouverture de la modal de détails
   const handleView = useCallback(
     (favoriteId: string) => {
-      console.log("handleView appelé avec favoriteId:", favoriteId);
-
-      // Chercher le favori par favoriteId
       const favori = favoris.find((f) => f.favoriteId === favoriteId);
 
       if (!favori) {
-        // Si non trouvé, essayer par itemUuid
-        const favoriByItemUuid = favoris.find((f) => f.itemUuid === favoriteId);
-        if (favoriByItemUuid) {
-          console.log("Favori trouvé par itemUuid:", favoriByItemUuid);
-          setSelectedFavori(favoriByItemUuid);
-          setShowViewModal(true);
-          fetchFullDetails(favoriByItemUuid);
-          return;
-        }
-
-        // Si encore non trouvé, essayer par uuid
-        const favoriByUuid = favoris.find((f) => f.uuid === favoriteId);
-        if (favoriByUuid) {
-          console.log("Favori trouvé par uuid:", favoriByUuid);
-          setSelectedFavori(favoriByUuid);
-          setShowViewModal(true);
-          fetchFullDetails(favoriByUuid);
-          return;
-        }
-
         console.error("Favori non trouvé pour l'ID:", favoriteId);
         alert("Favori non trouvé");
         return;
       }
 
-      console.log("Favori trouvé:", favori);
       setSelectedFavori(favori);
       setShowViewModal(true);
       fetchFullDetails(favori);
@@ -412,98 +373,67 @@ export default function FavorisPage() {
 
   // Fermer la modal
   const handleCloseModal = useCallback(() => {
-    console.log("Fermeture de la modal");
     setShowViewModal(false);
     setSelectedFavori(null);
     setFullDetails(null);
   }, []);
 
-  // Charger les favoris
+  // ✅ Fonction pour extraire les données de la réponse API
+  const extractDataFromResponse = useCallback(<T,>(response: any): T[] => {
+    if (!response) return [];
+
+    // CAS 1: La réponse a une propriété 'data' qui contient le tableau
+    if (response?.data && Array.isArray(response.data)) {
+      return response.data;
+    }
+    // CAS 2: La réponse elle-même est un tableau
+    else if (Array.isArray(response)) {
+      return response;
+    }
+    // CAS 3: La réponse a une structure { data: [...] }
+    else if (response?.data?.data && Array.isArray(response.data.data)) {
+      return response.data.data;
+    }
+    // CAS 4: La réponse a une structure avec statusCode et data
+    else if (
+      response?.data &&
+      typeof response.data === "object" &&
+      "data" in response.data &&
+      Array.isArray(response.data.data)
+    ) {
+      return response.data.data;
+    }
+    // CAS 5: La réponse est directement l'objet avec data
+    else if (
+      response?.data &&
+      typeof response.data === "object" &&
+      Array.isArray(response.data)
+    ) {
+      return response.data;
+    }
+
+    console.warn("Structure de réponse inattendue:", response);
+    return [];
+  }, []);
+
+  // ✅ Charger les favoris - VERSION AMÉLIORÉE
   const fetchFavoris = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      let response;
+      console.log("📡 Chargement des favoris...");
 
-      try {
-        // Premier essai: endpoint générique pour les favoris
-        response = await api.get(API_ENDPOINTS.FAVORIS.LIST);
-        console.log("Réponse de /favoris:", response);
-      } catch (err1: any) {
-        console.log("Erreur avec /favoris, essai /favoris/produits:", err1);
+      // Utiliser l'endpoint générique /favoris
+      const response = await api.get(API_ENDPOINTS.FAVORIS.LIST);
+      console.log("✅ Réponse de /favoris:", response);
 
-        // Deuxième essai: endpoint spécifique pour les produits favoris
-        try {
-          response = await api.get(API_ENDPOINTS.FAVORIS.PRODUITS);
-          console.log("Réponse de /favoris/produits:", response);
-        } catch (err2: any) {
-          console.log(
-            "Erreur avec /favoris/produits, essai /produits/favoris:",
-            err2,
-          );
+      // Extraire les données avec la fonction utilitaire
+      const favorisData = extractDataFromResponse<any>(response);
 
-          // Troisième essai: endpoint via produits
-          try {
-            response = await api.get(
-              API_ENDPOINTS.PRODUCTS.DETAIL_FAVORIS_UTILISATEUR,
-            );
-            console.log("Réponse de /produits/favoris:", response);
-          } catch (err3: any) {
-            console.log("Tous les endpoints ont échoué:", err3);
-            throw new Error(
-              "Impossible de récupérer les favoris. Vérifiez les permissions.",
-            );
-          }
-        }
-      }
+      console.log(`📊 ${favorisData.length} favori(s) trouvé(s)`);
 
-      // Extraire les données selon la structure de la réponse
-      const responseData = response.data || response;
-      console.log("Données de réponse complètes:", responseData);
-
-      let favorisData: any[] = [];
-
-      // Essayer différentes structures de données
-      if (responseData?.favoris && Array.isArray(responseData.favoris)) {
-        favorisData = responseData.favoris;
-      } else if (Array.isArray(responseData)) {
-        favorisData = responseData;
-      } else if (
-        responseData?.data?.favoris &&
-        Array.isArray(responseData.data.favoris)
-      ) {
-        favorisData = responseData.data.favoris;
-      } else if (Array.isArray(responseData?.data)) {
-        favorisData = responseData.data;
-      } else if (
-        responseData?.produits &&
-        Array.isArray(responseData.produits)
-      ) {
-        // Cas spécial pour l'endpoint /produits/favoris
-        favorisData = responseData.produits.map((produit: any) => ({
-          ...produit,
-          type: "produit",
-          produit: produit,
-          uuid: produit.uuid,
-        }));
-      } else {
-        // Essayer de trouver un tableau quelque part dans l'objet
-        const findArrayInObject = (obj: any): any[] => {
-          for (const key in obj) {
-            if (Array.isArray(obj[key])) {
-              return obj[key];
-            }
-          }
-          return [];
-        };
-        favorisData = findArrayInObject(responseData);
-      }
-
-      console.log("Données brutes des favoris:", favorisData);
-
-      if (!Array.isArray(favorisData) || favorisData.length === 0) {
-        console.log("Aucun favori trouvé ou tableau vide");
+      if (favorisData.length === 0) {
         setFavoris([]);
         setLoading(false);
         return;
@@ -511,19 +441,21 @@ export default function FavorisPage() {
 
       // Transformer les données
       const transformedData = favorisData
-        .map((item: any) => {
-          const transformed = transformFavoriData(item);
-          if (transformed) {
-            console.log("Item transformé:", transformed);
-          }
-          return transformed;
-        })
+        .map((item: any) => transformFavoriData(item))
         .filter((item): item is FavoriItem => item !== null);
 
-      console.log("Données transformées:", transformedData);
-      setFavoris(transformedData);
+      // Trier par date (plus récents d'abord)
+      const sortedData = [...transformedData].sort((a, b) => {
+        const dateA = a.addedAt ? new Date(a.addedAt).getTime() : 0;
+        const dateB = b.addedAt ? new Date(b.addedAt).getTime() : 0;
+        return dateB - dateA;
+      });
+
+      console.log(`✅ ${sortedData.length} favori(s) transformé(s)`);
+      setFavoris(sortedData);
+      setError(null);
     } catch (err: any) {
-      console.error("Erreur lors du chargement des favoris:", err);
+      console.error("❌ Erreur lors du chargement des favoris:", err);
       setError(
         err.response?.data?.message ||
           err.message ||
@@ -533,56 +465,50 @@ export default function FavorisPage() {
     } finally {
       setLoading(false);
     }
-  }, [transformFavoriData]);
+  }, [transformFavoriData, extractDataFromResponse]);
 
   // Charger les données au montage
   useEffect(() => {
     fetchFavoris();
   }, [fetchFavoris]);
 
-  // Actions
+  // ✅ Actions - SUPPRESSION AVEC L'ID DU FAVORI
   const handleRemoveFavori = useCallback(
     async (favoriteId: string, type: string) => {
       try {
-        // Trouver le favori par son ID
-        const favori = favoris.find((f) => f.favoriteId === favoriteId);
-        if (!favori) {
-          console.error("Favori non trouvé:", favoriteId);
-          alert("Favori non trouvé");
-          return;
-        }
+        console.log(`🗑️ Suppression du favori: ${favoriteId}`);
 
-        console.log("Suppression du favori:", {
-          favoriteId,
-          uuid: favori.uuid,
-          type: favori.type,
-        });
-
-        // Supprimer le favori - utiliser l'UUID de l'item
-        await api.delete(API_ENDPOINTS.FAVORIS.REMOVE(favori.uuid));
+        // Utiliser l'ID du favori pour la suppression
+        await api.delete(API_ENDPOINTS.FAVORIS.REMOVE(favoriteId));
 
         // Mise à jour optimiste
         setFavoris((prev) => prev.filter((f) => f.favoriteId !== favoriteId));
 
-        alert("Favori retiré avec succès");
+        // Retirer des sélections si nécessaire
+        if (selectedItems.has(favoriteId)) {
+          setSelectedItems((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(favoriteId);
+            return newSet;
+          });
+        }
+
+        console.log("✅ Favori supprimé avec succès");
       } catch (err: any) {
-        console.error("Erreur lors de la suppression du favori:", err);
+        console.error("❌ Erreur lors de la suppression du favori:", err);
         alert(err.response?.data?.message || "Erreur lors de la suppression");
       }
     },
-    [favoris],
+    [selectedItems],
   );
 
   const handleBulkRemove = useCallback(async (items: FavoriItem[]) => {
-    if (items.length === 0) {
-      alert("Aucun favori sélectionné");
-      return;
-    }
+    if (items.length === 0) return;
 
     try {
-      // Supprimer tous les favoris sélectionnés
+      // Supprimer tous les favoris sélectionnés (utiliser l'ID du favori)
       const promises = items.map((item) =>
-        api.delete(API_ENDPOINTS.FAVORIS.REMOVE(item.uuid)),
+        api.delete(API_ENDPOINTS.FAVORIS.REMOVE(item.favoriteId)),
       );
 
       await Promise.all(promises);
@@ -594,9 +520,9 @@ export default function FavorisPage() {
       // Réinitialiser la sélection
       setSelectedItems(new Set());
 
-      alert(`${items.length} favori(s) retiré(s) avec succès`);
+      console.log(`✅ ${items.length} favori(s) supprimé(s) avec succès`);
     } catch (err: any) {
-      console.error("Erreur lors de la suppression en masse:", err);
+      console.error("❌ Erreur lors de la suppression en masse:", err);
       alert("Erreur lors de la suppression des favoris");
     }
   }, []);
@@ -626,10 +552,8 @@ export default function FavorisPage() {
 
   const handleSelectAll = useCallback(() => {
     if (selectedItems.size === filteredFavoris.length) {
-      // Si tous sont déjà sélectionnés, tout désélectionner
       setSelectedItems(new Set());
     } else {
-      // Sinon, tout sélectionner
       const allIds = new Set(filteredFavoris.map((f) => f.favoriteId));
       setSelectedItems(allIds);
     }
