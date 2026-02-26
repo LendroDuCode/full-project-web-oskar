@@ -207,8 +207,8 @@ export default function ModifierProfile() {
     }
   };
 
-  // ✅ VERSION SIMPLIFIÉE - PLUS D'ENCODAGE MANUEL
-  const getAvatarUrl = useCallback(() => {
+  // ✅ VERSION SIMPLIFIÉE - Retourne TOUJOURS une string
+  const getAvatarUrl = useCallback((): string => {
     if (!profile) return getDefaultAvatar("A");
 
     if (avatarError) {
@@ -221,14 +221,14 @@ export default function ModifierProfile() {
 
     if (imagePath) {
       const url = buildImageUrl(imagePath);
-      console.log("🖼️ URL construite:", url);
-      return url;
+      // ✅ Si buildImageUrl retourne null, utiliser le fallback
+      return url || getDefaultAvatar(profile.nom || "A");
     }
 
     return getDefaultAvatar(profile.nom || "A");
   }, [profile, formData.avatar, formData.avatar_key, avatarError]);
 
-  const getDefaultAvatar = (nom: string) => {
+  const getDefaultAvatar = (nom: string): string => {
     const initials = nom ? nom.charAt(0).toUpperCase() : "A";
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=${encodeURIComponent(colors.oskar.green.replace("#", ""))}&color=fff&size=200&bold=true`;
   };
@@ -285,9 +285,10 @@ export default function ModifierProfile() {
       }
 
       setAvatarError(true);
+      // ✅ Forcer le changement de src avec le fallback
       target.src = getDefaultAvatar(profile?.nom || "A");
     },
-    [profile],
+    [profile, getDefaultAvatar],
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -667,7 +668,7 @@ export default function ModifierProfile() {
                         <div className="col-md-auto text-center mb-3 mb-md-0">
                           <div className="position-relative d-inline-block">
                             <img
-                              src={previewImage || getAvatarUrl()}
+                              src={previewImage || getAvatarUrl()} // ✅ Maintenant getAvatarUrl() retourne toujours string
                               alt="Photo administrateur"
                               className="rounded-circle border border-4 border-white shadow-lg"
                               style={{
