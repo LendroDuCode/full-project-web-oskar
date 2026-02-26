@@ -466,13 +466,15 @@ export default function DashboardHeader({
     return profile.isSuperAdmin ? "Super Admin" : profile.role || "Admin";
   }, [profile]);
 
-  // ✅ FONCTION SIMPLIFIÉE (comme dans Header)
-  const getAvatarUrl = useCallback(() => {
-    if (!profile?.avatar) {
+  // ✅ FONCTION CORRIGÉE - Retourne toujours une string
+  const getAvatarUrl = useCallback((): string => {
+    if (avatarError || !profile?.avatar) {
       return getDefaultAvatar(profile?.nom || profile?.prenoms || "U");
     }
-    return buildImageUrl(profile.avatar);
-  }, [profile]);
+    const url = buildImageUrl(profile.avatar);
+    // Si buildImageUrl retourne null, utiliser le fallback
+    return url || getDefaultAvatar(profile?.nom || profile?.prenoms || "U");
+  }, [profile, avatarError, getDefaultAvatar]);
 
   // Gestion des touches clavier
   const handleKeyDown = useCallback(
@@ -485,13 +487,17 @@ export default function DashboardHeader({
     [],
   );
 
-  // ✅ Gestionnaire d'erreur d'image simplifié
+  // ✅ Gestionnaire d'erreur d'image
   const handleImageError = useCallback(
     (e: React.SyntheticEvent<HTMLImageElement>) => {
       console.log("🖼️ Erreur de chargement d'image, fallback aux initiales");
       setAvatarError(true);
+      // Forcer le re-rendu avec le fallback
+      e.currentTarget.src = getDefaultAvatar(
+        profile?.nom || profile?.prenoms || "U",
+      );
     },
-    [],
+    [profile, getDefaultAvatar],
   );
 
   const toggleMobileMenu = () => {
