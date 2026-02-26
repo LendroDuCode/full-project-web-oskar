@@ -173,12 +173,12 @@ const Header: FC = () => {
 
   // Breakpoints plus précis pour un meilleur contrôle
   const breakpoints = {
-    xs: 0, // < 576px : très petits mobiles
-    sm: 576, // 576px - 767px : mobiles standards
-    md: 768, // 768px - 991px : tablettes
-    lg: 992, // 992px - 1199px : petits desktops
-    xl: 1200, // 1200px - 1399px : desktops standards
-    xxl: 1400, // ≥ 1400px : grands écrans
+    xs: 0,
+    sm: 576,
+    md: 768,
+    lg: 992,
+    xl: 1200,
+    xxl: 1400,
   };
 
   const isXs = windowWidth < breakpoints.sm;
@@ -283,7 +283,7 @@ const Header: FC = () => {
           })),
         );
 
-        // ÉTAPE 3: Éliminer les doublons basés sur le libellé (garder la plus récente par ID)
+        // ÉTAPE 3: Éliminer les doublons basés sur le libellé
         const uniqueCategoriesMap = new Map<string, Category>();
 
         mainCategories.forEach((category: Category) => {
@@ -679,13 +679,31 @@ const Header: FC = () => {
     xxl: 3,
   });
 
-  // ✅ FONCTION AVEC buildImageUrl CENTRALISÉ
-  const getAvatarUrl = useCallback(() => {
-    if (!userProfile?.avatar) {
-      return getDefaultAvatar(user?.nom || user?.prenoms || "U", iconSize);
+  // ✅ FONCTION AVEC buildImageUrl CENTRALISÉ - CORRIGÉE POUR NE JAMAIS RETOURNER NULL
+  const getAvatarUrl = useCallback((): string => {
+    if (!userProfile?.avatar || avatarError) {
+      return getDefaultAvatar(
+        user?.nom ||
+          user?.prenoms ||
+          userProfile?.nom ||
+          userProfile?.prenoms ||
+          "U",
+        iconSize,
+      );
     }
-    return buildImageUrl(userProfile.avatar);
-  }, [userProfile, user, iconSize]);
+    const url = buildImageUrl(userProfile.avatar);
+    return (
+      url ||
+      getDefaultAvatar(
+        user?.nom ||
+          user?.prenoms ||
+          userProfile?.nom ||
+          userProfile?.prenoms ||
+          "U",
+        iconSize,
+      )
+    );
+  }, [userProfile, user, iconSize, avatarError]);
 
   // ✅ GESTIONNAIRE D'ERREUR D'IMAGE
   const handleImageError = useCallback(
@@ -1458,30 +1476,17 @@ const Header: FC = () => {
                             border: `2px solid ${colors.oskar.green}`,
                           }}
                         >
-                          {getAvatarUrl() && !avatarError ? (
-                            <img
-                              src={getAvatarUrl()}
-                              alt={getUserFullName()}
-                              style={{
-                                width: "100%",
-                                height: "100%",
-                                objectFit: "cover",
-                              }}
-                              onError={handleImageError}
-                            />
-                          ) : (
-                            <div
-                              className="d-flex align-items-center justify-content-center w-100 h-100"
-                              style={{
-                                backgroundColor: colors.oskar.green,
-                                color: "white",
-                                fontSize: iconFontSize * 0.5,
-                                fontWeight: "bold",
-                              }}
-                            >
-                              {getUserInitials()}
-                            </div>
-                          )}
+                          {/* ✅ CORRECTION: getAvatarUrl() retourne toujours une string */}
+                          <img
+                            src={getAvatarUrl()}
+                            alt={getUserFullName()}
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                            }}
+                            onError={handleImageError}
+                          />
                         </div>
                       )}
                     </button>
@@ -1521,34 +1526,17 @@ const Header: FC = () => {
                                 border: `2px solid ${colors.oskar.green}`,
                               }}
                             >
-                              {getAvatarUrl() && !avatarError ? (
-                                <img
-                                  src={getAvatarUrl()}
-                                  alt={getUserFullName()}
-                                  style={{
-                                    width: "100%",
-                                    height: "100%",
-                                    objectFit: "cover",
-                                  }}
-                                  onError={handleImageError}
-                                />
-                              ) : (
-                                <div
-                                  className="d-flex align-items-center justify-content-center w-100 h-100"
-                                  style={{
-                                    backgroundColor: colors.oskar.green,
-                                    color: "white",
-                                    fontSize: getResponsiveSize({
-                                      lg: 14,
-                                      xl: 15,
-                                      xxl: 16,
-                                    }),
-                                    fontWeight: "bold",
-                                  }}
-                                >
-                                  {getUserInitials()}
-                                </div>
-                              )}
+                              {/* ✅ CORRECTION: getAvatarUrl() retourne toujours une string */}
+                              <img
+                                src={getAvatarUrl()}
+                                alt={getUserFullName()}
+                                style={{
+                                  width: "100%",
+                                  height: "100%",
+                                  objectFit: "cover",
+                                }}
+                                onError={handleImageError}
+                              />
                             </div>
                             <div className="flex-grow-1 min-w-0">
                               <h6
