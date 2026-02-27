@@ -15,31 +15,14 @@ interface ListingsGridProps {
 }
 
 // ============================================
-// FONCTION DE CONSTRUCTION D'URL D'IMAGE ROBUSTE - ✅ CORRIGÉE
+// FONCTION DE CONSTRUCTION D'URL D'IMAGE ROBUSTE
 // ============================================
 const buildImageUrl = (imagePath: string | null): string | null => {
   if (!imagePath) return null;
 
-  // ✅ Si c'est déjà une URL complète, la retourner telle quelle
-  if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
-    return imagePath;
-  }
-
-  const apiUrl =
-    process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
   const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
 
-  // ✅ Si le chemin commence par /api/files, ne pas l'ajouter à nouveau
-  if (imagePath.startsWith("/api/files/")) {
-    return `${apiUrl}${imagePath}`;
-  }
-
-  // ✅ Si le chemin commence par api/files (sans le slash), l'ajouter
-  if (imagePath.startsWith("api/files/")) {
-    return `${apiUrl}/${imagePath}`;
-  }
-
-  // ✅ Si le chemin est un chemin simple (ex: echanges%2F1772188621306-920351589.jpg)
   return `${apiUrl}${filesUrl}/${imagePath}`;
 };
 
@@ -195,7 +178,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           libelle: item.libelle,
           description: item.description,
           prix: item.prix,
-          image: normalizeImageUrl(item.image), // ✅ Utilisation de la fonction corrigée
+          image: `${process.env.NEXT_PUBLIC_API_URL}${process.env.NEXT_PUBLIC_FILES_URL}${item.image}`,
           date: item.date || item.createdAt || item.publieLe,
           disponible: item.disponible,
           statut: item.statut,
@@ -228,7 +211,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           titre: item.nom || item.titre || "Don sans titre",
           description: item.description,
           prix: item.prix,
-          image: normalizeImageUrl(item.image), // ✅ Utilisation de la fonction corrigée
+          image: normalizeImageUrl(item.image),
           statut: item.statut,
           numero: item.numero,
           localisation:
@@ -261,7 +244,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           titre: item.nomElementEchange || item.titre || "Échange sans titre",
           description: item.message || item.description,
           prix: item.prix,
-          image: normalizeImageUrl(item.image), // ✅ Utilisation de la fonction corrigée
+          image: normalizeImageUrl(item.image),
           statut: item.statut,
           numero: item.numero,
           localisation:
@@ -295,7 +278,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           libelle: item.libelle,
           description: item.description,
           prix: item.prix,
-          image: normalizeImageUrl(item.image), // ✅ Utilisation de la fonction corrigée
+          image: normalizeImageUrl(item.image),
           date: item.date || item.createdAt || item.publieLe,
           disponible: item.disponible,
           statut: item.statut,

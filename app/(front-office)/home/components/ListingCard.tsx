@@ -111,6 +111,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
   // app/(front-office)/home/components/ListingCard.tsx
 
   const getImageSrc = () => {
+    /*
     const apiUrl =
       process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
     const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
@@ -118,8 +119,12 @@ const ListingCard: React.FC<ListingCardProps> = ({
     // ✅ CAS 4: Chemin simple (sans %2F)
     const finalUrl = `${apiUrl}${filesUrl}/${listing.image}`;
     console.log("✅ Chemin simple:", finalUrl);
-    return finalUrl;
   };
+    */
+
+    return listing.image;
+
+
 
   const formatPrice = (price: number | string | null | undefined) => {
     if (price === null || price === undefined) return "Gratuit";
