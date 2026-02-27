@@ -178,7 +178,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           libelle: item.libelle,
           description: item.description,
           prix: item.prix,
-          image: normalizeImageUrl(item.image),
+          image: `${process.env.NEXT_PUBLIC_API_URL}${process.env.NEXT_PUBLIC_FILES_URL}${item.image}`,
           date: item.date || item.createdAt || item.publieLe,
           disponible: item.disponible,
           statut: item.statut,
