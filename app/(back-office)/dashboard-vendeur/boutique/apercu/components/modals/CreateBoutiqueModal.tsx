@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, ChangeEvent } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faPlus,
@@ -16,10 +16,11 @@ import {
   faBox,
   faTag,
   faExclamationTriangle,
+  faUpload,
+  faTrash,
 } from "@fortawesome/free-solid-svg-icons";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
-import colors from "@/app/shared/constants/colors";
 
 interface TypeBoutique {
   uuid: string;
@@ -37,7 +38,7 @@ interface CreateBoutiqueModalProps {
   loading: boolean;
   onClose: () => void;
   onCreate: (data: any) => Promise<void>;
-  vendeurData?: any; // ✅ Données du vendeur pour le workflow après connexion
+  vendeurData?: any;
 }
 
 const CreateBoutiqueModal = ({
@@ -45,7 +46,7 @@ const CreateBoutiqueModal = ({
   loading,
   onClose,
   onCreate,
-  vendeurData, // ✅ Nouvelle prop
+  vendeurData,
 }: CreateBoutiqueModalProps) => {
   const [formData, setFormData] = useState({
     nom: "",
@@ -64,49 +65,52 @@ const CreateBoutiqueModal = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [apiError, setApiError] = useState<string | null>(null);
 
-  // ✅ Nettoyage des previews à la fermeture
-  useEffect(() => {
-    return () => {
-      if (logoPreview) URL.revokeObjectURL(logoPreview);
-      if (bannierePreview) URL.revokeObjectURL(bannierePreview);
-    };
-  }, [logoPreview, bannierePreview]);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const banniereInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
+    e: ChangeEvent<HTMLInputElement>,
     type: "logo" | "banniere",
   ) => {
     const file = e.target.files?.[0] || null;
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setErrors({
-          ...errors,
-          [type]: "L'image ne doit pas dépasser 5MB",
-        });
-        return;
-      }
+    if (!file) return;
 
-      if (!file.type.startsWith("image/")) {
-        setErrors({
-          ...errors,
-          [type]: "Veuillez sélectionner une image valide",
-        });
-        return;
-      }
+    // Vérifier le type de fichier
+    const validTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (!validTypes.includes(file.type)) {
+      setErrors({
+        ...errors,
+        [type]: "Format non supporté. Utilisez: JPG, PNG ou WebP",
+      });
+      return;
+    }
 
-      setErrors({ ...errors, [type]: "" });
-      setApiError(null);
+    // Vérifier la taille (max 5MB)
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setErrors({
+        ...errors,
+        [type]: "L'image ne doit pas dépasser 5MB",
+      });
+      return;
+    }
 
-      if (type === "logo") {
-        // ✅ Nettoyer l'ancienne preview
-        if (logoPreview) URL.revokeObjectURL(logoPreview);
-        setFormData({ ...formData, logo: file });
-        setLogoPreview(URL.createObjectURL(file));
-      } else {
-        if (bannierePreview) URL.revokeObjectURL(bannierePreview);
-        setFormData({ ...formData, banniere: file });
-        setBannierePreview(URL.createObjectURL(file));
+    setErrors({ ...errors, [type]: "" });
+    setApiError(null); // Effacer l'erreur API lors d'une nouvelle action
+
+    if (type === "logo") {
+      // Nettoyer l'ancienne preview
+      if (logoPreview && logoPreview.startsWith("blob:")) {
+        URL.revokeObjectURL(logoPreview);
       }
+      setFormData({ ...formData, logo: file });
+      setLogoPreview(URL.createObjectURL(file));
+    } else {
+      if (bannierePreview && bannierePreview.startsWith("blob:")) {
+        URL.revokeObjectURL(bannierePreview);
+      }
+      setFormData({ ...formData, banniere: file });
+      setBannierePreview(URL.createObjectURL(file));
     }
   };
 
@@ -123,24 +127,33 @@ const CreateBoutiqueModal = ({
 
       let typesData: TypeBoutique[] = [];
 
-      // ✅ Extraction robuste des données
       if (Array.isArray(response)) {
         typesData = response;
-      } else if (response && typeof response === "object") {
-        if ("data" in response && Array.isArray(response.data)) {
-          typesData = response.data;
-        } else {
-          // Chercher le premier tableau dans l'objet
-          const arrayKey = Object.keys(response).find((key) =>
-            Array.isArray(response[key]),
+      } else if (
+        response &&
+        typeof response === "object" &&
+        "data" in response
+      ) {
+        const data = response.data;
+        if (Array.isArray(data)) {
+          typesData = data;
+        } else if (data && typeof data === "object") {
+          const arrayKey = Object.keys(data).find((key) =>
+            Array.isArray(data[key]),
           );
-          if (arrayKey && response[arrayKey]) {
-            typesData = response[arrayKey];
+          if (arrayKey && data[arrayKey]) {
+            typesData = data[arrayKey];
           }
+        }
+      } else if (response && typeof response === "object") {
+        const arrayKey = Object.keys(response).find((key) =>
+          Array.isArray(response[key]),
+        );
+        if (arrayKey && response[arrayKey]) {
+          typesData = response[arrayKey];
         }
       }
 
-      // ✅ Filtrer les entrées valides
       typesData = typesData.filter(
         (item) =>
           item &&
@@ -179,11 +192,20 @@ const CreateBoutiqueModal = ({
       fetchTypesBoutique();
       setErrors({});
       setApiError(null);
-    } else {
-      // ✅ Réinitialiser quand le modal se ferme
-      resetForm();
     }
   }, [show]);
+
+  // Nettoyer les previews à la fermeture
+  useEffect(() => {
+    return () => {
+      if (logoPreview && logoPreview.startsWith("blob:")) {
+        URL.revokeObjectURL(logoPreview);
+      }
+      if (bannierePreview && bannierePreview.startsWith("blob:")) {
+        URL.revokeObjectURL(bannierePreview);
+      }
+    };
+  }, [logoPreview, bannierePreview]);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -219,7 +241,7 @@ const CreateBoutiqueModal = ({
     }
 
     setErrors(newErrors);
-    setApiError(null);
+    setApiError(null); // Effacer l'erreur API lors de la validation
     return Object.keys(newErrors).length === 0;
   };
 
@@ -232,20 +254,21 @@ const CreateBoutiqueModal = ({
     }
 
     try {
-      // ✅ Préparer les données pour l'API
+      // Créer FormData comme dans le modal de produit
       const submitData = new FormData();
-      submitData.append("nom", formData.nom);
+      submitData.append("nom", formData.nom.trim());
       submitData.append("type_boutique_uuid", formData.type_boutique_uuid);
-      if (formData.description) {
-        submitData.append("description", formData.description);
+
+      if (formData.description?.trim()) {
+        submitData.append("description", formData.description.trim());
       }
-      if (formData.politique_retour) {
-        submitData.append("politique_retour", formData.politique_retour);
+      if (formData.politique_retour?.trim()) {
+        submitData.append("politique_retour", formData.politique_retour.trim());
       }
-      if (formData.conditions_utilisation) {
+      if (formData.conditions_utilisation?.trim()) {
         submitData.append(
           "conditions_utilisation",
-          formData.conditions_utilisation,
+          formData.conditions_utilisation.trim(),
         );
       }
       if (formData.logo) {
@@ -255,20 +278,17 @@ const CreateBoutiqueModal = ({
         submitData.append("banniere", formData.banniere);
       }
 
-      // ✅ Ajouter l'UUID du vendeur si disponible
       if (vendeurData?.vendeurId) {
         submitData.append("vendeur_uuid", vendeurData.vendeurId);
       }
 
+      // Appeler la fonction onCreate du parent
       await onCreate(submitData);
-      // ✅ La fermeture et le reset seront gérés par le parent après succès
+
+      // La fermeture et le reset sont gérés par le parent après succès
     } catch (error: any) {
       console.error("Erreur dans handleSubmit:", error);
-      setApiError(
-        error.response?.data?.message ||
-          error.message ||
-          "Une erreur est survenue lors de la création",
-      );
+      // L'erreur est déjà gérée dans le parent
     }
   };
 
@@ -278,9 +298,13 @@ const CreateBoutiqueModal = ({
   };
 
   const resetForm = () => {
-    // ✅ Nettoyer les previews
-    if (logoPreview) URL.revokeObjectURL(logoPreview);
-    if (bannierePreview) URL.revokeObjectURL(bannierePreview);
+    // Nettoyer les previews
+    if (logoPreview && logoPreview.startsWith("blob:")) {
+      URL.revokeObjectURL(logoPreview);
+    }
+    if (bannierePreview && bannierePreview.startsWith("blob:")) {
+      URL.revokeObjectURL(bannierePreview);
+    }
 
     setFormData({
       nom: "",
@@ -295,17 +319,35 @@ const CreateBoutiqueModal = ({
     setBannierePreview(null);
     setErrors({});
     setApiError(null);
+
+    // Réinitialiser les inputs file
+    if (logoInputRef.current) {
+      logoInputRef.current.value = "";
+    }
+    if (banniereInputRef.current) {
+      banniereInputRef.current.value = "";
+    }
   };
 
   const removeImage = (type: "logo" | "banniere") => {
     if (type === "logo") {
-      if (logoPreview) URL.revokeObjectURL(logoPreview);
+      if (logoPreview && logoPreview.startsWith("blob:")) {
+        URL.revokeObjectURL(logoPreview);
+      }
       setFormData({ ...formData, logo: null });
       setLogoPreview(null);
+      if (logoInputRef.current) {
+        logoInputRef.current.value = "";
+      }
     } else {
-      if (bannierePreview) URL.revokeObjectURL(bannierePreview);
+      if (bannierePreview && bannierePreview.startsWith("blob:")) {
+        URL.revokeObjectURL(bannierePreview);
+      }
       setFormData({ ...formData, banniere: null });
       setBannierePreview(null);
+      if (banniereInputRef.current) {
+        banniereInputRef.current.value = "";
+      }
     }
     setErrors({ ...errors, [type]: "" });
     setApiError(null);
@@ -317,25 +359,15 @@ const CreateBoutiqueModal = ({
     return faTag;
   };
 
-  const getTypeDescription = (type: TypeBoutique) => {
-    if (type.description) return type.description;
-    if (type.peut_vendre_produits && type.peut_vendre_biens) {
-      return "Peut vendre produits et biens";
-    }
-    if (type.peut_vendre_produits) return "Peut vendre des produits";
-    if (type.peut_vendre_biens) return "Peut vendre des biens";
-    return "";
-  };
-
   if (!show) return null;
 
   return (
     <div
       className="modal fade show d-block"
-      style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 20000 }} // ✅ Z-index très élevé
+      style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1050 }}
       tabIndex={-1}
       onClick={(e) => {
-        if (e.target === e.currentTarget && !loading) handleClose();
+        if (e.target === e.currentTarget) handleClose();
       }}
     >
       <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
@@ -343,8 +375,7 @@ const CreateBoutiqueModal = ({
           <div
             className="modal-header border-0 text-white position-relative overflow-hidden"
             style={{
-              background: "linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)", // ✅ Bleu pour les vendeurs
-              padding: "1.5rem 2rem",
+              background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
             }}
           >
             <div className="position-absolute top-0 end-0 bottom-0 start-0 opacity-10">
@@ -355,13 +386,13 @@ const CreateBoutiqueModal = ({
               />
             </div>
             <div className="position-relative z-1">
-              <h5 className="modal-title fw-bold d-flex align-items-center gap-3 mb-2">
+              <h5 className="modal-title fw-bold d-flex align-items-center gap-2">
                 <div className="bg-white bg-opacity-20 rounded-circle p-2">
                   <FontAwesomeIcon icon={faPlus} className="fs-5" />
                 </div>
                 <span>Créer votre boutique</span>
               </h5>
-              <p className="mb-0 text-white text-opacity-90 small ps-5">
+              <p className="mb-0 text-white text-opacity-90 small">
                 {vendeurData?.firstName
                   ? `Bonjour ${vendeurData.firstName}, `
                   : ""}
@@ -404,7 +435,7 @@ const CreateBoutiqueModal = ({
             )}
 
             <div className="p-4 border-bottom">
-              <h6 className="fw-bold mb-3 text-primary d-flex align-items-center gap-2">
+              <h6 className="fw-bold mb-3 text-success d-flex align-items-center gap-2">
                 <FontAwesomeIcon icon={faInfoCircle} />
                 Informations principales
               </h6>
@@ -426,7 +457,7 @@ const CreateBoutiqueModal = ({
                       onChange={(e) => {
                         setFormData({ ...formData, nom: e.target.value });
                         if (errors.nom) setErrors({ ...errors, nom: "" });
-                        setApiError(null);
+                        setApiError(null); // Effacer l'erreur API quand l'utilisateur modifie le champ
                       }}
                       required
                       disabled={loading}
@@ -488,9 +519,9 @@ const CreateBoutiqueModal = ({
                         <FontAwesomeIcon
                           icon={faSpinner}
                           spin
-                          className="text-primary"
+                          className="text-success"
                         />
-                        <small className="text-primary">
+                        <small className="text-success">
                           Chargement des types de boutique...
                         </small>
                       </div>
@@ -505,11 +536,6 @@ const CreateBoutiqueModal = ({
                     <div className="invalid-feedback d-block">
                       {errors.type}
                     </div>
-                  )}
-                  {typesBoutique.length > 0 && !loadingTypes && (
-                    <small className="text-muted d-block mt-1">
-                      {typesBoutique.length} type(s) disponible(s)
-                    </small>
                   )}
                 </div>
 
@@ -560,7 +586,7 @@ const CreateBoutiqueModal = ({
             </div>
 
             <div className="p-4 border-bottom">
-              <h6 className="fw-bold mb-3 text-primary d-flex align-items-center gap-2">
+              <h6 className="fw-bold mb-3 text-success d-flex align-items-center gap-2">
                 <FontAwesomeIcon icon={faImage} />
                 Images
               </h6>
@@ -568,7 +594,7 @@ const CreateBoutiqueModal = ({
               <div className="row g-4">
                 <div className="col-md-6">
                   <div className="card border h-100">
-                    <div className="card-body d-flex flex-column">
+                    <div className="card-body">
                       <label className="form-label fw-semibold mb-3">
                         Logo
                         <span className="text-muted fw-normal ms-1">
@@ -576,89 +602,84 @@ const CreateBoutiqueModal = ({
                         </span>
                       </label>
 
-                      <div className="mb-3">
-                        <div
-                          className={`file-upload-area ${errors.logo ? "border-danger" : "border-dashed"} rounded-3 p-4 text-center`}
-                          style={{
-                            border: "2px dashed #dee2e6",
-                            backgroundColor: logoPreview
-                              ? "transparent"
-                              : "#f8f9fa",
-                            transition: "all 0.3s ease",
-                          }}
-                        >
-                          {logoPreview ? (
-                            <div className="position-relative">
-                              <img
-                                src={logoPreview}
-                                alt="Aperçu logo"
-                                className="img-fluid rounded shadow-sm"
-                                style={{ maxHeight: "150px" }}
+                      {/* Aperçu du logo */}
+                      {logoPreview && (
+                        <div className="mb-3">
+                          <div className="position-relative d-inline-block">
+                            <img
+                              src={logoPreview}
+                              alt="Aperçu logo"
+                              className="img-fluid rounded border shadow-sm"
+                              style={{
+                                maxWidth: "150px",
+                                maxHeight: "150px",
+                                objectFit: "cover",
+                              }}
+                            />
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-danger position-absolute top-0 end-0 m-1"
+                              onClick={() => removeImage("logo")}
+                              disabled={loading}
+                              style={{
+                                width: "28px",
+                                height: "28px",
+                                borderRadius: "50%",
+                                padding: "0",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                              title="Supprimer l'image"
+                            >
+                              <FontAwesomeIcon
+                                icon={faTrash}
+                                className="fs-10"
                               />
-                              <button
-                                type="button"
-                                className="btn btn-danger btn-sm position-absolute top-0 end-0 m-2"
-                                onClick={() => removeImage("logo")}
-                                title="Supprimer l'image"
-                              >
-                                <FontAwesomeIcon icon={faTimes} />
-                              </button>
-                            </div>
-                          ) : (
-                            <>
-                              <div className="mb-3">
-                                <FontAwesomeIcon
-                                  icon={faImage}
-                                  className="fs-1 text-muted mb-2"
-                                />
-                                <p className="mb-1">
-                                  Glissez-déposez ou cliquez pour uploader
-                                </p>
-                                <small className="text-muted">
-                                  PNG, JPG, JPEG (max. 5MB)
-                                </small>
-                              </div>
-                              <input
-                                type="file"
-                                className="form-control d-none"
-                                id="logo-upload"
-                                accept="image/*"
-                                onChange={(e) => handleFileChange(e, "logo")}
-                                disabled={loading}
-                              />
-                              <label
-                                htmlFor="logo-upload"
-                                className="btn btn-outline-primary btn-sm"
-                                style={{
-                                  cursor: loading ? "not-allowed" : "pointer",
-                                }}
-                              >
-                                Choisir un logo
-                              </label>
-                            </>
-                          )}
-                        </div>
-                        {errors.logo && (
-                          <div className="invalid-feedback d-block mt-2">
-                            {errors.logo}
+                            </button>
                           </div>
-                        )}
-                      </div>
+                        </div>
+                      )}
 
-                      <div className="mt-auto">
+                      {/* Upload logo */}
+                      <div className="input-group">
+                        <input
+                          ref={logoInputRef}
+                          type="file"
+                          className="form-control"
+                          accept="image/jpeg,image/jpg,image/png,image/webp"
+                          onChange={(e) => handleFileChange(e, "logo")}
+                          disabled={loading}
+                          style={{ borderRadius: "8px 0 0 8px" }}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-outline-success"
+                          onClick={() => logoInputRef.current?.click()}
+                          disabled={loading}
+                          style={{ borderRadius: "0 8px 8px 0" }}
+                        >
+                          <FontAwesomeIcon icon={faUpload} />
+                        </button>
+                      </div>
+                      {errors.logo && (
+                        <div className="text-danger small mt-1">
+                          {errors.logo}
+                        </div>
+                      )}
+
+                      <div className="mt-3">
                         <small className="text-muted d-block">
                           <strong>Recommandations :</strong>
                         </small>
-                        <small className="text-muted">
+                        <small className="text-muted d-block">
                           • Format carré (1:1)
                         </small>
-                        <br />
-                        <small className="text-muted">
+                        <small className="text-muted d-block">
                           • Taille minimale : 200×200px
                         </small>
-                        <br />
-                        <small className="text-muted">
-                          • Fond transparent préférable
+                        <small className="text-muted d-block">
+                          • Formats: JPG, PNG, WebP (max 5MB)
                         </small>
                       </div>
                     </div>
@@ -667,7 +688,7 @@ const CreateBoutiqueModal = ({
 
                 <div className="col-md-6">
                   <div className="card border h-100">
-                    <div className="card-body d-flex flex-column">
+                    <div className="card-body">
                       <label className="form-label fw-semibold mb-3">
                         Bannière
                         <span className="text-muted fw-normal ms-1">
@@ -675,95 +696,84 @@ const CreateBoutiqueModal = ({
                         </span>
                       </label>
 
-                      <div className="mb-3">
-                        <div
-                          className={`file-upload-area ${errors.banniere ? "border-danger" : "border-dashed"} rounded-3 p-4 text-center`}
-                          style={{
-                            border: "2px dashed #dee2e6",
-                            backgroundColor: bannierePreview
-                              ? "transparent"
-                              : "#f8f9fa",
-                            transition: "all 0.3s ease",
-                          }}
-                        >
-                          {bannierePreview ? (
-                            <div className="position-relative">
-                              <img
-                                src={bannierePreview}
-                                alt="Aperçu bannière"
-                                className="img-fluid rounded shadow-sm"
-                                style={{
-                                  maxHeight: "150px",
-                                  width: "100%",
-                                  objectFit: "cover",
-                                }}
+                      {/* Aperçu de la bannière */}
+                      {bannierePreview && (
+                        <div className="mb-3">
+                          <div className="position-relative">
+                            <img
+                              src={bannierePreview}
+                              alt="Aperçu bannière"
+                              className="img-fluid rounded border shadow-sm"
+                              style={{
+                                maxHeight: "100px",
+                                width: "100%",
+                                objectFit: "cover",
+                              }}
+                            />
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-danger position-absolute top-0 end-0 m-1"
+                              onClick={() => removeImage("banniere")}
+                              disabled={loading}
+                              style={{
+                                width: "28px",
+                                height: "28px",
+                                borderRadius: "50%",
+                                padding: "0",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                              }}
+                              title="Supprimer l'image"
+                            >
+                              <FontAwesomeIcon
+                                icon={faTrash}
+                                className="fs-10"
                               />
-                              <button
-                                type="button"
-                                className="btn btn-danger btn-sm position-absolute top-0 end-0 m-2"
-                                onClick={() => removeImage("banniere")}
-                                title="Supprimer l'image"
-                              >
-                                <FontAwesomeIcon icon={faTimes} />
-                              </button>
-                            </div>
-                          ) : (
-                            <>
-                              <div className="mb-3">
-                                <FontAwesomeIcon
-                                  icon={faImage}
-                                  className="fs-1 text-muted mb-2"
-                                />
-                                <p className="mb-1">
-                                  Glissez-déposez ou cliquez pour uploader
-                                </p>
-                                <small className="text-muted">
-                                  PNG, JPG, JPEG (max. 5MB)
-                                </small>
-                              </div>
-                              <input
-                                type="file"
-                                className="form-control d-none"
-                                id="banniere-upload"
-                                accept="image/*"
-                                onChange={(e) =>
-                                  handleFileChange(e, "banniere")
-                                }
-                                disabled={loading}
-                              />
-                              <label
-                                htmlFor="banniere-upload"
-                                className="btn btn-outline-primary btn-sm"
-                                style={{
-                                  cursor: loading ? "not-allowed" : "pointer",
-                                }}
-                              >
-                                Choisir une bannière
-                              </label>
-                            </>
-                          )}
-                        </div>
-                        {errors.banniere && (
-                          <div className="invalid-feedback d-block mt-2">
-                            {errors.banniere}
+                            </button>
                           </div>
-                        )}
-                      </div>
+                        </div>
+                      )}
 
-                      <div className="mt-auto">
+                      {/* Upload bannière */}
+                      <div className="input-group">
+                        <input
+                          ref={banniereInputRef}
+                          type="file"
+                          className="form-control"
+                          accept="image/jpeg,image/jpg,image/png,image/webp"
+                          onChange={(e) => handleFileChange(e, "banniere")}
+                          disabled={loading}
+                          style={{ borderRadius: "8px 0 0 8px" }}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-outline-success"
+                          onClick={() => banniereInputRef.current?.click()}
+                          disabled={loading}
+                          style={{ borderRadius: "0 8px 8px 0" }}
+                        >
+                          <FontAwesomeIcon icon={faUpload} />
+                        </button>
+                      </div>
+                      {errors.banniere && (
+                        <div className="text-danger small mt-1">
+                          {errors.banniere}
+                        </div>
+                      )}
+
+                      <div className="mt-3">
                         <small className="text-muted d-block">
                           <strong>Recommandations :</strong>
                         </small>
-                        <small className="text-muted">
+                        <small className="text-muted d-block">
                           • Format paysage (16:9)
                         </small>
-                        <br />
-                        <small className="text-muted">
+                        <small className="text-muted d-block">
                           • Taille recommandée : 1200×400px
                         </small>
-                        <br />
-                        <small className="text-muted">
-                          • Image haute qualité
+                        <small className="text-muted d-block">
+                          • Formats: JPG, PNG, WebP (max 5MB)
                         </small>
                       </div>
                     </div>
@@ -773,7 +783,7 @@ const CreateBoutiqueModal = ({
             </div>
 
             <div className="p-4">
-              <h6 className="fw-bold mb-3 text-primary d-flex align-items-center gap-2">
+              <h6 className="fw-bold mb-3 text-success d-flex align-items-center gap-2">
                 <FontAwesomeIcon icon={faClipboardCheck} />
                 Conditions et politiques
               </h6>
@@ -805,7 +815,11 @@ const CreateBoutiqueModal = ({
                       Informez vos clients sur les retours et échanges
                     </small>
                     <small
-                      className={`${formData.politique_retour.length > 900 ? "text-warning" : "text-muted"}`}
+                      className={
+                        formData.politique_retour.length > 900
+                          ? "text-warning"
+                          : "text-muted"
+                      }
                     >
                       {formData.politique_retour.length}/1000 caractères
                     </small>
@@ -843,7 +857,11 @@ const CreateBoutiqueModal = ({
                       Définissez les règles d'utilisation de votre boutique
                     </small>
                     <small
-                      className={`${formData.conditions_utilisation.length > 900 ? "text-warning" : "text-muted"}`}
+                      className={
+                        formData.conditions_utilisation.length > 900
+                          ? "text-warning"
+                          : "text-muted"
+                      }
                     >
                       {formData.conditions_utilisation.length}/1000 caractères
                     </small>
@@ -870,17 +888,17 @@ const CreateBoutiqueModal = ({
             </button>
             <button
               type="submit"
-              className="btn btn-lg btn-primary d-flex align-items-center gap-2"
+              className="btn btn-lg btn-success d-flex align-items-center gap-2"
               onClick={handleSubmit}
               disabled={loading || loadingTypes || typesBoutique.length === 0}
               style={{
-                background: "linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)",
+                background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
                 border: "none",
               }}
             >
               {loading ? (
                 <>
-                  <FontAwesomeIcon icon={faSpinner} spin className="me-2" />
+                  <span className="spinner-border spinner-border-sm me-2"></span>
                   Création en cours...
                 </>
               ) : (
@@ -901,8 +919,8 @@ const CreateBoutiqueModal = ({
         }
 
         .file-upload-area:hover {
-          border-color: #0ea5e9 !important;
-          background-color: rgba(14, 165, 233, 0.05) !important;
+          border-color: #10b981 !important;
+          background-color: rgba(16, 185, 129, 0.05) !important;
         }
 
         .border-dashed {
@@ -926,8 +944,8 @@ const CreateBoutiqueModal = ({
 
         .form-control:focus,
         .form-select:focus {
-          border-color: #0ea5e9;
-          box-shadow: 0 0 0 0.25rem rgba(14, 165, 233, 0.25);
+          border-color: #10b981;
+          box-shadow: 0 0 0 0.25rem rgba(16, 185, 129, 0.25);
         }
 
         .card {
@@ -941,29 +959,37 @@ const CreateBoutiqueModal = ({
           box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1) !important;
         }
 
-        .text-primary {
-          color: #0284c7 !important;
+        .text-success {
+          color: #059669 !important;
         }
 
-        .btn-outline-primary {
-          color: #0284c7;
-          border-color: #0284c7;
+        .btn-outline-success {
+          color: #059669;
+          border-color: #059669;
         }
 
-        .btn-outline-primary:hover {
-          background-color: #0284c7;
-          border-color: #0284c7;
+        .btn-outline-success:hover {
+          background-color: #059669;
+          border-color: #059669;
           color: white;
         }
 
-        .btn-primary {
-          background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+        .btn-success {
+          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
         }
 
-        .btn-primary:hover:not(:disabled) {
-          background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+        .btn-success:hover:not(:disabled) {
+          background: linear-gradient(135deg, #059669 0%, #047857 100%);
           transform: translateY(-2px);
-          box-shadow: 0 10px 20px rgba(14, 165, 233, 0.3);
+          box-shadow: 0 10px 20px rgba(16, 185, 129, 0.3);
+        }
+
+        .fs-14 {
+          font-size: 14px !important;
+        }
+
+        .fs-10 {
+          font-size: 10px !important;
         }
       `}</style>
     </div>

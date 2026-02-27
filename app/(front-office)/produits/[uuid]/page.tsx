@@ -543,7 +543,7 @@ export default function ProduitDetailPage() {
   const [loadingRecents, setLoadingRecents] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [quantite, setQuantite] = useState(1);
-  const [favori, setFavori] = useState(false); // État basé sur la réponse API
+  const [favori, setFavori] = useState(false);
   const [showMoreComments, setShowMoreComments] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
   const [commentairesFetched, setCommentairesFetched] = useState(false);
@@ -563,8 +563,10 @@ export default function ProduitDetailPage() {
   const [selectedThumbnail, setSelectedThumbnail] = useState(0);
   const [contactVisible, setContactVisible] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
+  const [favoriInitialized, setFavoriInitialized] = useState(false);
 
-  // 🔴 SUPPRIMER LE STOCKAGE LOCAL DES FAVORIS - On utilise uniquement l'API
+  // ✅ Ref pour suivre si le chargement a déjà été effectué
+  const initialLoadDone = useRef(false);
 
   // Timer pour le toast
   useEffect(() => {
@@ -698,43 +700,22 @@ export default function ProduitDetailPage() {
     }
   };
 
-  // ✅ FONCTION FORMATDATE CORRIGÉE - GESTION DES FUSEAUX HORAIRES
   const formatDate = (dateString: string) => {
     if (!dateString) return "Date inconnue";
 
     try {
-      // Créer la date en UTC pour éviter les décalages
       const date = new Date(dateString);
       if (isNaN(date.getTime())) {
         return "Date inconnue";
       }
 
-      // Obtenir la date UTC
-      const utcYear = date.getUTCFullYear();
-      const utcMonth = date.getUTCMonth();
-      const utcDay = date.getUTCDate();
-      const utcHours = date.getUTCHours();
-      const utcMinutes = date.getUTCMinutes();
-
-      // Obtenir la date locale actuelle
       const now = new Date();
-
-      // Créer des dates UTC pour la comparaison
-      const todayUTC = new Date(
-        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-      );
-
-      const commentDateUTC = new Date(Date.UTC(utcYear, utcMonth, utcDay));
-
-      // Calculer la différence en jours UTC
-      const diffTime = todayUTC.getTime() - commentDateUTC.getTime();
+      const diffTime = now.getTime() - date.getTime();
       const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
-      // Formatage de l'heure en UTC
       const timeStr = date.toLocaleTimeString("fr-FR", {
         hour: "2-digit",
         minute: "2-digit",
-        timeZone: "UTC", // Forcer l'affichage en UTC
       });
 
       if (diffDays === 0) {
@@ -744,12 +725,10 @@ export default function ProduitDetailPage() {
       } else if (diffDays < 7) {
         return `Il y a ${diffDays} jours`;
       } else {
-        // Pour les dates plus anciennes, afficher la date locale
         return date.toLocaleDateString("fr-FR", {
           day: "numeric",
           month: "long",
           year: "numeric",
-          timeZone: "UTC",
         });
       }
     } catch {
@@ -935,16 +914,13 @@ export default function ProduitDetailPage() {
     };
   };
 
-  // ✅ FONCTION TRANSFORM BOUTIQUE AMÉLIORÉE - Inclut le vendeur
   const transformBoutiqueData = (apiBoutique: BoutiqueAPI): Boutique => {
     const logoUrl = normalizeImageUrl(apiBoutique.logo, apiBoutique.logo_key);
-
     const banniereUrl = normalizeImageUrl(
       apiBoutique.banniere,
       apiBoutique.banniere_key,
     );
 
-    // Transformer le vendeur de la boutique s'il existe
     const vendeurBoutique = apiBoutique.vendeur
       ? transformCreateurInfo(apiBoutique.vendeur)
       : undefined;
@@ -966,15 +942,13 @@ export default function ProduitDetailPage() {
       type_boutique_uuid: apiBoutique.type_boutique_uuid,
       politique_retour: apiBoutique.politique_retour,
       conditions_utilisation: apiBoutique.conditions_utilisation,
-      vendeur: vendeurBoutique, // Ajout du vendeur de la boutique
+      vendeur: vendeurBoutique,
     };
   };
 
-  // ✅ FONCTION TRANSFORM COMMENTAIRE AMÉLIORÉE
   const transformCommentaireData = (
     apiCommentaire: CommentaireAPI,
   ): Commentaire => {
-    // Récupérer l'auteur (peut être dans auteur ou utilisateur selon la structure API)
     const auteur = apiCommentaire.auteur || apiCommentaire.utilisateur || null;
 
     let nomComplet = "Utilisateur";
@@ -987,7 +961,6 @@ export default function ProduitDetailPage() {
       nomComplet = `${prenom} ${nom}`.trim() || "Utilisateur";
     }
 
-    // Construire l'URL de l'avatar
     let avatarUrl = null;
     if (auteur?.avatar) {
       avatarUrl = normalizeImageUrl(auteur.avatar);
@@ -1011,6 +984,8 @@ export default function ProduitDetailPage() {
   // CHARGEMENT DES DONNÉES
   // ============================================
   const fetchProduitsRecents = useCallback(async () => {
+    if (!uuid) return;
+
     try {
       setLoadingRecents(true);
 
@@ -1061,107 +1036,99 @@ export default function ProduitDetailPage() {
     }
   }, [uuid]);
 
-  // ✅ FONCTION FETCH COMMENTAIRES AMÉLIORÉE
-  const fetchCommentaires = useCallback(
-    async (produitUuid: string) => {
-      if (!produitUuid || commentairesFetched) return;
+  const fetchCommentaires = useCallback(async (produitUuid: string) => {
+    if (!produitUuid || commentairesFetched) return;
 
-      try {
-        setLoadingComments(true);
-        console.log("📥 Chargement des commentaires pour:", produitUuid);
+    try {
+      setLoadingComments(true);
 
-        const response = await api.get<CommentairesResponse>(
-          API_ENDPOINTS.COMMENTAIRES.BY_PRODUIT(produitUuid),
+      const response = await api.get<CommentairesResponse>(
+        API_ENDPOINTS.COMMENTAIRES.BY_PRODUIT(produitUuid),
+      );
+
+      if (response && response.commentaires) {
+        const commentairesData = response.commentaires.map(
+          transformCommentaireData,
         );
 
-        console.log("✅ Réponse commentaires:", response);
+        commentairesData.sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+        );
 
-        if (response && response.commentaires) {
-          const commentairesData = response.commentaires.map(
-            transformCommentaireData,
-          );
+        setCommentaires(commentairesData);
 
-          // Trier par date (plus récent d'abord)
-          commentairesData.sort(
-            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-          );
-
-          console.log(`📝 ${commentairesData.length} commentaires chargés`);
-          setCommentaires(commentairesData);
-
-          // Mettre à jour les stats
-          if (response.stats) {
-            setCommentairesStats({
-              nombreCommentaires: response.stats.nombreCommentaires || 0,
-              nombreNotes: response.stats.nombreNotes || 0,
-              noteMoyenne: response.stats.noteMoyenne || 0,
-              distributionNotes: response.stats.distributionNotes || {
-                1: 0,
-                2: 0,
-                3: 0,
-                4: 0,
-                5: 0,
-              },
-            });
-          } else {
-            // Calculer les stats manuellement si non fournies
-            const totalNotes = commentairesData.reduce(
-              (sum, c) => sum + c.note,
-              0,
-            );
-            const moyenne =
-              commentairesData.length > 0
-                ? totalNotes / commentairesData.length
-                : 0;
-
-            const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-            commentairesData.forEach((c) => {
-              const note = Math.round(c.note);
-              if (note >= 1 && note <= 5) {
-                distribution[note as keyof typeof distribution]++;
-              }
-            });
-
-            setCommentairesStats({
-              nombreCommentaires: commentairesData.length,
-              nombreNotes: commentairesData.length,
-              noteMoyenne: moyenne,
-              distributionNotes: distribution,
-            });
-          }
-
-          setCommentairesFetched(true);
+        if (response.stats) {
+          setCommentairesStats({
+            nombreCommentaires: response.stats.nombreCommentaires || 0,
+            nombreNotes: response.stats.nombreNotes || 0,
+            noteMoyenne: response.stats.noteMoyenne || 0,
+            distributionNotes: response.stats.distributionNotes || {
+              1: 0,
+              2: 0,
+              3: 0,
+              4: 0,
+              5: 0,
+            },
+          });
         } else {
-          console.log("ℹ️ Aucun commentaire trouvé");
-          setCommentaires([]);
-          setCommentairesFetched(true);
-        }
-      } catch (err: any) {
-        console.warn("⚠️ Erreur chargement commentaires:", err);
-        const produitNoteMoyenne = getSafeNoteMoyenne(produit);
+          const totalNotes = commentairesData.reduce(
+            (sum, c) => sum + c.note,
+            0,
+          );
+          const moyenne =
+            commentairesData.length > 0
+              ? totalNotes / commentairesData.length
+              : 0;
 
-        setCommentairesStats({
-          nombreCommentaires: 0,
-          nombreNotes: 0,
-          noteMoyenne: produitNoteMoyenne,
-          distributionNotes: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
-        });
+          const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+          commentairesData.forEach((c) => {
+            const note = Math.round(c.note);
+            if (note >= 1 && note <= 5) {
+              distribution[note as keyof typeof distribution]++;
+            }
+          });
+
+          setCommentairesStats({
+            nombreCommentaires: commentairesData.length,
+            nombreNotes: commentairesData.length,
+            noteMoyenne: moyenne,
+            distributionNotes: distribution,
+          });
+        }
+
+        setCommentairesFetched(true);
+      } else {
         setCommentaires([]);
         setCommentairesFetched(true);
-      } finally {
-        setLoadingComments(false);
       }
-    },
-    [produit],
-  );
+    } catch (err: any) {
+      console.warn("⚠️ Erreur chargement commentaires:", err);
+      setCommentairesStats({
+        nombreCommentaires: 0,
+        nombreNotes: 0,
+        noteMoyenne: 0,
+        distributionNotes: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+      });
+      setCommentaires([]);
+      setCommentairesFetched(true);
+    } finally {
+      setLoadingComments(false);
+    }
+  }, []);
 
   const fetchProduitDetails = useCallback(async () => {
     if (!uuid) return;
 
+    // ✅ Éviter les chargements multiples
+    if (initialLoadDone.current) return;
+    initialLoadDone.current = true;
+
     try {
       setLoading(true);
       setError(null);
+      setFavoriInitialized(false);
 
+      console.log("📦 Chargement du produit:", uuid);
       const response = await api.get<APIResponse>(
         API_ENDPOINTS.PRODUCTS.DETAIL_ALEATOIRE(uuid),
       );
@@ -1178,69 +1145,35 @@ export default function ProduitDetailPage() {
       setProduit(produitData);
       setProduitsSimilaires(similairesData);
 
-      // 🔴 Utiliser l'état is_favoris de l'API, pas localStorage
-      // Important: ne définir favori que si l'utilisateur est connecté
+      // ✅ Initialisation correcte des favoris
       if (isLoggedIn) {
-        setFavori(response.produit.is_favoris || false);
+        console.log("🔴 Produit is_favoris:", response.produit.is_favoris);
+        setFavori(response.produit.is_favoris === true);
       } else {
         setFavori(false);
       }
+      setFavoriInitialized(true);
 
-      // ✅ IMPORTANT: Récupérer le créateur depuis le produit ou la boutique
+      // Récupération du créateur
       if (response.produit.createur) {
-        // Si le créateur est directement dans le produit
         const createurData = transformCreateurInfo(response.produit.createur);
         createurData.userType = response.produit.createurType || "utilisateur";
         setCreateur(createurData);
       } else if (response.produit.boutique?.vendeur) {
-        // Si le créateur est dans la boutique (vendeur de la boutique)
         const createurData = transformCreateurInfo(
           response.produit.boutique.vendeur,
         );
         createurData.userType = "vendeur";
         setCreateur(createurData);
-      } else if (response.produit.vendeur_uuid) {
-        // Fallback: charger le vendeur par UUID
-        try {
-          const vendeurResponse = await api.get(
-            API_ENDPOINTS.AUTH.VENDEUR.DETAIL(response.produit.vendeur_uuid),
-          );
-          if (vendeurResponse && vendeurResponse.data) {
-            const vendeurData = transformCreateurInfo(vendeurResponse.data);
-            vendeurData.userType = "vendeur";
-            setCreateur(vendeurData);
-          }
-        } catch (err) {
-          console.warn("Impossible de charger les détails du vendeur:", err);
-        }
-      } else if (response.produit.utilisateur_uuid) {
-        try {
-          const utilisateurResponse = await api.get(
-            API_ENDPOINTS.AUTH.UTILISATEUR.DETAIL(
-              response.produit.utilisateur_uuid,
-            ),
-          );
-          if (utilisateurResponse && utilisateurResponse.data) {
-            const utilisateurData = transformCreateurInfo(
-              utilisateurResponse.data,
-            );
-            utilisateurData.userType = "utilisateur";
-            setCreateur(utilisateurData);
-          }
-        } catch (err) {
-          console.warn(
-            "Impossible de charger les détails de l'utilisateur:",
-            err,
-          );
-        }
       }
 
-      // Transformer la boutique (inclut maintenant le vendeur)
+      // Récupération de la boutique
       if (response.produit.boutique) {
         const boutiqueData = transformBoutiqueData(response.produit.boutique);
         setBoutique(boutiqueData);
       }
 
+      // Construction des images
       const imageUrls: string[] = [produitData.image];
 
       response.similaires.slice(0, 4).forEach((similaire) => {
@@ -1257,10 +1190,12 @@ export default function ProduitDetailPage() {
       setImages(imageUrls.slice(0, 5));
       setImagePrincipale(imageUrls[0]);
 
+      // Chargement des commentaires et produits récents
       fetchCommentaires(produitData.uuid);
       fetchProduitsRecents();
     } catch (err: any) {
       console.error("Erreur détail produit:", err);
+      initialLoadDone.current = false; // Réinitialiser en cas d'erreur
 
       if (
         err.response?.status === 404 ||
@@ -1279,13 +1214,14 @@ export default function ProduitDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [uuid, fetchCommentaires, fetchProduitsRecents, isLoggedIn]);
+  }, [uuid, isLoggedIn, fetchCommentaires, fetchProduitsRecents]);
 
+  // ✅ useEffect simplifié avec une seule dépendance
   useEffect(() => {
-    if (uuid && loading && !produit) {
+    if (uuid && !initialLoadDone.current) {
       fetchProduitDetails();
     }
-  }, [uuid, fetchProduitDetails, loading, produit]);
+  }, [uuid, fetchProduitDetails]);
 
   // ============================================
   // FONCTIONS D'AFFICHAGE
@@ -1386,7 +1322,6 @@ export default function ProduitDetailPage() {
     if (!createur) return;
 
     let phoneNumber = createur.telephone || createur.whatsapp_url || "";
-
     phoneNumber = phoneNumber.replace(/\D/g, "");
 
     if (phoneNumber.startsWith("225")) {
@@ -1481,7 +1416,6 @@ export default function ProduitDetailPage() {
     router.push(`${dashboardPath}/messages?${params.toString()}`);
   };
 
-  // ✅ FONCTION CORRIGÉE POUR LES FAVORIS - SANS LOCALSTORAGE
   const handleAddToFavorites = async () => {
     if (!produit) return;
 
@@ -1494,17 +1428,13 @@ export default function ProduitDetailPage() {
       console.log(`🔄 ${favori ? "Retrait" : "Ajout"} aux favoris...`);
 
       if (favori) {
-        // 🔴 RETRAIT DES FAVORIS - Utiliser REMOVE_PRODUIT
         const endpoint = API_ENDPOINTS.FAVORIS.REMOVE_PRODUIT(produit.uuid);
         console.log(`📤 Appel API: DELETE ${endpoint}`);
 
         await api.delete(endpoint);
-
-        // Mise à jour de l'état local uniquement
         setFavori(false);
         showToast("success", "Produit retiré des favoris");
       } else {
-        // 🔴 AJOUT AUX FAVORIS - Utiliser ADD
         const payload = {
           itemUuid: produit.uuid,
           type: "produit",
@@ -1514,7 +1444,6 @@ export default function ProduitDetailPage() {
         const response = await api.post(API_ENDPOINTS.FAVORIS.ADD, payload);
         console.log("✅ Réponse favoris:", response);
 
-        // Mise à jour de l'état local uniquement
         setFavori(true);
         showToast("success", "Produit ajouté aux favoris");
       }
@@ -1624,7 +1553,6 @@ export default function ProduitDetailPage() {
         },
       );
 
-      // Réinitialiser commentairesFetched pour forcer un rechargement
       setCommentairesFetched(false);
       await fetchCommentaires(produit.uuid);
 
@@ -1635,7 +1563,6 @@ export default function ProduitDetailPage() {
       setShowAddReview(false);
 
       showToast("success", "Votre avis a été ajouté avec succès !");
-      await fetchProduitDetails();
     } catch (err: any) {
       console.error("Erreur ajout avis:", err);
       if (err.response?.status === 401) {
@@ -1832,7 +1759,7 @@ export default function ProduitDetailPage() {
                 />
 
                 {/* 🔴 BOUTON FAVORI - UNIQUEMENT SI CONNECTÉ */}
-                {isLoggedIn && (
+                {isLoggedIn && favoriInitialized && (
                   <button
                     onClick={handleAddToFavorites}
                     className="position-absolute top-0 end-0 m-3 btn btn-light rounded-circle p-3 shadow-lg hover-bg-warning hover-text-white transition-all"
@@ -2477,7 +2404,7 @@ export default function ProduitDetailPage() {
               </div>
 
               {/* 🔴 BOUTON FAVORI DANS LA SIDEBAR - UNIQUEMENT SI CONNECTÉ */}
-              {isLoggedIn && (
+              {isLoggedIn && favoriInitialized && (
                 <div className="border-top pt-4 mb-4">
                   <button
                     onClick={handleAddToFavorites}

@@ -293,11 +293,29 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
     }
   };
 
+  // Dans RegisterModal.tsx - fonction handleRegistrationSuccess
+
   const handleRegistrationSuccess = async (data: any, type: string) => {
-    const token = data.token || data.accessToken;
+    // Récupérer le token - vérifier toutes les possibilités
+    const token =
+      data.token || data.accessToken || data.temp_token || data.tempToken;
+
+    console.log(
+      "📦 Token reçu:",
+      token ? token.substring(0, 20) + "..." : "aucun",
+    );
+
     if (token) {
+      // Sauvegarder dans TOUS les formats pour être sûr
       localStorage.setItem("token", token);
+      localStorage.setItem("oskar_token", token);
+      localStorage.setItem("temp_token", token);
+      localStorage.setItem("tempToken", token);
+
+      // Cookies aussi pour la sécurité
+      document.cookie = `oskar_token=${token}; path=/; max-age=86400`;
     }
+
     if (data.refreshToken) {
       localStorage.setItem("refreshToken", data.refreshToken);
     }
@@ -313,6 +331,16 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
       userData: userData,
     };
 
+    // Sauvegarder les infos utilisateur
+    localStorage.setItem("oskar_user", JSON.stringify(userData));
+    localStorage.setItem("oskar_user_type", type);
+
+    // Dispatcher l'événement pour mettre à jour le header
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("auth-state-changed"));
+      window.dispatchEvent(new Event("force-header-update"));
+    }
+
     if (registreCommercePreview) {
       URL.revokeObjectURL(registreCommercePreview);
     }
@@ -321,7 +349,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
       // 1. Fermer le modal d'inscription
       onHide();
 
-      // 2. Passer les données du vendeur au parent SANS ouvrir le modal de création
+      // 2. Passer les données du vendeur au parent
       if (onVendeurRegistered) {
         onVendeurRegistered(successData);
       }

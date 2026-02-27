@@ -1,105 +1,47 @@
 // app/(back-office)/dashboard-vendeur/page.tsx
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  // Icônes de base
   faStore,
   faShoppingBag,
   faGift,
   faExchangeAlt,
-  faUsers,
   faMoneyBillWave,
   faStar,
   faHeart,
-  faChartLine,
-  faCalendar,
-  faClock,
-  faBox,
-  faShoppingCart,
-  faBan,
-  faCheckCircle,
-  faSpinner,
-  faArrowUp,
-  faArrowDown,
-  faEllipsisH,
-  faEye,
-  faEdit,
-  faTrash,
-  faPlus,
-  faFilter,
-  faSearch,
-  faChartBar,
-  faChartPie,
-  faList,
-  faBell,
-  faCog,
-  faUser,
   faTachometerAlt,
-  faTag,
-  faGlobe,
-  faLock,
-  faLockOpen,
-  faBolt,
+  faChevronLeft,
+  faChevronRight,
+  faTimes,
+  faCheck,
   faExclamationTriangle,
   faInfoCircle,
   faSync,
   faDownload,
-  faUpload,
-  faHistory,
-  faCoins,
-  faPercent,
-  faTags,
-  faLayerGroup,
-  faFire,
-  faRocket,
-  faSeedling,
-  faWaveSquare,
-  faCrown,
-  faAward,
-  faTrophy,
-  faMedal,
-  faArrowTrendUp,
-  faArrowTrendDown,
-  faCompass,
-  faBullseye,
-  faFlagCheckered,
-  faTasks,
-  faCalendarAlt,
-  faCalendarCheck,
-  faCalendarDay,
-  faCalendarWeek,
-  faChartArea,
-  faCircleDot,
-  faCircleHalfStroke,
-  faCircleNodes,
-  faCircleRadiation,
-  faCircleChevronRight,
-  faCircleChevronLeft,
-  faCircleNotch,
-  faCloudArrowUp,
-  faDatabase,
-  faDiagramProject,
-  faNetworkWired,
-  faSitemap,
-  faSquarePollVertical,
-  faSquarePollHorizontal,
-  faLineChart,
-  faDotCircle,
-  faTurnUp,
-  faTurnDown,
-  faChevronLeft,
-  faChevronRight,
-  faBoxes,
-  faBoxOpen,
-  faRefresh,
-  faTimes,
-  faCheck,
-  faExclamation,
+  faPlus,
+  faFilter,
+  faSearch,
+  faEye,
+  faEdit,
+  faTrash,
+  faBan,
+  faCheckCircle,
+  faClock,
   faQuestion,
+  faTag,
+  faCalendarWeek,
+  faArrowUp,
+  faArrowDown,
+  faBoxOpen,
+  faGift as FaGiftIcon,
+  faExchangeAlt as FaExchangeAltIcon,
+  faStore as FaStoreIcon,
+  faBolt,
+  faPercent,
 } from "@fortawesome/free-solid-svg-icons";
 
 import { api } from "@/lib/api-client";
@@ -124,76 +66,141 @@ interface Stats {
   echangesBloques: number;
   echangesEnAttente: number;
   revenusTotaux: number;
-  revenusMensuels: number;
-  revenusHebdomadaires: number;
+  revenusProduits: number;
+  totalFavoris: number;
   avisMoyen: number;
   totalAvis: number;
-  totalFavoris: number;
   tauxConversion: number;
   panierMoyen: number;
 }
 
 interface Produit {
+  is_deleted?: boolean;
+  deleted_at?: string | null;
+  id?: number;
   uuid: string;
   libelle: string;
-  prix: string;
-  image: string;
+  slug?: string;
+  type?: string | null;
+  image_key?: string | null;
+  image_direct_url?: string | null;
+  disponible?: boolean;
+  publieLe?: string | null;
+  expireLe?: string | null;
+  nombreFavoris?: number;
   statut: string;
-  estPublie: boolean;
-  estBloque: boolean;
-  quantite: number;
-  boutique: {
+  image: string;
+  prix: string;
+  description?: string;
+  etoile?: number;
+  utilisateurUuid?: string | null;
+  vendeurUuid?: string | null;
+  agentUuid?: string | null;
+  boutiqueUuid?: string | null;
+  boutique?: {
     nom: string;
     uuid: string;
   } | null;
-  createdAt: string | null;
-  note_moyenne: string;
-  nombre_avis: number;
-  nombre_favoris: number;
+  categorie_uuid?: string;
+  categorie?: {
+    libelle: string;
+    uuid: string;
+  };
+  estPublie: boolean;
+  estBloque: boolean;
+  is_favoris?: boolean;
+  adminUuid?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  quantite: number;
+  note_moyenne?: string | number;
+  nombre_avis?: number;
+  repartition_notes?: any;
+  demi_etoile?: number;
+  etoiles_pleines?: number;
+  etoiles_vides?: number;
+  estUtilisateur?: boolean;
+  estVendeur?: boolean;
 }
 
 interface Don {
   uuid: string;
-  nom: string;
   type_don: string;
+  nom: string;
   prix: number | null;
+  quantite: number;
+  image_key?: string | null;
   categorie: string;
   image: string;
+  localisation: string;
+  description: string;
   statut: string;
+  date_debut: string;
+  date_fin: string | null;
   estPublie: boolean;
   est_bloque: boolean | null;
-  date_debut: string;
+  lieu_retrait: string;
+  est_public: number;
   vendeur: string;
-  description: string;
+  utilisateur: string;
+  agent: string;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  image_url?: string;
 }
 
 interface Echange {
   uuid: string;
   nomElementEchange: string;
+  nom_initiateur: string;
   prix: string;
+  quantite: number;
   image: string;
-  statut: string;
-  estPublie: boolean;
-  dateProposition: string;
+  typeDestinataire: string;
+  typeEchange: string;
+  agent: string;
+  utilisateur: string;
+  vendeur: string;
   objetPropose: string;
   objetDemande: string;
+  estPublie: boolean | null;
+  statut: string;
   message: string;
+  dateProposition: string;
+  dateAcceptation: string | null;
+  dateRefus: string | null;
+  categorie: string;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  image_url?: string;
 }
 
 interface Boutique {
+  is_deleted?: boolean;
+  deleted_at?: string | null;
+  id?: number;
   uuid: string;
+  type_boutique_uuid: string;
   nom: string;
+  slug: string;
   description: string | null;
   logo: string;
   banniere: string;
+  politique_retour: string | null;
+  conditions_utilisation: string | null;
+  logo_key?: string;
+  banniere_key?: string;
   statut: string;
-  est_bloque: boolean;
-  est_ferme: boolean;
   created_at: string;
+  updated_at: string;
   type_boutique: {
     libelle: string;
     code: string;
   };
+  vendeurUuid?: string;
+  agentUuid?: string | null;
+  est_bloque: boolean;
+  est_ferme: boolean;
   produits_count?: number;
 }
 
@@ -206,18 +213,11 @@ interface Vendeur {
 }
 
 interface ApiResponseProduits {
-  status: string;
-  message: string;
-  data: {
-    produits: Produit[];
-    pagination: {
-      total: number;
-      page: number;
-      limit: number;
-      totalPages: number;
-    };
-    vendeur?: Vendeur;
-  };
+  data: Produit[];
+  total?: number;
+  page?: number;
+  limit?: number;
+  vendeur?: Vendeur;
 }
 
 interface ApiResponseDons {
@@ -232,7 +232,10 @@ interface ApiResponseEchanges {
 
 interface ApiResponseBoutiques {
   data: Boutique[];
-  total: number;
+  total?: number;
+  page?: number;
+  limit?: number;
+  totalPages?: number;
 }
 
 // Fonction utilitaire pour les images placeholder
@@ -250,13 +253,22 @@ const getPlaceholderImage = (
 
 // Formatage
 const formatPrix = (prix: string | number | null) => {
-  if (prix === null) return "Gratuit";
-  const montant = typeof prix === "string" ? parseFloat(prix) : prix;
+  if (prix === null || prix === undefined) return "Gratuit";
+
+  let montant: number;
+  if (typeof prix === "string") {
+    const cleanPrix = prix.replace(/[^0-9.-]/g, "");
+    montant = parseFloat(cleanPrix) || 0;
+  } else {
+    montant = prix || 0;
+  }
+
   return new Intl.NumberFormat("fr-FR", {
     style: "currency",
     currency: "XOF",
     minimumFractionDigits: 0,
-  }).format(montant || 0);
+    maximumFractionDigits: 0,
+  }).format(montant);
 };
 
 const formatDate = (dateString: string | null) => {
@@ -413,11 +425,8 @@ export default function VendeurDashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [boutiques, setBoutiques] = useState<Boutique[]>([]);
   const [produits, setProduits] = useState<Produit[]>([]);
-  const [produitsBloques, setProduitsBloques] = useState<Produit[]>([]);
   const [dons, setDons] = useState<Don[]>([]);
-  const [donsBloques, setDonsBloques] = useState<Don[]>([]);
   const [echanges, setEchanges] = useState<Echange[]>([]);
-  const [echangesBloques, setEchangesBloques] = useState<Echange[]>([]);
   const [vendeur, setVendeur] = useState<Vendeur | null>(null);
   const [activeSection, setActiveSection] = useState<
     "produits" | "dons" | "echanges" | "boutiques"
@@ -429,6 +438,18 @@ export default function VendeurDashboard() {
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [timeRange, setTimeRange] = useState("month");
 
+  // Fonction pour calculer la somme des prix des produits
+  const calculerRevenusProduits = (produitsData: Produit[]): number => {
+    return produitsData.reduce((total, produit) => {
+      if (produit.prix) {
+        const prixNettoye = produit.prix.replace(/[^0-9.-]/g, "");
+        const prix = parseFloat(prixNettoye) || 0;
+        return total + prix;
+      }
+      return total;
+    }, 0);
+  };
+
   // Charger toutes les données
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -436,150 +457,137 @@ export default function VendeurDashboard() {
       setError(null);
 
       // Charger les boutiques
-      const boutiquesRes = await api.get<ApiResponseBoutiques>(
-        API_ENDPOINTS.BOUTIQUES.LISTE_BOUTIQUES_CREE_PAR_VENDEUR,
-      );
-      const boutiquesData = Array.isArray(boutiquesRes.data)
-        ? boutiquesRes.data
-        : boutiquesRes.data || [];
-      setBoutiques(boutiquesData);
-
-      // Charger les produits
-      const produitsRes = await api.get<ApiResponseProduits>(
-        API_ENDPOINTS.PRODUCTS.VENDEUR_PRODUCTS,
-      );
-      let produitsData = Array.isArray(produitsRes.data)
-        ? produitsRes.data
-        : produitsRes.data?.produits || [];
-
-      produitsData = produitsData.map((produit) => ({
-        ...produit,
-        boutique: produit.boutique || { nom: "Sans boutique", uuid: "" },
-      }));
-      setProduits(produitsData);
-
-      if (produitsRes.data?.vendeur) {
-        setVendeur(produitsRes.data.vendeur);
+      try {
+        const boutiquesRes = await api.get<ApiResponseBoutiques>(
+          API_ENDPOINTS.BOUTIQUES.LISTE_BOUTIQUES_CREE_PAR_VENDEUR,
+        );
+        const boutiquesData = boutiquesRes?.data || [];
+        setBoutiques(Array.isArray(boutiquesData) ? boutiquesData : []);
+      } catch (err) {
+        console.warn("Erreur chargement boutiques:", err);
+        setBoutiques([]);
       }
 
-      // Charger les produits bloqués
+      // Charger les produits
+      let produitsData: Produit[] = [];
       try {
-        const produitsBloquesRes = await api.get<ApiResponseProduits>(
-          "/produits/liste-produits-bloques-vendeur",
+        const produitsRes = await api.get<ApiResponseProduits>(
+          API_ENDPOINTS.PRODUCTS.VENDEUR_PRODUCTS ||
+            "/produits/liste-produits-cree-vendeur",
         );
-        let produitsBloquesData = Array.isArray(produitsBloquesRes.data)
-          ? produitsBloquesRes.data
-          : produitsBloquesRes.data?.produits || [];
-        produitsBloquesData = produitsBloquesData.map((produit) => ({
+
+        // Gérer les différents formats de réponse
+        if (produitsRes) {
+          if (Array.isArray(produitsRes)) {
+            produitsData = produitsRes;
+          } else if (produitsRes.data) {
+            if (Array.isArray(produitsRes.data)) {
+              produitsData = produitsRes.data;
+            } else if (produitsRes.data) {
+              produitsData = [produitsRes.data];
+            }
+          }
+        }
+
+        produitsData = produitsData.map((produit) => ({
           ...produit,
           boutique: produit.boutique || { nom: "Sans boutique", uuid: "" },
         }));
-        setProduitsBloques(produitsBloquesData);
+        setProduits(produitsData);
+
+        // ✅ CORRECTION: Récupérer le vendeur depuis la réponse si disponible
+        if (produitsRes && "vendeur" in produitsRes && produitsRes.vendeur) {
+          setVendeur(produitsRes.vendeur);
+        }
       } catch (err) {
-        console.warn("Erreur chargement produits bloqués:", err);
-        setProduitsBloques([]);
+        console.warn("Erreur chargement produits:", err);
+        setProduits([]);
       }
 
       // Charger les dons
-      const donsRes = await api.get<ApiResponseDons>(
-        API_ENDPOINTS.DONS.VENDEUR_DONS,
-      );
-      const donsData = Array.isArray(donsRes.data)
-        ? donsRes.data
-        : donsRes.data || [];
-      setDons(donsData);
-
-      // Charger les dons bloqués
       try {
-        const donsBloquesRes = await api.get<ApiResponseDons>(
-          "/dons/liste-dons-bloques-vendeur",
+        const donsRes = await api.get<ApiResponseDons>(
+          API_ENDPOINTS.DONS.VENDEUR_DONS,
         );
-        const donsBloquesData = Array.isArray(donsBloquesRes.data)
-          ? donsBloquesRes.data
-          : donsBloquesRes.data || [];
-        setDonsBloques(donsBloquesData);
+        const donsData = donsRes?.data || [];
+        setDons(Array.isArray(donsData) ? donsData : []);
       } catch (err) {
-        console.warn("Erreur chargement dons bloqués:", err);
-        setDonsBloques([]);
+        console.warn("Erreur chargement dons:", err);
+        setDons([]);
       }
 
       // Charger les échanges
-      const echangesRes = await api.get<ApiResponseEchanges>(
-        API_ENDPOINTS.ECHANGES.VENDEUR_ECHANGES,
-      );
-      const echangesData = Array.isArray(echangesRes.data)
-        ? echangesRes.data
-        : echangesRes.data || [];
-      setEchanges(echangesData);
-
-      // Charger les échanges bloqués
       try {
-        const echangesBloquesRes = await api.get<ApiResponseEchanges>(
-          "/echanges/liste-echange-bloque-vendeur",
+        const echangesRes = await api.get<ApiResponseEchanges>(
+          API_ENDPOINTS.ECHANGES.VENDEUR_ECHANGES,
         );
-        const echangesBloquesData = Array.isArray(echangesBloquesRes.data)
-          ? echangesBloquesRes.data
-          : echangesBloquesRes.data || [];
-        setEchangesBloques(echangesBloquesData);
+        const echangesData = echangesRes?.data || [];
+        setEchanges(Array.isArray(echangesData) ? echangesData : []);
       } catch (err) {
-        console.warn("Erreur chargement échanges bloqués:", err);
-        setEchangesBloques([]);
+        console.warn("Erreur chargement échanges:", err);
+        setEchanges([]);
       }
 
       // Calculer les statistiques
-      const statsData: Stats = {
-        totalBoutiques: boutiquesData.length,
-        boutiquesActives: boutiquesData.filter(
-          (b) => b.statut === "actif" && !b.est_bloque && !b.est_ferme,
-        ).length,
-        boutiquesEnReview: boutiquesData.filter((b) => b.statut === "en_review")
-          .length,
-        boutiquesBloquees: boutiquesData.filter(
-          (b) => b.est_bloque || b.est_ferme,
-        ).length,
-        totalProduits: produitsData.length + produitsBloques.length,
-        produitsPublies: produitsData.filter((p) => p.estPublie).length,
-        produitsNonPublies: produitsData.filter(
-          (p) => !p.estPublie && !p.estBloque,
-        ).length,
-        produitsBloques: produitsBloques.length,
-        totalDons: donsData.length + donsBloques.length,
-        donsPublies: donsData.filter((d) => d.estPublie && !d.est_bloque)
-          .length,
-        donsBloques: donsBloques.length,
-        donsEnAttente: donsData.filter((d) => !d.estPublie && !d.est_bloque)
-          .length,
-        totalEchanges: echangesData.length + echangesBloques.length,
-        echangesPublies: echangesData.filter((e) => e.estPublie).length,
-        echangesBloques: echangesBloques.length,
-        echangesEnAttente: echangesData.filter((e) => !e.estPublie).length,
-        revenusTotaux: 2500000,
-        revenusMensuels: 450000,
-        revenusHebdomadaires: 120000,
-        avisMoyen: 4.5,
-        totalAvis: produitsData.reduce(
-          (sum, p) => sum + (p.nombre_avis || 0),
-          0,
-        ),
-        totalFavoris: produitsData.reduce(
-          (sum, p) => sum + (p.nombre_favoris || 0),
-          0,
-        ),
-        tauxConversion: 2.8,
-        panierMoyen: 12500,
-      };
-      setStats(statsData);
+      setTimeout(() => {
+        const revenusProduits = calculerRevenusProduits(produitsData);
+
+        const statsData: Stats = {
+          totalBoutiques: boutiques.length,
+          boutiquesActives: boutiques.filter(
+            (b) => b.statut === "actif" && !b.est_bloque && !b.est_ferme,
+          ).length,
+          boutiquesEnReview: boutiques.filter((b) => b.statut === "en_attente")
+            .length,
+          boutiquesBloquees: boutiques.filter(
+            (b) => b.est_bloque || b.est_ferme,
+          ).length,
+          totalProduits: produitsData.length,
+          produitsPublies: produitsData.filter((p) => p.estPublie).length,
+          produitsNonPublies: produitsData.filter(
+            (p) => !p.estPublie && !p.estBloque,
+          ).length,
+          produitsBloques: produitsData.filter((p) => p.estBloque).length,
+          totalDons: dons.length,
+          donsPublies: dons.filter((d) => d.estPublie && !d.est_bloque).length,
+          donsBloques: dons.filter((d) => d.est_bloque).length,
+          donsEnAttente: dons.filter((d) => !d.estPublie && !d.est_bloque)
+            .length,
+          totalEchanges: echanges.length,
+          echangesPublies: echanges.filter((e) => e.estPublie).length,
+          echangesBloques: 0,
+          echangesEnAttente: echanges.filter((e) => !e.estPublie).length,
+          revenusTotaux: revenusProduits,
+          revenusProduits: revenusProduits,
+          totalFavoris: produitsData.reduce(
+            (sum, p) => sum + (p.nombreFavoris || 0),
+            0,
+          ),
+          avisMoyen: 0,
+          totalAvis: produitsData.reduce(
+            (sum, p) => sum + (p.nombre_avis || 0),
+            0,
+          ),
+          tauxConversion: 2.8,
+          panierMoyen:
+            produitsData.length > 0
+              ? Math.round(revenusProduits / produitsData.length)
+              : 0,
+        };
+
+        setStats(statsData);
+      }, 100);
     } catch (err: any) {
       console.error("Erreur lors du chargement du dashboard:", err);
       setError(
-        err.response?.data?.message ||
-          err.message ||
+        err?.response?.data?.message ||
+          err?.message ||
           "Erreur lors du chargement des données. Veuillez réessayer.",
       );
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, []); // ✅ Supprimer les dépendances pour éviter les boucles
 
   useEffect(() => {
     fetchDashboardData();
@@ -591,13 +599,28 @@ export default function VendeurDashboard() {
 
     switch (activeSection) {
       case "produits":
-        data = activeTab === "bloques" ? produitsBloques : produits;
+        data = produits;
+        if (activeTab === "publies") {
+          data = data.filter((p) => p.estPublie);
+        } else if (activeTab === "bloques") {
+          data = data.filter((p) => p.estBloque);
+        }
         break;
       case "dons":
-        data = activeTab === "bloques" ? donsBloques : dons;
+        data = dons;
+        if (activeTab === "publies") {
+          data = data.filter((d) => d.estPublie);
+        } else if (activeTab === "bloques") {
+          data = data.filter((d) => d.est_bloque);
+        }
         break;
       case "echanges":
-        data = activeTab === "bloques" ? echangesBloques : echanges;
+        data = echanges;
+        if (activeTab === "publies") {
+          data = data.filter((e) => e.estPublie);
+        } else if (activeTab === "bloques") {
+          data = data.filter((e) => e.statut === "bloque");
+        }
         break;
       case "boutiques":
         data = boutiques;
@@ -613,15 +636,25 @@ export default function VendeurDashboard() {
             item.nom?.toLowerCase().includes(searchLower) ||
             item.description?.toLowerCase().includes(searchLower)
           );
-        } else {
+        } else if (activeSection === "produits") {
           return (
             item.libelle?.toLowerCase().includes(searchLower) ||
+            item.description?.toLowerCase().includes(searchLower)
+          );
+        } else if (activeSection === "dons") {
+          return (
             item.nom?.toLowerCase().includes(searchLower) ||
+            item.description?.toLowerCase().includes(searchLower)
+          );
+        } else if (activeSection === "echanges") {
+          return (
             item.nomElementEchange?.toLowerCase().includes(searchLower) ||
-            item.description?.toLowerCase().includes(searchLower) ||
-            item.message?.toLowerCase().includes(searchLower)
+            item.message?.toLowerCase().includes(searchLower) ||
+            item.objetPropose?.toLowerCase().includes(searchLower) ||
+            item.objetDemande?.toLowerCase().includes(searchLower)
           );
         }
+        return false;
       });
     }
 
@@ -648,7 +681,7 @@ export default function VendeurDashboard() {
           boutique: item.boutique?.nom || "Sans boutique",
           note_moyenne: item.note_moyenne || 0,
           nombre_avis: item.nombre_avis || 0,
-          nombre_favoris: item.nombre_favoris || 0,
+          nombre_favoris: item.nombreFavoris || 0,
           quantite: item.quantite || 0,
         };
       case "dons":
@@ -733,6 +766,10 @@ export default function VendeurDashboard() {
                         width: "80px",
                         height: "80px",
                         objectFit: "cover",
+                      }}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src =
+                          getPlaceholderImage(80, "V");
                       }}
                     />
                     <span
@@ -901,13 +938,13 @@ export default function VendeurDashboard() {
         <div className="row g-4 mb-4">
           <div className="col-xl-3 col-lg-4 col-md-6">
             <StatCard
-              title="Revenus"
-              value={`${((stats?.revenusTotaux || 0) / 1000000).toFixed(1)}M`}
+              title="Valeur du stock"
+              value={formatPrix(stats?.revenusTotaux || 0)}
               icon={faMoneyBillWave}
               color="success"
-              subtitle={`${(stats?.revenusMensuels || 0).toLocaleString("fr-FR")} FCFA ce mois`}
+              subtitle={`${stats?.totalProduits || 0} produits`}
               trend="up"
-              trendText="+25%"
+              trendText="Somme des produits"
               delay={4}
             />
           </div>
@@ -918,7 +955,7 @@ export default function VendeurDashboard() {
               value={stats?.totalAvis || 0}
               icon={faStar}
               color="warning"
-              subtitle={`Note moyenne: ${stats?.avisMoyen || 0}/5`}
+              subtitle={`Note moyenne: ${(stats?.avisMoyen || 0).toFixed(1)}/5`}
               trend="up"
               trendText="+8%"
               delay={5}
@@ -940,11 +977,11 @@ export default function VendeurDashboard() {
 
           <div className="col-xl-3 col-lg-4 col-md-6">
             <StatCard
-              title="Conversion"
-              value={`${stats?.tauxConversion || 0}%`}
+              title="Prix moyen"
+              value={formatPrix(stats?.panierMoyen || 0)}
               icon={faPercent}
               color="info"
-              subtitle={`Panier moyen: ${(stats?.panierMoyen || 0).toLocaleString("fr-FR")} FCFA`}
+              subtitle="Moyenne des produits"
               trend="up"
               trendText="+2%"
               delay={7}
@@ -1103,7 +1140,7 @@ export default function VendeurDashboard() {
                     ? stats?.produitsBloques
                     : activeSection === "dons"
                       ? stats?.donsBloques
-                      : stats?.echangesBloques}
+                      : 0}
                   )
                 </button>
               </div>
@@ -1436,13 +1473,13 @@ export default function VendeurDashboard() {
                                     />
                                     Active
                                   </span>
-                                ) : displayData.statut === "en_review" ? (
+                                ) : displayData.statut === "en_attente" ? (
                                   <span className="badge bg-warning bg-opacity-10 text-warning border border-warning">
                                     <FontAwesomeIcon
                                       icon={faClock}
                                       className="me-1"
                                     />
-                                    En revue
+                                    En attente
                                   </span>
                                 ) : (
                                   <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary">
@@ -1489,7 +1526,7 @@ export default function VendeurDashboard() {
                                       className="me-1"
                                     />
                                     {parseFloat(
-                                      displayData.note_moyenne,
+                                      displayData.note_moyenne.toString(),
                                     ).toFixed(1)}
                                   </small>
                                 </div>
@@ -1642,7 +1679,7 @@ export default function VendeurDashboard() {
                   </div>
                   <div className="list-group-item border-0 px-0 py-2">
                     <div className="d-flex justify-content-between align-items-center">
-                      <span>Revenus totaux</span>
+                      <span>Valeur totale du stock</span>
                       <span className="fw-bold text-success">
                         {formatPrix(stats?.revenusTotaux || 0)}
                       </span>

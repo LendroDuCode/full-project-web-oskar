@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "./AuthContext";
 import LoginModal from "./login/page";
 import RegisterModal from "./register/page";
@@ -14,6 +14,7 @@ import {
   faStore,
   faTimes,
 } from "@fortawesome/free-solid-svg-icons";
+import { api } from "@/lib/api-client";
 
 const AuthModals = () => {
   const {
@@ -26,47 +27,118 @@ const AuthModals = () => {
     openLoginModal,
   } = useAuth();
 
-  // États pour gérer la création de boutique APRÈS connexion
   const [showBoutiquePrompt, setShowBoutiquePrompt] = useState(false);
   const [showBoutiqueCreation, setShowBoutiqueCreation] = useState(false);
   const [vendeurData, setVendeurData] = useState<any>(null);
   const [loadingBoutique, setLoadingBoutique] = useState(false);
   const [boutiqueError, setBoutiqueError] = useState<string | null>(null);
+  const [promptVisible, setPromptVisible] = useState(false);
+
+  useEffect(() => {
+    if (showBoutiquePrompt) {
+      setTimeout(() => {
+        setPromptVisible(true);
+      }, 50);
+    } else {
+      setPromptVisible(false);
+    }
+  }, [showBoutiquePrompt]);
+
+  // app/(front-office)/auth/AuthModals.tsx
+  // Modifiez la fonction handleLoginSuccess
 
   const handleLoginSuccess = (userData: any) => {
     console.log("✅ Login success - userData:", userData);
 
-    // Connexion réussie - Vérifier si c'est un vendeur
     if (userData.type === "vendeur") {
-      console.log("👤 Vendeur connecté, préparation du prompt boutique");
+      console.log("👤 Vendeur connecté, vérification des boutiques...");
 
-      // Stocker les données du vendeur
-      setVendeurData(userData);
+      // Vérifier si le vendeur a déjà une boutique
+      const checkExistingBoutique = async () => {
+        try {
+          // Appeler l'API pour récupérer les boutiques du vendeur
+          const token = userData.token || userData.temp_token;
+          const response = await fetch(API_ENDPOINTS.BOUTIQUES.LIST, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
 
-      // Fermer le modal de connexion
-      closeModals();
+          if (response.ok) {
+            const data = await response.json();
+            const boutiques = Array.isArray(data) ? data : data.data || [];
 
-      // Ouvrir le prompt de proposition de boutique APRÈS UN COURT DÉLAI
-      setTimeout(() => {
-        console.log("🔄 Ouverture du prompt de création de boutique");
-        setShowBoutiquePrompt(true);
-      }, 500);
+            if (boutiques.length > 0) {
+              // Le vendeur a déjà des boutiques
+              console.log(
+                "✅ Vendeur avec boutique(s) existante(s):",
+                boutiques.length,
+              );
+
+              // Mettre à jour les données du vendeur
+              const updatedUser = {
+                ...userData,
+                has_boutique: true,
+                boutiques: boutiques,
+              };
+
+              // Sauvegarder dans localStorage
+              localStorage.setItem("oskar_user", JSON.stringify(updatedUser));
+              setVendeurData(updatedUser);
+
+              // Connecter directement sans prompt
+              closeModals();
+              login(updatedUser, userData.token || userData.temp_token, true);
+            } else {
+              // Le vendeur n'a pas de boutique
+              console.log("🆕 Nouveau vendeur sans boutique");
+              setVendeurData(userData);
+              closeModals();
+
+              setTimeout(() => {
+                console.log("🔄 Ouverture du prompt de création de boutique");
+                setShowBoutiquePrompt(true);
+              }, 300);
+            }
+          } else {
+            // En cas d'erreur, on suppose qu'il n'a pas de boutique
+            console.warn(
+              "⚠️ Erreur vérification boutique, on suppose nouveau vendeur",
+            );
+            setVendeurData(userData);
+            closeModals();
+
+            setTimeout(() => {
+              setShowBoutiquePrompt(true);
+            }, 300);
+          }
+        } catch (error) {
+          console.error("❌ Erreur vérification boutique:", error);
+          // En cas d'erreur, on laisse le prompt s'afficher
+          setVendeurData(userData);
+          closeModals();
+
+          setTimeout(() => {
+            setShowBoutiquePrompt(true);
+          }, 300);
+        }
+      };
+
+      checkExistingBoutique();
     } else {
-      // Pour les utilisateurs normaux, connexion directe
-      console.log("👤 Utilisateur normal connecté, redirection dashboard");
-      login(userData, userData.token || userData.temp_token, true);
+      console.log("👤 Utilisateur normal connecté, reste sur la page");
+      login(userData, userData.token || userData.temp_token, false);
+      closeModals();
     }
   };
 
   const handleVendeurRegistered = (vendeurData: any) => {
     console.log("👤 Vendeur inscrit, données stockées:", vendeurData);
     setVendeurData(vendeurData);
-    // Ne PAS ouvrir le prompt ici, on attend la connexion
   };
 
   const handleRegisterSuccess = (userData: any) => {
     console.log("✅ Register success - userData:", userData);
-    // Pour les utilisateurs normaux seulement
     if (userData.type !== "vendeur") {
       console.log("👤 Utilisateur normal inscrit, ouverture login");
       setTimeout(() => {
@@ -75,51 +147,147 @@ const AuthModals = () => {
     }
   };
 
-  // Callback pour quand l'utilisateur veut créer une boutique (depuis le prompt)
+  // app/(front-office)/auth/AuthModals.tsx
+  // Modifiez la fonction handleCreateBoutique
+
   const handleCreateBoutique = async (boutiqueData: any) => {
     console.log("🏪 Création de boutique demandée");
     setLoadingBoutique(true);
     setBoutiqueError(null);
 
     try {
-      // Utiliser le token du vendeur
-      const token = vendeurData?.token || localStorage.getItem("token");
+      // Récupérer le token depuis toutes les sources possibles
+      const token =
+        vendeurData?.token ||
+        localStorage.getItem("oskar_token") ||
+        localStorage.getItem("token") ||
+        localStorage.getItem("temp_token");
 
-      console.log("📦 Envoi des données à l'API...");
+      if (!token) {
+        throw new Error("Token d'authentification manquant");
+      }
 
-      // Appeler l'API pour créer la boutique
+      console.log("🔑 Token trouvé, longueur:", token.length);
+
+      // Créer un nouveau FormData
+      const formDataToSend = new FormData();
+
+      // Ajouter les champs requis
+      formDataToSend.append("nom", boutiqueData.get("nom"));
+      formDataToSend.append(
+        "type_boutique_uuid",
+        boutiqueData.get("type_boutique_uuid"),
+      );
+
+      // Ajouter les champs optionnels s'ils existent
+      const description = boutiqueData.get("description");
+      if (description) formDataToSend.append("description", description);
+
+      const politique_retour = boutiqueData.get("politique_retour");
+      if (politique_retour)
+        formDataToSend.append("politique_retour", politique_retour);
+
+      const conditions_utilisation = boutiqueData.get("conditions_utilisation");
+      if (conditions_utilisation)
+        formDataToSend.append("conditions_utilisation", conditions_utilisation);
+
+      // Ajouter les fichiers
+      const logo = boutiqueData.get("logo");
+      if (logo instanceof File) formDataToSend.append("logo", logo);
+
+      const banniere = boutiqueData.get("banniere");
+      if (banniere instanceof File) formDataToSend.append("banniere", banniere);
+
+      // Ajouter l'UUID du vendeur
+      if (vendeurData?.vendeurId) {
+        formDataToSend.append("vendeur_uuid", vendeurData.vendeurId);
+      } else if (vendeurData?.uuid) {
+        formDataToSend.append("vendeur_uuid", vendeurData.uuid);
+      }
+
+      // LOGS DE DÉBOGAGE
+      console.log("📦 Données envoyées:");
+      for (let pair of (formDataToSend as any).entries()) {
+        if (pair[1] instanceof File) {
+          console.log(
+            `   ${pair[0]}: [Fichier] ${pair[1].name} (${pair[1].type}, ${pair[1].size} octets)`,
+          );
+        } else {
+          console.log(`   ${pair[0]}: ${pair[1]}`);
+        }
+      }
+
+      // ✅ IMPORTANT: Utiliser fetch DIRECTEMENT, pas api.post
       const response = await fetch(API_ENDPOINTS.BOUTIQUES.CREATE, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
+          // NE PAS mettre Content-Type, le navigateur le fera automatiquement avec FormData
         },
-        body: boutiqueData, // Déjà FormData
+        body: formDataToSend,
       });
 
-      const data = await response.json();
-      console.log("📦 Réponse API création boutique:", data);
+      console.log("📦 Statut réponse:", response.status);
+      console.log("📦 Status text:", response.statusText);
 
-      if (response.ok) {
-        console.log("✅ Boutique créée avec succès");
+      // Lire la réponse
+      let responseData;
+      const contentType = response.headers.get("content-type");
 
-        // Fermer le modal de création
-        setShowBoutiqueCreation(false);
-        setShowBoutiquePrompt(false);
-
-        // Connecter l'utilisateur avec succès
-        if (vendeurData) {
-          console.log("🔑 Connexion du vendeur après création boutique");
-          login(vendeurData.userData || vendeurData, vendeurData.token, true);
-          setVendeurData(null);
-        }
+      if (contentType && contentType.includes("application/json")) {
+        responseData = await response.json();
       } else {
-        console.error("❌ Erreur création boutique:", data);
-        setBoutiqueError(
-          data.message || "Erreur lors de la création de la boutique",
+        const text = await response.text();
+        console.log("📦 Réponse texte:", text);
+        responseData = { message: text };
+      }
+
+      if (!response.ok) {
+        console.error("❌ Erreur réponse:", responseData);
+        throw new Error(
+          responseData.message ||
+            responseData.error ||
+            `Erreur ${response.status}`,
         );
       }
+
+      console.log("✅ Réponse API création boutique:", responseData);
+
+      // SUCCÈS
+      setShowBoutiqueCreation(false);
+      setShowBoutiquePrompt(false);
+      setPromptVisible(false);
+
+      // Mettre à jour le user dans localStorage
+      if (vendeurData) {
+        const updatedUser = {
+          ...vendeurData,
+          has_boutique: true,
+          boutique_uuid: responseData.boutique?.uuid || responseData.uuid,
+        };
+
+        // Sauvegarder dans localStorage
+        localStorage.setItem("oskar_user", JSON.stringify(updatedUser));
+
+        // Dispatcher les événements
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("auth-state-changed", {
+              detail: { isLoggedIn: true, user: updatedUser },
+            }),
+          );
+          window.dispatchEvent(new Event("force-header-update"));
+        }
+
+        // Connecter l'utilisateur après un délai
+        setTimeout(() => {
+          console.log("🔑 Connexion du vendeur après création boutique");
+          login(updatedUser, vendeurData.token, true);
+          setVendeurData(null);
+        }, 500);
+      }
     } catch (error: any) {
-      console.error("❌ Erreur:", error);
+      console.error("❌ Erreur création boutique:", error);
       setBoutiqueError(
         error.message || "Erreur lors de la création de la boutique",
       );
@@ -128,33 +296,34 @@ const AuthModals = () => {
     }
   };
 
-  // ✅ CORRECTION: Cette fonction est appelée quand l'utilisateur clique sur "Créer ma boutique" dans le prompt
   const handleStartBoutiqueCreation = () => {
     console.log("🏪 Utilisateur a choisi de créer une boutique");
-    setShowBoutiquePrompt(false); // Fermer le prompt
-    setShowBoutiqueCreation(true); // Ouvrir le modal de création immédiatement (SANS setTimeout)
+    setShowBoutiquePrompt(false);
+    setPromptVisible(false);
+
+    setTimeout(() => {
+      setShowBoutiqueCreation(true);
+    }, 200);
   };
 
-  // Fermer le modal de création de boutique sans créer
   const handleCloseBoutiqueModal = () => {
     console.log("❌ Fermeture modal création boutique");
     setShowBoutiqueCreation(false);
-    setShowBoutiquePrompt(false);
     setBoutiqueError(null);
 
-    // Connecter l'utilisateur même sans boutique
-    if (vendeurData) {
-      console.log("🔑 Connexion du vendeur sans création boutique");
-      login(vendeurData.userData || vendeurData, vendeurData.token, true);
-      setVendeurData(null);
-    }
+    setTimeout(() => {
+      if (vendeurData) {
+        console.log("🔑 Connexion du vendeur sans création boutique");
+        login(vendeurData.userData || vendeurData, vendeurData.token, true);
+        setVendeurData(null);
+      }
+    }, 300);
   };
 
-  // Fonction pour ignorer la création de boutique (depuis le prompt)
   const handleSkipBoutiqueCreation = () => {
     console.log("⏭️ Utilisateur a choisi de ne pas créer de boutique");
     setShowBoutiquePrompt(false);
-    setShowBoutiqueCreation(false);
+    setPromptVisible(false);
 
     if (vendeurData) {
       console.log("🔑 Connexion du vendeur sans boutique");
@@ -181,7 +350,7 @@ const AuthModals = () => {
         onShowLoginAfterRegister={openLoginModal}
       />
 
-      {/* PROMPT DE CRÉATION DE BOUTIQUE (après connexion) */}
+      {/* PROMPT DE CRÉATION DE BOUTIQUE */}
       {showBoutiquePrompt && vendeurData && (
         <div
           style={{
@@ -190,15 +359,23 @@ const AuthModals = () => {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.7)",
+            backgroundColor: promptVisible
+              ? "rgba(0, 0, 0, 0.7)"
+              : "rgba(0, 0, 0, 0)",
             zIndex: 30000,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             padding: "1rem",
+            transition: "background-color 0.3s ease",
+            pointerEvents: promptVisible ? "auto" : "none",
           }}
           onClick={(e) => {
-            if (e.target === e.currentTarget && !loadingBoutique) {
+            if (
+              e.target === e.currentTarget &&
+              !loadingBoutique &&
+              promptVisible
+            ) {
               handleSkipBoutiqueCreation();
             }
           }}
@@ -212,10 +389,14 @@ const AuthModals = () => {
               maxWidth: "500px",
               overflow: "hidden",
               position: "relative",
-              animation: "slideIn 0.4s ease-out",
+              transform: promptVisible
+                ? "translateY(0) scale(1)"
+                : "translateY(-30px) scale(0.95)",
+              opacity: promptVisible ? 1 : 0,
+              transition: "all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
+              pointerEvents: promptVisible ? "auto" : "none",
             }}
           >
-            {/* Bouton de fermeture */}
             <button
               onClick={handleSkipBoutiqueCreation}
               style={{
@@ -236,14 +417,6 @@ const AuthModals = () => {
                 boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
               }}
               disabled={loadingBoutique}
-              onMouseOver={(e) => {
-                if (!loadingBoutique)
-                  e.currentTarget.style.backgroundColor = "#f1f5f9";
-              }}
-              onMouseOut={(e) => {
-                if (!loadingBoutique)
-                  e.currentTarget.style.backgroundColor = "#f8fafc";
-              }}
               aria-label="Fermer"
             >
               <FontAwesomeIcon
@@ -252,7 +425,6 @@ const AuthModals = () => {
               />
             </button>
 
-            {/* Header avec illustration */}
             <div
               style={{
                 background: "linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)",
@@ -263,29 +435,6 @@ const AuthModals = () => {
                 overflow: "hidden",
               }}
             >
-              <div
-                style={{
-                  position: "absolute",
-                  top: "-50px",
-                  right: "-50px",
-                  width: "200px",
-                  height: "200px",
-                  background: "rgba(255, 255, 255, 0.1)",
-                  borderRadius: "50%",
-                }}
-              />
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: "-30px",
-                  left: "-30px",
-                  width: "150px",
-                  height: "150px",
-                  background: "rgba(255, 255, 255, 0.05)",
-                  borderRadius: "50%",
-                }}
-              />
-
               <div style={{ position: "relative", zIndex: 1 }}>
                 <div
                   style={{
@@ -330,9 +479,7 @@ const AuthModals = () => {
               </div>
             </div>
 
-            {/* Body avec contenu */}
             <div style={{ padding: "2.5rem" }}>
-              {/* Message de succès */}
               <div
                 style={{
                   backgroundColor: "#f0f9ff",
@@ -340,7 +487,6 @@ const AuthModals = () => {
                   padding: "1.5rem",
                   marginBottom: "2rem",
                   border: "2px solid #bae6fd",
-                  position: "relative",
                 }}
               >
                 <div
@@ -394,7 +540,6 @@ const AuthModals = () => {
                 </div>
               </div>
 
-              {/* Message d'erreur */}
               {boutiqueError && (
                 <div
                   style={{
@@ -411,7 +556,6 @@ const AuthModals = () => {
                 </div>
               )}
 
-              {/* Avantages de créer une boutique maintenant */}
               <div style={{ marginBottom: "2rem" }}>
                 <h4
                   style={{
@@ -427,12 +571,7 @@ const AuthModals = () => {
                   <FontAwesomeIcon icon={faArrowRight} color="#0ea5e9" />
                   Pourquoi créer votre boutique maintenant ?
                 </h4>
-                <div
-                  style={{
-                    display: "grid",
-                    gap: "0.75rem",
-                  }}
-                >
+                <div style={{ display: "grid", gap: "0.75rem" }}>
                   {[
                     "Commencez à vendre immédiatement",
                     "Accédez aux outils professionnels",
@@ -475,7 +614,6 @@ const AuthModals = () => {
                 </div>
               </div>
 
-              {/* Boutons d'action */}
               <div
                 style={{
                   display: "flex",
@@ -503,22 +641,6 @@ const AuthModals = () => {
                     boxShadow: "0 10px 20px rgba(14, 165, 233, 0.3)",
                     opacity: loadingBoutique ? 0.6 : 1,
                   }}
-                  onMouseOver={(e) => {
-                    if (!loadingBoutique) {
-                      e.currentTarget.style.backgroundColor = "#0284c7";
-                      e.currentTarget.style.transform = "translateY(-2px)";
-                      e.currentTarget.style.boxShadow =
-                        "0 15px 25px rgba(14, 165, 233, 0.4)";
-                    }
-                  }}
-                  onMouseOut={(e) => {
-                    if (!loadingBoutique) {
-                      e.currentTarget.style.backgroundColor = "#0ea5e9";
-                      e.currentTarget.style.transform = "translateY(0)";
-                      e.currentTarget.style.boxShadow =
-                        "0 10px 20px rgba(14, 165, 233, 0.3)";
-                    }
-                  }}
                 >
                   <FontAwesomeIcon icon={faStore} />
                   Créer ma boutique maintenant
@@ -539,24 +661,11 @@ const AuthModals = () => {
                     transition: "all 0.3s",
                     opacity: loadingBoutique ? 0.5 : 1,
                   }}
-                  onMouseOver={(e) => {
-                    if (!loadingBoutique) {
-                      e.currentTarget.style.backgroundColor = "#f8fafc";
-                      e.currentTarget.style.borderColor = "#cbd5e1";
-                    }
-                  }}
-                  onMouseOut={(e) => {
-                    if (!loadingBoutique) {
-                      e.currentTarget.style.backgroundColor = "transparent";
-                      e.currentTarget.style.borderColor = "#e2e8f0";
-                    }
-                  }}
                 >
                   Créer plus tard depuis mon tableau de bord
                 </button>
               </div>
 
-              {/* Note informative */}
               <div
                 style={{
                   marginTop: "1.5rem",
@@ -570,8 +679,7 @@ const AuthModals = () => {
               >
                 <p style={{ margin: 0, lineHeight: "1.5" }}>
                   <strong>Note :</strong> Vous pouvez créer plusieurs boutiques
-                  plus tard. Nous vous recommandons de commencer avec une
-                  boutique principale pour vos premiers produits.
+                  plus tard.
                 </p>
               </div>
             </div>
@@ -579,7 +687,6 @@ const AuthModals = () => {
         </div>
       )}
 
-      {/* MODAL DE CRÉATION DE BOUTIQUE */}
       {showBoutiqueCreation && vendeurData && (
         <CreateBoutiqueModal
           show={showBoutiqueCreation}
@@ -591,17 +698,6 @@ const AuthModals = () => {
       )}
 
       <style jsx>{`
-        @keyframes slideIn {
-          from {
-            opacity: 0;
-            transform: translateY(-30px) scale(0.95);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-
         @keyframes bounce {
           0%,
           100% {

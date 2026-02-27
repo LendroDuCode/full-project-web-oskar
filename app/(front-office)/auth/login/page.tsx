@@ -188,6 +188,8 @@ const LoginModal: React.FC<LoginModalProps> = ({
     }
   };
 
+  // Dans LoginModal.tsx - fonction saveUserData
+
   const saveUserData = (userType: string, userData: any, tempToken: string) => {
     const userToStore = {
       ...userData,
@@ -195,11 +197,28 @@ const LoginModal: React.FC<LoginModalProps> = ({
       temp_token: tempToken || "",
     };
 
+    // ✅ Sauvegarder dans TOUS les formats pour compatibilité
     localStorage.setItem("oskar_user", JSON.stringify(userToStore));
     localStorage.setItem("oskar_token", tempToken || "");
     localStorage.setItem("oskar_user_type", userType);
 
+    // Anciens formats pour compatibilité
+    localStorage.setItem("token", tempToken || "");
+    localStorage.setItem("temp_token", tempToken || "");
+    localStorage.setItem("tempToken", tempToken || "");
+
+    // Cookies
     saveAuthToCookies(userToStore, tempToken || "");
+
+    // ✅ Dispatcher les événements pour mettre à jour le header
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("auth-state-changed", {
+          detail: { isLoggedIn: true, user: userToStore },
+        }),
+      );
+      window.dispatchEvent(new Event("force-header-update"));
+    }
 
     if (loginData.rememberMe) {
       localStorage.setItem("oskar_remember_email", loginData.email);
@@ -225,6 +244,9 @@ const LoginModal: React.FC<LoginModalProps> = ({
     setSuccess(null);
     setShowPassword(false);
   };
+
+  // app/(front-office)/auth/LoginModal.tsx
+  // Modifiez seulement la fonction handleLogin (lignes ~180-250)
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -306,7 +328,7 @@ const LoginModal: React.FC<LoginModalProps> = ({
               temp_token: normalizedData.temp_token || normalizedData.tempToken,
             });
 
-            // 3. Dispatcher TOUS les événements pour forcer le rechargement
+            // 3. Dispatcher les événements pour mettre à jour l'UI
             const events = [
               new CustomEvent("auth-state-changed", {
                 detail: { isLoggedIn: true, user: normalizedData.user },
@@ -320,18 +342,17 @@ const LoginModal: React.FC<LoginModalProps> = ({
             events.forEach((event) => window.dispatchEvent(event));
 
             // 4. Afficher le message de succès
-            setSuccess(
-              `Connexion réussie en tant que ${userType.type} ! Redirection...`,
-            );
+            setSuccess(`Connexion réussie en tant que ${userType.type} !`);
             setLoginSuccess(true);
 
             // 5. Réinitialiser le formulaire
             resetForm();
 
-            // 6. Attendre 1.5 secondes puis RECHARGER LA PAGE
+            // 6. ✅ FERMER LE MODAL SANS REDIRECTION
             setTimeout(() => {
               onHide(); // Fermer le modal
-              window.location.reload(); // RECHARGEMENT COMPLET
+              // Le parent (AuthModals) s'occupe d'ouvrir le prompt pour les vendeurs si nécessaire
+              // PAS DE REDIRECTION VERS LE DASHBOARD
             }, 1500);
 
             return;
@@ -364,7 +385,6 @@ const LoginModal: React.FC<LoginModalProps> = ({
       setLoading(false);
     }
   };
-
   const handleSocialLogin = (provider: "google" | "facebook") => {
     console.log(`Connexion avec ${provider}`);
 
