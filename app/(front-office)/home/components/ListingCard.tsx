@@ -122,7 +122,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
   };
     */
 
-    return listing.image;
+    return listing.image || "";
   };
 
   const formatPrice = (price: number | string | null | undefined) => {
