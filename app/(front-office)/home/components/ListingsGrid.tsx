@@ -25,6 +25,7 @@ const buildImageUrl = (imagePath: string | null): string | null => {
   const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
 
   // ✅ Nettoyer le chemin des espaces indésirables
+  /*
   let cleanPath = imagePath
     .replace(/\s+/g, "") // Supprimer tous les espaces
     .replace(/-/g, "-") // Normaliser les tirets
@@ -46,8 +47,9 @@ const buildImageUrl = (imagePath: string | null): string | null => {
     return `${apiUrl}${filesUrl}/${cleanPath}`;
   }
 
+  */
   // ✅ CAS 3: Chemin simple
-  return `${apiUrl}${filesUrl}/${cleanPath}`;
+  return `${apiUrl}${filesUrl}/${imagePath}`;
 };
 
 const ListingsGrid: React.FC<ListingsGridProps> = ({
