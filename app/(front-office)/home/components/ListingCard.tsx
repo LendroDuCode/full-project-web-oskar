@@ -12,7 +12,7 @@ export interface ListingItem {
   libelle?: string;
   description?: string | null;
   prix?: number | string | null;
-  image?: string | null;
+  image: string;
   date?: string | null | undefined;
   disponible?: boolean;
   statut?: string;
@@ -110,21 +110,6 @@ const ListingCard: React.FC<ListingCardProps> = ({
   // app/(front-office)/home/components/ListingCard.tsx
   // app/(front-office)/home/components/ListingCard.tsx
 
-  const getImageSrc = () => {
-    /*
-    const apiUrl =
-      process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
-    const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
-
-    // ✅ CAS 4: Chemin simple (sans %2F)
-    const finalUrl = `${apiUrl}${filesUrl}/${listing.image}`;
-    console.log("✅ Chemin simple:", finalUrl);
-  };
-    */
-
-    return listing.image || "";
-  };
-
   const formatPrice = (price: number | string | null | undefined) => {
     if (price === null || price === undefined) return "Gratuit";
     if (price === 0) return "Gratuit";
@@ -210,7 +195,11 @@ const ListingCard: React.FC<ListingCardProps> = ({
               style={{ minHeight: "200px" }}
             >
               <img
-                src={getImageSrc()}
+                src={
+                  process.env.NEXT_PUBLIC_API_URL +
+                  "/api/files/" +
+                  listing.image
+                }
                 alt={listing.titre || "Annonce"}
                 className="w-100 h-100 object-fit-cover transition-transform group-hover-scale"
                 style={{ height: "200px", objectFit: "cover" }}
@@ -337,7 +326,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
         style={{ height: "224px" }}
       >
         <img
-          src={getImageSrc()}
+          src={listing.image || ""}
           alt={listing.titre || "Annonce"}
           className="w-100 h-100 object-fit-cover transition-transform group-hover-scale"
           style={{ transition: "transform 0.3s ease" }}
