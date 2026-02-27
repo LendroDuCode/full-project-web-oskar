@@ -48,7 +48,7 @@ const buildImageUrl = (imagePath: string | null): string | null => {
   }
 
   */
-  // ✅ CAS 3: Chemin simple
+  // ✅ CAS 3: Chemin simple te
   return `${apiUrl}${filesUrl}/${imagePath}`;
 };
 

@@ -111,49 +111,12 @@ const ListingCard: React.FC<ListingCardProps> = ({
   // app/(front-office)/home/components/ListingCard.tsx
 
   const getImageSrc = () => {
-    if (imageError || !listing.image) {
-      return "/images/placeholder.jpg";
-    }
-
-    console.log("📸 Traitement de l'image:", listing.image);
-
     const apiUrl =
       process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
     const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
 
-    // ✅ CAS 1: L'image est déjà une URL complète
-    if (listing.image.startsWith("http")) {
-      // Si c'est une URL locale (localhost), remplacer par l'URL de production
-      if (listing.image.includes("localhost")) {
-        const productionUrl = apiUrl.replace(/\/api$/, "");
-        const corrected = listing.image.replace(
-          /http:\/\/localhost(:\d+)?/g,
-          productionUrl,
-        );
-        console.log("✅ URL locale corrigée:", corrected);
-        return corrected;
-      }
-      console.log("✅ URL complète conservée:", listing.image);
-      return listing.image;
-    }
-
-    // ✅ CAS 2: Nettoyer le chemin des espaces indésirables
-    let cleanImage = listing.image
-      .replace(/\s+/g, "") // Supprimer tous les espaces
-      .replace(/-/g, "-") // Normaliser les tirets
-      .trim();
-
-    // ✅ CAS 3: Chemin avec %2F (déjà encodé)
-    if (cleanImage.includes("%2F")) {
-      // S'assurer qu'il n'y a pas d'espaces avant/après
-      cleanImage = cleanImage.replace(/%2F\s+/, "%2F");
-      const finalUrl = `${apiUrl}${filesUrl}/${cleanImage}`;
-      console.log("✅ Chemin encodé nettoyé:", finalUrl);
-      return finalUrl;
-    }
-
     // ✅ CAS 4: Chemin simple (sans %2F)
-    const finalUrl = `${apiUrl}${filesUrl}/${cleanImage}`;
+    const finalUrl = `${apiUrl}${filesUrl}/${listing.image}`;
     console.log("✅ Chemin simple:", finalUrl);
     return finalUrl;
   };
