@@ -18,12 +18,16 @@ interface ListingsGridProps {
 // FONCTION DE CONSTRUCTION D'URL D'IMAGE ROBUSTE
 // ============================================
 const buildImageUrl = (imagePath: string | null): string | null => {
-  if (!imagePath) return null;
+  // if (!imagePath) return null;
+  //console.log({ imagePath });
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
   const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+  const finalUrlEnd = imagePath?.replace(`${apiUrl}${filesUrl}/`, "");
+  const testUrl = `${apiUrl}${filesUrl}/${finalUrlEnd}`;
+  console.log({ testUrl });
 
-  return `${apiUrl}${filesUrl}/${imagePath}`;
+  return testUrl;
 };
 
 const ListingsGrid: React.FC<ListingsGridProps> = ({
@@ -47,11 +51,6 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
     useSearch();
 
   const MAX_RETRIES = 3;
-
-  // ✅ Fonction de normalisation qui construit l'URL complète
-  const normalizeImageUrl = useCallback((url: string | null): string | null => {
-    return buildImageUrl(url);
-  }, []);
 
   const abortCurrentRequest = useCallback(() => {
     if (abortControllerRef.current && isMountedRef.current) {
@@ -178,7 +177,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           libelle: item.libelle,
           description: item.description,
           prix: item.prix,
-          image: `${process.env.NEXT_PUBLIC_API_URL}${process.env.NEXT_PUBLIC_FILES_URL}${item.image}`,
+          image: buildImageUrl(item.image),
           date: item.date || item.createdAt || item.publieLe,
           disponible: item.disponible,
           statut: item.statut,
@@ -189,17 +188,14 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
             ? {
                 name: item.createurDetails.nom || "Annonceur",
                 avatar:
-                  normalizeImageUrl(item.createurDetails.avatar) ||
-                  "/images/default-avatar.png",
+                  item.createurDetails.avatar || "/images/default-avatar.png",
               }
             : item.createur
               ? {
                   name:
                     `${item.createur.prenoms || ""} ${item.createur.nom || ""}`.trim() ||
                     "Annonceur",
-                  avatar:
-                    normalizeImageUrl(item.createur.avatar) ||
-                    "/images/default-avatar.png",
+                  avatar: item.createur.avatar || "/images/default-avatar.png",
                 }
               : undefined,
           createdAt: item.createdAt,
@@ -211,7 +207,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           titre: item.nom || item.titre || "Don sans titre",
           description: item.description,
           prix: item.prix,
-          image: normalizeImageUrl(item.image),
+          image: item.image,
           statut: item.statut,
           numero: item.numero,
           localisation:
@@ -221,17 +217,14 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
             ? {
                 name: item.createurDetails.nom || "Donateur",
                 avatar:
-                  normalizeImageUrl(item.createurDetails.avatar) ||
-                  "/images/default-avatar.png",
+                  item.createurDetails.avatar || "/images/default-avatar.png",
               }
             : item.createur
               ? {
                   name:
                     `${item.createur.prenoms || ""} ${item.createur.nom || ""}`.trim() ||
                     "Donateur",
-                  avatar:
-                    normalizeImageUrl(item.createur.avatar) ||
-                    "/images/default-avatar.png",
+                  avatar: item.createur.avatar || "/images/default-avatar.png",
                 }
               : undefined,
           createdAt: item.createdAt,
@@ -244,7 +237,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           titre: item.nomElementEchange || item.titre || "Échange sans titre",
           description: item.message || item.description,
           prix: item.prix,
-          image: normalizeImageUrl(item.image),
+          image: item.image,
           statut: item.statut,
           numero: item.numero,
           localisation:
@@ -254,17 +247,14 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
             ? {
                 name: item.createurDetails.nom || "Initiateur",
                 avatar:
-                  normalizeImageUrl(item.createurDetails.avatar) ||
-                  "/images/default-avatar.png",
+                  item.createurDetails.avatar || "/images/default-avatar.png",
               }
             : item.createur
               ? {
                   name:
                     `${item.createur.prenoms || ""} ${item.createur.nom || ""}`.trim() ||
                     "Initiateur",
-                  avatar:
-                    normalizeImageUrl(item.createur.avatar) ||
-                    "/images/default-avatar.png",
+                  avatar: item.createur.avatar || "/images/default-avatar.png",
                 }
               : undefined,
           createdAt: item.createdAt,
@@ -278,7 +268,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           libelle: item.libelle,
           description: item.description,
           prix: item.prix,
-          image: normalizeImageUrl(item.image),
+          image: item.image,
           date: item.date || item.createdAt || item.publieLe,
           disponible: item.disponible,
           statut: item.statut,
@@ -287,8 +277,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
             ? {
                 name: item.createurDetails.nom || "Vendeur",
                 avatar:
-                  normalizeImageUrl(item.createurDetails.avatar) ||
-                  "/images/default-avatar.png",
+                  item.createurDetails.avatar || "/images/default-avatar.png",
               }
             : item.vendeur || item.createur
               ? {
@@ -296,9 +285,8 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
                     `${(item.vendeur || item.createur)?.prenoms || ""} ${(item.vendeur || item.createur)?.nom || ""}`.trim() ||
                     "Vendeur",
                   avatar:
-                    normalizeImageUrl(
-                      (item.vendeur || item.createur)?.avatar,
-                    ) || "/images/default-avatar.png",
+                    (item.vendeur || item.createur)?.avatar ||
+                    "/images/default-avatar.png",
                 }
               : undefined,
         }));
@@ -471,7 +459,6 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
     filterType,
     sortOption,
     retryCount,
-    normalizeImageUrl,
     getApiUrl,
     abortCurrentRequest,
     categoryUuid,
