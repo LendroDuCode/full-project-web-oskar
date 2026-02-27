@@ -123,8 +123,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
     */
 
     return listing.image;
-
-
+  };
 
   const formatPrice = (price: number | string | null | undefined) => {
     if (price === null || price === undefined) return "Gratuit";
