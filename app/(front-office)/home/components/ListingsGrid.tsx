@@ -23,8 +23,7 @@ const buildImageUrl = (imagePath: string | null): string | null => {
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
   const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
-  const finalUrlEnd = imagePath?.replace(`${apiUrl}${filesUrl}/`, "");
-  const testUrl = `${apiUrl}${filesUrl}/${finalUrlEnd}`;
+  const testUrl = `${apiUrl}${filesUrl}/${imagePath}`;
   console.log({ testUrl });
 
   return testUrl;

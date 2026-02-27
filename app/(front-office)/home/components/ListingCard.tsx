@@ -197,11 +197,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
               style={{ minHeight: "200px" }}
             >
               <img
-                src={
-                  process.env.NEXT_PUBLIC_API_URL +
-                  "/api/files/" +
-                  listing.image
-                }
+                src={listing.image}
                 alt={listing.titre || "Annonce"}
                 className="w-100 h-100 object-fit-cover transition-transform group-hover-scale"
                 style={{ height: "200px", objectFit: "cover" }}
