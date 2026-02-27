@@ -1,4 +1,3 @@
-// app/(front-office)/home/components/ListingsGrid.tsx
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -14,8 +13,6 @@ interface ListingsGridProps {
   onDataLoaded?: (count: number) => void;
   showFeatured?: boolean;
 }
-
-// app/(front-office)/home/components/ListingsGrid.tsx
 
 // ============================================
 // FONCTION DE CONSTRUCTION D'URL D'IMAGE ROBUSTE
@@ -52,6 +49,7 @@ const buildImageUrl = (imagePath: string | null): string | null => {
   // ✅ CAS 3: Chemin simple
   return `${apiUrl}${filesUrl}/${cleanPath}`;
 };
+
 const ListingsGrid: React.FC<ListingsGridProps> = ({
   categoryUuid,
   filterType = "all",
@@ -149,7 +147,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
       }, 15000);
 
       const url = getApiUrl(endpoint);
-      console.log("🌐 Fetching from:", url);
+      console.log("🌐 Fetching from:", url, "avec filtre:", filterType);
 
       const response = await fetch(url, {
         method: "GET",
@@ -211,14 +209,23 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           numero: item.numero,
           localisation:
             item.localisation || item.ville || item.lieu_rencontre || "",
-          seller: item.createur
+          seller: item.createurDetails
             ? {
-                name:
-                  `${item.createur.prenoms || ""} ${item.createur.nom || ""}`.trim() ||
-                  "Annonceur",
-                avatar: item.createur.avatar || "/images/default-avatar.png",
+                name: item.createurDetails.nom || "Annonceur",
+                avatar:
+                  normalizeImageUrl(item.createurDetails.avatar) ||
+                  "/images/default-avatar.png",
               }
-            : undefined,
+            : item.createur
+              ? {
+                  name:
+                    `${item.createur.prenoms || ""} ${item.createur.nom || ""}`.trim() ||
+                    "Annonceur",
+                  avatar:
+                    normalizeImageUrl(item.createur.avatar) ||
+                    "/images/default-avatar.png",
+                }
+              : undefined,
           createdAt: item.createdAt,
         }));
       } else if (filterType === "donation") {
@@ -234,14 +241,23 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           localisation:
             item.localisation || item.ville || item.lieu_retrait || "",
           date: item.createdAt || item.publieLe,
-          seller: item.createur
+          seller: item.createurDetails
             ? {
-                name:
-                  `${item.createur.prenoms || ""} ${item.createur.nom || ""}`.trim() ||
-                  "Donateur",
-                avatar: item.createur.avatar || "/images/default-avatar.png",
+                name: item.createurDetails.nom || "Donateur",
+                avatar:
+                  normalizeImageUrl(item.createurDetails.avatar) ||
+                  "/images/default-avatar.png",
               }
-            : undefined,
+            : item.createur
+              ? {
+                  name:
+                    `${item.createur.prenoms || ""} ${item.createur.nom || ""}`.trim() ||
+                    "Donateur",
+                  avatar:
+                    normalizeImageUrl(item.createur.avatar) ||
+                    "/images/default-avatar.png",
+                }
+              : undefined,
           createdAt: item.createdAt,
         }));
       } else if (filterType === "exchange") {
@@ -258,14 +274,23 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           localisation:
             item.localisation || item.ville || item.lieu_rencontre || "",
           date: item.createdAt || item.publieLe,
-          seller: item.createur
+          seller: item.createurDetails
             ? {
-                name:
-                  `${item.createur.prenoms || ""} ${item.createur.nom || ""}`.trim() ||
-                  "Initiateur",
-                avatar: item.createur.avatar || "/images/default-avatar.png",
+                name: item.createurDetails.nom || "Initiateur",
+                avatar:
+                  normalizeImageUrl(item.createurDetails.avatar) ||
+                  "/images/default-avatar.png",
               }
-            : undefined,
+            : item.createur
+              ? {
+                  name:
+                    `${item.createur.prenoms || ""} ${item.createur.nom || ""}`.trim() ||
+                    "Initiateur",
+                  avatar:
+                    normalizeImageUrl(item.createur.avatar) ||
+                    "/images/default-avatar.png",
+                }
+              : undefined,
           createdAt: item.createdAt,
         }));
       } else if (filterType === "sale") {
@@ -282,15 +307,22 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           disponible: item.disponible,
           statut: item.statut,
           localisation: item.localisation || item.ville || "",
-          seller:
-            item.vendeur || item.createur
+          seller: item.createurDetails
+            ? {
+                name: item.createurDetails.nom || "Vendeur",
+                avatar:
+                  normalizeImageUrl(item.createurDetails.avatar) ||
+                  "/images/default-avatar.png",
+              }
+            : item.vendeur || item.createur
               ? {
                   name:
                     `${(item.vendeur || item.createur)?.prenoms || ""} ${(item.vendeur || item.createur)?.nom || ""}`.trim() ||
                     "Vendeur",
                   avatar:
-                    (item.vendeur || item.createur)?.avatar ||
-                    "/images/default-avatar.png",
+                    normalizeImageUrl(
+                      (item.vendeur || item.createur)?.avatar,
+                    ) || "/images/default-avatar.png",
                 }
               : undefined,
         }));
@@ -317,7 +349,6 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
       // 2. Filtre par catégorie
       if (selectedCategory) {
         filteredData = filteredData.filter((item) => {
-          // Adapter selon votre logique de catégorie
           if (selectedCategory === "electronique") {
             return (
               item.titre?.toLowerCase().includes("téléphone") ||
@@ -404,13 +435,16 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
             const priceB = b.prix ? parseFloat(b.prix.toString()) : 0;
             return priceB - priceA;
           }
-          case "recent": {
+          case "popular": {
+            // Simuler la popularité par le nombre de favoris ou commentaires
+            return 0;
+          }
+          case "recent":
+          default: {
             const dateA = a.date ? new Date(a.date).getTime() : 0;
             const dateB = b.date ? new Date(b.date).getTime() : 0;
             return dateB - dateA;
           }
-          default:
-            return 0;
         }
       });
 
@@ -471,6 +505,47 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
     maxPrice,
     onDataLoaded,
   ]);
+
+  // Écouter les changements de filtre de type
+  useEffect(() => {
+    const handleFilterTypeChange = (event: CustomEvent) => {
+      console.log("📢 Changement de filtre type détecté:", event.detail);
+      if (event.detail?.filterType !== filterType) {
+        fetchListings();
+      }
+    };
+
+    const handleSortOptionChange = (event: CustomEvent) => {
+      console.log("📢 Changement de tri détecté:", event.detail);
+      if (event.detail?.sortOption !== sortOption) {
+        fetchListings();
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener(
+        "filter-type-changed",
+        handleFilterTypeChange as EventListener,
+      );
+      window.addEventListener(
+        "sort-option-changed",
+        handleSortOptionChange as EventListener,
+      );
+    }
+
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener(
+          "filter-type-changed",
+          handleFilterTypeChange as EventListener,
+        );
+        window.removeEventListener(
+          "sort-option-changed",
+          handleSortOptionChange as EventListener,
+        );
+      }
+    };
+  }, [fetchListings, filterType, sortOption]);
 
   useEffect(() => {
     isMountedRef.current = true;

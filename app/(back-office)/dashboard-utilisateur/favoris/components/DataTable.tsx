@@ -1,3 +1,5 @@
+// app/(front-office)/mes-favoris/components/DataTable.tsx
+
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
@@ -39,34 +41,26 @@ import { FavoriItem } from "../type/favoris";
 const buildImageUrl = (imagePath: string | null): string | null => {
   if (!imagePath) return null;
 
-  // Nettoyer le chemin des espaces indésirables
-  let cleanPath = imagePath
-    .replace(/\s+/g, "") // Supprimer tous les espaces
-    .replace(/-/g, "-") // Normaliser les tirets
-    .trim();
-
   const apiUrl =
     process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
   const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
 
-  // ✅ CAS 1: Déjà une URL complète
-  if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
-    if (cleanPath.includes("localhost")) {
+  // Déjà une URL complète
+  if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
+    if (imagePath.includes("localhost")) {
       const productionUrl = apiUrl.replace(/\/api$/, "");
-      return cleanPath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
+      return imagePath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
     }
-    return cleanPath;
+    return imagePath;
   }
 
-  // ✅ CAS 2: Chemin avec %2F (déjà encodé)
-  if (cleanPath.includes("%2F")) {
-    // Nettoyer les espaces autour de %2F
-    const finalPath = cleanPath.replace(/%2F\s+/, "%2F");
-    return `${apiUrl}${filesUrl}/${finalPath}`;
+  // Chemin avec %2F
+  if (imagePath.includes("%2F")) {
+    return `${apiUrl}${filesUrl}/${imagePath}`;
   }
 
-  // ✅ CAS 3: Chemin simple
-  return `${apiUrl}${filesUrl}/${cleanPath}`;
+  // Chemin simple
+  return `${apiUrl}${filesUrl}/${imagePath}`;
 };
 
 // Type for color keys
@@ -186,127 +180,99 @@ export default function DataTable({
     [],
   );
 
-  // ✅ Obtenir l'URL de l'image d'un produit
-  const getProduitImageUrl = useCallback((item: any): string => {
-    if (!item) return `https://via.placeholder.com/60/6f42c1/ffffff?text=P`;
+  // ✅ Obtenir l'URL de l'image
+  const getImageUrl = useCallback((item: any): string | null => {
+    if (!item) return null;
 
-    // Essayer d'abord avec image_key
-    if (item.image_key) {
-      const url = buildImageUrl(item.image_key);
-      if (url) return url;
-    }
-
-    // Sinon avec image
+    // Essayer d'abord avec image_key (dans votre API, c'est "image" qui contient le chemin)
     if (item.image) {
       const url = buildImageUrl(item.image);
       if (url) return url;
     }
 
-    return `https://via.placeholder.com/60/6f42c1/ffffff?text=P`;
+    return null;
   }, []);
 
-  // ✅ Obtenir l'URL de l'image d'un don
-  const getDonImageUrl = useCallback((item: any): string => {
-    if (!item) return `https://via.placeholder.com/60/6f42c1/ffffff?text=D`;
-
-    // Essayer d'abord avec image_key
-    if (item.image_key) {
-      const url = buildImageUrl(item.image_key);
-      if (url) return url;
-    }
-
-    // Sinon avec image
-    if (item.image) {
-      const url = buildImageUrl(item.image);
-      if (url) return url;
-    }
-
-    return `https://via.placeholder.com/60/6f42c1/ffffff?text=D`;
+  // ✅ Obtenir le libellé de la catégorie de façon sécurisée
+  const getCategoryLabel = useCallback((category: any): string => {
+    if (!category) return "";
+    if (typeof category === "string") return category;
+    if (category.libelle) return category.libelle;
+    if (category.nom) return category.nom;
+    return "";
   }, []);
 
-  // ✅ Obtenir l'URL de l'image d'un échange
-  const getEchangeImageUrl = useCallback((item: any): string => {
-    if (!item) return `https://via.placeholder.com/60/6f42c1/ffffff?text=E`;
-
-    // Essayer d'abord avec image_key
-    if (item.image_key) {
-      const url = buildImageUrl(item.image_key);
-      if (url) return url;
-    }
-
-    // Sinon avec image
-    if (item.image) {
-      const url = buildImageUrl(item.image);
-      if (url) return url;
-    }
-
-    return `https://via.placeholder.com/60/6f42c1/ffffff?text=E`;
-  }, []);
-
+  // ✅ Obtenir les détails d'un favori - CORRIGÉ pour éviter les objets dans le render
   const getItemDetails = useCallback(
     (item: FavoriItem) => {
       switch (item.type) {
         case "produit":
+          const produit = item.produit;
           return {
-            title: item.produit?.libelle || "Produit sans nom",
-            description: item.produit?.description,
-            image: getProduitImageUrl(item.produit),
-            price: item.produit?.prix,
-            quantity: item.produit?.quantite || 1,
-            status: item.produit?.statut,
-            estPublie: item.produit?.estPublie,
-            estBloque: item.produit?.estBloque,
-            category: item.produit?.categorie?.libelle,
-            seller: item.produit?.vendeur,
-            sellerName: item.produit?.vendeur
-              ? `${item.produit.vendeur.prenoms} ${item.produit.vendeur.nom}`
-              : "Vendeur inconnu",
-            boutique: item.produit?.boutique,
+            title: produit?.libelle || produit?.libelle || "Produit sans nom",
+            description: produit?.description,
+            image: getImageUrl(produit),
+            price: produit?.prix,
+            quantity: produit?.quantite || 1,
+            status: produit?.statut,
+            estPublie: produit?.estPublie,
+            estBloque: produit?.estBloque,
+            // ✅ CORRIGÉ: Extraire le libellé de la catégorie
+            category: getCategoryLabel(produit?.categorie),
+            sellerName: produit?.vendeur
+              ? `${produit.vendeur.prenoms || ""} ${produit.vendeur.nom || ""}`.trim()
+              : produit?.createur
+                ? `${produit.createur.prenoms || ""} ${produit.createur.nom || ""}`.trim()
+                : "Vendeur inconnu",
+            boutique: produit?.boutique,
             itemUuid: item.itemUuid,
           };
         case "don":
+          const don = item.don;
           return {
-            title: item.don?.nom || "Don sans nom",
-            description: item.don?.description,
-            image: getDonImageUrl(item.don),
-            price: null,
-            quantity: item.don?.quantite || 1,
-            status: item.don?.statut,
-            estPublie: item.don?.estPublie,
-            estBloque: item.don?.est_bloque,
-            category: item.don?.categorie,
-            seller: { name: item.don?.nom_donataire || "Donateur" },
-            sellerName: item.don?.nom_donataire || "Donateur",
-            date: item.don?.date_debut,
+            title: don?.nom || don?.titre || "Don sans nom",
+            description: don?.description,
+            image: getImageUrl(don),
+            price: don?.prix,
+            quantity: don?.quantite || 1,
+            status: don?.statut,
+            estPublie: don?.estPublie,
+            estBloque: don?.est_bloque,
+            // ✅ CORRIGÉ: Extraire le libellé de la catégorie
+            category: getCategoryLabel(don?.categorie),
+            sellerName: don?.createur
+              ? `${don.createur.prenoms || ""} ${don.createur.nom || ""}`.trim()
+              : don?.nom_donataire || "Donateur inconnu",
             itemUuid: item.itemUuid,
           };
         case "echange":
+          const echange = item.echange;
           return {
-            title: item.echange?.nomElementEchange || "Échange sans nom",
-            description: item.echange?.nomElementEchange,
-            image: getEchangeImageUrl(item.echange),
-            price: item.echange?.prix,
-            quantity: item.echange?.quantite || 1,
-            status: item.echange?.statut,
-            estPublie: item.echange?.estPublie,
-            estBloque: item.echange?.estBloque,
-            category: item.echange?.categorie,
-            seller: { name: item.echange?.nom_initiateur || "Initié par" },
-            sellerName: item.echange?.nom_initiateur || "Initié par",
-            date: item.echange?.dateProposition,
+            title: echange?.nomElementEchange || "Échange sans nom",
+            description: echange?.message || echange?.nomElementEchange,
+            image: getImageUrl(echange),
+            price: echange?.prix,
+            quantity: echange?.quantite || 1,
+            status: echange?.statut,
+            estPublie: echange?.estPublie,
+            estBloque: echange?.estBloque,
+            // ✅ CORRIGÉ: Extraire le libellé de la catégorie
+            category: getCategoryLabel(echange?.categorie),
+            sellerName: echange?.nom_initiateur || "Initiateur inconnu",
             itemUuid: item.itemUuid,
           };
         default:
           return {
             title: "Élément sans nom",
-            image: `https://via.placeholder.com/64?text=?`,
+            image: null,
             quantity: 1,
             sellerName: "Inconnu",
             itemUuid: item.itemUuid,
+            category: "",
           };
       }
     },
-    [getProduitImageUrl, getDonImageUrl, getEchangeImageUrl],
+    [getImageUrl, getCategoryLabel],
   );
 
   const getStatusConfig = useCallback(
@@ -595,7 +561,8 @@ export default function DataTable({
                               <img
                                 src={details.image}
                                 alt={details.title}
-                                className="w-100 h-100 object-cover"
+                                className="w-100 h-100"
+                                style={{ objectFit: "cover" }}
                                 onError={(e) => handleImageError(item.uuid, e)}
                               />
                             ) : (
@@ -666,7 +633,7 @@ export default function DataTable({
 
                           <div className="d-flex align-items-center flex-wrap gap-2">
                             {details.category && (
-                              <span className="badge bg-light text-dark border">
+                              <span className="badge bg-light text-dark border small">
                                 {details.category}
                               </span>
                             )}
@@ -722,22 +689,6 @@ export default function DataTable({
                                         className="me-1"
                                       />
                                       {details.boutique.nom}
-                                    </span>
-                                  </div>
-                                )}
-                                {details.date && (
-                                  <div className="col-md-6">
-                                    <small className="text-muted d-block">
-                                      Date de publication
-                                    </small>
-                                    <span className="fw-medium small d-block">
-                                      <FontAwesomeIcon
-                                        icon={faCalendar}
-                                        className="me-1"
-                                      />
-                                      {new Date(
-                                        details.date,
-                                      ).toLocaleDateString("fr-FR")}
                                     </span>
                                   </div>
                                 )}
@@ -813,14 +764,6 @@ export default function DataTable({
                           </span>
                         )}
                       </div>
-                      {Number(details.quantity) > 1 && details.price && (
-                        <small className="text-muted d-block mt-1">
-                          {formatPrice(
-                            Number(details.price) / Number(details.quantity),
-                          )}
-                          /unité
-                        </small>
-                      )}
                     </td>
 
                     <td className="align-middle">

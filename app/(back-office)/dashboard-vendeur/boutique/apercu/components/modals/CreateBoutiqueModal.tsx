@@ -37,6 +37,7 @@ interface CreateBoutiqueModalProps {
   loading: boolean;
   onClose: () => void;
   onCreate: (data: any) => Promise<void>;
+  vendeurData?: any; // ✅ Données du vendeur pour le workflow après connexion
 }
 
 const CreateBoutiqueModal = ({
@@ -44,6 +45,7 @@ const CreateBoutiqueModal = ({
   loading,
   onClose,
   onCreate,
+  vendeurData, // ✅ Nouvelle prop
 }: CreateBoutiqueModalProps) => {
   const [formData, setFormData] = useState({
     nom: "",
@@ -61,6 +63,14 @@ const CreateBoutiqueModal = ({
   const [bannierePreview, setBannierePreview] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [apiError, setApiError] = useState<string | null>(null);
+
+  // ✅ Nettoyage des previews à la fermeture
+  useEffect(() => {
+    return () => {
+      if (logoPreview) URL.revokeObjectURL(logoPreview);
+      if (bannierePreview) URL.revokeObjectURL(bannierePreview);
+    };
+  }, [logoPreview, bannierePreview]);
 
   const handleFileChange = (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -85,12 +95,15 @@ const CreateBoutiqueModal = ({
       }
 
       setErrors({ ...errors, [type]: "" });
-      setApiError(null); // Effacer l'erreur API lors d'une nouvelle action
+      setApiError(null);
 
       if (type === "logo") {
+        // ✅ Nettoyer l'ancienne preview
+        if (logoPreview) URL.revokeObjectURL(logoPreview);
         setFormData({ ...formData, logo: file });
         setLogoPreview(URL.createObjectURL(file));
       } else {
+        if (bannierePreview) URL.revokeObjectURL(bannierePreview);
         setFormData({ ...formData, banniere: file });
         setBannierePreview(URL.createObjectURL(file));
       }
@@ -103,50 +116,46 @@ const CreateBoutiqueModal = ({
       setErrors({ ...errors, types: "" });
       setApiError(null);
 
+      console.log("📦 Chargement des types de boutique...");
       const response = await api.get(API_ENDPOINTS.TYPES_BOUTIQUE.LIST);
 
       console.log("📦 Réponse types boutique:", response);
 
       let typesData: TypeBoutique[] = [];
 
+      // ✅ Extraction robuste des données
       if (Array.isArray(response)) {
         typesData = response;
-      } else if (
-        response &&
-        typeof response === "object" &&
-        "data" in response
-      ) {
-        const data = response.data;
-        if (Array.isArray(data)) {
-          typesData = data;
-        } else if (data && typeof data === "object") {
-          const arrayKey = Object.keys(data).find((key) =>
-            Array.isArray(data[key]),
-          );
-          if (arrayKey && data[arrayKey]) {
-            typesData = data[arrayKey];
-          }
-        }
       } else if (response && typeof response === "object") {
-        const arrayKey = Object.keys(response).find((key) =>
-          Array.isArray(response[key]),
-        );
-        if (arrayKey && response[arrayKey]) {
-          typesData = response[arrayKey];
+        if ("data" in response && Array.isArray(response.data)) {
+          typesData = response.data;
+        } else {
+          // Chercher le premier tableau dans l'objet
+          const arrayKey = Object.keys(response).find((key) =>
+            Array.isArray(response[key]),
+          );
+          if (arrayKey && response[arrayKey]) {
+            typesData = response[arrayKey];
+          }
         }
       }
 
+      // ✅ Filtrer les entrées valides
       typesData = typesData.filter(
         (item) =>
           item &&
           typeof item === "object" &&
           "uuid" in item &&
-          "libelle" in item,
+          "libelle" in item &&
+          "code" in item,
       );
 
       if (typesData.length === 0) {
         console.warn("⚠️ Aucun type de boutique trouvé ou format invalide");
         setTypesBoutique([]);
+        setErrors({
+          types: "Aucun type de boutique disponible pour le moment",
+        });
       } else {
         console.log(`✅ ${typesData.length} type(s) de boutique chargé(s)`);
         setTypesBoutique(typesData);
@@ -170,6 +179,9 @@ const CreateBoutiqueModal = ({
       fetchTypesBoutique();
       setErrors({});
       setApiError(null);
+    } else {
+      // ✅ Réinitialiser quand le modal se ferme
+      resetForm();
     }
   }, [show]);
 
@@ -193,8 +205,21 @@ const CreateBoutiqueModal = ({
         "La description ne doit pas dépasser 500 caractères";
     }
 
+    if (formData.politique_retour && formData.politique_retour.length > 1000) {
+      newErrors.politique_retour =
+        "La politique de retour ne doit pas dépasser 1000 caractères";
+    }
+
+    if (
+      formData.conditions_utilisation &&
+      formData.conditions_utilisation.length > 1000
+    ) {
+      newErrors.conditions_utilisation =
+        "Les conditions d'utilisation ne doivent pas dépasser 1000 caractères";
+    }
+
     setErrors(newErrors);
-    setApiError(null); // Effacer l'erreur API lors de la validation
+    setApiError(null);
     return Object.keys(newErrors).length === 0;
   };
 
@@ -207,12 +232,43 @@ const CreateBoutiqueModal = ({
     }
 
     try {
-      await onCreate(formData);
-      // Ne pas reset ici car la fonction parent le fera après succès
+      // ✅ Préparer les données pour l'API
+      const submitData = new FormData();
+      submitData.append("nom", formData.nom);
+      submitData.append("type_boutique_uuid", formData.type_boutique_uuid);
+      if (formData.description) {
+        submitData.append("description", formData.description);
+      }
+      if (formData.politique_retour) {
+        submitData.append("politique_retour", formData.politique_retour);
+      }
+      if (formData.conditions_utilisation) {
+        submitData.append(
+          "conditions_utilisation",
+          formData.conditions_utilisation,
+        );
+      }
+      if (formData.logo) {
+        submitData.append("logo", formData.logo);
+      }
+      if (formData.banniere) {
+        submitData.append("banniere", formData.banniere);
+      }
+
+      // ✅ Ajouter l'UUID du vendeur si disponible
+      if (vendeurData?.vendeurId) {
+        submitData.append("vendeur_uuid", vendeurData.vendeurId);
+      }
+
+      await onCreate(submitData);
+      // ✅ La fermeture et le reset seront gérés par le parent après succès
     } catch (error: any) {
-      // L'erreur est déjà gérée dans le parent, mais on peut l'afficher ici aussi
       console.error("Erreur dans handleSubmit:", error);
-      // Le parent va setter l'erreur, on n'a pas besoin de faire quoi que ce soit ici
+      setApiError(
+        error.response?.data?.message ||
+          error.message ||
+          "Une erreur est survenue lors de la création",
+      );
     }
   };
 
@@ -222,6 +278,10 @@ const CreateBoutiqueModal = ({
   };
 
   const resetForm = () => {
+    // ✅ Nettoyer les previews
+    if (logoPreview) URL.revokeObjectURL(logoPreview);
+    if (bannierePreview) URL.revokeObjectURL(bannierePreview);
+
     setFormData({
       nom: "",
       type_boutique_uuid: "",
@@ -239,9 +299,11 @@ const CreateBoutiqueModal = ({
 
   const removeImage = (type: "logo" | "banniere") => {
     if (type === "logo") {
+      if (logoPreview) URL.revokeObjectURL(logoPreview);
       setFormData({ ...formData, logo: null });
       setLogoPreview(null);
     } else {
+      if (bannierePreview) URL.revokeObjectURL(bannierePreview);
       setFormData({ ...formData, banniere: null });
       setBannierePreview(null);
     }
@@ -255,15 +317,25 @@ const CreateBoutiqueModal = ({
     return faTag;
   };
 
+  const getTypeDescription = (type: TypeBoutique) => {
+    if (type.description) return type.description;
+    if (type.peut_vendre_produits && type.peut_vendre_biens) {
+      return "Peut vendre produits et biens";
+    }
+    if (type.peut_vendre_produits) return "Peut vendre des produits";
+    if (type.peut_vendre_biens) return "Peut vendre des biens";
+    return "";
+  };
+
   if (!show) return null;
 
   return (
     <div
       className="modal fade show d-block"
-      style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1050 }}
+      style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 20000 }} // ✅ Z-index très élevé
       tabIndex={-1}
       onClick={(e) => {
-        if (e.target === e.currentTarget) handleClose();
+        if (e.target === e.currentTarget && !loading) handleClose();
       }}
     >
       <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
@@ -271,25 +343,29 @@ const CreateBoutiqueModal = ({
           <div
             className="modal-header border-0 text-white position-relative overflow-hidden"
             style={{
-              background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+              background: "linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)", // ✅ Bleu pour les vendeurs
+              padding: "1.5rem 2rem",
             }}
           >
             <div className="position-absolute top-0 end-0 bottom-0 start-0 opacity-10">
               <FontAwesomeIcon
                 icon={faStore}
                 className="position-absolute"
-                style={{ background: colors.oskar.green }}
+                style={{ fontSize: "8rem", right: "-1rem", bottom: "-2rem" }}
               />
             </div>
             <div className="position-relative z-1">
-              <h5 className="modal-title fw-bold d-flex align-items-center gap-2">
+              <h5 className="modal-title fw-bold d-flex align-items-center gap-3 mb-2">
                 <div className="bg-white bg-opacity-20 rounded-circle p-2">
                   <FontAwesomeIcon icon={faPlus} className="fs-5" />
                 </div>
-                <span>Créer une nouvelle boutique</span>
+                <span>Créer votre boutique</span>
               </h5>
-              <p className="mb-0 text-white text-opacity-90 small">
-                Remplissez les informations pour créer votre boutique
+              <p className="mb-0 text-white text-opacity-90 small ps-5">
+                {vendeurData?.firstName
+                  ? `Bonjour ${vendeurData.firstName}, `
+                  : ""}
+                configurez votre boutique pour commencer à vendre
               </p>
             </div>
             <button
@@ -328,7 +404,7 @@ const CreateBoutiqueModal = ({
             )}
 
             <div className="p-4 border-bottom">
-              <h6 className="fw-bold mb-3 text-success d-flex align-items-center gap-2">
+              <h6 className="fw-bold mb-3 text-primary d-flex align-items-center gap-2">
                 <FontAwesomeIcon icon={faInfoCircle} />
                 Informations principales
               </h6>
@@ -350,7 +426,7 @@ const CreateBoutiqueModal = ({
                       onChange={(e) => {
                         setFormData({ ...formData, nom: e.target.value });
                         if (errors.nom) setErrors({ ...errors, nom: "" });
-                        setApiError(null); // Effacer l'erreur API quand l'utilisateur modifie le champ
+                        setApiError(null);
                       }}
                       required
                       disabled={loading}
@@ -412,9 +488,9 @@ const CreateBoutiqueModal = ({
                         <FontAwesomeIcon
                           icon={faSpinner}
                           spin
-                          className="text-success"
+                          className="text-primary"
                         />
-                        <small className="text-success">
+                        <small className="text-primary">
                           Chargement des types de boutique...
                         </small>
                       </div>
@@ -484,7 +560,7 @@ const CreateBoutiqueModal = ({
             </div>
 
             <div className="p-4 border-bottom">
-              <h6 className="fw-bold mb-3 text-success d-flex align-items-center gap-2">
+              <h6 className="fw-bold mb-3 text-primary d-flex align-items-center gap-2">
                 <FontAwesomeIcon icon={faImage} />
                 Images
               </h6>
@@ -552,7 +628,7 @@ const CreateBoutiqueModal = ({
                               />
                               <label
                                 htmlFor="logo-upload"
-                                className="btn btn-outline-success btn-sm"
+                                className="btn btn-outline-primary btn-sm"
                                 style={{
                                   cursor: loading ? "not-allowed" : "pointer",
                                 }}
@@ -657,7 +733,7 @@ const CreateBoutiqueModal = ({
                               />
                               <label
                                 htmlFor="banniere-upload"
-                                className="btn btn-outline-success btn-sm"
+                                className="btn btn-outline-primary btn-sm"
                                 style={{
                                   cursor: loading ? "not-allowed" : "pointer",
                                 }}
@@ -697,7 +773,7 @@ const CreateBoutiqueModal = ({
             </div>
 
             <div className="p-4">
-              <h6 className="fw-bold mb-3 text-success d-flex align-items-center gap-2">
+              <h6 className="fw-bold mb-3 text-primary d-flex align-items-center gap-2">
                 <FontAwesomeIcon icon={faClipboardCheck} />
                 Conditions et politiques
               </h6>
@@ -708,7 +784,7 @@ const CreateBoutiqueModal = ({
                     Politique de retour
                   </label>
                   <textarea
-                    className="form-control"
+                    className={`form-control ${errors.politique_retour ? "is-invalid" : ""}`}
                     rows={3}
                     placeholder="Décrivez votre politique de retour et d'échange..."
                     value={formData.politique_retour}
@@ -717,6 +793,8 @@ const CreateBoutiqueModal = ({
                         ...formData,
                         politique_retour: e.target.value,
                       });
+                      if (errors.politique_retour)
+                        setErrors({ ...errors, politique_retour: "" });
                       setApiError(null);
                     }}
                     disabled={loading}
@@ -726,10 +804,17 @@ const CreateBoutiqueModal = ({
                     <small className="text-muted">
                       Informez vos clients sur les retours et échanges
                     </small>
-                    <small className="text-muted">
+                    <small
+                      className={`${formData.politique_retour.length > 900 ? "text-warning" : "text-muted"}`}
+                    >
                       {formData.politique_retour.length}/1000 caractères
                     </small>
                   </div>
+                  {errors.politique_retour && (
+                    <div className="invalid-feedback d-block">
+                      {errors.politique_retour}
+                    </div>
+                  )}
                 </div>
 
                 <div className="col-12">
@@ -737,7 +822,7 @@ const CreateBoutiqueModal = ({
                     Conditions d'utilisation
                   </label>
                   <textarea
-                    className="form-control"
+                    className={`form-control ${errors.conditions_utilisation ? "is-invalid" : ""}`}
                     rows={3}
                     placeholder="Décrivez les conditions générales d'utilisation..."
                     value={formData.conditions_utilisation}
@@ -746,6 +831,8 @@ const CreateBoutiqueModal = ({
                         ...formData,
                         conditions_utilisation: e.target.value,
                       });
+                      if (errors.conditions_utilisation)
+                        setErrors({ ...errors, conditions_utilisation: "" });
                       setApiError(null);
                     }}
                     disabled={loading}
@@ -755,10 +842,17 @@ const CreateBoutiqueModal = ({
                     <small className="text-muted">
                       Définissez les règles d'utilisation de votre boutique
                     </small>
-                    <small className="text-muted">
+                    <small
+                      className={`${formData.conditions_utilisation.length > 900 ? "text-warning" : "text-muted"}`}
+                    >
                       {formData.conditions_utilisation.length}/1000 caractères
                     </small>
                   </div>
+                  {errors.conditions_utilisation && (
+                    <div className="invalid-feedback d-block">
+                      {errors.conditions_utilisation}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -776,17 +870,17 @@ const CreateBoutiqueModal = ({
             </button>
             <button
               type="submit"
-              className="btn btn-lg btn-success d-flex align-items-center gap-2"
+              className="btn btn-lg btn-primary d-flex align-items-center gap-2"
               onClick={handleSubmit}
               disabled={loading || loadingTypes || typesBoutique.length === 0}
               style={{
-                background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                background: "linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)",
                 border: "none",
               }}
             >
               {loading ? (
                 <>
-                  <span className="spinner-border spinner-border-sm me-2"></span>
+                  <FontAwesomeIcon icon={faSpinner} spin className="me-2" />
                   Création en cours...
                 </>
               ) : (
@@ -807,8 +901,8 @@ const CreateBoutiqueModal = ({
         }
 
         .file-upload-area:hover {
-          border-color: #10b981 !important;
-          background-color: rgba(16, 185, 129, 0.05) !important;
+          border-color: #0ea5e9 !important;
+          background-color: rgba(14, 165, 233, 0.05) !important;
         }
 
         .border-dashed {
@@ -832,8 +926,8 @@ const CreateBoutiqueModal = ({
 
         .form-control:focus,
         .form-select:focus {
-          border-color: #10b981;
-          box-shadow: 0 0 0 0.25rem rgba(16, 185, 129, 0.25);
+          border-color: #0ea5e9;
+          box-shadow: 0 0 0 0.25rem rgba(14, 165, 233, 0.25);
         }
 
         .card {
@@ -847,19 +941,29 @@ const CreateBoutiqueModal = ({
           box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1) !important;
         }
 
-        .text-success {
-          color: #059669 !important;
+        .text-primary {
+          color: #0284c7 !important;
         }
 
-        .btn-outline-success {
-          color: #059669;
-          border-color: #059669;
+        .btn-outline-primary {
+          color: #0284c7;
+          border-color: #0284c7;
         }
 
-        .btn-outline-success:hover {
-          background-color: #059669;
-          border-color: #059669;
+        .btn-outline-primary:hover {
+          background-color: #0284c7;
+          border-color: #0284c7;
           color: white;
+        }
+
+        .btn-primary {
+          background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+          background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+          transform: translateY(-2px);
+          box-shadow: 0 10px 20px rgba(14, 165, 233, 0.3);
         }
       `}</style>
     </div>

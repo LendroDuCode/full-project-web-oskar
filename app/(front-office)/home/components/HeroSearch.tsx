@@ -1,9 +1,7 @@
-// app/(front-office)/home/components/HeroSearch.tsx
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import colors from "../../../shared/constants/colors";
-import { useRouter } from "next/navigation";
 import { useSearch } from "../contexts/SearchContext";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
@@ -67,8 +65,6 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
   showPopularSearches = true,
   compactMode = false,
 }) => {
-  const router = useRouter();
-
   const {
     searchQuery,
     setSearchQuery,
@@ -112,6 +108,12 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
     { value: "bouake", label: "Bouaké" },
     { value: "daloa", label: "Daloa" },
     { value: "yamassoukro", label: "Yamoussoukro" },
+    { value: "san-pedro", label: "San-Pédro" },
+    { value: "korhogo", label: "Korhogo" },
+    { value: "man", label: "Man" },
+    { value: "gagnoa", label: "Gagnoa" },
+    { value: "soubre", label: "Soubré" },
+    { value: "bondoukou", label: "Bondoukou" },
   ];
 
   const priceRanges = [
@@ -121,6 +123,21 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
     { value: "50000", label: "50 000 FCFA" },
     { value: "100000", label: "100 000 FCFA" },
     { value: "200000", label: "200 000 FCFA" },
+    { value: "500000", label: "500 000 FCFA" },
+    { value: "1000000", label: "1 000 000 FCFA" },
+  ];
+
+  // Options de catégories pour le filtre
+  const categoryOptions = [
+    { value: "", label: "Toutes les catégories" },
+    { value: "electronique", label: "Électronique" },
+    { value: "mode", label: "Mode & Accessoires" },
+    { value: "maison", label: "Maison & Jardin" },
+    { value: "vehicules", label: "Véhicules" },
+    { value: "education", label: "Éducation & Culture" },
+    { value: "services", label: "Services" },
+    { value: "don-echange", label: "Don & Échange" },
+    { value: "autres", label: "Autres" },
   ];
 
   // ============================================
@@ -270,7 +287,7 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
   }, [isMobile]);
 
   // ============================================
-  // FONCTION DE RECHERCHE AVEC FILTRES
+  // FONCTION DE RECHERCHE AVEC FILTRES (SANS REDIRECTION)
   // ============================================
   const handleSearch = () => {
     const query = searchQuery.trim();
@@ -278,34 +295,33 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
     if (onSearch) {
       onSearch(query);
     } else {
-      const params = new URLSearchParams();
+      // ✅ NE PLUS REDIRIGER - juste mettre à jour le contexte
+      // Les filtres sont déjà dans le contexte via les setters
+      console.log("Recherche effectuée - Mise à jour des filtres:", {
+        query,
+        selectedCategory,
+        selectedSousCategorie,
+        selectedSousCategorieLibelle,
+        selectedLocation,
+        maxPrice,
+      });
 
-      // Ajouter tous les filtres aux paramètres d'URL
-      if (query) params.append("q", query);
-      if (selectedCategory) params.append("categorie", selectedCategory);
-      if (selectedSousCategorie) {
-        params.append("sous_categorie", selectedSousCategorie);
-        // Ajouter aussi le libellé pour l'affichage
-        if (selectedSousCategorieLibelle) {
-          params.append("sous_categorie_libelle", selectedSousCategorieLibelle);
-        }
+      // Émettre un événement personnalisé pour que ListingsGrid se mette à jour
+      if (typeof window !== "undefined") {
+        const event = new CustomEvent("search-filters-updated", {
+          detail: {
+            searchQuery: query,
+            category: selectedCategory,
+            sousCategorie: selectedSousCategorie,
+            location: selectedLocation,
+            maxPrice,
+          },
+        });
+        window.dispatchEvent(event);
       }
-      if (selectedLocation) params.append("localisation", selectedLocation);
-      if (maxPrice) params.append("prix_max", maxPrice);
-
-      // Navigation vers la page de recherche avec tous les filtres
-      router.push(`/recherche?${params.toString()}`);
     }
 
     setShowSuggestions(false);
-    console.log("Recherche effectuée:", {
-      query,
-      selectedCategory,
-      selectedSousCategorie,
-      selectedSousCategorieLibelle,
-      selectedLocation,
-      maxPrice,
-    });
   };
 
   // ============================================
@@ -357,7 +373,6 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
   const handleSuggestionClick = (suggestion: string) => {
     setSearchQuery(suggestion);
     setActiveTag(suggestion);
-    setInputFocused(false);
     handleSearch();
   };
 
@@ -375,6 +390,20 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
     setSelectedLocation("");
     setMaxPrice("");
     setActiveTag(null);
+
+    // Émettre un événement pour réinitialiser les filtres
+    if (typeof window !== "undefined") {
+      const event = new CustomEvent("search-filters-updated", {
+        detail: {
+          searchQuery: "",
+          category: "",
+          sousCategorie: "",
+          location: "",
+          maxPrice: "",
+        },
+      });
+      window.dispatchEvent(event);
+    }
   };
 
   const getPlaceholder = () => {
@@ -658,6 +687,135 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
           {!compactMode && !isMobile && (
             <div className="mt-3 mb-4">
               <div className="d-flex flex-wrap justify-content-center align-items-stretch gap-3">
+                {/* CATÉGORIE - NOUVEAU FILTRE */}
+                <div
+                  className="position-relative"
+                  style={{ minWidth: "220px", flex: "0 1 auto" }}
+                >
+                  <div className="position-relative">
+                    <select
+                      className="form-select"
+                      style={{
+                        width: "100%",
+                        padding: "0.75rem 2.5rem 0.75rem 2.5rem",
+                        borderColor: selectedCategory
+                          ? colors.oskar.green
+                          : colors.oskar.lightGrey,
+                        fontSize: "0.95rem",
+                        backgroundColor: "white",
+                        color: selectedCategory
+                          ? colors.oskar.black
+                          : "#6c757d",
+                        appearance: "none",
+                        cursor: "pointer",
+                        borderWidth: "1.5px",
+                        transition: "all 0.2s",
+                        borderRadius: "10px",
+                        fontWeight: selectedCategory ? "500" : "400",
+                        height: "54px",
+                        lineHeight: "1.5",
+                      }}
+                      value={selectedCategory}
+                      onChange={(e) => {
+                        setSelectedCategory(e.target.value);
+                        // Émettre un événement pour mettre à jour les filtres
+                        if (typeof window !== "undefined") {
+                          const event = new CustomEvent(
+                            "search-filters-updated",
+                            {
+                              detail: {
+                                searchQuery,
+                                category: e.target.value,
+                                sousCategorie: selectedSousCategorie,
+                                location: selectedLocation,
+                                maxPrice,
+                              },
+                            },
+                          );
+                          window.dispatchEvent(event);
+                        }
+                      }}
+                    >
+                      {categoryOptions.map((cat) => (
+                        <option key={cat.value} value={cat.value}>
+                          {cat.label}
+                        </option>
+                      ))}
+                    </select>
+
+                    {/* Icône gauche */}
+                    <div
+                      className="position-absolute top-50 start-0 translate-middle-y"
+                      style={{
+                        color: selectedCategory
+                          ? colors.oskar.green
+                          : colors.oskar.grey,
+                        left: "15px",
+                        pointerEvents: "none",
+                        zIndex: 2,
+                      }}
+                    >
+                      <i className="fa-solid fa-tag"></i>
+                    </div>
+
+                    {/* Icône droite */}
+                    <div
+                      className="position-absolute top-50 end-0 translate-middle-y pe-3"
+                      style={{
+                        color: colors.oskar.green,
+                        pointerEvents: "none",
+                        zIndex: 2,
+                        right: "10px",
+                      }}
+                    >
+                      <i className="fa-solid fa-chevron-down"></i>
+                    </div>
+
+                    {/* Texte sélectionné */}
+                    {selectedCategory && (
+                      <div
+                        className="position-absolute top-50 start-0 translate-middle-y"
+                        style={{
+                          left: "45px",
+                          pointerEvents: "none",
+                          zIndex: 2,
+                          color: colors.oskar.black,
+                          fontSize: "0.95rem",
+                          fontWeight: "500",
+                          maxWidth: "120px",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {categoryOptions.find(
+                          (c) => c.value === selectedCategory,
+                        )?.label || ""}
+                      </div>
+                    )}
+                  </div>
+
+                  <span
+                    className="position-absolute px-2"
+                    style={{
+                      top: "-10px",
+                      left: "15px",
+                      fontSize: "0.7rem",
+                      color: selectedCategory
+                        ? colors.oskar.green
+                        : colors.oskar.grey,
+                      backgroundColor: "white",
+                      padding: "0 6px",
+                      fontWeight: 600,
+                      letterSpacing: "0.3px",
+                      zIndex: 3,
+                      lineHeight: "1",
+                    }}
+                  >
+                    CATÉGORIE
+                  </span>
+                </div>
+
                 {/* LOCALISATION */}
                 <div
                   className="position-relative"
@@ -687,7 +845,25 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
                         lineHeight: "1.5",
                       }}
                       value={selectedLocation}
-                      onChange={(e) => setSelectedLocation(e.target.value)}
+                      onChange={(e) => {
+                        setSelectedLocation(e.target.value);
+                        // Émettre un événement pour mettre à jour les filtres
+                        if (typeof window !== "undefined") {
+                          const event = new CustomEvent(
+                            "search-filters-updated",
+                            {
+                              detail: {
+                                searchQuery,
+                                category: selectedCategory,
+                                sousCategorie: selectedSousCategorie,
+                                location: e.target.value,
+                                maxPrice,
+                              },
+                            },
+                          );
+                          window.dispatchEvent(event);
+                        }
+                      }}
                     >
                       {locations.map((loc) => (
                         <option key={loc.value} value={loc.value}>
@@ -795,7 +971,25 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
                         lineHeight: "1.5",
                       }}
                       value={maxPrice}
-                      onChange={(e) => setMaxPrice(e.target.value)}
+                      onChange={(e) => {
+                        setMaxPrice(e.target.value);
+                        // Émettre un événement pour mettre à jour les filtres
+                        if (typeof window !== "undefined") {
+                          const event = new CustomEvent(
+                            "search-filters-updated",
+                            {
+                              detail: {
+                                searchQuery,
+                                category: selectedCategory,
+                                sousCategorie: selectedSousCategorie,
+                                location: selectedLocation,
+                                maxPrice: e.target.value,
+                              },
+                            },
+                          );
+                          window.dispatchEvent(event);
+                        }
+                      }}
                     >
                       {priceRanges.map((price) => (
                         <option key={price.value} value={price.value}>
@@ -924,6 +1118,87 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
                 className="d-flex gap-2 overflow-auto pb-2"
                 style={{ scrollbarWidth: "none" }}
               >
+                {/* Catégorie - Mobile */}
+                <div
+                  className="position-relative flex-shrink-0"
+                  style={{ minWidth: "160px" }}
+                >
+                  <div className="position-relative">
+                    <select
+                      className="form-select"
+                      style={{
+                        width: "100%",
+                        padding: "0.7rem 2.2rem 0.7rem 2.2rem",
+                        borderColor: selectedCategory
+                          ? colors.oskar.green
+                          : colors.oskar.lightGrey,
+                        fontSize: "0.85rem",
+                        backgroundColor: "white",
+                        color: selectedCategory
+                          ? colors.oskar.black
+                          : "#6c757d",
+                        appearance: "none",
+                        cursor: "pointer",
+                        borderWidth: "1.5px",
+                        height: "48px",
+                        borderRadius: "10px",
+                        fontWeight: selectedCategory ? "500" : "400",
+                      }}
+                      value={selectedCategory}
+                      onChange={(e) => {
+                        setSelectedCategory(e.target.value);
+                        if (typeof window !== "undefined") {
+                          const event = new CustomEvent(
+                            "search-filters-updated",
+                            {
+                              detail: {
+                                searchQuery,
+                                category: e.target.value,
+                                sousCategorie: selectedSousCategorie,
+                                location: selectedLocation,
+                                maxPrice,
+                              },
+                            },
+                          );
+                          window.dispatchEvent(event);
+                        }
+                      }}
+                    >
+                      {categoryOptions.map((cat) => (
+                        <option key={cat.value} value={cat.value}>
+                          {cat.label}
+                        </option>
+                      ))}
+                    </select>
+
+                    <div
+                      className="position-absolute top-50 start-0 translate-middle-y"
+                      style={{
+                        color: selectedCategory
+                          ? colors.oskar.green
+                          : colors.oskar.grey,
+                        left: "12px",
+                        pointerEvents: "none",
+                        zIndex: 2,
+                      }}
+                    >
+                      <i className="fa-solid fa-tag"></i>
+                    </div>
+
+                    <div
+                      className="position-absolute top-50 end-0 translate-middle-y"
+                      style={{
+                        color: colors.oskar.green,
+                        pointerEvents: "none",
+                        zIndex: 2,
+                        right: "12px",
+                      }}
+                    >
+                      <i className="fa-solid fa-chevron-down"></i>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Localisation - Mobile */}
                 <div
                   className="position-relative flex-shrink-0"
@@ -951,7 +1226,24 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
                         fontWeight: selectedLocation ? "500" : "400",
                       }}
                       value={selectedLocation}
-                      onChange={(e) => setSelectedLocation(e.target.value)}
+                      onChange={(e) => {
+                        setSelectedLocation(e.target.value);
+                        if (typeof window !== "undefined") {
+                          const event = new CustomEvent(
+                            "search-filters-updated",
+                            {
+                              detail: {
+                                searchQuery,
+                                category: selectedCategory,
+                                sousCategorie: selectedSousCategorie,
+                                location: e.target.value,
+                                maxPrice,
+                              },
+                            },
+                          );
+                          window.dispatchEvent(event);
+                        }
+                      }}
                     >
                       {locations.map((loc) => (
                         <option key={loc.value} value={loc.value}>
@@ -1013,7 +1305,24 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
                         fontWeight: maxPrice ? "500" : "400",
                       }}
                       value={maxPrice}
-                      onChange={(e) => setMaxPrice(e.target.value)}
+                      onChange={(e) => {
+                        setMaxPrice(e.target.value);
+                        if (typeof window !== "undefined") {
+                          const event = new CustomEvent(
+                            "search-filters-updated",
+                            {
+                              detail: {
+                                searchQuery,
+                                category: selectedCategory,
+                                sousCategorie: selectedSousCategorie,
+                                location: selectedLocation,
+                                maxPrice: e.target.value,
+                              },
+                            },
+                          );
+                          window.dispatchEvent(event);
+                        }
+                      }}
                     >
                       {priceRanges.map((price) => (
                         <option key={price.value} value={price.value}>
@@ -1133,7 +1442,7 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
                         </span>
                       </div>
 
-                      {/* SOUS-CATÉGORIES SUR LA MÊME LIGNE - MODIFICATION ICI */}
+                      {/* SOUS-CATÉGORIES SUR LA MÊME LIGNE */}
                       <div className="d-flex flex-wrap justify-content-center gap-2">
                         {item.subCategories.map((sub) => (
                           <button
@@ -1269,7 +1578,8 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
                           color: colors.oskar.green,
                         }}
                       ></i>
-                      {selectedCategory}
+                      {categoryOptions.find((c) => c.value === selectedCategory)
+                        ?.label || selectedCategory}
                     </span>
                   )}
                   {selectedSousCategorieLibelle && (

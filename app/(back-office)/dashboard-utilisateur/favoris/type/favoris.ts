@@ -82,6 +82,13 @@ export interface EchangeFavori {
   estPublie: boolean;
   estBloque?: boolean;
   quantite: number;
+  createur?: {
+    nom: string;
+    prenoms: string;
+    avatar?: string;
+    email: string;
+    telephone: string;
+  };
   dateProposition: string;
   categorie?: string;
   nom_initiateur?: string;

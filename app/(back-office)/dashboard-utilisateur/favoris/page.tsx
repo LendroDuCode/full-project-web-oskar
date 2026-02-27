@@ -1,4 +1,5 @@
 // app/(front-office)/mes-favoris/page.tsx
+
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -6,7 +7,6 @@ import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import FilterBar from "./components/FilterBar";
 import DataTable from "./components/DataTable";
-
 import { FavoriItem, FavorisResponse } from "./type/favoris";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -17,7 +17,6 @@ import {
   faFilterCircleXmark,
   faStar,
   faTrash,
-  faDownload,
   faEye,
   faPlus,
   faTimes,
@@ -30,6 +29,34 @@ import {
 import EmptyState from "./components/EmptyState";
 import ViewModal from "../annonces/components/ViewModal";
 import colors from "@/app/shared/constants/colors";
+
+// ============================================
+// FONCTION DE CONSTRUCTION D'URL D'IMAGE ROBUSTE
+// ============================================
+const buildImageUrl = (imagePath: string | null): string | null => {
+  if (!imagePath) return null;
+
+  const apiUrl =
+    process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+  const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+
+  // Déjà une URL complète
+  if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
+    if (imagePath.includes("localhost")) {
+      const productionUrl = apiUrl.replace(/\/api$/, "");
+      return imagePath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
+    }
+    return imagePath;
+  }
+
+  // Chemin avec %2F
+  if (imagePath.includes("%2F")) {
+    return `${apiUrl}${filesUrl}/${imagePath}`;
+  }
+
+  // Chemin simple
+  return `${apiUrl}${filesUrl}/${imagePath}`;
+};
 
 export default function MesFavorisPage() {
   const [favoris, setFavoris] = useState<FavoriItem[]>([]);
@@ -67,10 +94,10 @@ export default function MesFavorisPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [fullDetails, setFullDetails] = useState<any>(null);
 
-  // Transformer un FavoriItem en AnnonceData pour la modal
+  // ✅ Transformer un FavoriItem en AnnonceData pour la modal
   const transformFavoriToAnnonce = useCallback((favori: FavoriItem) => {
     let annonceData: any = {
-      uuid: favori.uuid,
+      uuid: favori.itemUuid, // Utiliser itemUuid, pas favori.uuid
       type: favori.type as "produit" | "don" | "echange",
       date: favori.createdAt,
     };
@@ -78,73 +105,96 @@ export default function MesFavorisPage() {
     switch (favori.type) {
       case "produit":
         const produit = favori.produit;
+        if (!produit) return null;
+
         annonceData = {
           ...annonceData,
-          title: produit?.libelle || "Produit sans nom",
-          description: produit?.description,
-          image: produit?.image || `https://via.placeholder.com/64?text=P`,
+          title: produit.libelle || produit.libelle || "Produit sans nom",
+          description: produit.description,
+          image: produit.image
+            ? buildImageUrl(produit.image)
+            : `https://via.placeholder.com/64?text=P`,
           status:
-            produit?.statut?.toLowerCase() ||
-            (produit?.estPublie ? "publie" : "en-attente"),
-          price: produit?.prix,
-          quantity: produit?.quantite,
-          estPublie: produit?.estPublie,
-          estBloque: produit?.estBloque,
+            produit.statut?.toLowerCase() ||
+            (produit.estPublie ? "publie" : "en-attente"),
+          price: produit.prix,
+          quantity: produit.quantite || 1,
+          estPublie: produit.estPublie,
+          estBloque: produit.estBloque,
           seller: {
-            name: produit?.createur
-              ? `${produit.createur.prenoms} ${produit.createur.nom}`
-              : "Vendeur inconnu",
-            avatar: produit?.createur?.avatar,
-            isPro: false,
-            type: "utilisateur",
+            name: produit.vendeur
+              ? `${produit.vendeur.prenoms || ""} ${produit.vendeur.nom || ""}`.trim()
+              : produit.createur
+                ? `${produit.createur.prenoms || ""} ${produit.createur.nom || ""}`.trim()
+                : "Vendeur inconnu",
+            avatar: produit.vendeur?.avatar || produit.createur?.avatar,
+            isPro: !!produit.vendeur,
+            type: produit.vendeur ? "vendeur" : "utilisateur",
           },
-          category: produit?.categorie?.libelle,
+          category: produit.categorie?.libelle,
           originalData: produit,
         };
         break;
 
       case "don":
         const don = favori.don;
+        if (!don) return null;
+
         annonceData = {
           ...annonceData,
-          title: don?.titre || don?.nom || "Don sans nom",
-          description: don?.description,
-          image: don?.image || `https://via.placeholder.com/64?text=D`,
-          status: don?.statut?.toLowerCase() || "en-attente",
-          price: don?.prix,
-          quantity: don?.quantite,
-          estPublie: don?.estPublie,
-          estBloque: don?.est_bloque,
+          title: don.nom || don.titre || "Don sans nom",
+          description: don.description,
+          image: don.image
+            ? buildImageUrl(don.image)
+            : `https://via.placeholder.com/64?text=D`,
+          status: don.statut?.toLowerCase() || "en-attente",
+          price: don.prix,
+          quantity: don.quantite || 1,
+          estPublie: don.estPublie,
+          estBloque: don.est_bloque,
           seller: {
-            name: don?.createur
-              ? `${don.createur.prenoms} ${don.createur.nom}`
-              : "Donateur inconnu",
-            avatar: don?.createur?.avatar,
-            isPro: false,
-            type: "utilisateur",
+            name: don.createur
+              ? `${don.createur.prenoms || ""} ${don.createur.nom || ""}`.trim()
+              : don.createur
+                ? `${don.createur || ""} ${don.createur || ""}`.trim()
+                : don.nom_donataire || "Donateur inconnu",
+            avatar: don.createur?.avatar || don.createur?.avatar,
+            isPro: !!don.createur,
+            type: don.createur ? "vendeur" : "utilisateur",
           },
-          category: don?.categorie,
+          category: don.categorie,
           originalData: don,
         };
         break;
 
       case "echange":
         const echange = favori.echange;
+        if (!echange) return null;
+
         annonceData = {
           ...annonceData,
-          title: echange?.nomElementEchange || "Échange sans nom",
-          description: echange?.message || echange?.nomElementEchange,
-          image: echange?.image || `https://via.placeholder.com/64?text=E`,
-          status: echange?.statut?.toLowerCase() || "en-attente",
-          price: echange?.prix,
-          quantity: echange?.quantite,
-          estPublie: echange?.estPublie,
-          estBloque: echange?.estBloque,
+          title: echange.nomElementEchange || "Échange sans nom",
+          description:
+            echange.message || echange.message || echange.nomElementEchange,
+          image: echange.image
+            ? buildImageUrl(echange.image)
+            : `https://via.placeholder.com/64?text=E`,
+          status: echange.statut?.toLowerCase() || "en-attente",
+          price: echange.prix,
+          quantity: echange.quantite || 1,
+          estPublie: echange.estPublie,
+          estBloque: echange.estBloque,
           seller: {
-            name: echange?.nom_initiateur || "Initié par",
-            type: echange?.typeDestinataire || "utilisateur",
+            name: echange.createur
+              ? `${echange.createur.prenoms || ""} ${echange.createur.nom || ""}`.trim()
+              : echange.createur
+                ? `${echange.createur || ""} ${echange.createur || ""}`.trim()
+                : echange.nom_initiateur || "Initiateur inconnu",
+            avatar: echange.createur?.avatar || echange.createur?.avatar,
+            isPro: !!echange.createur,
+            type: echange.createur ? "vendeur" : "utilisateur",
           },
-          category: echange?.categorie,
+          category: echange.categorie,
           originalData: echange,
         };
         break;
@@ -153,7 +203,7 @@ export default function MesFavorisPage() {
     return annonceData;
   }, []);
 
-  // Charger les détails complets d'un favori
+  // ✅ Charger les détails complets d'un favori
   const fetchFullDetails = useCallback(async (favori: FavoriItem) => {
     setDetailLoading(true);
     try {
@@ -182,171 +232,111 @@ export default function MesFavorisPage() {
     }
   }, []);
 
-  // Gérer l'ouverture de la modal de détails
+  // ✅ Gérer l'ouverture de la modal de détails
   const handleView = useCallback(
     async (uuid: string, type: string, itemUuid: string) => {
       const favori = favoris.find((f) => f.uuid === uuid && f.type === type);
       if (favori) {
         const annonceData = transformFavoriToAnnonce(favori);
-        setSelectedFavori(annonceData);
-        setShowViewModal(true);
-        await fetchFullDetails(favori);
+        if (annonceData) {
+          setSelectedFavori(annonceData);
+          setShowViewModal(true);
+          await fetchFullDetails(favori);
+        }
       }
     },
     [favoris, transformFavoriToAnnonce, fetchFullDetails],
   );
 
-  // Fermer la modal
+  // ✅ Fermer la modal
   const handleCloseModal = useCallback(() => {
     setShowViewModal(false);
     setSelectedFavori(null);
     setFullDetails(null);
   }, []);
 
-  // ✅ Charger les favoris utilisateur depuis les endpoints spécifiques
+  // ✅ Charger les favoris - UTILISATION DIRECTE DE L'API (VERSION CORRIGÉE)
   const fetchUserFavoris = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      console.log("📡 Chargement des favoris utilisateur...");
+      console.log("📡 Chargement des favoris avec l'endpoint générique...");
 
-      // Appeler les 3 endpoints spécifiques pour les utilisateurs
-      const [produitsRes, donsRes, echangesRes] = await Promise.allSettled([
-        api.get<any>(API_ENDPOINTS.PRODUCTS.LIST_PRODUITS_FAVORIS_UTILISATEUR),
-        api.get<any>(API_ENDPOINTS.DONS.LIST_FAVORIS_DON_UTILISATEUR),
-        api.get<any>(API_ENDPOINTS.ECHANGES.LIST_ECHANGES_FAVORIS_UTILISATEUR),
-      ]);
+      // Utiliser l'endpoint générique /favoris
+      const response = await api.get<any>(API_ENDPOINTS.FAVORIS.LIST);
+      console.log("✅ Réponse reçue:", response);
 
-      const allFavoris: FavoriItem[] = [];
+      // Extraire les données selon la structure de votre API
+      let favorisData: FavoriItem[] = [];
 
-      // Traiter les produits
-      if (produitsRes.status === "fulfilled") {
-        const response = produitsRes.value;
-        const produitsData = response.data || response;
-
-        if (Array.isArray(produitsData)) {
-          produitsData.forEach((item: any) => {
-            // CORRIGÉ : Structure conforme à l'interface FavoriItem
-            allFavoris.push({
-              uuid: `produit-${item.uuid}-${Date.now()}`,
-              type: "produit",
-              produitUuid: item.uuid, // Ajout de produitUuid
-              donUuid: "", // Valeur par défaut
-              echangeUuid: "", // Valeur par défaut
-              utilisateurUuid: item.createur?.uuid || "",
-              itemUuid: item.uuid,
-              produit: {
-                ...item,
-                libelle: item.libelle,
-                description: item.description,
-                prix: item.prix,
-                image: item.image,
-                statut: item.statut,
-                estPublie: item.estPublie,
-                estBloque: item.estBloque,
-                quantite: item.quantite,
-                createur: item.createur,
-                categorie: item.categorie,
-              },
-              createdAt: item.createdAt || new Date().toISOString(),
-            });
-          });
-        }
+      // CAS 1: La réponse a une propriété 'data' qui contient le tableau
+      if (response?.data && Array.isArray(response.data)) {
+        favorisData = response.data;
+      }
+      // CAS 2: La réponse elle-même est un tableau
+      else if (Array.isArray(response)) {
+        favorisData = response;
+      }
+      // CAS 3: La réponse a une structure { data: [...] }
+      else if (response?.data?.data && Array.isArray(response.data.data)) {
+        favorisData = response.data.data;
+      }
+      // CAS 4: La réponse a une structure avec statusCode et data
+      else if (
+        response?.data &&
+        typeof response.data === "object" &&
+        "data" in response.data &&
+        Array.isArray(response.data.data)
+      ) {
+        favorisData = response.data.data;
+      }
+      // CAS 5: La réponse est directement l'objet avec data
+      else if (
+        response?.data &&
+        typeof response.data === "object" &&
+        Array.isArray(response.data)
+      ) {
+        favorisData = response.data;
       }
 
-      // Traiter les dons
-      if (donsRes.status === "fulfilled") {
-        const response = donsRes.value;
-        const donsData = response.data || response;
+      console.log(
+        `📊 ${favorisData.length} favori(s) trouvé(s) directement depuis l'API`,
+      );
 
-        if (Array.isArray(donsData)) {
-          donsData.forEach((item: any) => {
-            // CORRIGÉ : Structure conforme à l'interface FavoriItem
-            allFavoris.push({
-              uuid: `don-${item.uuid}-${Date.now()}`,
-              type: "don",
-              produitUuid: "", // Valeur par défaut
-              donUuid: item.uuid, // Ajout de donUuid
-              echangeUuid: "", // Valeur par défaut
-              utilisateurUuid: item.createur?.uuid || "",
-              itemUuid: item.uuid,
-              don: {
-                ...item,
-                titre: item.titre,
-                nom: item.titre,
-                description: item.description,
-                prix: item.prix,
-                image: item.image,
-                statut: item.statut,
-                estPublie: item.estPublie,
-                est_bloque: item.est_bloque,
-                quantite: item.quantite,
-                createur: item.createur,
-                categorie: item.categorie,
-              },
-              createdAt: item.createdAt || new Date().toISOString(),
-            });
-          });
-        }
-      }
+      // Filtrer pour ne garder que les favoris avec des données valides
+      const validFavoris = favorisData.filter((item) => {
+        // Vérifier que l'item a les propriétés minimales
+        if (!item || typeof item !== "object") return false;
 
-      // Traiter les échanges
-      if (echangesRes.status === "fulfilled") {
-        const response = echangesRes.value;
-        const echangesData = response.data || response;
+        // Vérifier selon le type
+        if (item.type === "produit" && !item.produit) return false;
+        if (item.type === "don" && !item.don) return false;
+        if (item.type === "echange" && !item.echange) return false;
 
-        if (Array.isArray(echangesData)) {
-          echangesData.forEach((item: any) => {
-            // CORRIGÉ : Structure conforme à l'interface FavoriItem
-            allFavoris.push({
-              uuid: `echange-${item.uuid}-${Date.now()}`,
-              type: "echange",
-              produitUuid: "", // Valeur par défaut
-              donUuid: "", // Valeur par défaut
-              echangeUuid: item.uuid, // Ajout de echangeUuid
-              utilisateurUuid: item.createur?.uuid || "",
-              itemUuid: item.uuid,
-              echange: {
-                ...item,
-                nomElementEchange: item.nomElementEchange,
-                message: item.message,
-                prix: item.prix,
-                image: item.image,
-                statut: item.statut,
-                estPublie: item.estPublie,
-                estBloque: item.estBloque,
-                quantite: item.quantite,
-                nom_initiateur: item.nom_initiateur,
-                typeDestinataire: item.typeDestinataire,
-              },
-              createdAt:
-                item.createdAt ||
-                item.dateProposition ||
-                new Date().toISOString(),
-            });
-          });
-        }
-      }
-
-      console.log(`✅ Total favoris utilisateur chargés: ${allFavoris.length}`);
+        return true;
+      });
 
       // Trier par date (plus récents d'abord)
-      const sortedFavoris = allFavoris.sort((a, b) => {
+      const sortedFavoris = validFavoris.sort((a, b) => {
         const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return dateB - dateA;
       });
 
+      console.log(`✅ ${sortedFavoris.length} favori(s) valide(s) chargé(s)`);
       setFavoris(sortedFavoris);
+      setError(null);
 
-      if (allFavoris.length === 0) {
+      if (sortedFavoris.length === 0) {
         setError("Vous n'avez pas encore de favoris");
       }
     } catch (err: any) {
       console.error("❌ Erreur lors du chargement des favoris:", err);
       setError(
-        err.message || "Une erreur est survenue lors du chargement des favoris",
+        err.response?.data?.message ||
+          err.message ||
+          "Une erreur est survenue lors du chargement des favoris",
       );
       setFavoris([]);
     } finally {
@@ -354,7 +344,7 @@ export default function MesFavorisPage() {
     }
   }, []);
 
-  // Filtrer les favoris
+  // ✅ Filtrer les favoris
   useEffect(() => {
     let filtered = favoris;
 
@@ -374,19 +364,18 @@ export default function MesFavorisPage() {
 
         switch (item.type) {
           case "produit":
-            title = item.produit?.libelle || "";
+            title = item.produit?.libelle || item.produit?.libelle || "";
             description = item.produit?.description || "";
             category = item.produit?.categorie?.libelle || "";
             break;
           case "don":
-            title = item.don?.titre || item.don?.nom || "";
+            title = item.don?.nom || item.don?.titre || "";
             description = item.don?.description || "";
             category = item.don?.categorie || "";
             break;
           case "echange":
             title = item.echange?.nomElementEchange || "";
-            description =
-              item.echange?.message || item.echange?.nomElementEchange || "";
+            description = item.echange?.message || item.echange?.message || "";
             category = item.echange?.categorie || "";
             break;
         }
@@ -405,7 +394,7 @@ export default function MesFavorisPage() {
     setShowBatchActions(false);
   }, [favoris, selectedType, searchQuery]);
 
-  // Gérer la sélection multiple
+  // ✅ Gérer la sélection multiple
   const handleSelectAll = useCallback(
     (checked: boolean) => {
       if (checked) {
@@ -424,7 +413,6 @@ export default function MesFavorisPage() {
     setSelectedItems((prev) => {
       let newItems;
       if (checked) {
-        // Éviter les doublons
         if (!prev.includes(uuid)) {
           newItems = [...prev, uuid];
         } else {
@@ -445,46 +433,33 @@ export default function MesFavorisPage() {
     });
   }, []);
 
-  // Retirer un favori
+  // ✅ Retirer un favori - CORRIGÉ : utiliser l'ID du favori
   const handleRemoveFavorite = useCallback(
     async (uuid: string, type: string, itemUuid: string) => {
       try {
         console.log(`🗑️ Retrait du favori ${uuid} (${type})`);
 
-        // Utiliser l'endpoint approprié selon le type
-        let endpoint = "";
-        switch (type) {
-          case "produit":
-            endpoint = API_ENDPOINTS.FAVORIS.REMOVE(itemUuid);
-            break;
-          case "don":
-            endpoint =
-              API_ENDPOINTS.FAVORIS.REMOVE_DON?.(itemUuid) ||
-              `/favoris/don/${itemUuid}`;
-            break;
-          case "echange":
-            endpoint =
-              API_ENDPOINTS.FAVORIS.REMOVE_ECHANGE?.(itemUuid) ||
-              `/favoris/echange/${itemUuid}`;
-            break;
-        }
+        // Utiliser l'ID du favori pour la suppression
+        await api.delete(API_ENDPOINTS.FAVORIS.REMOVE(uuid));
 
-        await api.delete(endpoint);
+        // Mise à jour optimiste de l'état
+        setFavoris((prev) => prev.filter((f) => f.uuid !== uuid));
 
-        // Recharger les favoris
-        await fetchUserFavoris();
-
-        // Message de succès
         alert("L'élément a été retiré de vos favoris avec succès");
       } catch (err: any) {
         console.error("❌ Erreur lors du retrait du favori:", err);
-        alert("Erreur lors du retrait du favori. Veuillez réessayer.");
+        alert(
+          err.response?.data?.message || "Erreur lors du retrait du favori",
+        );
+
+        // En cas d'erreur, recharger pour être sûr
+        await fetchUserFavoris();
       }
     },
     [fetchUserFavoris],
   );
 
-  // Retirer plusieurs favoris
+  // ✅ Retirer plusieurs favoris
   const handleBatchRemove = useCallback(async () => {
     if (selectedItems.length === 0) return;
 
@@ -497,35 +472,16 @@ export default function MesFavorisPage() {
     }
 
     try {
-      const selectedFavoris = filteredFavoris.filter((item) =>
-        selectedItems.includes(item.uuid),
+      // Supprimer tous les favoris sélectionnés en utilisant leurs UUIDs
+      const promises = selectedItems.map((uuid) =>
+        api.delete(API_ENDPOINTS.FAVORIS.REMOVE(uuid)),
       );
-
-      // Retirer chaque favori sélectionné
-      const promises = selectedFavoris.map((favori) => {
-        let endpoint = "";
-        switch (favori.type) {
-          case "produit":
-            endpoint = API_ENDPOINTS.FAVORIS.REMOVE(favori.itemUuid);
-            break;
-          case "don":
-            endpoint =
-              API_ENDPOINTS.FAVORIS.REMOVE_DON?.(favori.itemUuid) ||
-              `/favoris/don/${favori.itemUuid}`;
-            break;
-          case "echange":
-            endpoint =
-              API_ENDPOINTS.FAVORIS.REMOVE_ECHANGE?.(favori.itemUuid) ||
-              `/favoris/echange/${favori.itemUuid}`;
-            break;
-        }
-        return api.delete(endpoint);
-      });
 
       await Promise.all(promises);
 
-      // Recharger les favoris
-      await fetchUserFavoris();
+      // Mise à jour optimiste de l'état
+      const selectedSet = new Set(selectedItems);
+      setFavoris((prev) => prev.filter((f) => !selectedSet.has(f.uuid)));
 
       // Réinitialiser la sélection
       setSelectedItems([]);
@@ -536,11 +492,16 @@ export default function MesFavorisPage() {
       );
     } catch (err: any) {
       console.error("❌ Erreur lors du retrait groupé:", err);
-      alert("Erreur lors du retrait des favoris. Veuillez réessayer.");
-    }
-  }, [selectedItems, filteredFavoris, fetchUserFavoris]);
+      alert(
+        err.response?.data?.message || "Erreur lors du retrait des favoris",
+      );
 
-  // Exporter la sélection
+      // En cas d'erreur, recharger
+      await fetchUserFavoris();
+    }
+  }, [selectedItems, fetchUserFavoris]);
+
+  // ✅ Exporter la sélection
   const handleExportSelection = useCallback(() => {
     const selectedFavoris = filteredFavoris.filter((item) =>
       selectedItems.includes(item.uuid),
@@ -550,22 +511,38 @@ export default function MesFavorisPage() {
       dateExport: new Date().toISOString(),
       type: "favoris-utilisateur",
       nombreElements: selectedFavoris.length,
-      favoris: selectedFavoris.map((favori) => ({
-        type: favori.type,
-        titre:
-          favori.produit?.libelle ||
-          favori.don?.titre ||
-          favori.echange?.nomElementEchange,
-        dateAjout: favori.createdAt,
-        url: `${window.location.origin}/${favori.type}s/${favori.itemUuid}`,
-      })),
+      favoris: selectedFavoris.map((favori) => {
+        let titre = "";
+        switch (favori.type) {
+          case "produit":
+            titre =
+              favori.produit?.libelle ||
+              favori.produit?.libelle ||
+              "Produit sans nom";
+            break;
+          case "don":
+            titre = favori.don?.nom || favori.don?.titre || "Don sans nom";
+            break;
+          case "echange":
+            titre = favori.echange?.nomElementEchange || "Échange sans nom";
+            break;
+        }
+        return {
+          uuid: favori.uuid,
+          type: favori.type,
+          titre,
+          itemUuid: favori.itemUuid,
+          dateAjout: favori.createdAt,
+          url: `${window.location.origin}/${favori.type}s/${favori.itemUuid}`,
+        };
+      }),
     };
 
     const dataStr = JSON.stringify(exportData, null, 2);
     const dataUri =
       "data:application/json;charset=utf-8," + encodeURIComponent(dataStr);
 
-    const exportFileDefaultName = `mes-favoris-utilisateur-${new Date().toISOString().split("T")[0]}.json`;
+    const exportFileDefaultName = `mes-favoris-${new Date().toISOString().split("T")[0]}.json`;
 
     const linkElement = document.createElement("a");
     linkElement.setAttribute("href", dataUri);
@@ -589,12 +566,12 @@ export default function MesFavorisPage() {
     fetchUserFavoris();
   }, [fetchUserFavoris]);
 
-  // Charger au montage
+  // ✅ Charger au montage
   useEffect(() => {
     fetchUserFavoris();
   }, [fetchUserFavoris]);
 
-  // Statistiques
+  // ✅ Statistiques
   const stats = useMemo(() => {
     const total = favoris.length;
     const produits = favoris.filter((f) => f.type === "produit").length;
@@ -604,12 +581,12 @@ export default function MesFavorisPage() {
     return { total, produits, dons, echanges };
   }, [favoris]);
 
-  // Fonction pour naviguer vers la boutique
+  // ✅ Fonction pour naviguer vers le catalogue
   const navigateToMarketplace = useCallback(() => {
     window.location.href = "/boutique";
   }, []);
 
-  // Ouvrir tous les éléments sélectionnés dans de nouveaux onglets
+  // ✅ Ouvrir tous les éléments sélectionnés dans de nouveaux onglets
   const handleOpenAllSelected = useCallback(() => {
     const selectedFavoris = filteredFavoris.filter((item) =>
       selectedItems.includes(item.uuid),
@@ -680,7 +657,7 @@ export default function MesFavorisPage() {
               <div className="d-flex align-items-center gap-2 flex-wrap">
                 <span className="badge bg-info text-white px-3 py-2 rounded-pill">
                   <FontAwesomeIcon icon={faUser} className="me-1" />
-                  Favoris utilisateur uniquement
+                  Mes favoris
                 </span>
                 <span className="badge bg-success bg-opacity-10 text-success px-3 py-2 rounded-pill">
                   <FontAwesomeIcon icon={faHeart} className="me-1" />
@@ -1027,13 +1004,15 @@ export default function MesFavorisPage() {
       </div>
 
       {/* Modal de détails */}
-      <ViewModal
-        show={showViewModal}
-        onClose={handleCloseModal}
-        annonce={selectedFavori}
-        fullDetails={fullDetails}
-        loading={detailLoading}
-      />
+      {selectedFavori && (
+        <ViewModal
+          show={showViewModal}
+          onClose={handleCloseModal}
+          annonce={selectedFavori}
+          fullDetails={fullDetails}
+          loading={detailLoading}
+        />
+      )}
     </div>
   );
 }

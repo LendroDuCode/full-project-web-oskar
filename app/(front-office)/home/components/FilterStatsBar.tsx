@@ -1,4 +1,3 @@
-// components/FilterStatsBar.tsx - Version sans le compteur
 "use client";
 
 import colors from "@/app/shared/constants/colors";
@@ -23,6 +22,7 @@ interface FilterStatsBarProps {
 }
 
 const FilterStatsBar: React.FC<FilterStatsBarProps> = ({
+  totalItems,
   activeFilter,
   onFilterChange,
   viewMode,
@@ -65,11 +65,17 @@ const FilterStatsBar: React.FC<FilterStatsBarProps> = ({
     { value: "price-asc", label: "Prix : Croissant" },
     { value: "price-desc", label: "Prix : Décroissant" },
     { value: "popular", label: "Plus populaire" },
-    { value: "distance", label: "Distance : Plus proche" },
   ];
 
   const handleFilterClick = (filterId: string) => {
     onFilterChange(filterId);
+    // Émettre un événement pour que ListingsGrid se mette à jour
+    if (typeof window !== "undefined") {
+      const event = new CustomEvent("filter-type-changed", {
+        detail: { filterType: filterId },
+      });
+      window.dispatchEvent(event);
+    }
   };
 
   const handleViewModeClick = (mode: "grid" | "list") => {
@@ -77,20 +83,36 @@ const FilterStatsBar: React.FC<FilterStatsBarProps> = ({
   };
 
   const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    onSortChange(e.target.value);
+    const value = e.target.value;
+    onSortChange(value);
+    // Émettre un événement pour que ListingsGrid se mette à jour
+    if (typeof window !== "undefined") {
+      const event = new CustomEvent("sort-option-changed", {
+        detail: { sortOption: value },
+      });
+      window.dispatchEvent(event);
+    }
   };
 
   return (
     <section
       id="filter-stats-bar"
-      className="bg-white border-bottom py-3"
+      className="bg-white border-bottom py-2"
       style={{ borderColor: colors.oskar.lightGrey }}
     >
       <div className="container">
-        <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
-          {/* Partie gauche : Filtres seulement - SANS LE COMPTEUR */}
+        <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2">
+          {/* Partie gauche : Compteur et filtres */}
           <div className="d-flex flex-wrap align-items-center gap-3">
-            {/* Boutons de filtre - TOUS SUR LA MÊME LIGNE */}
+            {/* Compteur d'annonces */}
+            <span
+              className="fw-semibold"
+              style={{ color: colors.oskar.black, fontSize: "0.95rem" }}
+            >
+              {totalItems.toLocaleString("fr-FR")} annonces
+            </span>
+
+            {/* Boutons de filtre */}
             <div className="d-flex flex-wrap align-items-center gap-2">
               {filterTypes.map((filter) => {
                 const isActive = activeFilter === filter.id;
@@ -105,10 +127,10 @@ const FilterStatsBar: React.FC<FilterStatsBarProps> = ({
                       color: isActive ? "white" : colors.oskar.grey,
                       border: `2px solid ${isActive ? colors.oskar.green : colors.oskar.lightGrey}`,
                       borderRadius: "8px",
-                      padding: "6px 12px",
-                      fontSize: "0.875rem",
+                      padding: "4px 10px",
+                      fontSize: "0.85rem",
                       fontWeight: 500,
-                      transition: "all 0.3s",
+                      transition: "all 0.2s",
                       cursor: "pointer",
                       whiteSpace: "nowrap",
                     }}
@@ -117,7 +139,7 @@ const FilterStatsBar: React.FC<FilterStatsBarProps> = ({
                         e.currentTarget.style.borderColor =
                           filter.borderColor || colors.oskar.green;
                         e.currentTarget.style.backgroundColor =
-                          colors.oskar.lightGrey;
+                          colors.oskar.lightGrey + "50";
                       }
                     }}
                     onMouseLeave={(e) => {
@@ -134,7 +156,7 @@ const FilterStatsBar: React.FC<FilterStatsBarProps> = ({
                         color: isActive
                           ? "white"
                           : filter.iconColor || colors.oskar.grey,
-                        fontSize: "0.875rem",
+                        fontSize: "0.85rem",
                       }}
                     />
                     <span>{filter.label}</span>
@@ -145,27 +167,27 @@ const FilterStatsBar: React.FC<FilterStatsBarProps> = ({
           </div>
 
           {/* Partie droite : Vue et tri */}
-          <div className="d-flex flex-wrap align-items-center gap-3">
+          <div className="d-flex flex-wrap align-items-center gap-2">
             {/* Boutons de vue */}
-            <div className="d-flex gap-2">
+            <div className="d-flex gap-1">
               <button
                 onClick={() => handleViewModeClick("grid")}
-                className="btn p-2 d-flex align-items-center justify-content-center"
+                className="btn p-1 d-flex align-items-center justify-content-center"
                 style={{
                   backgroundColor:
                     viewMode === "grid" ? colors.oskar.green : "white",
                   color: viewMode === "grid" ? "white" : colors.oskar.grey,
                   border: `2px solid ${viewMode === "grid" ? colors.oskar.green : colors.oskar.lightGrey}`,
                   borderRadius: "8px",
-                  width: "36px",
-                  height: "36px",
-                  transition: "all 0.3s",
+                  width: "32px",
+                  height: "32px",
+                  transition: "all 0.2s",
                   cursor: "pointer",
                 }}
                 onMouseEnter={(e) => {
                   if (viewMode !== "grid") {
                     e.currentTarget.style.backgroundColor =
-                      colors.oskar.lightGrey;
+                      colors.oskar.lightGrey + "50";
                   }
                 }}
                 onMouseLeave={(e) => {
@@ -174,27 +196,30 @@ const FilterStatsBar: React.FC<FilterStatsBarProps> = ({
                   }
                 }}
               >
-                <i className="fa-solid fa-grip" />
+                <i
+                  className="fa-solid fa-grip"
+                  style={{ fontSize: "0.9rem" }}
+                />
               </button>
 
               <button
                 onClick={() => handleViewModeClick("list")}
-                className="btn p-2 d-flex align-items-center justify-content-center"
+                className="btn p-1 d-flex align-items-center justify-content-center"
                 style={{
                   backgroundColor:
                     viewMode === "list" ? colors.oskar.green : "white",
                   color: viewMode === "list" ? "white" : colors.oskar.grey,
                   border: `2px solid ${viewMode === "list" ? colors.oskar.green : colors.oskar.lightGrey}`,
                   borderRadius: "8px",
-                  width: "36px",
-                  height: "36px",
-                  transition: "all 0.3s",
+                  width: "32px",
+                  height: "32px",
+                  transition: "all 0.2s",
                   cursor: "pointer",
                 }}
                 onMouseEnter={(e) => {
                   if (viewMode !== "list") {
                     e.currentTarget.style.backgroundColor =
-                      colors.oskar.lightGrey;
+                      colors.oskar.lightGrey + "50";
                   }
                 }}
                 onMouseLeave={(e) => {
@@ -203,12 +228,15 @@ const FilterStatsBar: React.FC<FilterStatsBarProps> = ({
                   }
                 }}
               >
-                <i className="fa-solid fa-list" />
+                <i
+                  className="fa-solid fa-list"
+                  style={{ fontSize: "0.9rem" }}
+                />
               </button>
             </div>
 
             {/* Sélecteur de tri */}
-            <div className="position-relative" style={{ minWidth: "180px" }}>
+            <div className="position-relative" style={{ minWidth: "160px" }}>
               <select
                 value={sortOption}
                 onChange={handleSortChange}
@@ -217,13 +245,13 @@ const FilterStatsBar: React.FC<FilterStatsBarProps> = ({
                   border: `2px solid ${colors.oskar.lightGrey}`,
                   borderRadius: "8px",
                   color: colors.oskar.black,
-                  fontSize: "0.875rem",
-                  padding: "6px 36px 6px 12px",
+                  fontSize: "0.85rem",
+                  padding: "4px 30px 4px 8px",
                   appearance: "none",
                   cursor: "pointer",
-                  transition: "border-color 0.3s",
+                  transition: "border-color 0.2s",
                   backgroundColor: "white",
-                  height: "36px",
+                  height: "32px",
                 }}
                 onFocus={(e) =>
                   (e.currentTarget.style.borderColor = colors.oskar.green)
@@ -240,10 +268,10 @@ const FilterStatsBar: React.FC<FilterStatsBarProps> = ({
               </select>
 
               <i
-                className="fa-solid fa-chevron-down position-absolute top-50 end-0 translate-middle-y me-3"
+                className="fa-solid fa-chevron-down position-absolute top-50 end-0 translate-middle-y me-2"
                 style={{
                   color: colors.oskar.grey,
-                  fontSize: "0.75rem",
+                  fontSize: "0.7rem",
                   pointerEvents: "none",
                 }}
               />
