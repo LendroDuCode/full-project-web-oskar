@@ -42,6 +42,8 @@ const ListingCard: React.FC<ListingCardProps> = ({
   const [isFavorite, setIsFavorite] = useState(false);
   const [imageError, setImageError] = useState(false);
 
+  console.log({ listing });
+
   const getTypeConfig = (type: string) => {
     switch (type) {
       case "produit":

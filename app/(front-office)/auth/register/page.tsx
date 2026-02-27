@@ -196,7 +196,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
       setError("Veuillez entrer un email valide");
       return false;
     }
-    if (!formData.telephone || formData.telephone.length < 8) {
+    if (!formData.telephone) {
       setError("Le numéro de téléphone est requis");
       return false;
     }
@@ -389,9 +389,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({
   const handlePhoneChange = (value: string) => {
     const numbers = value.replace(/\D/g, "");
     const phone = "+225" + numbers;
-    if (phone.length <= 13) {
-      setFormData({ ...formData, telephone: phone });
-    }
+    setFormData({ ...formData, telephone: phone });
   };
 
   const removeRegistreCommerceFile = () => {
