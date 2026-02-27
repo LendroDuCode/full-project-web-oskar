@@ -177,7 +177,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           libelle: item.libelle,
           description: item.description,
           prix: item.prix,
-          image: buildImageUrl(item.image),
+          image: item.image,
           date: item.date || item.createdAt || item.publieLe,
           disponible: item.disponible,
           statut: item.statut,
@@ -207,7 +207,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           titre: item.nom || item.titre || "Don sans titre",
           description: item.description,
           prix: item.prix,
-          image: item.image,
+          image: item.image || "",
           statut: item.statut,
           numero: item.numero,
           localisation:
