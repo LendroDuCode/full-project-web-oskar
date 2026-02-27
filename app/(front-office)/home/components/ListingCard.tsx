@@ -31,6 +31,37 @@ interface ListingCardProps {
   viewMode?: "grid" | "list";
 }
 
+const buildImageUrl = (imagePath: string, imageKey: string): string => {
+  // Si on a une clé, priorité à la construction via API
+  if (!imageKey) {
+    return "";
+  }
+  // Si la clé est déjà une URL complète
+  if (imageKey.startsWith("http://") || imageKey.startsWith("https://")) {
+    // Remplacer localhost par l'URL de production si nécessaire
+    if (imageKey.includes("localhost")) {
+      const productionUrl =
+        process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
+        "https://oskar-api.mysonec.pro";
+      return imageKey.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
+    }
+    return imageKey || "";
+  }
+
+  // Construire l'URL avec la clé
+  const apiUrl =
+    process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+  const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+
+  // Si la clé contient déjà %2F, l'utiliser directement
+  if (imageKey.includes("%2F")) {
+    return `${apiUrl}${filesUrl}/${imageKey}`;
+  }
+
+  // Sinon, encoder la clé
+  const encodedKey = encodeURIComponent(imageKey);
+  return `${apiUrl}${filesUrl}/${encodedKey}`;
+};
 //const PLACEHOLDER_IMAGE =
 //  "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2YzZjRmNiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM2NjY2NjYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5BdWN1bmUgaW1hZ2U8L3RleHQ+PC9zdmc+";
 
@@ -197,7 +228,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
               style={{ minHeight: "200px" }}
             >
               <img
-                src={listing.image}
+                src={buildImageUrl(listing.image, listing.image)}
                 alt={listing.titre || "Annonce"}
                 className="w-100 h-100 object-fit-cover transition-transform group-hover-scale"
                 style={{ height: "200px", objectFit: "cover" }}
