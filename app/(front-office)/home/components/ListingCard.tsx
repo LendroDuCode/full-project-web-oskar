@@ -31,7 +31,7 @@ interface ListingCardProps {
   viewMode?: "grid" | "list";
 }
 
-// Fonction utilitaire pour obtenir l'URL complète de l'image
+// Fonction utilitaire pour obtenir l'URL complète de l'image test
 const getImageUrl = (imagePath: string): string => {
   if (!imagePath) {
     return '';
