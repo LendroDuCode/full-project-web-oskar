@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import colors from "@/app/shared/constants/colors";
+import { buildImageUrl } from "@/app/shared/utils/image-utils";
 
 export interface ListingItem {
   uuid: string;
@@ -12,7 +13,7 @@ export interface ListingItem {
   libelle?: string;
   description?: string | null;
   prix?: number | string | null;
-  image: string; // Maintenant, c'est l'URL complète ou le chemin
+  image: string;
   date?: string | null | undefined;
   disponible?: boolean;
   statut?: string;
@@ -31,36 +32,6 @@ interface ListingCardProps {
   viewMode?: "grid" | "list";
 }
 
-// Fonction utilitaire pour obtenir l'URL complète de l'image test
-const getImageUrl = (imagePath: string): string => {
-  if (!imagePath) {
-    return '';
-  }
-    
-  // Si c'est déjà une URL complète (http:// ou https://)
-  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
-    return imagePath;
-  }
-
-  // Si c'est un chemin commençant par /api/files/
-  if (imagePath.startsWith('/api/files/')) {
-    if (process.env.NODE_ENV === 'development') {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3005';
-      const finalUrl = `${apiUrl}${imagePath}`;
-      return finalUrl;
-    }
-    return imagePath;
-  }
-  
-  // Si c'est juste une clé (nom de fichier), construire l'URL complète
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://oskar-api.mysonec.pro';
-  const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || '/api/files';
-  const encodedPath = encodeURIComponent(imagePath);
-  const finalUrl = `${apiUrl}${filesUrl}/${encodedPath}`;
-  
-  return finalUrl;
-};
-
 const ListingCard: React.FC<ListingCardProps> = ({
   listing,
   featured = false,
@@ -69,13 +40,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
   const [isFavorite, setIsFavorite] = useState(false);
   const [imageError, setImageError] = useState(false);
 
-  // Log au montage du composant pour débogage
-  useEffect(() => {
-    console.log("%c🎴 [ListingCard] Composant monté", "color: #7c3aed; font-weight: bold;");
-    console.log("[ListingCard] listing.uuid:", listing.uuid);
-    console.log("[ListingCard] listing.image:", listing.image);
-    console.log("[ListingCard] listing.type:", listing.type);
-  }, [listing.uuid, listing.image, listing.type]);
+  console.log({ listing });
 
   const getTypeConfig = (type: string) => {
     switch (type) {
@@ -194,14 +159,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
   };
 
   const getButtonClasses = () => {
-    switch (listing.type) {
-      case "don":
-        return "btn text-white px-4 py-2 rounded-3 fw-semibold border-0 transition-colors";
-      case "echange":
-        return "btn text-white px-4 py-2 rounded-3 fw-semibold border-0 transition-colors";
-      default:
-        return "btn text-white px-4 py-2 rounded-3 fw-semibold border-0 transition-colors";
-    }
+    return "btn text-white px-4 py-2 rounded-3 fw-semibold border-0 transition-colors";
   };
 
   const getButtonStyle = () => {
@@ -215,13 +173,11 @@ const ListingCard: React.FC<ListingCardProps> = ({
     }
   };
 
-  // Génération de l'URL avec logs
-  const imageUrl = getImageUrl(listing.image || '');
-  
-  // Log supplémentaire après génération
-  useEffect(() => {
-    console.log("%c[ListingCard] 🖼️ Image URL finale:", "color: #06b6d4; font-weight: bold;", imageUrl);
-  }, [imageUrl]);
+  const getAvatarSrc = (avatar?: string) => {
+    if (!avatar) return "https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-1.jpg";
+    if (avatar.startsWith('http')) return avatar;
+    return buildImageUrl(avatar);
+  };
 
   if (viewMode === "list") {
     return (
@@ -235,18 +191,11 @@ const ListingCard: React.FC<ListingCardProps> = ({
               style={{ minHeight: "200px" }}
             >
               <img
-                src={imageUrl}
+                src={buildImageUrl(listing.image)}
                 alt={listing.titre || "Annonce"}
                 className="w-100 h-100 object-fit-cover transition-transform group-hover-scale"
                 style={{ height: "200px", objectFit: "cover" }}
-                onError={(e) => {
-                  console.log("%c[ListingCard] ❌ Erreur de chargement image:", "color: #ef4444; font-weight: bold;", imageUrl);
-                  setImageError(true);
-                  (e.target as HTMLImageElement).src = "https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-1.jpg";
-                }}
-                onLoad={() => {
-                  console.log("%c[ListingCard] ✅ Image chargée avec succès", "color: #22c55e;");
-                }}
+                onError={() => setImageError(true)}
               />
               <div
                 className="position-absolute top-0 start-0 px-2 py-1 text-white small fw-bold rounded-3 d-flex align-items-center gap-1 m-2"
@@ -322,10 +271,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
                   {listing.seller && (
                     <div className="d-flex align-items-center gap-2">
                       <img
-                        src={
-                          listing.seller.avatar ||
-                          "https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-1.jpg"
-                        }
+                        src={getAvatarSrc(listing.seller.avatar)}
                         alt={listing.seller.name}
                         className="rounded-circle object-fit-cover"
                         style={{ width: "32px", height: "32px" }}
@@ -369,18 +315,11 @@ const ListingCard: React.FC<ListingCardProps> = ({
         style={{ height: "224px" }}
       >
         <img
-          src={imageUrl}
+          src={buildImageUrl(listing.image)}
           alt={listing.titre || "Annonce"}
           className="w-100 h-100 object-fit-cover transition-transform group-hover-scale"
           style={{ transition: "transform 0.3s ease" }}
-          onError={(e) => {
-            console.log("%c[ListingCard] ❌ Erreur de chargement image:", "color: #ef4444; font-weight: bold;", imageUrl);
-            setImageError(true);
-            (e.target as HTMLImageElement).src = "https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-1.jpg";
-          }}
-          onLoad={() => {
-            console.log("%c[ListingCard] ✅ Image chargée avec succès", "color: #22c55e;");
-          }}
+          onError={() => setImageError(true)}
         />
 
         {/* Badge type */}
@@ -436,10 +375,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
         <div className="d-flex justify-content-between align-items-center pt-3 border-top">
           <div className="d-flex align-items-center">
             <img
-              src={
-                listing.seller?.avatar ||
-                "https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-1.jpg"
-              }
+              src={getAvatarSrc(listing.seller?.avatar)}
               alt={listing.seller?.name || "Vendeur"}
               className="rounded-circle object-fit-cover me-2"
               style={{ width: "32px", height: "32px" }}
