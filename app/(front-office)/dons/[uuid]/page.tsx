@@ -9,6 +9,7 @@ import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { API_CONFIG } from "@/config/env";
 import { useAuth } from "@/app/(front-office)/auth/AuthContext";
+import { buildImageUrl } from "@/app/shared/utils/image-utils";
 
 // Import des icônes FontAwesome
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -330,67 +331,6 @@ interface NoteStats {
 }
 
 // ============================================
-// FONCTION DE CONSTRUCTION D'URL D'IMAGE
-// ============================================
-const buildImageUrl = (
-  imagePath: string | null,
-  imageKey: string | null = null,
-): string => {
-  // Si on a une clé, priorité à la construction via API
-  if (imageKey) {
-    // Si la clé est déjà une URL complète
-    if (imageKey.startsWith("http://") || imageKey.startsWith("https://")) {
-      return imageKey;
-    }
-
-    // Construire l'URL avec la clé
-    const apiUrl =
-      process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
-    const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
-
-    // Si la clé contient déjà %2F, l'utiliser directement
-    if (imageKey.includes("%2F")) {
-      return `${apiUrl}${filesUrl}/${imageKey}`;
-    }
-
-    // Sinon, encoder la clé
-    const encodedKey = encodeURIComponent(imageKey);
-    return `${apiUrl}${filesUrl}/${encodedKey}`;
-  }
-
-  // Fallback sur le chemin image
-  if (!imagePath) {
-    return "/images/placeholder.jpg";
-  }
-
-  // Si c'est déjà une URL complète
-  if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
-    // Remplacer localhost par l'URL de production si nécessaire
-    if (imagePath.includes("localhost")) {
-      const productionUrl =
-        process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
-        "https://oskar-api.mysonec.pro";
-      return imagePath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
-    }
-    return imagePath;
-  }
-
-  // Si c'est un chemin encodé (avec %2F)
-  if (imagePath.includes("%2F")) {
-    const apiUrl =
-      process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
-    const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
-    return `${apiUrl}${filesUrl}/${imagePath}`;
-  }
-
-  // Si c'est un chemin simple
-  const apiUrl =
-    process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
-  const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
-  return `${apiUrl}${filesUrl}/${imagePath}`;
-};
-
-// ============================================
 // COMPOSANT D'IMAGE SÉCURISÉ
 // ============================================
 const SecureImage = ({
@@ -595,7 +535,7 @@ export default function DonDetailPage() {
   const [loadingRecents, setLoadingRecents] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [quantite, setQuantite] = useState(1);
-  const [favori, setFavori] = useState(false); // État basé sur la réponse API, pas localStorage
+  const [favori, setFavori] = useState(false);
   const [showMoreComments, setShowMoreComments] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
   const [commentairesFetched, setCommentairesFetched] = useState(false);
@@ -615,8 +555,6 @@ export default function DonDetailPage() {
   const [selectedThumbnail, setSelectedThumbnail] = useState(0);
   const [contactVisible, setContactVisible] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
-
-  // 🔴 SUPPRIMER LE STOCKAGE LOCAL DES FAVORIS - On utilise uniquement l'API
 
   // Timer pour le toast
   useEffect(() => {
@@ -666,13 +604,6 @@ export default function DonDetailPage() {
 
   const getDefaultDonImage = (): string => {
     return `${API_CONFIG.BASE_URL || "https://oskar-api.mysonec.pro"}/images/default-don.png`;
-  };
-
-  const normalizeImageUrl = (
-    url: string | null,
-    key: string | null = null,
-  ): string => {
-    return buildImageUrl(url, key);
   };
 
   const safeToFixed = (
@@ -755,7 +686,7 @@ export default function DonDetailPage() {
   };
 
   // ============================================
-  // FONCTIONS DE TRANSFORMATION
+  // FONCTIONS DE TRANSFORMATION - AVEC buildImageUrl
   // ============================================
   const transformCreateurInfo = (apiCreateur: any): CreateurInfo => {
     return {
@@ -764,7 +695,7 @@ export default function DonDetailPage() {
       prenoms: apiCreateur.prenoms || "",
       email: apiCreateur.email || "",
       telephone: apiCreateur.telephone || "",
-      avatar: apiCreateur.avatar ? normalizeImageUrl(apiCreateur.avatar) : null,
+      avatar: apiCreateur.avatar ? buildImageUrl(apiCreateur.avatar) : null,
       facebook_url: apiCreateur.facebook_url || null,
       whatsapp_url: apiCreateur.whatsapp_url || null,
       twitter_url: apiCreateur.twitter_url || null,
@@ -787,7 +718,7 @@ export default function DonDetailPage() {
       type_don: apiDon.type_don,
       description: apiDon.description,
       prix: apiDon.prix,
-      image: normalizeImageUrl(apiDon.image, apiDon.image_key),
+      image: buildImageUrl(apiDon.image, apiDon.image_key),
       image_key: apiDon.image_key,
       localisation: apiDon.localisation,
       statut: apiDon.statut,
@@ -823,7 +754,7 @@ export default function DonDetailPage() {
       type_don: apiSimilaire.type_don,
       description: apiSimilaire.description,
       prix: apiSimilaire.prix,
-      image: normalizeImageUrl(apiSimilaire.image, apiSimilaire.image_key),
+      image: buildImageUrl(apiSimilaire.image, apiSimilaire.image_key),
       localisation: apiSimilaire.localisation,
       statut: apiSimilaire.statut,
       disponible: apiSimilaire.disponible,
@@ -836,11 +767,9 @@ export default function DonDetailPage() {
     };
   };
 
-  // ✅ FONCTION TRANSFORM COMMENTAIRE AMÉLIORÉE
   const transformCommentaireData = (
     apiCommentaire: CommentaireAPI,
   ): Commentaire => {
-    // Récupérer l'auteur (peut être dans auteur ou utilisateur selon la structure API)
     const auteur = apiCommentaire.auteur || apiCommentaire.utilisateur || null;
 
     let nomComplet = "Utilisateur";
@@ -853,10 +782,9 @@ export default function DonDetailPage() {
       nomComplet = `${prenom} ${nom}`.trim() || "Utilisateur";
     }
 
-    // Construire l'URL de l'avatar
     let avatarUrl = null;
     if (auteur?.avatar) {
-      avatarUrl = normalizeImageUrl(auteur.avatar);
+      avatarUrl = buildImageUrl(auteur.avatar);
     }
 
     return {
@@ -894,7 +822,7 @@ export default function DonDetailPage() {
           type_don: item.type_don || "objet",
           description: item.description || "",
           prix: item.prix || null,
-          image: normalizeImageUrl(item.image, item.image_key),
+          image: buildImageUrl(item.image, item.image_key),
           localisation: item.localisation || "",
           statut: item.statut || "disponible",
           disponible: item.disponible || true,
@@ -916,7 +844,6 @@ export default function DonDetailPage() {
     }
   }, [uuid]);
 
-  // ✅ FONCTION FETCH COMMENTAIRES AMÉLIORÉE
   const fetchCommentaires = useCallback(
     async (donUuid: string) => {
       if (!donUuid || commentairesFetched) return;
@@ -936,7 +863,6 @@ export default function DonDetailPage() {
             transformCommentaireData,
           );
 
-          // Trier par date (plus récent d'abord)
           commentairesData.sort(
             (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
           );
@@ -944,7 +870,6 @@ export default function DonDetailPage() {
           console.log(`📝 ${commentairesData.length} commentaires chargés`);
           setCommentaires(commentairesData);
 
-          // Mettre à jour les stats
           if (response.stats) {
             setCommentairesStats({
               nombreCommentaires: response.stats.nombreCommentaires || 0,
@@ -959,7 +884,6 @@ export default function DonDetailPage() {
               },
             });
           } else {
-            // Calculer les stats manuellement si non fournies
             const totalNotes = commentairesData.reduce(
               (sum, c) => sum + c.note,
               0,
@@ -1030,8 +954,6 @@ export default function DonDetailPage() {
 
       setDon(donData);
       setDonsSimilaires(similairesData);
-
-      // 🔴 Utiliser l'état is_favoris de l'API, pas localStorage
       setFavori(response.don.is_favoris || false);
 
       if (response.don.createur) {
@@ -1043,7 +965,7 @@ export default function DonDetailPage() {
       const imageUrls: string[] = [donData.image];
 
       response.similaires.slice(0, 4).forEach((similaire) => {
-        const imgUrl = normalizeImageUrl(similaire.image, similaire.image_key);
+        const imgUrl = buildImageUrl(similaire.image, similaire.image_key);
         if (imgUrl && !imageUrls.includes(imgUrl)) {
           imageUrls.push(imgUrl);
         }
@@ -1280,7 +1202,6 @@ export default function DonDetailPage() {
     router.push(`${dashboardPath}/messages?${params.toString()}`);
   };
 
-  // ✅ FONCTION POUR LES FAVORIS - CORRIGÉE (SANS LOCALSTORAGE)
   const handleAddToFavorites = async () => {
     if (!don) return;
 
@@ -1293,18 +1214,13 @@ export default function DonDetailPage() {
       console.log(`🔄 ${favori ? "Retrait" : "Ajout"} aux favoris...`);
 
       if (favori) {
-        // 🔴 RETRAIT DES FAVORIS - Utiliser REMOVE_DON
         const endpoint = API_ENDPOINTS.FAVORIS.REMOVE_DON(don.uuid);
         console.log(`📤 Appel API: DELETE ${endpoint}`);
 
         await api.delete(endpoint);
-
-        // Mise à jour de l'état local uniquement
         setFavori(false);
-
         showToast("success", "Don retiré des favoris");
       } else {
-        // 🔴 AJOUT AUX FAVORIS - Utiliser ADD
         const payload = {
           itemUuid: don.uuid,
           type: "don",
@@ -1313,10 +1229,7 @@ export default function DonDetailPage() {
 
         const response = await api.post(API_ENDPOINTS.FAVORIS.ADD, payload);
         console.log("✅ Réponse favoris:", response);
-
-        // Mise à jour de l'état local uniquement
         setFavori(true);
-
         showToast("success", "Don ajouté aux favoris");
       }
     } catch (err: any) {
@@ -1425,7 +1338,6 @@ export default function DonDetailPage() {
         },
       );
 
-      // Réinitialiser commentairesFetched pour forcer un rechargement
       setCommentairesFetched(false);
       await fetchCommentaires(don.uuid);
 
@@ -2008,7 +1920,7 @@ export default function DonDetailPage() {
                     </div>
                   )}
 
-                  {/* ✅ LISTE DES COMMENTAIRES AMÉLIORÉE */}
+                  {/* LISTE DES COMMENTAIRES */}
                   {commentaires.length > 0 ? (
                     <div className="space-y-6">
                       {visibleComments.map((comment) => (
