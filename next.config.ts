@@ -35,6 +35,10 @@ const nextConfig = {
     unoptimized: true,
   },
 
+   typescript: {
+    ignoreBuildErrors: false,
+  },
+
   async rewrites() {
     return [
       {
