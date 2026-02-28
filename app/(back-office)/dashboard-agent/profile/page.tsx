@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { api } from "@/lib/api-client";
+import { buildImageUrl } from "@/app/shared/utils/image-utils";
 
 interface AgentProfile {
   uuid: string;
@@ -46,6 +47,7 @@ export default function AgentProfilePage() {
   const [activeTab, setActiveTab] = useState<"personal" | "security">(
     "personal",
   );
+  const [imageError, setImageError] = useState(false);
 
   const [formData, setFormData] = useState({
     nom: "",
@@ -58,6 +60,15 @@ export default function AgentProfilePage() {
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  // ✅ Obtenir l'URL de l'avatar
+  const getAvatarUrl = (): string | null => {
+    if (imageError) return null;
+
+    if (previewUrl) return previewUrl;
+
+    return null;
+  };
 
   // Récupérer les civilités
   useEffect(() => {
@@ -78,6 +89,7 @@ export default function AgentProfilePage() {
     try {
       setLoading(true);
       setError(null);
+      setImageError(false);
 
       const token = localStorage.getItem("oskar_token");
       if (!token) {
@@ -108,7 +120,8 @@ export default function AgentProfilePage() {
         });
 
         if (data.avatar) {
-          setPreviewUrl(data.avatar);
+          const avatarUrl = buildImageUrl(data.avatar);
+          setPreviewUrl(avatarUrl);
         }
       }
     } catch (err: any) {
@@ -172,6 +185,12 @@ export default function AgentProfilePage() {
 
     setError(null);
     setSuccess(null);
+    setImageError(false);
+  };
+
+  // Gestionnaire d'erreur d'image
+  const handleImageError = () => {
+    setImageError(true);
   };
 
   // Soumission du formulaire - VERSION CORRIGÉE
@@ -252,6 +271,15 @@ export default function AgentProfilePage() {
       `${formData.prenoms?.charAt(0) || ""}${formData.nom?.charAt(0) || ""}`.toUpperCase() ||
       "A";
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=16a34a&color=fff&size=150`;
+  };
+
+  // ✅ Obtenir la source de l'avatar
+  const getAvatarSrc = () => {
+    const avatarUrl = getAvatarUrl();
+    if (avatarUrl && !imageError) {
+      return avatarUrl;
+    }
+    return getDefaultAvatar();
   };
 
   // Formater la date
@@ -464,7 +492,7 @@ export default function AgentProfilePage() {
                               <div className="position-relative d-inline-block">
                                 <div className="avatar-wrapper">
                                   <img
-                                    src={previewUrl || getDefaultAvatar()}
+                                    src={getAvatarSrc()}
                                     alt="Avatar Agent"
                                     className="rounded-circle border border-4 border-white shadow-lg"
                                     style={{
@@ -472,11 +500,7 @@ export default function AgentProfilePage() {
                                       height: "200px",
                                       objectFit: "cover",
                                     }}
-                                    onError={(e) => {
-                                      const target =
-                                        e.target as HTMLImageElement;
-                                      target.src = getDefaultAvatar();
-                                    }}
+                                    onError={handleImageError}
                                   />
                                   <div className="avatar-overlay rounded-circle">
                                     <label

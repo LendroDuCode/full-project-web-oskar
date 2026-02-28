@@ -25,6 +25,7 @@ import {
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import colors from "@/app/shared/constants/colors";
+import { buildImageUrl } from "@/app/shared/utils/image-utils";
 
 interface Category {
   id: number;
@@ -34,6 +35,7 @@ interface Category {
   slug: string;
   description?: string;
   image: string;
+  image_key?: string;
   statut?: string;
   is_deleted: boolean;
   deleted_at?: string | null;
@@ -46,6 +48,7 @@ interface Category {
     libelle: string;
     type: string;
     image?: string;
+    image_key?: string;
   };
   counts?: {
     produits?: number;
@@ -62,6 +65,7 @@ interface SubCategory {
   type: string;
   description?: string;
   image?: string;
+  image_key?: string;
   statut?: string;
   createdAt?: string;
   counts?: {
@@ -96,6 +100,7 @@ const ViewCategoryModal = ({
   >("details");
   const [showImageFullscreen, setShowImageFullscreen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
 
   // Charger les sous-catégories si c'est une catégorie parente
   useEffect(() => {
@@ -103,6 +108,13 @@ const ViewCategoryModal = ({
       loadSubCategories();
     }
   }, [isOpen, category]);
+
+  // Réinitialiser les erreurs d'image quand le modal s'ouvre avec une nouvelle catégorie
+  useEffect(() => {
+    if (isOpen && category) {
+      setImageErrors({});
+    }
+  }, [isOpen, category?.uuid]);
 
   const loadSubCategories = async () => {
     // Vérification supplémentaire pour TypeScript
@@ -120,6 +132,32 @@ const ViewCategoryModal = ({
     } finally {
       setLoadingSubCategories(false);
     }
+  };
+
+  // ✅ Fonction pour obtenir l'URL de l'image
+  const getImageUrl = (item: { image?: string; image_key?: string } | null, id: string): string | null => {
+    if (!item) return null;
+    
+    if (imageErrors[id]) return null;
+
+    // Priorité à image_key
+    if (item.image_key) {
+      const url = buildImageUrl(item.image_key);
+      if (url) return url;
+    }
+
+    // Sinon utiliser image
+    if (item.image) {
+      const url = buildImageUrl(item.image);
+      if (url) return url;
+    }
+
+    return null;
+  };
+
+  // ✅ Gestionnaire d'erreur d'image
+  const handleImageError = (id: string) => {
+    setImageErrors(prev => ({ ...prev, [id]: true }));
   };
 
   const copyToClipboard = (text: string) => {
@@ -165,6 +203,9 @@ const ViewCategoryModal = ({
   };
 
   if (!isOpen || !category) return null;
+
+  const categoryImageUrl = getImageUrl(category, `category-${category.uuid}`);
+  const parentImageUrl = category.parent ? getImageUrl(category.parent, `parent-${category.parent.uuid}`) : null;
 
   return (
     <div
@@ -290,9 +331,9 @@ const ViewCategoryModal = ({
                         onClick={() => setShowImageFullscreen(true)}
                         style={{ aspectRatio: "1/1" }}
                       >
-                        {category.image ? (
+                        {categoryImageUrl ? (
                           <img
-                            src={category.image}
+                            src={categoryImageUrl}
                             alt={category.libelle}
                             className="img-fluid rounded-top"
                             style={{
@@ -300,10 +341,7 @@ const ViewCategoryModal = ({
                               height: "100%",
                               objectFit: "cover",
                             }}
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src =
-                                `https://via.placeholder.com/400/cccccc/ffffff?text=${category.libelle.charAt(0)}`;
-                            }}
+                            onError={() => handleImageError(`category-${category.uuid}`)}
                           />
                         ) : (
                           <div
@@ -603,58 +641,75 @@ const ViewCategoryModal = ({
                   </div>
                 ) : (
                   <div className="row g-3">
-                    {subCategories.map((subCat) => (
-                      <div key={subCat.uuid} className="col-md-6">
-                        <div className="card border-0 shadow-sm h-100">
-                          <div className="card-body">
-                            <div className="d-flex align-items-start gap-3">
-                              <div
-                                className="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
-                                style={{
-                                  width: "50px",
-                                  height: "50px",
-                                  backgroundColor: `${getTypeColor(subCat.type)}15`,
-                                  color: getTypeColor(subCat.type),
-                                }}
-                              >
-                                <FontAwesomeIcon
-                                  icon={getTypeIcon(subCat.type)}
-                                />
-                              </div>
-                              <div className="flex-grow-1">
-                                <div className="d-flex justify-content-between align-items-start">
-                                  <h6 className="fw-semibold mb-1">
-                                    {subCat.libelle}
-                                  </h6>
-                                  <span
-                                    className={`badge ${subCat.statut === "inactif" ? "bg-warning" : "bg-success"} bg-opacity-10 ${subCat.statut === "inactif" ? "text-warning" : "text-success"}`}
-                                  >
-                                    {subCat.statut === "inactif"
-                                      ? "Inactif"
-                                      : "Actif"}
-                                  </span>
+                    {subCategories.map((subCat) => {
+                      const subCatImageUrl = getImageUrl(subCat, `subcat-${subCat.uuid}`);
+                      return (
+                        <div key={subCat.uuid} className="col-md-6">
+                          <div className="card border-0 shadow-sm h-100">
+                            <div className="card-body">
+                              <div className="d-flex align-items-start gap-3">
+                                <div
+                                  className="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+                                  style={{
+                                    width: "50px",
+                                    height: "50px",
+                                    backgroundColor: `${getTypeColor(subCat.type)}15`,
+                                    color: getTypeColor(subCat.type),
+                                  }}
+                                >
+                                  {subCatImageUrl ? (
+                                    <img
+                                      src={subCatImageUrl}
+                                      alt={subCat.libelle}
+                                      className="rounded-circle"
+                                      style={{
+                                        width: "50px",
+                                        height: "50px",
+                                        objectFit: "cover",
+                                      }}
+                                      onError={() => handleImageError(`subcat-${subCat.uuid}`)}
+                                    />
+                                  ) : (
+                                    <FontAwesomeIcon
+                                      icon={getTypeIcon(subCat.type)}
+                                    />
+                                  )}
                                 </div>
-                                <p className="text-muted small mb-2">
-                                  {subCat.type}
-                                </p>
-                                {subCat.description && (
-                                  <p className="small mb-2">
-                                    {subCat.description}
-                                  </p>
-                                )}
-                                {subCat.counts && (
-                                  <div className="d-flex gap-2 mt-2">
-                                    <span className="badge bg-primary bg-opacity-10 text-primary">
-                                      {subCat.counts.total || 0} éléments
+                                <div className="flex-grow-1">
+                                  <div className="d-flex justify-content-between align-items-start">
+                                    <h6 className="fw-semibold mb-1">
+                                      {subCat.libelle}
+                                    </h6>
+                                    <span
+                                      className={`badge ${subCat.statut === "inactif" ? "bg-warning" : "bg-success"} bg-opacity-10 ${subCat.statut === "inactif" ? "text-warning" : "text-success"}`}
+                                    >
+                                      {subCat.statut === "inactif"
+                                        ? "Inactif"
+                                        : "Actif"}
                                     </span>
                                   </div>
-                                )}
+                                  <p className="text-muted small mb-2">
+                                    {subCat.type}
+                                  </p>
+                                  {subCat.description && (
+                                    <p className="small mb-2">
+                                      {subCat.description}
+                                    </p>
+                                  )}
+                                  {subCat.counts && (
+                                    <div className="d-flex gap-2 mt-2">
+                                      <span className="badge bg-primary bg-opacity-10 text-primary">
+                                        {subCat.counts.total || 0} éléments
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -743,7 +798,7 @@ const ViewCategoryModal = ({
       </div>
 
       {/* Modal plein écran pour l'image */}
-      {showImageFullscreen && category.image && (
+      {showImageFullscreen && categoryImageUrl && (
         <div
           className="modal fade show d-block"
           style={{ backgroundColor: "rgba(0,0,0,0.9)" }}
@@ -762,10 +817,11 @@ const ViewCategoryModal = ({
               </div>
               <div className="modal-body d-flex align-items-center justify-content-center">
                 <img
-                  src={category.image}
+                  src={categoryImageUrl}
                   alt={category.libelle}
                   className="img-fluid"
                   style={{ maxHeight: "80vh", maxWidth: "100%" }}
+                  onError={() => handleImageError(`fullscreen-${category.uuid}`)}
                 />
               </div>
               <div className="modal-footer border-0 justify-content-center">

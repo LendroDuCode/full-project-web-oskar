@@ -42,6 +42,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { api } from "@/lib/api-client";
 import colors from "@/app/shared/constants/colors";
+import { buildImageUrl } from "@/app/shared/utils/image-utils";
 import CreateSubCategoryModal from "./components/modals/CreateSubCategoryModal";
 import ViewCategoryModal from "./components/modals/ViewCategoryModal";
 
@@ -54,6 +55,7 @@ interface Category {
   slug: string;
   description?: string;
   image: string;
+  image_key?: string;
   statut?: string;
   is_deleted: boolean;
   deleted_at?: string | null;
@@ -79,6 +81,7 @@ interface SubCategory {
   slug: string;
   description?: string;
   image?: string;
+  image_key?: string;
   statut?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -111,10 +114,9 @@ interface ApiSubCategoryResponse {
   };
 }
 
-// CORRECTION: Remplacer totalPages par pages dans l'interface
 interface PaginationData {
   page: number;
-  pages: number; // Changé de totalPages à pages pour la cohérence
+  pages: number;
   limit: number;
   total: number;
 }
@@ -570,6 +572,7 @@ export default function SubCategoriesPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
 
   // États pour les modals
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -589,12 +592,11 @@ export default function SubCategoriesPage() {
     direction: "asc" | "desc";
   } | null>(null);
 
-  // CORRECTION: Mise à jour de l'initialisation de pagination
   const [pagination, setPagination] = useState<PaginationData>({
     page: 1,
     limit: 10,
     total: 0,
-    pages: 1, // Changé de totalPages à pages
+    pages: 1,
   });
 
   // États pour la sélection multiple
@@ -604,6 +606,32 @@ export default function SubCategoriesPage() {
   const [selectAll, setSelectAll] = useState(false);
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // ✅ Fonction pour obtenir l'URL de l'image
+  const getImageUrl = (item: { image?: string; image_key?: string } | null, id: string): string | null => {
+    if (!item) return null;
+    
+    if (imageErrors[id]) return null;
+
+    // Priorité à image_key
+    if (item.image_key) {
+      const url = buildImageUrl(item.image_key);
+      if (url) return url;
+    }
+
+    // Sinon utiliser image
+    if (item.image) {
+      const url = buildImageUrl(item.image);
+      if (url) return url;
+    }
+
+    return null;
+  };
+
+  // ✅ Gestionnaire d'erreur d'image
+  const handleImageError = (id: string) => {
+    setImageErrors(prev => ({ ...prev, [id]: true }));
+  };
 
   // Fonction utilitaire pour traiter la réponse API
   const processApiResponse = (
@@ -633,12 +661,11 @@ export default function SubCategoriesPage() {
       );
 
       if (response.pagination) {
-        // CORRECTION: Convertir totalPages en pages
         paginationData = {
           page: response.pagination.page,
           limit: response.pagination.limit,
           total: response.pagination.total,
-          pages: response.pagination.totalPages, // Conversion de totalPages à pages
+          pages: response.pagination.totalPages,
         };
         console.log(
           "📊 Pagination reçue de l'API (convertie):",
@@ -660,12 +687,11 @@ export default function SubCategoriesPage() {
         );
 
         if (dataObj.pagination) {
-          // CORRECTION: Convertir totalPages en pages
           paginationData = {
             page: dataObj.pagination.page,
             limit: dataObj.pagination.limit,
             total: dataObj.pagination.total,
-            pages: dataObj.pagination.totalPages, // Conversion de totalPages à pages
+            pages: dataObj.pagination.totalPages,
           };
           console.log(
             "📊 Pagination reçue de l'API (format 3 convertie):",
@@ -705,6 +731,7 @@ export default function SubCategoriesPage() {
         setLoadingParent(true);
         setLoading(true);
         setError(null);
+        setImageErrors({});
 
         console.log("📡 Chargement catégorie parente... UUID:", parentUuid);
 
@@ -735,7 +762,6 @@ export default function SubCategoriesPage() {
 
         setSubCategories(subCats);
 
-        // CORRECTION: Mettre à jour la pagination avec la propriété correcte
         if (paginationData) {
           setPagination(paginationData);
         } else {
@@ -796,6 +822,7 @@ export default function SubCategoriesPage() {
       setLoading(true);
       setLoadingParent(true);
       setError(null);
+      setImageErrors({});
 
       // Charger la catégorie parente
       const parentResponse = await api.get<Category>(
@@ -815,7 +842,6 @@ export default function SubCategoriesPage() {
 
       setSubCategories(subCats);
 
-      // CORRECTION: Mettre à jour la pagination correctement
       if (paginationData) {
         setPagination(paginationData);
       } else {
@@ -826,7 +852,7 @@ export default function SubCategoriesPage() {
           ...prev,
           total: total,
           pages: pages,
-          page: 1, // Retour à la première page
+          page: 1,
         }));
       }
 
@@ -1022,7 +1048,6 @@ export default function SubCategoriesPage() {
     );
   }, [filteredSubCategories, pagination.page, pagination.limit]);
 
-  // CORRECTION: Mise à jour de la pagination avec useEffect
   useEffect(() => {
     const total = filteredSubCategories.length;
     const pages = Math.ceil(total / pagination.limit) || 1;
@@ -1332,6 +1357,8 @@ export default function SubCategoriesPage() {
     );
   }
 
+  const parentImageUrl = getImageUrl(parentCategory, `parent-${parentCategory.uuid}`);
+
   return (
     <>
       {/* Modals */}
@@ -1356,6 +1383,7 @@ export default function SubCategoriesPage() {
                 .replace(/\s+/g, "-"),
               description: selectedSubCategory.description,
               image: selectedSubCategory.image || "",
+              image_key: selectedSubCategory.image_key,
               statut: selectedSubCategory.statut,
               is_deleted: selectedSubCategory.is_deleted || false,
               parent: parentCategory,
@@ -1455,9 +1483,9 @@ export default function SubCategoriesPage() {
                 <div className="card bg-light border-0 mt-3">
                   <div className="card-body p-3">
                     <div className="d-flex align-items-center gap-3">
-                      {parentCategory.image && (
+                      {parentImageUrl ? (
                         <img
-                          src={parentCategory.image}
+                          src={parentImageUrl}
                           alt={parentCategory.libelle}
                           className="rounded"
                           style={{
@@ -1465,11 +1493,27 @@ export default function SubCategoriesPage() {
                             height: "50px",
                             objectFit: "cover",
                           }}
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src =
-                              `https://via.placeholder.com/50/cccccc/ffffff?text=${parentCategory.libelle.charAt(0)}`;
-                          }}
+                          onError={() => handleImageError(`parent-${parentCategory.uuid}`)}
                         />
+                      ) : parentCategory.image ? (
+                        <img
+                          src={buildImageUrl(parentCategory.image) || parentCategory.image}
+                          alt={parentCategory.libelle}
+                          className="rounded"
+                          style={{
+                            width: "50px",
+                            height: "50px",
+                            objectFit: "cover",
+                          }}
+                          onError={() => handleImageError(`parent-${parentCategory.uuid}`)}
+                        />
+                      ) : (
+                        <div
+                          className="bg-secondary bg-opacity-10 rounded d-flex align-items-center justify-content-center"
+                          style={{ width: "50px", height: "50px" }}
+                        >
+                          <FontAwesomeIcon icon={faImage} className="text-muted" />
+                        </div>
                       )}
                       <div>
                         <h6 className="mb-1 fw-semibold">
@@ -1952,216 +1996,233 @@ export default function SubCategoriesPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {currentItems.map((subCategory, index) => (
-                      <tr
-                        key={subCategory.uuid}
-                        className={`align-middle ${selectedSubCategories.includes(subCategory.uuid) ? "table-active" : ""}`}
-                      >
-                        <td className="text-center">
-                          <div className="form-check d-flex justify-content-center">
-                            <input
-                              type="checkbox"
-                              className="form-check-input"
-                              checked={selectedSubCategories.includes(
-                                subCategory.uuid,
-                              )}
-                              onChange={() =>
-                                handleSelectSubCategory(subCategory.uuid)
-                              }
-                            />
-                          </div>
-                        </td>
-                        <td className="text-center text-muted fw-semibold">
-                          {(pagination.page - 1) * pagination.limit + index + 1}
-                        </td>
-                        <td>
-                          <div className="d-flex align-items-center">
-                            <div className="flex-shrink-0">
-                              <div
-                                className="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center"
-                                style={{ width: "40px", height: "40px" }}
-                              >
-                                <FontAwesomeIcon icon={faTags} />
+                    {currentItems.map((subCategory, index) => {
+                      const subCategoryImageUrl = getImageUrl(subCategory, `subcat-${subCategory.uuid}`);
+                      return (
+                        <tr
+                          key={subCategory.uuid}
+                          className={`align-middle ${selectedSubCategories.includes(subCategory.uuid) ? "table-active" : ""}`}
+                        >
+                          <td className="text-center">
+                            <div className="form-check d-flex justify-content-center">
+                              <input
+                                type="checkbox"
+                                className="form-check-input"
+                                checked={selectedSubCategories.includes(
+                                  subCategory.uuid,
+                                )}
+                                onChange={() =>
+                                  handleSelectSubCategory(subCategory.uuid)
+                                }
+                              />
+                            </div>
+                          </td>
+                          <td className="text-center text-muted fw-semibold">
+                            {(pagination.page - 1) * pagination.limit + index + 1}
+                          </td>
+                          <td>
+                            <div className="d-flex align-items-center">
+                              <div className="flex-shrink-0">
+                                <div
+                                  className="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center"
+                                  style={{ width: "40px", height: "40px" }}
+                                >
+                                  <FontAwesomeIcon icon={faTags} />
+                                </div>
+                              </div>
+                              <div className="flex-grow-1 ms-3">
+                                <div className="fw-semibold">
+                                  {subCategory.libelle}
+                                </div>
+                                {subCategory.description && (
+                                  <small
+                                    className="text-muted text-truncate d-block"
+                                    style={{
+                                      maxWidth: "150px",
+                                      fontSize: "0.75rem",
+                                    }}
+                                    title={subCategory.description}
+                                  >
+                                    {subCategory.description}
+                                  </small>
+                                )}
+                                {subCategory.path && (
+                                  <small
+                                    className="text-muted d-block"
+                                    style={{ fontSize: "0.7rem" }}
+                                  >
+                                    Path: {subCategory.path.substring(0, 20)}...
+                                  </small>
+                                )}
                               </div>
                             </div>
-                            <div className="flex-grow-1 ms-3">
-                              <div className="fw-semibold">
-                                {subCategory.libelle}
-                              </div>
-                              {subCategory.description && (
-                                <small
-                                  className="text-muted text-truncate d-block"
+                          </td>
+                          <td>
+                            <TypeBadge type={subCategory.type} />
+                          </td>
+                          <td>
+                            {subCategoryImageUrl ? (
+                              <div
+                                className="position-relative"
+                                style={{ width: "50px", height: "50px" }}
+                              >
+                                <img
+                                  src={subCategoryImageUrl}
+                                  alt={subCategory.libelle}
+                                  className="img-fluid rounded border"
                                   style={{
-                                    maxWidth: "150px",
-                                    fontSize: "0.75rem",
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "cover",
                                   }}
-                                  title={subCategory.description}
+                                  onError={() => handleImageError(`subcat-${subCategory.uuid}`)}
+                                />
+                              </div>
+                            ) : subCategory.image ? (
+                              <div
+                                className="position-relative"
+                                style={{ width: "50px", height: "50px" }}
+                              >
+                                <img
+                                  src={buildImageUrl(subCategory.image) || subCategory.image}
+                                  alt={subCategory.libelle}
+                                  className="img-fluid rounded border"
+                                  style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "cover",
+                                  }}
+                                  onError={() => handleImageError(`subcat-${subCategory.uuid}`)}
+                                />
+                              </div>
+                            ) : (
+                              <div
+                                className="bg-secondary bg-opacity-10 rounded d-flex align-items-center justify-content-center"
+                                style={{ width: "50px", height: "50px" }}
+                              >
+                                <FontAwesomeIcon
+                                  icon={faImage}
+                                  className="text-muted"
+                                />
+                              </div>
+                            )}
+                          </td>
+                          <td>
+                            <StatusBadge statut={subCategory.statut} />
+                            {subCategory.is_deleted && (
+                              <div className="mt-1">
+                                <span
+                                  className="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25"
+                                  style={{ fontSize: "0.65rem" }}
                                 >
-                                  {subCategory.description}
-                                </small>
-                              )}
-                              {subCategory.path && (
+                                  Supprimé
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                          <td>
+                            {subCategory.counts ? (
+                              <div className="d-flex flex-column gap-1">
+                                <div className="d-flex align-items-center gap-1">
+                                  <FontAwesomeIcon
+                                    icon={faCube}
+                                    className="text-primary"
+                                    style={{ fontSize: "0.7rem" }}
+                                  />
+                                  <span className="fw-semibold">
+                                    {subCategory.counts.total || 0}
+                                  </span>
+                                  <span
+                                    className="text-muted"
+                                    style={{ fontSize: "0.75rem" }}
+                                  >
+                                    total
+                                  </span>
+                                </div>
+                                <div className="d-flex gap-1">
+                                  {subCategory.counts.produits > 0 && (
+                                    <small className="badge bg-success bg-opacity-10 text-success">
+                                      {subCategory.counts.produits}P
+                                    </small>
+                                  )}
+                                  {subCategory.counts.dons > 0 && (
+                                    <small className="badge bg-info bg-opacity-10 text-info">
+                                      {subCategory.counts.dons}D
+                                    </small>
+                                  )}
+                                  {subCategory.counts.echanges > 0 && (
+                                    <small className="badge bg-warning bg-opacity-10 text-warning">
+                                      {subCategory.counts.echanges}É
+                                    </small>
+                                  )}
+                                  {subCategory.counts.annonces > 0 && (
+                                    <small className="badge bg-orange bg-opacity-10 text-orange">
+                                      {subCategory.counts.annonces}A
+                                    </small>
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-muted">N/A</span>
+                            )}
+                          </td>
+                          <td>
+                            <div className="d-flex align-items-center">
+                              <FontAwesomeIcon
+                                icon={faCalendar}
+                                className="text-muted me-2"
+                              />
+                              <small className="text-muted">
+                                {formatDate(subCategory.createdAt)}
+                              </small>
+                            </div>
+                            {subCategory.updatedAt &&
+                              subCategory.updatedAt !== subCategory.createdAt && (
                                 <small
                                   className="text-muted d-block"
                                   style={{ fontSize: "0.7rem" }}
                                 >
-                                  Path: {subCategory.path.substring(0, 20)}...
+                                  Modifié: {formatDate(subCategory.updatedAt)}
                                 </small>
                               )}
-                            </div>
-                          </div>
-                        </td>
-                        <td>
-                          <TypeBadge type={subCategory.type} />
-                        </td>
-                        <td>
-                          {subCategory.image ? (
-                            <div
-                              className="position-relative"
-                              style={{ width: "50px", height: "50px" }}
-                            >
-                              <img
-                                src={subCategory.image}
-                                alt={subCategory.libelle}
-                                className="img-fluid rounded border"
-                                style={{
-                                  width: "100%",
-                                  height: "100%",
-                                  objectFit: "cover",
+                          </td>
+                          <td className="text-center">
+                            <div className="btn-group btn-group-sm" role="group">
+                              <button
+                                className="btn btn-outline-primary"
+                                title="Voir détails"
+                                onClick={() => {
+                                  setSelectedSubCategory(subCategory);
+                                  setShowViewModal(true);
                                 }}
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).src =
-                                    `https://via.placeholder.com/50/cccccc/ffffff?text=${subCategory.libelle.charAt(0)}`;
+                                disabled={loading}
+                              >
+                                <FontAwesomeIcon icon={faEye} />
+                              </button>
+                              <button
+                                className="btn btn-outline-warning"
+                                title="Modifier"
+                                onClick={() => {
+                                  setSelectedSubCategory(subCategory);
+                                  setShowEditModal(true);
                                 }}
-                              />
-                            </div>
-                          ) : (
-                            <div
-                              className="bg-secondary bg-opacity-10 rounded d-flex align-items-center justify-content-center"
-                              style={{ width: "50px", height: "50px" }}
-                            >
-                              <FontAwesomeIcon
-                                icon={faImage}
-                                className="text-muted"
-                              />
-                            </div>
-                          )}
-                        </td>
-                        <td>
-                          <StatusBadge statut={subCategory.statut} />
-                          {subCategory.is_deleted && (
-                            <div className="mt-1">
-                              <span
-                                className="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25"
-                                style={{ fontSize: "0.65rem" }}
+                                disabled={loading || subCategory.is_deleted}
                               >
-                                Supprimé
-                              </span>
-                            </div>
-                          )}
-                        </td>
-                        <td>
-                          {subCategory.counts ? (
-                            <div className="d-flex flex-column gap-1">
-                              <div className="d-flex align-items-center gap-1">
-                                <FontAwesomeIcon
-                                  icon={faCube}
-                                  className="text-primary"
-                                  style={{ fontSize: "0.7rem" }}
-                                />
-                                <span className="fw-semibold">
-                                  {subCategory.counts.total || 0}
-                                </span>
-                                <span
-                                  className="text-muted"
-                                  style={{ fontSize: "0.75rem" }}
-                                >
-                                  total
-                                </span>
-                              </div>
-                              <div className="d-flex gap-1">
-                                {subCategory.counts.produits > 0 && (
-                                  <small className="badge bg-success bg-opacity-10 text-success">
-                                    {subCategory.counts.produits}P
-                                  </small>
-                                )}
-                                {subCategory.counts.dons > 0 && (
-                                  <small className="badge bg-info bg-opacity-10 text-info">
-                                    {subCategory.counts.dons}D
-                                  </small>
-                                )}
-                                {subCategory.counts.echanges > 0 && (
-                                  <small className="badge bg-warning bg-opacity-10 text-warning">
-                                    {subCategory.counts.echanges}É
-                                  </small>
-                                )}
-                                {subCategory.counts.annonces > 0 && (
-                                  <small className="badge bg-orange bg-opacity-10 text-orange">
-                                    {subCategory.counts.annonces}A
-                                  </small>
-                                )}
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="text-muted">N/A</span>
-                          )}
-                        </td>
-                        <td>
-                          <div className="d-flex align-items-center">
-                            <FontAwesomeIcon
-                              icon={faCalendar}
-                              className="text-muted me-2"
-                            />
-                            <small className="text-muted">
-                              {formatDate(subCategory.createdAt)}
-                            </small>
-                          </div>
-                          {subCategory.updatedAt &&
-                            subCategory.updatedAt !== subCategory.createdAt && (
-                              <small
-                                className="text-muted d-block"
-                                style={{ fontSize: "0.7rem" }}
+                                <FontAwesomeIcon icon={faEdit} />
+                              </button>
+                              <button
+                                className="btn btn-outline-danger"
+                                title="Supprimer"
+                                onClick={() => openDeleteModal(subCategory)}
+                                disabled={loading || subCategory.is_deleted}
                               >
-                                Modifié: {formatDate(subCategory.updatedAt)}
-                              </small>
-                            )}
-                        </td>
-                        <td className="text-center">
-                          <div className="btn-group btn-group-sm" role="group">
-                            <button
-                              className="btn btn-outline-primary"
-                              title="Voir détails"
-                              onClick={() => {
-                                setSelectedSubCategory(subCategory);
-                                setShowViewModal(true);
-                              }}
-                              disabled={loading}
-                            >
-                              <FontAwesomeIcon icon={faEye} />
-                            </button>
-                            <button
-                              className="btn btn-outline-warning"
-                              title="Modifier"
-                              onClick={() => {
-                                setSelectedSubCategory(subCategory);
-                                setShowEditModal(true);
-                              }}
-                              disabled={loading || subCategory.is_deleted}
-                            >
-                              <FontAwesomeIcon icon={faEdit} />
-                            </button>
-                            <button
-                              className="btn btn-outline-danger"
-                              title="Supprimer"
-                              onClick={() => openDeleteModal(subCategory)}
-                              disabled={loading || subCategory.is_deleted}
-                            >
-                              <FontAwesomeIcon icon={faTrash} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                                <FontAwesomeIcon icon={faTrash} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
 

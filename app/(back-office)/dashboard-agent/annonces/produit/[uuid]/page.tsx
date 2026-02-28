@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
+import { buildImageUrl } from "@/app/shared/utils/image-utils";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowLeft,
@@ -273,6 +274,8 @@ export default function ProductDetailPage() {
     message: string;
     onConfirm: () => void;
   } | null>(null);
+  const [imageError, setImageError] = useState(false);
+  const [imageKey, setImageKey] = useState(Date.now());
 
   const imageContainerRef = useRef<HTMLDivElement>(null);
   const rotationIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -289,9 +292,15 @@ export default function ProductDetailPage() {
 
   // URL d'image de secours avec une image 3D plus adaptée
   const getProductImage = () => {
-    if (product?.image) {
-      return product.image;
+    if (imageError) {
+      return `https://via.placeholder.com/800x600/1e3c72/ffffff?text=${encodeURIComponent(product?.libelle?.charAt(0) || "P")}`;
     }
+
+    if (product?.image) {
+      const url = buildImageUrl(product.image);
+      if (url) return url;
+    }
+
     // Image 3D générique pour mieux voir l'effet
     return "https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=1200&q=80&fit=crop";
   };
@@ -331,10 +340,16 @@ export default function ProductDetailPage() {
     setConfirmDialog({ title, message, onConfirm });
   };
 
+  const handleImageError = () => {
+    setImageError(true);
+  };
+
   const fetchProduct = async () => {
     try {
       setLoading(true);
       setError(null);
+      setImageError(false);
+      setImageKey(Date.now());
       const response = await api.get(
         API_ENDPOINTS.PRODUCTS.DETAIL_NON_PUBLIE(uuid),
       );
@@ -791,7 +806,7 @@ export default function ProductDetailPage() {
                 ref={imageContainerRef}
                 className="position-relative bg-gradient rounded-3 overflow-hidden mb-4"
                 style={{
-                  height: "500px", // Augmenté de 400px à 500px
+                  height: "500px",
                   background:
                     "linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)",
                   cursor:
@@ -812,8 +827,8 @@ export default function ProductDetailPage() {
                     transform: `translateZ(150px) rotateX(${rotation.x}deg) rotateY(${rotation.y}deg) scale(${zoom})`,
                     transition:
                       isRotating || autoRotate ? "none" : "transform 0.5s ease",
-                    width: "80%", // Augmenté de 70% à 80%
-                    height: "80%", // Augmenté de 70% à 80%
+                    width: "80%",
+                    height: "80%",
                   }}
                 >
                   {/* Image 2D pour le moment (simulation) */}
@@ -826,6 +841,7 @@ export default function ProductDetailPage() {
                   >
                     {/* Image principale avec effet 3D */}
                     <img
+                      key={imageKey}
                       src={getProductImage()}
                       alt={`${product.libelle} - Vue 3D`}
                       className="img-fluid rounded-3 shadow-3d"
@@ -839,9 +855,7 @@ export default function ProductDetailPage() {
                             ? "-20px 20px 60px rgba(0,0,0,0.5)"
                             : "20px 20px 60px rgba(0,0,0,0.5)",
                       }}
-                      onError={(e) => {
-                        e.currentTarget.src = `https://via.placeholder.com/800x600/1e3c72/ffffff?text=${encodeURIComponent(product.libelle?.charAt(0) || "P")}`;
-                      }}
+                      onError={handleImageError}
                     />
 
                     {/* Effet de réflexion */}

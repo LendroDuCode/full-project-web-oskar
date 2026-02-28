@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
+import { buildImageUrl } from "@/app/shared/utils/image-utils";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowLeft,
@@ -220,6 +221,8 @@ export default function EchangeDetailPage() {
     message: string;
     onConfirm: () => void;
   } | null>(null);
+  const [imageError, setImageError] = useState(false);
+  const [imageKey, setImageKey] = useState(Date.now());
 
   // États pour la visualisation 3D
   const [activePerspective, setActivePerspective] = useState(0);
@@ -244,11 +247,17 @@ export default function EchangeDetailPage() {
 
   // Image par défaut pour les échanges
   const getEchangeImage = useCallback(() => {
-    if (echange?.image) {
-      return echange.image;
+    if (imageError) {
+      return `https://via.placeholder.com/800x600/667eea/ffffff?text=${encodeURIComponent(echange?.nomElementEchange?.charAt(0) || "E")}`;
     }
+
+    if (echange?.image) {
+      const url = buildImageUrl(echange.image);
+      if (url) return url;
+    }
+    
     return "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=1200&q=80&fit=crop";
-  }, [echange?.image]);
+  }, [echange?.image, echange?.nomElementEchange, imageError]);
 
   useEffect(() => {
     fetchEchange();
@@ -289,6 +298,8 @@ export default function EchangeDetailPage() {
     try {
       setLoading(true);
       setError(null);
+      setImageError(false);
+      setImageKey(Date.now());
       const response = await api.get<Echange>(
         API_ENDPOINTS.ECHANGES.DETAIL_NON_PUBLIE(uuid),
       );
@@ -299,6 +310,10 @@ export default function EchangeDetailPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleImageError = () => {
+    setImageError(true);
   };
 
   const startAutoRotation = () => {
@@ -787,6 +802,7 @@ export default function EchangeDetailPage() {
                   {/* Image principale avec effet 3D */}
                   <div className="position-relative w-100 h-100">
                     <img
+                      key={imageKey}
                       src={getEchangeImage()}
                       alt={`${echange.nomElementEchange} - Vue 3D`}
                       className="img-fluid rounded-3 shadow-3d-echange"
@@ -800,9 +816,7 @@ export default function EchangeDetailPage() {
                             ? "-20px 20px 60px rgba(0,0,0,0.5)"
                             : "20px 20px 60px rgba(0,0,0,0.5)",
                       }}
-                      onError={(e) => {
-                        e.currentTarget.src = `https://via.placeholder.com/800x600/667eea/ffffff?text=${encodeURIComponent(echange.nomElementEchange?.charAt(0) || "E")}`;
-                      }}
+                      onError={handleImageError}
                     />
 
                     {/* Badge échange sur l'image */}

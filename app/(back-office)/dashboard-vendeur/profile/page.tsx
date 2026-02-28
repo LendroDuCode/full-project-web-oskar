@@ -1,37 +1,11 @@
 // app/(back-office)/dashboard-vendeur/profile/page.tsx
 "use client";
+
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { api } from "@/lib/api-client";
-
-// ============================================
-// FONCTION DE CONSTRUCTION D'URL D'IMAGE ROBUSTE
-// ============================================
-const buildImageUrl = (imagePath: string | null): string | null => {
-  if (!imagePath) return null;
-
-  let cleanPath = imagePath.replace(/\s+/g, "").replace(/-/g, "-").trim();
-
-  const apiUrl =
-    process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
-  const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
-
-  if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
-    if (cleanPath.includes("localhost")) {
-      const productionUrl = apiUrl.replace(/\/api$/, "");
-      return cleanPath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
-    }
-    return cleanPath;
-  }
-
-  if (cleanPath.includes("%2F")) {
-    const finalPath = cleanPath.replace(/%2F\s+/, "%2F");
-    return `${apiUrl}${filesUrl}/${finalPath}`;
-  }
-
-  return `${apiUrl}${filesUrl}/${cleanPath}`;
-};
+import { buildImageUrl } from "@/app/shared/utils/image-utils";
 
 interface ProfileData {
   uuid?: string;
@@ -373,6 +347,12 @@ export default function ProfileVendeurPage() {
     return formData.prenoms || profile.prenoms || "Vendeur";
   };
 
+  // ✅ Obtenir la source de l'avatar
+  const getAvatarSrc = () => {
+    if (previewUrl) return previewUrl;
+    return getAvatarUrl();
+  };
+
   return (
     <div className="min-vh-100 bg-light">
       <div className="container-fluid py-4">
@@ -528,7 +508,7 @@ export default function ProfileVendeurPage() {
                                     <div className="position-relative d-inline-block">
                                       <div className="avatar-upload-wrapper">
                                         <img
-                                          src={previewUrl || getAvatarUrl()}
+                                          src={getAvatarSrc()}
                                           alt="Avatar"
                                           className="rounded-circle border border-4 border-success shadow"
                                           style={{

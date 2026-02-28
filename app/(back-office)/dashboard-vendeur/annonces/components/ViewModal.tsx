@@ -63,6 +63,7 @@ import {
   formatDate,
   getStatusLabel,
 } from "@/app/shared/utils/formatters";
+import { buildImageUrl } from "@/app/shared/utils/image-utils";
 
 interface ViewModalProps {
   // Propriétés principales de l'annonce
@@ -139,110 +140,139 @@ export default function ViewModal({
   if (!isOpen || !annonce) return null;
 
   // Fonction pour obtenir l'URL de l'image correcte selon le type
-  const getImageUrl = (item: any = annonce) => {
+  const getImageUrl = (item: any = annonce, index?: string) => {
+    const imageKey = index ? `image-${index}` : "main";
+
+    // Vérifier si l'image a déjà eu une erreur
+    if (imageErrors[`${imageKey}-${item.uuid || 'unknown'}`]) {
+      return `https://via.placeholder.com/800x800?text=${type?.charAt(0).toUpperCase() || 'A'}`;
+    }
+
+    // Pour tous les types, chercher d'abord image_key, puis image
+    if (item.image_key) {
+      const url = buildImageUrl(item.image_key);
+      if (url) return url;
+    }
+
+    if (item.image) {
+      const url = buildImageUrl(item.image);
+      if (url) return url;
+    }
+
     // Pour les échanges, vérifier toutes les sources possibles
     if (type === "echange") {
-      console.log("Item échange:", item); // Pour debug
-      console.log("Image disponible:", item.image);
-      console.log("Image_key disponible:", item.image_key);
+      const possibleSources = [
+        item.photo,
+        item.images?.[0],
+        item.photos?.[0],
+        item.image_url,
+        item.imageUrl,
+        item.photo_url,
+        item.photoUrl,
+        item.imagePrincipale,
+        item.image_principale,
+        item.url_image,
+        item.urlImage,
+        item.media?.image,
+        item.media?.url,
+        item.attachments?.[0]?.url,
+        item.fichiers?.[0]?.url,
+      ];
 
-      return (
-        item.image ||
-        item.image_key || // AJOUT IMPORTANT : Chercher dans image_key
-        item.photo ||
-        item.images?.[0] ||
-        item.photos?.[0] ||
-        item.image_url ||
-        item.imageUrl ||
-        item.photo_url ||
-        item.photoUrl ||
-        item.imagePrincipale ||
-        item.image_principale ||
-        item.url_image ||
-        item.urlImage ||
-        item.media?.image ||
-        item.media?.url ||
-        item.attachments?.[0]?.url ||
-        item.fichiers?.[0]?.url ||
-        `https://via.placeholder.com/800x800?text=E`
-      );
+      for (const source of possibleSources) {
+        if (source) {
+          const url = buildImageUrl(source);
+          if (url) return url;
+        }
+      }
     }
 
     // Pour les produits
     if (type === "produit") {
-      return (
-        item.image ||
-        item.photo ||
-        item.images?.[0] ||
-        item.photos?.[0] ||
-        item.image_url ||
-        item.imageUrl ||
-        item.imagePrincipale ||
-        `https://via.placeholder.com/800x800?text=P`
-      );
+      const possibleSources = [
+        item.photo,
+        item.images?.[0],
+        item.photos?.[0],
+        item.image_url,
+        item.imageUrl,
+        item.imagePrincipale,
+      ];
+
+      for (const source of possibleSources) {
+        if (source) {
+          const url = buildImageUrl(source);
+          if (url) return url;
+        }
+      }
     }
 
     // Pour les dons
     if (type === "don") {
-      return (
-        item.image ||
-        item.photo ||
-        item.images?.[0] ||
-        item.photos?.[0] ||
-        item.image_url ||
-        item.imageUrl ||
-        `https://via.placeholder.com/800x800?text=D`
-      );
+      const possibleSources = [
+        item.photo,
+        item.images?.[0],
+        item.photos?.[0],
+        item.image_url,
+        item.imageUrl,
+      ];
+
+      for (const source of possibleSources) {
+        if (source) {
+          const url = buildImageUrl(source);
+          if (url) return url;
+        }
+      }
     }
 
-    // Pour les annonces
-    return (
-      item.image ||
-      item.photo ||
-      item.images?.[0] ||
-      item.photos?.[0] ||
-      `https://via.placeholder.com/800x800?text=A`
-    );
+    // Fallback vers placeholder
+    return `https://via.placeholder.com/800x800?text=${type?.charAt(0).toUpperCase() || 'A'}`;
   };
 
   // Fonction pour obtenir toutes les images
   const getAllImages = (item: any = annonce) => {
+    const images: string[] = [];
+
+    // Ajouter l'image principale si disponible
+    const mainImage = getImageUrl(item);
+    if (mainImage && !mainImage.includes("placeholder")) {
+      images.push(mainImage);
+    }
+
+    // Pour les échanges, vérifier toutes les sources possibles
     if (type === "echange") {
-      // Pour les échanges, vérifier toutes les sources possibles
-      const images = [
+      const sources = [
         ...(item.images || []),
         ...(item.photos || []),
         ...(item.attachments?.map((a: any) => a.url) || []),
         ...(item.fichiers?.map((f: any) => f.url) || []),
-      ].filter(Boolean); // Filtrer les valeurs null/undefined
+      ];
 
-      const mainImage = getImageUrl(item);
-
-      // Ajouter l'image principale si elle n'est pas déjà dans la liste
-      if (
-        mainImage &&
-        !mainImage.includes("placeholder") &&
-        !images.includes(mainImage)
-      ) {
-        return [mainImage, ...images];
-      }
-
-      return images.length > 0 ? images : [mainImage];
+      sources.forEach((source) => {
+        if (source && typeof source === 'string' && !images.includes(source)) {
+          const url = buildImageUrl(source);
+          if (url && !images.includes(url) && !images.includes(source)) {
+            images.push(url);
+          }
+        }
+      });
     }
 
     // Pour les autres types
-    const images = item.images || item.photos || [];
-    const mainImage = getImageUrl(item);
+    const otherSources = [
+      ...(item.images || []),
+      ...(item.photos || []),
+    ];
 
-    if (
-      mainImage &&
-      !mainImage.includes("placeholder") &&
-      !images.includes(mainImage)
-    ) {
-      return [mainImage, ...images];
-    }
+    otherSources.forEach((source) => {
+      if (source && typeof source === 'string' && !images.includes(source)) {
+        const url = buildImageUrl(source);
+        if (url && !images.includes(url) && !images.includes(source)) {
+          images.push(url);
+        }
+      }
+    });
 
-    return images.length > 0 ? images : [mainImage];
+    return images.length > 0 ? images : [getImageUrl(item)];
   };
 
   const getTypeConfig = () => {
@@ -364,8 +394,8 @@ export default function ViewModal({
     }
   };
 
-  const handleImageError = (imageUrl: string) => {
-    setImageErrors((prev) => ({ ...prev, [imageUrl]: true }));
+  const handleImageError = (imageId: string) => {
+    setImageErrors((prev) => ({ ...prev, [imageId]: true }));
   };
 
   const renderInfoCard = (
@@ -412,12 +442,12 @@ export default function ViewModal({
               {/* Image principale */}
               <div className="col-md-5 position-relative">
                 <div className="ratio ratio-1x1 h-100">
-                  {mainImage && !imageErrors[mainImage] ? (
+                  {mainImage && !imageErrors[`main-${annonce.uuid}`] ? (
                     <img
                       src={mainImage}
                       alt={annonce.title || annonce.nom || "Produit"}
                       className="img-fluid object-fit-cover"
-                      onError={() => handleImageError(mainImage)}
+                      onError={() => handleImageError(`main-${annonce.uuid}`)}
                     />
                   ) : (
                     <div className="w-100 h-100 d-flex flex-column align-items-center justify-content-center bg-light">
@@ -707,12 +737,12 @@ export default function ViewModal({
               {/* Image principale */}
               <div className="col-md-5 position-relative">
                 <div className="ratio ratio-1x1 h-100">
-                  {mainImage && !imageErrors[mainImage] ? (
+                  {mainImage && !imageErrors[`main-${annonce.uuid}`] ? (
                     <img
                       src={mainImage}
                       alt={annonce.title || "Don"}
                       className="img-fluid object-fit-cover"
-                      onError={() => handleImageError(mainImage)}
+                      onError={() => handleImageError(`main-${annonce.uuid}`)}
                     />
                   ) : (
                     <div className="w-100 h-100 d-flex flex-column align-items-center justify-content-center bg-light">
@@ -833,14 +863,14 @@ export default function ViewModal({
               {/* Image principale */}
               <div className="col-md-5 position-relative">
                 <div className="ratio ratio-1x1 h-100">
-                  {mainImage && !imageErrors[mainImage] ? (
+                  {mainImage && !imageErrors[`main-${annonce.uuid}`] ? (
                     <img
                       src={mainImage}
                       alt={
                         annonce.title || annonce.nomElementEchange || "Échange"
                       }
                       className="img-fluid object-fit-cover"
-                      onError={() => handleImageError(mainImage)}
+                      onError={() => handleImageError(`main-${annonce.uuid}`)}
                     />
                   ) : (
                     <div className="w-100 h-100 d-flex flex-column align-items-center justify-content-center bg-light">

@@ -1,7 +1,8 @@
+// app/(back-office)/dashboard-agent/boutiques/page.tsx
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation"; // AJOUTER CET IMPORT
+import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faPlus,
@@ -50,6 +51,7 @@ import {
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import colors from "@/app/shared/constants/colors";
+import { buildImageUrl } from "@/app/shared/utils/image-utils";
 
 // Types
 interface TypeBoutique {
@@ -115,8 +117,23 @@ const BoutiqueImage = ({
   onView?: () => void;
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const [imageSrc, setImageSrc] = useState<string | null>(null);
 
-  if (!src) {
+  useEffect(() => {
+    if (src) {
+      setImageSrc(buildImageUrl(src));
+      setImageError(false);
+    } else {
+      setImageSrc(null);
+    }
+  }, [src]);
+
+  const handleImageError = () => {
+    setImageError(true);
+  };
+
+  if (!src || imageError) {
     return (
       <div
         className={`bg-secondary bg-opacity-10 rounded d-flex flex-column align-items-center justify-content-center ${type === "logo" ? "logo-placeholder" : "banniere-placeholder"}`}
@@ -156,7 +173,7 @@ const BoutiqueImage = ({
       title={`Cliquer pour agrandir ${type === "logo" ? "le logo" : type === "banniere" ? "la bannière" : "l'image"}`}
     >
       <img
-        src={src}
+        src={imageSrc || ''}
         alt={alt}
         className="img-fluid rounded border"
         style={{
@@ -166,10 +183,7 @@ const BoutiqueImage = ({
           transition: "transform 0.3s ease",
           transform: isHovered ? "scale(1.05)" : "scale(1)",
         }}
-        onError={(e) => {
-          (e.target as HTMLImageElement).src =
-            `https://via.placeholder.com/${type === "logo" ? "50" : type === "banniere" ? "100x60" : "40"}/cccccc/ffffff?text=${alt.charAt(0)}`;
-        }}
+        onError={handleImageError}
       />
 
       {isHovered && (
@@ -268,7 +282,8 @@ const TypeBoutiqueBadge = ({
 }) => {
   const handleViewTypeImage = () => {
     if (typeBoutique.image) {
-      window.open(typeBoutique.image, "_blank");
+      const imageUrl = buildImageUrl(typeBoutique.image);
+      window.open(imageUrl, "_blank");
     }
   };
 
@@ -657,6 +672,14 @@ const ImageModal = ({
   alt: string;
   onClose: () => void;
 }) => {
+  const [imageSrc, setImageSrc] = useState<string>(imageUrl);
+
+  useEffect(() => {
+    if (imageUrl) {
+      setImageSrc(buildImageUrl(imageUrl));
+    }
+  }, [imageUrl]);
+
   if (!show) return null;
 
   return (
@@ -677,10 +700,13 @@ const ImageModal = ({
           </div>
           <div className="modal-body text-center p-0">
             <img
-              src={imageUrl}
+              src={imageSrc}
               alt={alt}
               className="img-fluid rounded"
               style={{ maxHeight: "80vh", maxWidth: "100%" }}
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = "https://via.placeholder.com/800x600/cccccc/ffffff?text=Image+non+disponible";
+              }}
             />
             <div className="mt-2 text-white">
               <small>{alt}</small>
@@ -693,7 +719,6 @@ const ImageModal = ({
 };
 
 export default function BoutiquesPage() {
-  // AJOUTER CET HOOK
   const router = useRouter();
 
   // États
@@ -749,85 +774,157 @@ export default function BoutiquesPage() {
   const itemsPerPageOptions = [5, 10, 20, 50];
 
   // Charger les boutiques depuis l'API
-  // Charger les boutiques depuis l'API
-const fetchBoutiques = useCallback(
-  async (params?: Record<string, any>) => {
-    try {
-      setLoading(true);
-      setError(null);
-      setInfoMessage(null);
-      setSuccessMessage(null);
+  const fetchBoutiques = useCallback(
+    async (params?: Record<string, any>) => {
+      try {
+        setLoading(true);
+        setError(null);
+        setInfoMessage(null);
+        setSuccessMessage(null);
 
-      console.log("📡 Chargement des boutiques depuis l'API...");
+        console.log("📡 Chargement des boutiques depuis l'API...");
 
-      // Construire les paramètres de requête
-      const queryParams: Record<string, any> = {
-        page: pagination.page,
-        limit: pagination.limit,
-        ...params,
-      };
-
-      // Nettoyer les paramètres vides
-      Object.keys(queryParams).forEach((key) => {
-        if (
-          queryParams[key] === undefined ||
-          queryParams[key] === null ||
-          queryParams[key] === ""
-        ) {
-          delete queryParams[key];
-        }
-      });
-
-      console.log("Paramètres de requête:", queryParams);
-
-      // Appel à l'API réelle
-      const response = await api.get<ApiResponse>(
-        API_ENDPOINTS.BOUTIQUES.ALL,
-        {
-        },
-      );
-
-      console.log("Réponse API:", response.data);
-
-      // CORRECTION : Définir une variable pour les données de réponse
-      const responseData = response.data;
-      let boutiquesData: Boutique[] = [];
-
-      if (responseData && Array.isArray(responseData)) {
-        // Si la réponse est un tableau simple
-        boutiquesData = responseData as Boutique[];
-        setBoutiques(boutiquesData);
-        setPagination({
-          page: 1,
+        // Construire les paramètres de requête
+        const queryParams: Record<string, any> = {
+          page: pagination.page,
           limit: pagination.limit,
-          total: boutiquesData.length,
-          pages: Math.ceil(boutiquesData.length / pagination.limit),
-        });
-      } else if (responseData && "data" in responseData) {
-        // Si la réponse a une structure { data: [], meta: {} }
-        const apiResponse = responseData as ApiResponse;
-        boutiquesData = apiResponse.data || [];
-        setBoutiques(boutiquesData);
+          ...params,
+        };
 
-        if (apiResponse.meta) {
-          setPagination({
-            page: apiResponse.meta.page || 1,
-            limit: apiResponse.meta.limit || pagination.limit,
-            total: apiResponse.meta.total || boutiquesData.length,
-            pages:
-              apiResponse.meta.totalPages ||
-              Math.ceil(boutiquesData.length / pagination.limit),
-          });
-        } else {
+        // Nettoyer les paramètres vides
+        Object.keys(queryParams).forEach((key) => {
+          if (
+            queryParams[key] === undefined ||
+            queryParams[key] === null ||
+            queryParams[key] === ""
+          ) {
+            delete queryParams[key];
+          }
+        });
+
+        console.log("Paramètres de requête:", queryParams);
+
+        // Appel à l'API réelle
+        const response = await api.get<ApiResponse>(
+          API_ENDPOINTS.BOUTIQUES.ALL,
+          {
+          },
+        );
+
+        console.log("Réponse API:", response.data);
+
+        // CORRECTION : Définir une variable pour les données de réponse
+        const responseData = response.data;
+        let boutiquesData: Boutique[] = [];
+
+        if (responseData && Array.isArray(responseData)) {
+          // Si la réponse est un tableau simple
+          boutiquesData = responseData as Boutique[];
+          setBoutiques(boutiquesData);
           setPagination({
             page: 1,
             limit: pagination.limit,
             total: boutiquesData.length,
             pages: Math.ceil(boutiquesData.length / pagination.limit),
           });
+        } else if (responseData && "data" in responseData) {
+          // Si la réponse a une structure { data: [], meta: {} }
+          const apiResponse = responseData as ApiResponse;
+          boutiquesData = apiResponse.data || [];
+          setBoutiques(boutiquesData);
+
+          if (apiResponse.meta) {
+            setPagination({
+              page: apiResponse.meta.page || 1,
+              limit: apiResponse.meta.limit || pagination.limit,
+              total: apiResponse.meta.total || boutiquesData.length,
+              pages:
+                apiResponse.meta.totalPages ||
+                Math.ceil(boutiquesData.length / pagination.limit),
+            });
+          } else {
+            setPagination({
+              page: 1,
+              limit: pagination.limit,
+              total: boutiquesData.length,
+              pages: Math.ceil(boutiquesData.length / pagination.limit),
+            });
+          }
+        } else {
+          console.error("Format de réponse API inattendu:", responseData);
+          setBoutiques([]);
+          setPagination({
+            page: 1,
+            limit: pagination.limit,
+            total: 0,
+            pages: 1,
+          });
         }
-      } else {
-        console.error("Format de réponse API inattendu:", responseData);
+
+        // CORRECTION : Extraire les types de boutiques uniques
+        const typesMap = new Map<string, TypeBoutique>();
+        
+        // Déterminer toutes les boutiques à traiter
+        let allBoutiques: Boutique[] = [];
+        
+        if (Array.isArray(responseData)) {
+          // Si la réponse est directement un tableau
+          allBoutiques = responseData;
+        } else if (responseData && typeof responseData === 'object') {
+          // Si la réponse a une structure { data: Boutique[] }
+          const apiResponse = responseData as any;
+          if ('data' in apiResponse && Array.isArray(apiResponse.data)) {
+            allBoutiques = apiResponse.data;
+          } else if (Array.isArray(apiResponse)) {
+            // Fallback si apiResponse est un tableau
+            allBoutiques = apiResponse;
+          }
+        }
+
+        console.log(`📊 ${allBoutiques.length} boutiques à traiter pour les types`);
+
+        allBoutiques.forEach((boutique: Boutique) => {
+          if (boutique.type_boutique && boutique.type_boutique.uuid) {
+            typesMap.set(boutique.type_boutique.uuid, boutique.type_boutique);
+          }
+        });
+        
+        setUniqueTypes(Array.from(typesMap.values()));
+        console.log(`🏷️ ${typesMap.size} types de boutiques uniques trouvés`);
+
+        // Réinitialiser la sélection après chargement
+        setSelectedBoutiques([]);
+        setSelectAll(false);
+
+        console.log(
+          `✅ ${boutiquesData.length} boutiques chargées depuis l'API`,
+        );
+      } catch (err: any) {
+        console.error("❌ Erreur lors du chargement des boutiques:", err);
+
+        // Message d'erreur plus détaillé
+        let errorMessage = "Erreur lors du chargement des boutiques";
+        if (err.response) {
+          if (err.response.status === 401) {
+            errorMessage = "Session expirée. Veuillez vous reconnecter.";
+          } else if (err.response.status === 403) {
+            errorMessage =
+              "Vous n'avez pas la permission d'accéder à cette ressource.";
+          } else if (err.response.status === 404) {
+            errorMessage = "API non trouvée. Vérifiez l'URL de l'API.";
+          } else if (err.response.data?.message) {
+            errorMessage = `Erreur ${err.response.status}: ${err.response.data.message}`;
+          } else {
+            errorMessage = `Erreur ${err.response.status}: ${err.response.statusText}`;
+          }
+        } else if (err.request) {
+          errorMessage =
+            "Impossible de joindre le serveur. Vérifiez votre connexion.";
+        } else {
+          errorMessage = err.message || "Erreur inconnue";
+        }
+
+        setError(errorMessage);
         setBoutiques([]);
         setPagination({
           page: 1,
@@ -835,90 +932,12 @@ const fetchBoutiques = useCallback(
           total: 0,
           pages: 1,
         });
+      } finally {
+        setLoading(false);
       }
-
-      // CORRECTION : Extraire les types de boutiques uniques
-      const typesMap = new Map<string, TypeBoutique>();
-      
-      // Déterminer toutes les boutiques à traiter
-      let allBoutiques: Boutique[] = [];
-      
-      if (Array.isArray(responseData)) {
-        // Si la réponse est directement un tableau
-        allBoutiques = responseData;
-      } else if (responseData && typeof responseData === 'object') {
-        // Si la réponse a une structure { data: Boutique[] }
-        const apiResponse = responseData as any;
-        if ('data' in apiResponse && Array.isArray(apiResponse.data)) {
-          allBoutiques = apiResponse.data;
-        } else if (Array.isArray(apiResponse)) {
-          // Fallback si apiResponse est un tableau
-          allBoutiques = apiResponse;
-        }
-      }
-      
-      // Alternative plus concise :
-      // const allBoutiques = Array.isArray(responseData) 
-      //   ? responseData 
-      //   : (responseData as any)?.data || [];
-
-      console.log(`📊 ${allBoutiques.length} boutiques à traiter pour les types`);
-
-      allBoutiques.forEach((boutique: Boutique) => {
-        if (boutique.type_boutique && boutique.type_boutique.uuid) {
-          typesMap.set(boutique.type_boutique.uuid, boutique.type_boutique);
-        }
-      });
-      
-      setUniqueTypes(Array.from(typesMap.values()));
-      console.log(`🏷️ ${typesMap.size} types de boutiques uniques trouvés`);
-
-      // Réinitialiser la sélection après chargement
-      setSelectedBoutiques([]);
-      setSelectAll(false);
-
-      console.log(
-        `✅ ${boutiquesData.length} boutiques chargées depuis l'API`,
-      );
-    } catch (err: any) {
-      console.error("❌ Erreur lors du chargement des boutiques:", err);
-
-      // Message d'erreur plus détaillé
-      let errorMessage = "Erreur lors du chargement des boutiques";
-      if (err.response) {
-        if (err.response.status === 401) {
-          errorMessage = "Session expirée. Veuillez vous reconnecter.";
-        } else if (err.response.status === 403) {
-          errorMessage =
-            "Vous n'avez pas la permission d'accéder à cette ressource.";
-        } else if (err.response.status === 404) {
-          errorMessage = "API non trouvée. Vérifiez l'URL de l'API.";
-        } else if (err.response.data?.message) {
-          errorMessage = `Erreur ${err.response.status}: ${err.response.data.message}`;
-        } else {
-          errorMessage = `Erreur ${err.response.status}: ${err.response.statusText}`;
-        }
-      } else if (err.request) {
-        errorMessage =
-          "Impossible de joindre le serveur. Vérifiez votre connexion.";
-      } else {
-        errorMessage = err.message || "Erreur inconnue";
-      }
-
-      setError(errorMessage);
-      setBoutiques([]);
-      setPagination({
-        page: 1,
-        limit: pagination.limit,
-        total: 0,
-        pages: 1,
-      });
-    } finally {
-      setLoading(false);
-    }
-  },
-  [pagination.page, pagination.limit],
-);
+    },
+    [pagination.page, pagination.limit],
+  );
 
   // Charger les boutiques au montage
   useEffect(() => {
@@ -1247,92 +1266,8 @@ const fetchBoutiques = useCallback(
     setShowDeleteMultipleModal(true);
   };
 
-  // Export CSV
-  /**
-     const createCSVExport = async () => {
-    if (boutiques.length === 0) {
-      setInfoMessage("Aucune boutique à exporter");
-      setTimeout(() => setInfoMessage(null), 3000);
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      const response = await api.get<ApiResponse>(API_ENDPOINTS.BOUTIQUES.ALL, {
-        params: { limit: 1000 },
-      });
-
-      const exportBoutiques = response.data?.data || response.data || [];
-
-      if (exportBoutiques.length === 0) {
-        setInfoMessage("Aucune boutique à exporter");
-        setTimeout(() => setInfoMessage(null), 3000);
-        return;
-      }
-
-      const csvContent = [
-        [
-          "ID",
-          "Nom",
-          "Type",
-          "Statut",
-          "Slug",
-          "Description",
-          "Logo",
-          "Bannière",
-          "Bloquée",
-          "Fermée",
-          "Créée le",
-          "Modifiée le",
-        ],
-        ...exportBoutiques.map((boutique: Boutique) => [
-          boutique.id,
-          `"${boutique.nom || ""}"`,
-          `"${boutique.type_boutique?.libelle || ""}"`,
-          boutique.statut,
-          `"${boutique.slug || ""}"`,
-          `"${boutique.description || ""}"`,
-          boutique.logo ? "Oui" : "Non",
-          boutique.banniere ? "Oui" : "Non",
-          boutique.est_bloque ? "Oui" : "Non",
-          boutique.est_ferme ? "Oui" : "Non",
-          boutique.created_at
-            ? new Date(boutique.created_at).toLocaleDateString("fr-FR")
-            : "",
-          boutique.updated_at
-            ? new Date(boutique.updated_at).toLocaleDateString("fr-FR")
-            : "",
-        ]),
-      ]
-        .map((row) => row.join(","))
-        .join("\n");
-
-      const blob = new Blob(["\uFEFF" + csvContent], {
-        type: "text/csv;charset=utf-8;",
-      });
-      const link = document.createElement("a");
-      const url = URL.createObjectURL(blob);
-      link.setAttribute("href", url);
-      link.setAttribute(
-        "download",
-        `boutiques-${new Date().toISOString().split("T")[0]}.csv`,
-      );
-      link.style.visibility = "hidden";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      handleSuccess("Export CSV réussi !");
-    } catch (err: any) {
-      console.error("❌ Erreur lors de l'export CSV:", err);
-      setError("Erreur lors de l'export CSV");
-      setTimeout(() => setError(null), 3000);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-   */
+  // Export CSV (commenté comme dans l'original)
+  // const createCSVExport = async () => { ... };
 
   // Utils
   const formatDate = (dateString?: string) => {
@@ -2145,7 +2080,6 @@ const fetchBoutiques = useCallback(
                         </td>
                         <td className="text-center">
                           <div className="btn-group btn-group-sm" role="group">
-                            {/* MODIFIER CETTE PARTIE */}
                             <button
                               className="btn btn-outline-primary"
                               title="Voir détails"
@@ -2158,7 +2092,6 @@ const fetchBoutiques = useCallback(
                             >
                               <FontAwesomeIcon icon={faEye} />
                             </button>
-                            {/* FIN DE LA MODIFICATION */}
                             <button
                               className="btn btn-outline-warning"
                               title="Modifier"

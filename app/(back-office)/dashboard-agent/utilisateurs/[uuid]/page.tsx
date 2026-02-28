@@ -44,42 +44,7 @@ import {
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import colors from "@/app/shared/constants/colors";
-
-// ============================================
-// FONCTION DE CONSTRUCTION D'URL D'IMAGE ROBUSTE
-// ============================================
-const buildImageUrl = (imagePath: string | null): string | null => {
-  if (!imagePath) return null;
-
-  // Nettoyer le chemin des espaces indésirables
-  let cleanPath = imagePath
-    .replace(/\s+/g, "") // Supprimer tous les espaces
-    .replace(/-/g, "-") // Normaliser les tirets
-    .trim();
-
-  const apiUrl =
-    process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
-  const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
-
-  // ✅ CAS 1: Déjà une URL complète
-  if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
-    if (cleanPath.includes("localhost")) {
-      const productionUrl = apiUrl.replace(/\/api$/, "");
-      return cleanPath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
-    }
-    return cleanPath;
-  }
-
-  // ✅ CAS 2: Chemin avec %2F (déjà encodé)
-  if (cleanPath.includes("%2F")) {
-    // Nettoyer les espaces autour de %2F
-    const finalPath = cleanPath.replace(/%2F\s+/, "%2F");
-    return `${apiUrl}${filesUrl}/${finalPath}`;
-  }
-
-  // ✅ CAS 3: Chemin simple
-  return `${apiUrl}${filesUrl}/${cleanPath}`;
-};
+import { buildImageUrl } from "@/app/shared/utils/image-utils";
 
 // Types
 interface Civilite {
@@ -171,13 +136,14 @@ export default function DetailUtilisateurPage() {
   const [activeTab, setActiveTab] = useState<
     "info" | "produits" | "historique"
   >("info");
-  const [imageError, setImageError] = useState(false);
+  const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
 
   // Fonction pour récupérer l'utilisateur
   const fetchUser = async (): Promise<void> => {
     try {
       setLoading(true);
       setError(null);
+      setImageErrors(new Set());
 
       console.log(`🔄 Fetching user with ID: ${userId}`);
       console.log(
@@ -196,7 +162,6 @@ export default function DetailUtilisateurPage() {
       }
 
       setUser(userData);
-      setImageError(false);
     } catch (err: any) {
       console.error("❌ Error fetching user:", err);
 
@@ -377,50 +342,32 @@ export default function DetailUtilisateurPage() {
   };
 
   // ✅ Gestion des erreurs d'image
-  const handleImageError = (
-    e: React.SyntheticEvent<HTMLImageElement, Event>,
-  ) => {
-    const target = e.currentTarget;
-
-    // Si l'URL contient localhost, essayer de la corriger
-    if (target.src.includes("localhost")) {
-      const productionUrl =
-        process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
-        "https://oskar-api.mysonec.pro";
-      target.src = target.src.replace(
-        /http:\/\/localhost(:\d+)?/g,
-        productionUrl,
-      );
-      return;
-    }
-
-    // Si l'URL contient des espaces, essayer de les nettoyer
-    if (target.src.includes("%20")) {
-      target.src = target.src.replace(/%20/g, "");
-      return;
-    }
-
-    setImageError(true);
-    target.onerror = null;
+  const handleImageError = (imageId: string) => {
+    setImageErrors((prev) => new Set(prev).add(imageId));
   };
 
   // ✅ Obtenir l'URL de l'avatar
   const getAvatarUrl = (): string | null => {
-    if (imageError) return null;
+    if (imageErrors.has("avatar")) return null;
 
     if (user?.avatar) {
-      return buildImageUrl(user.avatar);
+      const url = buildImageUrl(user.avatar);
+      if (url) return url;
     }
 
     if (user?.avatar_key) {
-      return buildImageUrl(user.avatar_key);
+      const url = buildImageUrl(user.avatar_key);
+      if (url) return url;
     }
 
     return null;
   };
 
   // ✅ Obtenir l'URL de l'image d'un produit
-  const getProductImageUrl = (produit: Produit): string => {
+  const getProductImageUrl = (produit: Produit): string | null => {
+    const productId = `product-${produit.uuid}`;
+    if (imageErrors.has(productId)) return null;
+
     if (produit.image_key) {
       const url = buildImageUrl(produit.image_key);
       if (url) return url;
@@ -431,7 +378,7 @@ export default function DetailUtilisateurPage() {
       if (url) return url;
     }
 
-    return "";
+    return null;
   };
 
   // Affichage du chargement
@@ -718,7 +665,7 @@ export default function DetailUtilisateurPage() {
                                 height: "120px",
                                 objectFit: "cover",
                               }}
-                              onError={handleImageError}
+                              onError={() => handleImageError("avatar")}
                             />
                           ) : (
                             <div
@@ -1113,9 +1060,9 @@ export default function DetailUtilisateurPage() {
                                     height: "200px",
                                     objectFit: "cover",
                                   }}
-                                  onError={(e) => {
-                                    e.currentTarget.style.display = "none";
-                                  }}
+                                  onError={() =>
+                                    handleImageError(`product-${produit.uuid}`)
+                                  }
                                 />
                               ) : (
                                 <div

@@ -548,6 +548,11 @@ export default function DonDetailPage() {
   const [contactVisible, setContactVisible] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
 
+  // 🔴 Ref pour éviter les chargements multiples
+  const initialLoadDone = useRef(false);
+  const commentsLoadDone = useRef(false);
+  const recentsLoadDone = useRef(false);
+
   // Timer pour le toast
   useEffect(() => {
     if (toast?.show) {
@@ -812,6 +817,8 @@ export default function DonDetailPage() {
   // CHARGEMENT DES DONNÉES
   // ============================================
   const fetchDonsRecents = useCallback(async () => {
+    if (!uuid || recentsLoadDone.current) return;
+
     try {
       setLoadingRecents(true);
 
@@ -842,6 +849,7 @@ export default function DonDetailPage() {
         }));
 
         setDonsRecents(transformed);
+        recentsLoadDone.current = true;
       }
     } catch (err) {
       console.warn("Erreur chargement dons récents:", err);
@@ -853,7 +861,7 @@ export default function DonDetailPage() {
 
   const fetchCommentaires = useCallback(
     async (donUuid: string) => {
-      if (!donUuid || commentairesFetched) return;
+      if (!donUuid || commentairesFetched || commentsLoadDone.current) return;
 
       try {
         setLoadingComments(true);
@@ -913,9 +921,11 @@ export default function DonDetailPage() {
           }
 
           setCommentairesFetched(true);
+          commentsLoadDone.current = true;
         } else {
           setCommentaires([]);
           setCommentairesFetched(true);
+          commentsLoadDone.current = true;
         }
       } catch (err: any) {
         console.warn("⚠️ Erreur chargement commentaires:", err);
@@ -929,6 +939,7 @@ export default function DonDetailPage() {
         });
         setCommentaires([]);
         setCommentairesFetched(true);
+        commentsLoadDone.current = true;
       } finally {
         setLoadingComments(false);
       }
@@ -937,7 +948,7 @@ export default function DonDetailPage() {
   );
 
   const fetchDonDetails = useCallback(async () => {
-    if (!uuid) return;
+    if (!uuid || initialLoadDone.current) return;
 
     try {
       setLoading(true);
@@ -984,6 +995,10 @@ export default function DonDetailPage() {
       setImages(imageUrls.slice(0, 5));
       setImagePrincipale(imageUrls[0]);
 
+      // Marquer le chargement initial comme terminé
+      initialLoadDone.current = true;
+
+      // Charger les commentaires et dons récents
       fetchCommentaires(donData.uuid);
       fetchDonsRecents();
     } catch (err: any) {
@@ -1005,8 +1020,9 @@ export default function DonDetailPage() {
     }
   }, [uuid, fetchCommentaires, fetchDonsRecents]);
 
+  // 🔴 useEffect simplifié avec une seule dépendance
   useEffect(() => {
-    if (uuid) {
+    if (uuid && !initialLoadDone.current) {
       fetchDonDetails();
     }
   }, [uuid, fetchDonDetails]);
@@ -1336,7 +1352,9 @@ export default function DonDetailPage() {
         },
       );
 
+      // Réinitialiser les flags pour forcer le rechargement
       setCommentairesFetched(false);
+      commentsLoadDone.current = false;
       await fetchCommentaires(don.uuid);
 
       setNewReview({

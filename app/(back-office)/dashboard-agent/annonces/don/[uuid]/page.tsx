@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
+import { buildImageUrl } from "@/app/shared/utils/image-utils";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowLeft,
@@ -184,6 +185,8 @@ export default function DonDetailPage() {
     message: string;
     onConfirm: () => void;
   } | null>(null);
+  const [imageError, setImageError] = useState(false);
+  const [imageKey, setImageKey] = useState(Date.now());
 
   const imageContainerRef = useRef<HTMLDivElement>(null);
   const rotationIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -200,9 +203,14 @@ export default function DonDetailPage() {
 
   // Image par défaut pour les dons
   const getDonImage = () => {
-    if (don?.image) {
-      return don.image;
+    if (imageError) {
+      return `https://via.placeholder.com/800x600/0d9488/ffffff?text=${encodeURIComponent(don?.nom?.charAt(0) || "D")}`;
     }
+
+    if (don?.image) {
+      return buildImageUrl(don.image) || `https://via.placeholder.com/800x600/0d9488/ffffff?text=${encodeURIComponent(don?.nom?.charAt(0) || "D")}`;
+    }
+
     // Image de don générique adaptée
     return "https://images.unsplash.com/photo-1532629345422-7515f3d16bb6?w=1200&q=80&fit=crop";
   };
@@ -246,6 +254,8 @@ export default function DonDetailPage() {
     try {
       setLoading(true);
       setError(null);
+      setImageError(false);
+      setImageKey(Date.now());
       const response = await api.get(
         API_ENDPOINTS.DONS.DETAIL_NON_PUBLIE(uuid),
       );
@@ -334,6 +344,10 @@ export default function DonDetailPage() {
 
   const handleZoomOut = () => {
     setZoom((prev) => Math.max(prev - 0.1, 0.5));
+  };
+
+  const handleImageError = () => {
+    setImageError(true);
   };
 
   const handleValidate = async () => {
@@ -724,6 +738,7 @@ export default function DonDetailPage() {
                   {/* Image principale avec effet 3D */}
                   <div className="position-relative w-100 h-100">
                     <img
+                      key={imageKey}
                       src={getDonImage()}
                       alt={`${don.nom} - Vue 3D`}
                       className="img-fluid rounded-3 shadow-3d-don"
@@ -737,9 +752,7 @@ export default function DonDetailPage() {
                             ? "-20px 20px 60px rgba(0,0,0,0.5)"
                             : "20px 20px 60px rgba(0,0,0,0.5)",
                       }}
-                      onError={(e) => {
-                        e.currentTarget.src = `https://via.placeholder.com/800x600/0d9488/ffffff?text=${encodeURIComponent(don.nom?.charAt(0) || "D")}`;
-                      }}
+                      onError={handleImageError}
                     />
 
                     {/* Badge don sur l'image */}

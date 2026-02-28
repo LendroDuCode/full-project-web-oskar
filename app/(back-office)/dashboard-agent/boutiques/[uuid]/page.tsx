@@ -73,48 +73,7 @@ import {
   FaSearch,
   FaLockOpen,
 } from "react-icons/fa";
-
-// ============================================
-// FONCTION DE CONSTRUCTION D'URL D'IMAGE ROBUSTE
-// ============================================
-const buildImageUrl = (
-  imagePath: string | null,
-  imageKey: string | null = null,
-): string | null => {
-  // Priorité à image_key si disponible
-  const path = imageKey || imagePath;
-
-  if (!path) return null;
-
-  // Nettoyer le chemin des espaces indésirables
-  let cleanPath = path
-    .replace(/\s+/g, "") // Supprimer tous les espaces
-    .replace(/-/g, "-") // Normaliser les tirets
-    .trim();
-
-  const apiUrl =
-    process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
-  const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
-
-  // ✅ CAS 1: Déjà une URL complète
-  if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
-    if (cleanPath.includes("localhost")) {
-      const productionUrl = apiUrl.replace(/\/api$/, "");
-      return cleanPath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
-    }
-    return cleanPath;
-  }
-
-  // ✅ CAS 2: Chemin avec %2F (déjà encodé)
-  if (cleanPath.includes("%2F")) {
-    // Nettoyer les espaces autour de %2F
-    const finalPath = cleanPath.replace(/%2F\s+/, "%2F");
-    return `${apiUrl}${filesUrl}/${finalPath}`;
-  }
-
-  // ✅ CAS 3: Chemin simple
-  return `${apiUrl}${filesUrl}/${cleanPath}`;
-};
+import { buildImageUrl } from "@/app/shared/utils/image-utils";
 
 interface TypeBoutique {
   uuid: string;
@@ -211,45 +170,35 @@ const BoutiqueDetail: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(5);
 
-  // ✅ Gestion des erreurs d'image
+  // ✅ Gestion des erreurs d'image améliorée
   const handleImageError = useCallback(
     (id: string, e: React.SyntheticEvent<HTMLImageElement>) => {
       const target = e.target as HTMLImageElement;
 
-      // Si l'URL contient localhost, essayer de la corriger
-      if (target.src.includes("localhost")) {
-        const productionUrl =
-          process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
-          "https://oskar-api.mysonec.pro";
-        target.src = target.src.replace(
-          /http:\/\/localhost(:\d+)?/g,
-          productionUrl,
-        );
-        return;
-      }
-
-      // Si l'URL contient des espaces, essayer de les nettoyer
-      if (target.src.includes("%20")) {
-        target.src = target.src.replace(/%20/g, "");
-        return;
-      }
-
+      // Marquer cette image comme en erreur
       setImageErrors((prev) => new Set(prev).add(id));
-      target.onerror = null;
+
+      // Fallback vers placeholder
+      target.src = `https://via.placeholder.com/300x300/cccccc/ffffff?text=Image+non+disponible`;
+      target.onerror = null; // Éviter les boucles infinies
     },
     [],
   );
 
-  // ✅ Obtenir l'URL du logo
+  // ✅ Obtenir l'URL du logo avec fallback
   const getLogoUrl = (boutique: Boutique | null): string | null => {
     if (!boutique) return null;
+    
+    // Vérifier si l'image a déjà eu une erreur
     if (imageErrors.has(boutique.uuid)) return null;
 
+    // Priorité à logo_key s'il existe
     if (boutique.logo_key) {
       const url = buildImageUrl(boutique.logo_key);
       if (url) return url;
     }
 
+    // Sinon utiliser logo
     if (boutique.logo) {
       const url = buildImageUrl(boutique.logo);
       if (url) return url;
@@ -258,16 +207,20 @@ const BoutiqueDetail: React.FC = () => {
     return null;
   };
 
-  // ✅ Obtenir l'URL de la bannière
+  // ✅ Obtenir l'URL de la bannière avec fallback
   const getBanniereUrl = (boutique: Boutique | null): string | null => {
     if (!boutique) return null;
-    if (imageErrors.has(`${boutique.uuid}-banner`)) return null;
+    
+    const bannerId = `${boutique.uuid}-banner`;
+    if (imageErrors.has(bannerId)) return null;
 
+    // Priorité à banniere_key s'il existe
     if (boutique.banniere_key) {
       const url = buildImageUrl(boutique.banniere_key);
       if (url) return url;
     }
 
+    // Sinon utiliser banniere
     if (boutique.banniere) {
       const url = buildImageUrl(boutique.banniere);
       if (url) return url;
@@ -276,18 +229,22 @@ const BoutiqueDetail: React.FC = () => {
     return null;
   };
 
-  // ✅ Obtenir l'URL de l'image du type de boutique
+  // ✅ Obtenir l'URL de l'image du type de boutique avec fallback
   const getTypeImageUrl = (
     typeBoutique: TypeBoutique | null,
   ): string | null => {
     if (!typeBoutique) return null;
-    if (imageErrors.has(`type-${typeBoutique.uuid}`)) return null;
+    
+    const typeId = `type-${typeBoutique.uuid}`;
+    if (imageErrors.has(typeId)) return null;
 
+    // Priorité à image_key s'il existe
     if (typeBoutique.image_key) {
       const url = buildImageUrl(typeBoutique.image_key);
       if (url) return url;
     }
 
+    // Sinon utiliser image
     if (typeBoutique.image) {
       const url = buildImageUrl(typeBoutique.image);
       if (url) return url;
@@ -296,15 +253,19 @@ const BoutiqueDetail: React.FC = () => {
     return null;
   };
 
-  // ✅ Obtenir l'URL de l'image d'un produit
+  // ✅ Obtenir l'URL de l'image d'un produit avec fallback
   const getProductImageUrl = (produit: Produit): string | null => {
+    if (!produit) return null;
+    
     if (imageErrors.has(produit.uuid)) return null;
 
+    // Priorité à image_key s'il existe
     if (produit.image_key) {
       const url = buildImageUrl(produit.image_key);
       if (url) return url;
     }
 
+    // Sinon utiliser image
     if (produit.image) {
       const url = buildImageUrl(produit.image);
       if (url) return url;
@@ -313,14 +274,19 @@ const BoutiqueDetail: React.FC = () => {
     return null;
   };
 
-  // ✅ Obtenir l'URL de l'image de la catégorie
+  // ✅ Obtenir l'URL de l'image de la catégorie avec fallback
   const getCategoryImageUrl = (categorie: Categorie): string | null => {
     if (!categorie) return null;
+    
+    const categoryId = `category-${categorie.uuid}`;
+    if (imageErrors.has(categoryId)) return null;
 
+    // Priorité à image_key s'il existe
     if (categorie.image_key) {
       return buildImageUrl(categorie.image_key);
     }
 
+    // Sinon utiliser image
     if (categorie.image) {
       return buildImageUrl(categorie.image);
     }
@@ -349,6 +315,7 @@ const BoutiqueDetail: React.FC = () => {
     try {
       setLoading(true);
       setRefreshLoading(true);
+      setImageErrors(new Set()); // Réinitialiser les erreurs d'image
 
       const endpoint = API_ENDPOINTS.BOUTIQUES.DETAIL(boutiqueId);
       console.log("📡 Appel API:", endpoint);

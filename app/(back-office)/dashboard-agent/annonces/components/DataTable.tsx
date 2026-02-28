@@ -27,6 +27,7 @@ import {
 import "bootstrap/dist/css/bootstrap.min.css";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
+import { buildImageUrl } from "@/app/shared/utils/image-utils";
 
 interface ContentItem {
   id: string;
@@ -59,44 +60,8 @@ interface DataTableProps {
   className?: string;
   data?: ContentItem[];
   loading?: boolean;
-  hideVendeurColumn?: boolean; // ✅ Nouvelle prop pour cacher la colonne vendeur
+  hideVendeurColumn?: boolean;
 }
-
-// ============================================
-// FONCTION DE CONSTRUCTION D'URL D'IMAGE ROBUSTE
-// ============================================
-const buildImageUrl = (imagePath: string | null): string | null => {
-  if (!imagePath) return null;
-
-  // Nettoyer le chemin des espaces indésirables
-  let cleanPath = imagePath
-    .replace(/\s+/g, "") // Supprimer tous les espaces
-    .replace(/-/g, "-") // Normaliser les tirets
-    .trim();
-
-  const apiUrl =
-    process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
-  const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
-
-  // ✅ CAS 1: Déjà une URL complète
-  if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
-    if (cleanPath.includes("localhost")) {
-      const productionUrl = apiUrl.replace(/\/api$/, "");
-      return cleanPath.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
-    }
-    return cleanPath;
-  }
-
-  // ✅ CAS 2: Chemin avec %2F (déjà encodé)
-  if (cleanPath.includes("%2F")) {
-    // Nettoyer les espaces autour de %2F
-    const finalPath = cleanPath.replace(/%2F\s+/, "%2F");
-    return `${apiUrl}${filesUrl}/${finalPath}`;
-  }
-
-  // ✅ CAS 3: Chemin simple
-  return `${apiUrl}${filesUrl}/${cleanPath}`;
-};
 
 export default function DataTable({
   contentType = "produit",
@@ -112,7 +77,7 @@ export default function DataTable({
   className = "",
   data: externalData,
   loading: externalLoading,
-  hideVendeurColumn = true, // ✅ Par défaut à true pour cacher la colonne vendeur
+  hideVendeurColumn = true,
 }: DataTableProps) {
   const router = useRouter();
   const [data, setData] = useState<ContentItem[]>(externalData || []);
@@ -135,6 +100,7 @@ export default function DataTable({
     try {
       setLoading(true);
       setError(null);
+      setImageErrors(new Set());
 
       let endpoint = "";
 
@@ -171,10 +137,8 @@ export default function DataTable({
           isPublished = item.estPublie || false;
           isBlocked = item.estBloque || false;
 
-          // ✅ CORRECTION: Utiliser buildImageUrl pour l'image
-          imageUrl =
-            buildImageUrl(item.image) ||
-            `https://via.placeholder.com/48?text=${encodeURIComponent(title?.charAt?.(0) || "P")}`;
+          // ✅ Utilisation de buildImageUrl
+          imageUrl = item.image ? buildImageUrl(item.image) : "";
         } else if (contentType === "don") {
           title = item.nom || "Don sans nom";
           date = item.date_debut || new Date().toISOString();
@@ -182,10 +146,8 @@ export default function DataTable({
           isPublished = item.estPublie || false;
           isBlocked = item.est_bloque || false;
 
-          // ✅ CORRECTION: Utiliser buildImageUrl pour l'image
-          imageUrl =
-            buildImageUrl(item.image) ||
-            `https://via.placeholder.com/48?text=D`;
+          // ✅ Utilisation de buildImageUrl
+          imageUrl = item.image ? buildImageUrl(item.image) : "";
         } else if (contentType === "echange") {
           title =
             item.nomElementEchange ||
@@ -196,10 +158,8 @@ export default function DataTable({
           isPublished = item.estPublie || false;
           isBlocked = item.estBloque || false;
 
-          // ✅ CORRECTION: Utiliser buildImageUrl pour l'image
-          imageUrl =
-            buildImageUrl(item.image) ||
-            `https://via.placeholder.com/48?text=E`;
+          // ✅ Utilisation de buildImageUrl
+          imageUrl = item.image ? buildImageUrl(item.image) : "";
         }
 
         if (!title || title.trim() === "") {
@@ -259,39 +219,26 @@ export default function DataTable({
     uuid: string,
   ) => {
     const target = e.currentTarget;
-
-    // Si l'URL contient localhost, essayer de la corriger
-    if (target.src.includes("localhost")) {
-      const productionUrl =
-        process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
-        "https://oskar-api.mysonec.pro";
-      target.src = target.src.replace(
-        /http:\/\/localhost(:\d+)?/g,
-        productionUrl,
-      );
-      return;
-    }
-
-    // Si l'URL contient des espaces, essayer de les nettoyer
-    if (target.src.includes("%20")) {
-      target.src = target.src.replace(/%20/g, "");
-      return;
-    }
-
+    
+    // Marquer cette image comme en erreur
     setImageErrors((prev) => new Set(prev).add(uuid));
 
     // Fallback vers placeholder
     const firstChar = title?.charAt?.(0)?.toUpperCase() || "?";
     target.src = `https://via.placeholder.com/48?text=${encodeURIComponent(firstChar)}`;
-    target.onerror = null;
+    target.onerror = null; // Éviter les boucles infinies
   };
 
   // ✅ Obtenir l'URL de l'image avec fallback
   const getImageUrl = (item: ContentItem): string => {
+    // Si l'image a déjà eu une erreur, utiliser directement le placeholder
     if (imageErrors.has(item.uuid)) {
-      return `https://via.placeholder.com/48?text=${item.title?.charAt(0) || "?"}`;
+      const firstChar = item.title?.charAt?.(0)?.toUpperCase() || "?";
+      return `https://via.placeholder.com/48?text=${encodeURIComponent(firstChar)}`;
     }
-    return item.image;
+    
+    // Sinon, retourner l'URL construite (peut être vide)
+    return item.image || `https://via.placeholder.com/48?text=${encodeURIComponent(item.title?.charAt?.(0)?.toUpperCase() || "?")}`;
   };
 
   // Filtrer les données

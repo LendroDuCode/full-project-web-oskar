@@ -19,11 +19,13 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
+import { buildImageUrl } from "@/app/shared/utils/image-utils";
 
 interface Category {
   uuid: string;
   libelle: string;
   type?: string;
+  image?: string
 }
 
 interface Product {
@@ -85,6 +87,16 @@ const ViewProductModal: React.FC<ViewProductModalProps> = ({
 }) => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [category, setCategory] = useState<Category | null>(null);
+  const [imageError, setImageError] = useState(false);
+  const [imageKey, setImageKey] = useState(Date.now());
+
+  // Réinitialiser les états d'erreur quand le modal s'ouvre avec un nouveau produit
+  useEffect(() => {
+    if (isOpen) {
+      setImageError(false);
+      setImageKey(Date.now());
+    }
+  }, [isOpen, product.uuid]);
 
   // Charger les catégories et trouver la catégorie du produit
   useEffect(() => {
@@ -108,6 +120,47 @@ const ViewProductModal: React.FC<ViewProductModalProps> = ({
     } catch (err) {
       console.error("Erreur chargement catégories:", err);
     }
+  };
+
+  // ✅ Fonction pour obtenir l'URL de l'image du produit
+  const getProductImageUrl = (): string | null => {
+    if (imageError) return null;
+
+    // Priorité à image_key s'il existe
+    if (product.image_key) {
+      const url = buildImageUrl(product.image_key);
+      if (url) return url;
+    }
+
+    // Sinon utiliser image
+    if (product.image) {
+      const url = buildImageUrl(product.image);
+      if (url) return url;
+    }
+
+    return null;
+  };
+
+  // ✅ Fonction pour obtenir l'URL de l'image de la catégorie
+  const getCategoryImageUrl = (): string | null => {
+    if (!category) return null;
+
+    if (category.image) {
+      const url = buildImageUrl(category.image);
+      if (url) return url;
+    }
+
+    if (category.image) {
+      const url = buildImageUrl(category.image);
+      if (url) return url;
+    }
+
+    return null;
+  };
+
+  // ✅ Gestionnaire d'erreur d'image
+  const handleImageError = () => {
+    setImageError(true);
   };
 
   // Fonction pour formater la date
@@ -145,6 +198,9 @@ const ViewProductModal: React.FC<ViewProductModalProps> = ({
 
   if (!isOpen) return null;
 
+  const productImageUrl = getProductImageUrl();
+  const categoryImageUrl = getCategoryImageUrl();
+
   return (
     <div
       className="modal fade show d-block"
@@ -175,9 +231,10 @@ const ViewProductModal: React.FC<ViewProductModalProps> = ({
                 <div className="sticky-top" style={{ top: "20px" }}>
                   <div className="card border-0 shadow-sm mb-4">
                     <div className="card-body p-0">
-                      {product.image ? (
+                      {productImageUrl ? (
                         <img
-                          src={product.image}
+                          key={imageKey}
+                          src={productImageUrl}
                           alt={product.libelle}
                           className="img-fluid rounded-top"
                           style={{
@@ -185,10 +242,7 @@ const ViewProductModal: React.FC<ViewProductModalProps> = ({
                             height: "300px",
                             objectFit: "cover",
                           }}
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src =
-                              `https://via.placeholder.com/400x300/cccccc/ffffff?text=${product.libelle?.charAt(0) || "P"}`;
-                          }}
+                          onError={handleImageError}
                         />
                       ) : (
                         <div

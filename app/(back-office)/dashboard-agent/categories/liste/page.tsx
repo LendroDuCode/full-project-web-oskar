@@ -1,3 +1,4 @@
+// app/(back-office)/dashboard-agent/categories/liste/page.tsx
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -36,11 +37,12 @@ import {
   faUsers,
   faEllipsisV,
   faCheckDouble,
-  faFolderOpen, // Nouvelle icône ajoutée
+  faFolderOpen,
 } from "@fortawesome/free-solid-svg-icons";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import colors from "@/app/shared/constants/colors";
+import { buildImageUrl } from "@/app/shared/utils/image-utils";
 import CreateCategoryModal from "../components/modals/CreateCategoryModal";
 import EditCategoryModal from "../components/modals/EditCategoryModal";
 import ViewCategoryModal from "../components/modals/ViewCategoryModal";
@@ -54,6 +56,7 @@ interface Category {
   slug: string;
   description?: string;
   image: string;
+  image_key?: string;
   statut?: string;
   is_deleted: boolean;
   deleted_at?: string | null;
@@ -511,10 +514,11 @@ export default function CategoriesPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
 
   // États pour les modals
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false); // ← CORRECTION ICI : Ajout du = manquant
   const [showViewModal, setShowViewModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showDeleteMultipleModal, setShowDeleteMultipleModal] = useState(false);
@@ -550,6 +554,33 @@ export default function CategoriesPage() {
   // Options pour les éléments par page
   const itemsPerPageOptions = [5, 10, 20, 50];
 
+  // ✅ Fonction pour obtenir l'URL de l'image
+  const getImageUrl = (category: Category): string | null => {
+    if (!category) return null;
+    
+    const imageId = category.uuid;
+    if (imageErrors[imageId]) return null;
+
+    // Priorité à image_key
+    if (category.image_key) {
+      const url = buildImageUrl(category.image_key);
+      if (url) return url;
+    }
+
+    // Sinon utiliser image
+    if (category.image) {
+      const url = buildImageUrl(category.image);
+      if (url) return url;
+    }
+
+    return null;
+  };
+
+  // ✅ Gestionnaire d'erreur d'image
+  const handleImageError = (categoryUuid: string) => {
+    setImageErrors(prev => ({ ...prev, [categoryUuid]: true }));
+  };
+
   // Fonction pour naviguer vers les sous-catégories
   const handleViewSubCategories = (categoryUuid: string) => {
     router.push(`/dashboard-agent/categories/${categoryUuid}/sous-categories`);
@@ -562,6 +593,7 @@ export default function CategoriesPage() {
       setError(null);
       setInfoMessage(null);
       setSuccessMessage(null);
+      setImageErrors({});
 
       const queryParams = new URLSearchParams({
         page: String(pagination.page),
@@ -1077,7 +1109,6 @@ export default function CategoriesPage() {
             setShowViewModal(false);
             setSelectedCategory(null);
           }}
-          // CORRECTION: Retirer onEdit qui n'existe pas dans ViewCategoryModalProps
         />
       )}
       <DeleteModal
@@ -1523,171 +1554,171 @@ export default function CategoriesPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {currentItems.map((category, index) => (
-                      <tr
-                        key={category.uuid}
-                        className={`align-middle ${selectedCategories.includes(category.uuid) ? "table-active" : ""}`}
-                      >
-                        <td className="text-center">
-                          <div className="form-check d-flex justify-content-center">
-                            <input
-                              type="checkbox"
-                              className="form-check-input"
-                              checked={selectedCategories.includes(
-                                category.uuid,
-                              )}
-                              onChange={() =>
-                                handleSelectCategory(category.uuid)
-                              }
-                            />
-                          </div>
-                        </td>
-                        <td className="text-center text-muted fw-semibold">
-                          {(pagination.page - 1) * pagination.limit + index + 1}
-                        </td>
-                        <td>
-                          <div className="d-flex align-items-center">
-                            <div className="flex-shrink-0">
-                              <div
-                                className="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center"
-                                style={{ width: "40px", height: "40px" }}
-                              >
-                                <FontAwesomeIcon icon={faTags} />
-                              </div>
+                    {currentItems.map((category, index) => {
+                      const imageUrl = getImageUrl(category);
+                      return (
+                        <tr
+                          key={category.uuid}
+                          className={`align-middle ${selectedCategories.includes(category.uuid) ? "table-active" : ""}`}
+                        >
+                          <td className="text-center">
+                            <div className="form-check d-flex justify-content-center">
+                              <input
+                                type="checkbox"
+                                className="form-check-input"
+                                checked={selectedCategories.includes(
+                                  category.uuid,
+                                )}
+                                onChange={() =>
+                                  handleSelectCategory(category.uuid)
+                                }
+                              />
                             </div>
-                            <div className="flex-grow-1 ms-3">
-                              <div className="fw-semibold">
-                                {category.libelle}
-                              </div>
-                              {category.description && (
-                                <small
-                                  className="text-muted text-truncate d-block"
-                                  style={{
-                                    maxWidth: "150px",
-                                    fontSize: "0.75rem",
-                                  }}
-                                  title={category.description}
+                          </td>
+                          <td className="text-center text-muted fw-semibold">
+                            {(pagination.page - 1) * pagination.limit + index + 1}
+                          </td>
+                          <td>
+                            <div className="d-flex align-items-center">
+                              <div className="flex-shrink-0">
+                                <div
+                                  className="bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center"
+                                  style={{ width: "40px", height: "40px" }}
                                 >
-                                  {category.description}
-                                </small>
-                              )}
+                                  <FontAwesomeIcon icon={faTags} />
+                                </div>
+                              </div>
+                              <div className="flex-grow-1 ms-3">
+                                <div className="fw-semibold">
+                                  {category.libelle}
+                                </div>
+                                {category.description && (
+                                  <small
+                                    className="text-muted text-truncate d-block"
+                                    style={{
+                                      maxWidth: "150px",
+                                      fontSize: "0.75rem",
+                                    }}
+                                    title={category.description}
+                                  >
+                                    {category.description}
+                                  </small>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        </td>
-                        <td>
-                          <TypeBadge type={category.type} />
-                        </td>
-                        <td>
-                          {category.image ? (
-                            <div
-                              className="position-relative"
-                              style={{ width: "50px", height: "50px" }}
-                            >
-                              <img
-                                src={category.image}
-                                alt={category.libelle}
-                                className="img-fluid rounded border"
-                                style={{
-                                  width: "100%",
-                                  height: "100%",
-                                  objectFit: "cover",
-                                }}
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).src =
-                                    `https://via.placeholder.com/50/cccccc/ffffff?text=${category.libelle.charAt(0)}`;
-                                }}
-                              />
-                            </div>
-                          ) : (
-                            <div
-                              className="bg-secondary bg-opacity-10 rounded d-flex align-items-center justify-content-center"
-                              style={{ width: "50px", height: "50px" }}
-                            >
-                              <FontAwesomeIcon
-                                icon={faImage}
-                                className="text-muted"
-                              />
-                            </div>
-                          )}
-                        </td>
-                        <td>
-                          <code
-                            className="text-muted bg-light rounded px-2 py-1"
-                            style={{ fontSize: "0.75rem" }}
-                          >
-                            {category.slug}
-                          </code>
-                        </td>
-                        <td>
-                          <StatusBadge statut={category.statut} />
-                          {category.is_deleted && (
-                            <div className="mt-1">
-                              <span
-                                className="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25"
-                                style={{ fontSize: "0.65rem" }}
+                          </td>
+                          <td>
+                            <TypeBadge type={category.type} />
+                          </td>
+                          <td>
+                            {imageUrl ? (
+                              <div
+                                className="position-relative"
+                                style={{ width: "50px", height: "50px" }}
                               >
-                                Supprimé
-                              </span>
+                                <img
+                                  src={imageUrl}
+                                  alt={category.libelle}
+                                  className="img-fluid rounded border"
+                                  style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "cover",
+                                  }}
+                                  onError={() => handleImageError(category.uuid)}
+                                />
+                              </div>
+                            ) : (
+                              <div
+                                className="bg-secondary bg-opacity-10 rounded d-flex align-items-center justify-content-center"
+                                style={{ width: "50px", height: "50px" }}
+                              >
+                                <FontAwesomeIcon
+                                  icon={faImage}
+                                  className="text-muted"
+                                />
+                              </div>
+                            )}
+                          </td>
+                          <td>
+                            <code
+                              className="text-muted bg-light rounded px-2 py-1"
+                              style={{ fontSize: "0.75rem" }}
+                            >
+                              {category.slug}
+                            </code>
+                          </td>
+                          <td>
+                            <StatusBadge statut={category.statut} />
+                            {category.is_deleted && (
+                              <div className="mt-1">
+                                <span
+                                  className="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25"
+                                  style={{ fontSize: "0.65rem" }}
+                                >
+                                  Supprimé
+                                </span>
+                              </div>
+                            )}
+                          </td>
+                          <td>
+                            <div className="d-flex align-items-center">
+                              <FontAwesomeIcon
+                                icon={faCalendar}
+                                className="text-muted me-2"
+                              />
+                              <small className="text-muted">
+                                {formatDate(category.createdAt)}
+                              </small>
                             </div>
-                          )}
-                        </td>
-                        <td>
-                          <div className="d-flex align-items-center">
-                            <FontAwesomeIcon
-                              icon={faCalendar}
-                              className="text-muted me-2"
-                            />
-                            <small className="text-muted">
-                              {formatDate(category.createdAt)}
-                            </small>
-                          </div>
-                        </td>
-                        <td className="text-center">
-                          <div className="btn-group btn-group-sm" role="group">
-                            <button
-                              className="btn btn-outline-primary"
-                              title="Voir détails"
-                              onClick={() => {
-                                setSelectedCategory(category);
-                                setShowViewModal(true);
-                              }}
-                              disabled={loading}
-                            >
-                              <FontAwesomeIcon icon={faEye} />
-                            </button>
-                            <button
-                              className="btn btn-outline-info"
-                              title="Voir sous-catégories"
-                              onClick={() =>
-                                handleViewSubCategories(category.uuid)
-                              }
-                              disabled={loading}
-                            >
-                              <FontAwesomeIcon icon={faFolderOpen} />
-                            </button>
-                            <button
-                              className="btn btn-outline-warning"
-                              title="Modifier"
-                              onClick={() => {
-                                setSelectedCategory(category);
-                                setShowEditModal(true);
-                              }}
-                              disabled={loading || category.is_deleted}
-                            >
-                              <FontAwesomeIcon icon={faEdit} />
-                            </button>
-                            <button
-                              className="btn btn-outline-danger"
-                              title="Supprimer"
-                              onClick={() => openDeleteModal(category)}
-                              disabled={loading || category.is_deleted}
-                            >
-                              <FontAwesomeIcon icon={faTrash} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td className="text-center">
+                            <div className="btn-group btn-group-sm" role="group">
+                              <button
+                                className="btn btn-outline-primary"
+                                title="Voir détails"
+                                onClick={() => {
+                                  setSelectedCategory(category);
+                                  setShowViewModal(true);
+                                }}
+                                disabled={loading}
+                              >
+                                <FontAwesomeIcon icon={faEye} />
+                              </button>
+                              <button
+                                className="btn btn-outline-info"
+                                title="Voir sous-catégories"
+                                onClick={() =>
+                                  handleViewSubCategories(category.uuid)
+                                }
+                                disabled={loading}
+                              >
+                                <FontAwesomeIcon icon={faFolderOpen} />
+                              </button>
+                              <button
+                                className="btn btn-outline-warning"
+                                title="Modifier"
+                                onClick={() => {
+                                  setSelectedCategory(category);
+                                  setShowEditModal(true);
+                                }}
+                                disabled={loading || category.is_deleted}
+                              >
+                                <FontAwesomeIcon icon={faEdit} />
+                              </button>
+                              <button
+                                className="btn btn-outline-danger"
+                                title="Supprimer"
+                                onClick={() => openDeleteModal(category)}
+                                disabled={loading || category.is_deleted}
+                              >
+                                <FontAwesomeIcon icon={faTrash} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
 
