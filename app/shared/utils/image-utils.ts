@@ -1,4 +1,4 @@
-// utils/imageUtils.ts
+// utils/imageUtils.ts test
 export const buildImageUrl = (imagePath: string | null): string => {
   if (!imagePath) return '';
   
