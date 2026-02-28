@@ -718,7 +718,7 @@ export default function DonDetailPage() {
       type_don: apiDon.type_don,
       description: apiDon.description,
       prix: apiDon.prix,
-      image: buildImageUrl(apiDon.image, apiDon.image_key),
+      image: buildImageUrl(apiDon.image),
       image_key: apiDon.image_key,
       localisation: apiDon.localisation,
       statut: apiDon.statut,
@@ -754,7 +754,7 @@ export default function DonDetailPage() {
       type_don: apiSimilaire.type_don,
       description: apiSimilaire.description,
       prix: apiSimilaire.prix,
-      image: buildImageUrl(apiSimilaire.image, apiSimilaire.image_key),
+      image: buildImageUrl(apiSimilaire.image),
       localisation: apiSimilaire.localisation,
       statut: apiSimilaire.statut,
       disponible: apiSimilaire.disponible,
@@ -822,7 +822,7 @@ export default function DonDetailPage() {
           type_don: item.type_don || "objet",
           description: item.description || "",
           prix: item.prix || null,
-          image: buildImageUrl(item.image, item.image_key),
+          image: buildImageUrl(item.image),
           localisation: item.localisation || "",
           statut: item.statut || "disponible",
           disponible: item.disponible || true,
@@ -965,7 +965,7 @@ export default function DonDetailPage() {
       const imageUrls: string[] = [donData.image];
 
       response.similaires.slice(0, 4).forEach((similaire) => {
-        const imgUrl = buildImageUrl(similaire.image, similaire.image_key);
+        const imgUrl = buildImageUrl(similaire.image);
         if (imgUrl && !imageUrls.includes(imgUrl)) {
           imageUrls.push(imgUrl);
         }
