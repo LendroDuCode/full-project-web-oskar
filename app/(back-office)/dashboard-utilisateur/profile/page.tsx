@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { useAuth } from "@/app/(front-office)/auth/AuthContext";
+import { buildImageUrl } from "@/app/shared/utils/image-utils";
 
 interface ProfileData {
   nom: string;
@@ -34,6 +35,7 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<"personal" | "security">(
     "personal",
   );
+  const [imageError, setImageError] = useState(false);
 
   const [formData, setFormData] = useState<ProfileData>({
     nom: "",
@@ -150,6 +152,7 @@ export default function ProfilePage() {
     try {
       setLoading(true);
       setError(null);
+      setImageError(false);
 
       const data = await authFetch(API_ENDPOINTS.AUTH.UTILISATEUR.PROFILE);
       const profileData = data.data || data;
@@ -165,8 +168,10 @@ export default function ProfilePage() {
           created_at: profileData.created_at || profileData.createdAt,
         });
 
+        // Construire l'URL de l'avatar avec buildImageUrl si disponible
         if (profileData.avatar || profileData.photo) {
-          setPreviewUrl(profileData.avatar || profileData.photo);
+          const avatarUrl = buildImageUrl(profileData.avatar || profileData.photo);
+          setPreviewUrl(avatarUrl);
         }
       }
     } catch (err: any) {
@@ -228,6 +233,11 @@ export default function ProfilePage() {
 
     setError(null);
     setSuccess(null);
+    setImageError(false);
+  };
+
+  const handleImageError = () => {
+    setImageError(true);
   };
 
   // Soumission du formulaire
@@ -323,6 +333,14 @@ export default function ProfilePage() {
 
     const initials = `${firstChar}${secondChar}`.toUpperCase() || "U";
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=16a34a&color=fff&size=150`;
+  };
+
+  // Obtenir la source de l'avatar
+  const getAvatarSrc = () => {
+    if (previewUrl && !imageError) {
+      return previewUrl;
+    }
+    return getDefaultAvatar();
   };
 
   if (!isLoggedIn) {
@@ -495,7 +513,7 @@ export default function ProfilePage() {
                                     <div className="position-relative d-inline-block">
                                       <div className="avatar-upload-wrapper">
                                         <img
-                                          src={previewUrl || getDefaultAvatar()}
+                                          src={getAvatarSrc()}
                                           alt="Avatar"
                                           className="rounded-circle border border-4 border-success shadow"
                                           style={{
@@ -503,11 +521,7 @@ export default function ProfilePage() {
                                             height: "180px",
                                             objectFit: "cover",
                                           }}
-                                          onError={(e) => {
-                                            const target =
-                                              e.target as HTMLImageElement;
-                                            target.src = getDefaultAvatar();
-                                          }}
+                                          onError={handleImageError}
                                         />
                                         <div className="avatar-overlay rounded-circle">
                                           <label

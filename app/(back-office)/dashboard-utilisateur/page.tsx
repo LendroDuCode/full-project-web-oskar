@@ -55,6 +55,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { api } from "@/lib/api-client";
 import Link from "next/link";
+import { buildImageUrl } from "@/app/shared/utils/image-utils";
 
 // Interfaces basées sur les réponses API
 interface Utilisateur {
@@ -400,6 +401,7 @@ export default function ListeProduitsCreeUtilisateur() {
 
   // États pour les sélections
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const [stats, setStats] = useState<StatsData>({
     produits: {
       total: 0,
@@ -429,11 +431,29 @@ export default function ListeProduitsCreeUtilisateur() {
     },
   });
 
+  const getImageSrc = (imagePath: string | null | undefined, fallbackText: string = "I"): string => {
+    if (!imagePath) {
+      return getPlaceholderImage(60, fallbackText);
+    }
+    
+    // Vérifier si l'image a déjà une erreur
+    if (imageErrors[imagePath]) {
+      return getPlaceholderImage(60, fallbackText);
+    }
+    
+    return buildImageUrl(imagePath);
+  };
+
+  const handleImageError = (imagePath: string) => {
+    setImageErrors(prev => ({ ...prev, [imagePath]: true }));
+  };
+
   // Charger toutes les données
   const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
+      setImageErrors({});
 
       // Charger les produits de l'utilisateur
       const produitsResponse = await api.get<ApiResponseProduits>(
@@ -652,39 +672,42 @@ export default function ListeProduitsCreeUtilisateur() {
             uuid: favItem.uuid,
             libelle: favItem.produit?.libelle || "Produit",
             description: favItem.produit?.description || "Pas de description",
-            image: favItem.produit?.image || getPlaceholderImage(60, "P"),
+            image: favItem.produit?.image,
             prix: favItem.produit?.prix || null,
             statut: favItem.produit?.statut || "inconnu",
             estPublie: favItem.produit?.estPublie || false,
             categorie: favItem.produit?.categorie?.libelle || "Non catégorisé",
             date: favItem.createdAt,
             type: "produit",
+            imageKey: `favoris-produit-${favItem.uuid}`,
           };
         case "don":
           return {
             uuid: favItem.uuid,
             libelle: favItem.don?.nom || "Don",
             description: favItem.don?.description || "Pas de description",
-            image: favItem.don?.image || getPlaceholderImage(60, "D"),
+            image: favItem.don?.image,
             prix: favItem.don?.prix || null,
             statut: favItem.don?.statut || "inconnu",
             estPublie: favItem.don?.estPublie || false,
             categorie: favItem.don?.categorie || "Non catégorisé",
             date: favItem.createdAt,
             type: "don",
+            imageKey: `favoris-don-${favItem.uuid}`,
           };
         case "echange":
           return {
             uuid: favItem.uuid,
             libelle: favItem.echange?.nomElementEchange || "Échange",
             description: favItem.echange?.message || "Pas de description",
-            image: favItem.echange?.image || getPlaceholderImage(60, "E"),
+            image: favItem.echange?.image,
             prix: favItem.echange?.prix || "0",
             statut: favItem.echange?.statut || "inconnu",
             estPublie: favItem.echange?.estPublie || false,
             categorie: favItem.echange?.categorie || "Non catégorisé",
             date: favItem.createdAt,
             type: "echange",
+            imageKey: `favoris-echange-${favItem.uuid}`,
           };
       }
     } else {
@@ -692,7 +715,7 @@ export default function ListeProduitsCreeUtilisateur() {
         uuid: item.uuid,
         libelle: item.libelle || item.nom || item.nomElementEchange,
         description: item.description || item.message || "Pas de description",
-        image: item.image || getPlaceholderImage(60, "I"),
+        image: item.image,
         prix: item.prix,
         statut: item.statut,
         estPublie: item.estPublie,
@@ -700,6 +723,7 @@ export default function ListeProduitsCreeUtilisateur() {
           item.categorie?.libelle || item.categorie || "Non catégorisé",
         date: item.createdAt || item.updatedAt,
         type: activeSection,
+        imageKey: `${activeSection}-${item.uuid}`,
       };
     }
   };
@@ -727,13 +751,7 @@ export default function ListeProduitsCreeUtilisateur() {
                 {utilisateur && (
                   <div className="position-relative me-4">
                     <img
-                      src={
-                        utilisateur.avatar ||
-                        getPlaceholderImage(
-                          80,
-                          `${utilisateur.prenoms?.charAt(0)}${utilisateur.nom?.charAt(0)}`,
-                        )
-                      }
+                      src={getImageSrc(utilisateur.avatar, `${utilisateur.prenoms?.charAt(0)}${utilisateur.nom?.charAt(0)}`)}
                       alt={`${utilisateur.prenoms} ${utilisateur.nom}`}
                       className="rounded-circle border border-4 border-white shadow"
                       style={{
@@ -741,6 +759,7 @@ export default function ListeProduitsCreeUtilisateur() {
                         height: "80px",
                         objectFit: "cover",
                       }}
+                      onError={() => utilisateur.avatar && handleImageError(utilisateur.avatar)}
                     />
                     <span
                       className="position-absolute bottom-0 end-0 bg-success rounded-circle border border-3 border-white d-flex align-items-center justify-content-center"
@@ -872,7 +891,7 @@ export default function ListeProduitsCreeUtilisateur() {
               color="success"
               subtitle={`Sur ${stats.produits.total} produits`}
               trend="up"
-              trendText="Taux: {((stats.produits.disponibles / stats.produits.total) * 100).toFixed(0)}%"
+              trendText={`Taux: ${((stats.produits.disponibles / stats.produits.total) * 100).toFixed(0)}%`}
             />
           </div>
 
@@ -1282,7 +1301,7 @@ export default function ListeProduitsCreeUtilisateur() {
                               style={{ width: "60px", height: "60px" }}
                             >
                               <img
-                                src={displayData.image}
+                                src={getImageSrc(displayData.image, displayData.libelle?.charAt(0) || "I")}
                                 alt={displayData.libelle}
                                 className="rounded-3"
                                 style={{
@@ -1290,6 +1309,7 @@ export default function ListeProduitsCreeUtilisateur() {
                                   height: "100%",
                                   objectFit: "cover",
                                 }}
+                                onError={() => displayData.image && handleImageError(displayData.image)}
                               />
                               {activeSection === "favoris" && (
                                 <div className="position-absolute top-0 end-0 translate-middle">

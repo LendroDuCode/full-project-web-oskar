@@ -39,6 +39,8 @@ import {
   getTypeLabel,
   formatRelativeTime,
 } from "@/app/shared/utils/formatters";
+import { buildImageUrl } from "@/app/shared/utils/image-utils";
+import { useState, useEffect } from "react";
 
 interface AnnonceData {
   uuid: string;
@@ -77,7 +79,29 @@ export default function ViewModal({
   fullDetails,
   loading,
 }: ViewModalProps) {
+  const [imageError, setImageError] = useState<Record<string, boolean>>({});
+
+  // Réinitialiser les erreurs d'image quand l'annonce change
+  useEffect(() => {
+    setImageError({});
+  }, [annonce]);
+
   if (!show || !annonce) return null;
+
+  const getImageSrc = (imagePath: string | null | undefined, key: string = 'main'): string => {
+    if (!imagePath) return `https://via.placeholder.com/140?text=${annonce.title.charAt(0)}`;
+    
+    // Si l'image a déjà été traitée et a une erreur, utiliser le placeholder
+    if (imageError[key]) {
+      return `https://via.placeholder.com/140?text=${annonce.title.charAt(0)}`;
+    }
+    
+    return buildImageUrl(imagePath);
+  };
+
+  const handleImageError = (key: string = 'main') => {
+    setImageError(prev => ({ ...prev, [key]: true }));
+  };
 
   const getTypeConfig = (type: string) => {
     const configs = {
@@ -471,13 +495,10 @@ export default function ViewModal({
                 style={{ width: "140px", height: "140px" }}
               >
                 <img
-                  src={annonce.image}
+                  src={getImageSrc(annonce.image, 'main')}
                   alt={annonce.title}
                   className="w-100 h-100 object-cover"
-                  onError={(e) => {
-                    e.currentTarget.src = `https://via.placeholder.com/140?text=${annonce.title.charAt(0)}`;
-                    e.currentTarget.style.backgroundColor = typeConfig.bgColor;
-                  }}
+                  onError={() => handleImageError('main')}
                 />
                 <div
                   className="position-absolute top-0 end-0 m-2"
@@ -581,9 +602,10 @@ export default function ViewModal({
                     >
                       {annonce.seller?.avatar ? (
                         <img
-                          src={annonce.seller.avatar}
+                          src={getImageSrc(annonce.seller.avatar, 'avatar')}
                           alt={annonce.seller.name}
                           className="w-100 h-100 object-cover"
+                          onError={() => handleImageError('avatar')}
                         />
                       ) : (
                         <FontAwesomeIcon

@@ -245,7 +245,6 @@ interface DonSimilaire {
   createur?: CreateurInfo;
 }
 
-// Interface pour le commentaire API
 interface CommentaireAPI {
   is_deleted: boolean;
   deleted_at: string | null;
@@ -331,7 +330,7 @@ interface NoteStats {
 }
 
 // ============================================
-// COMPOSANT D'IMAGE SÉCURISÉ
+// COMPOSANT D'IMAGE SÉCURISÉ AMÉLIORÉ
 // ============================================
 const SecureImage = ({
   src,
@@ -362,13 +361,16 @@ const SecureImage = ({
   const [loading, setLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const [key, setKey] = useState(Date.now());
 
+  // Réinitialiser quand la source change
   useEffect(() => {
     if (src && src !== "null" && src !== "undefined" && src.trim() !== "") {
       setCurrentSrc(src);
       setLoading(true);
       setHasError(false);
       setRetryCount(0);
+      setKey(Date.now()); // Force le rechargement
     } else {
       setCurrentSrc(fallbackSrc);
       setLoading(false);
@@ -376,6 +378,8 @@ const SecureImage = ({
   }, [src, fallbackSrc]);
 
   const handleError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    console.error(`Erreur chargement image: ${currentSrc}`);
+
     if (currentSrc === fallbackSrc || currentSrc.includes("default")) {
       return;
     }
@@ -383,20 +387,31 @@ const SecureImage = ({
     if (!hasError) {
       setHasError(true);
 
-      // Tentative de reconstruction de l'URL
-      if (retryCount < 2) {
+      // Tentative de reconstruction avec différents formats
+      if (retryCount < 3) {
         setRetryCount((prev) => prev + 1);
 
-        // Essayer de reconstruire l'URL
-        const apiUrl =
-          process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
         const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
 
-        // Extraire le chemin de l'URL actuelle
-        const urlParts = currentSrc.split("/api/files/");
-        if (urlParts.length > 1) {
-          const path = urlParts[1];
-          setCurrentSrc(`${apiUrl}${filesUrl}/${path}`);
+        // Essayer différentes combinaisons
+        if (retryCount === 0) {
+          // Essayer avec le chemin tel quel
+          const path = currentSrc.split('/').pop();
+          if (path) {
+            setCurrentSrc(`${apiUrl}${filesUrl}/${path}`);
+            return;
+          }
+        } else if (retryCount === 1) {
+          // Essayer avec l'URL complète
+          if (!currentSrc.startsWith('http')) {
+            setCurrentSrc(`${apiUrl}${filesUrl}/${currentSrc}`);
+            return;
+          }
+        } else if (retryCount === 2) {
+          // Dernier essai avec timestamp pour éviter le cache
+          const baseUrl = currentSrc.split('?')[0];
+          setCurrentSrc(`${baseUrl}?t=${Date.now()}`);
           return;
         }
       }
@@ -433,7 +448,7 @@ const SecureImage = ({
         </div>
       )}
       <img
-        key={currentSrc}
+        key={key}
         src={currentSrc}
         alt={alt}
         className={`${className} ${loading && !hasError && currentSrc !== fallbackSrc ? "opacity-0" : "opacity-100"}`}
@@ -461,47 +476,24 @@ const formatDate = (dateString: string | null | undefined): string => {
       return "Date inconnue";
     }
 
-    // Détecter si la date est en UTC (présence de 'Z')
-    const isUTC = dateString.includes("Z") || dateString.includes("+00:00");
-
-    // Obtenir la date UTC
-    const utcYear = date.getUTCFullYear();
-    const utcMonth = date.getUTCMonth();
-    const utcDay = date.getUTCDate();
-    const utcHours = date.getUTCHours();
-    const utcMinutes = date.getUTCMinutes();
-
-    // Obtenir la date locale actuelle
     const now = new Date();
-
-    // Créer des dates UTC pour la comparaison
-    const todayUTC = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-    );
-
-    const commentDateUTC = new Date(Date.UTC(utcYear, utcMonth, utcDay));
-
-    // Calculer la différence en jours UTC
-    const diffTime = todayUTC.getTime() - commentDateUTC.getTime();
+    const diffTime = now.getTime() - date.getTime();
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
-    // Formater l'heure en UTC
-    const hours = utcHours.toString().padStart(2, "0");
-    const minutes = utcMinutes.toString().padStart(2, "0");
-    const timeStr = `${hours}:${minutes}`;
-
     if (diffDays === 0) {
-      return `Aujourd'hui à ${timeStr}`;
+      const hours = date.getHours().toString().padStart(2, "0");
+      const minutes = date.getMinutes().toString().padStart(2, "0");
+      return `Aujourd'hui à ${hours}:${minutes}`;
     } else if (diffDays === 1) {
-      return `Hier à ${timeStr}`;
+      return "Hier";
     } else if (diffDays < 7) {
       return `Il y a ${diffDays} jours`;
     } else {
-      // Pour les dates plus anciennes, afficher la date
-      const day = utcDay.toString().padStart(2, "0");
-      const month = (utcMonth + 1).toString().padStart(2, "0");
-      const year = utcYear;
-      return `${day}/${month}/${year}`;
+      return date.toLocaleDateString("fr-FR", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
     }
   } catch {
     return "Date inconnue";
@@ -686,7 +678,7 @@ export default function DonDetailPage() {
   };
 
   // ============================================
-  // FONCTIONS DE TRANSFORMATION - AVEC buildImageUrl
+  // FONCTIONS DE TRANSFORMATION
   // ============================================
   const transformCreateurInfo = (apiCreateur: any): CreateurInfo => {
     return {
@@ -712,13 +704,23 @@ export default function DonDetailPage() {
   };
 
   const transformDonData = (apiDon: DonAPI): Don => {
+    // Construction robuste de l'URL de l'image
+    let imageUrl = "";
+    if (apiDon.image) {
+      imageUrl = buildImageUrl(apiDon.image);
+      // Ajouter un timestamp pour éviter le cache en développement
+      if (process.env.NODE_ENV === 'development') {
+        imageUrl = `${imageUrl}?t=${Date.now()}`;
+      }
+    }
+
     return {
       uuid: apiDon.uuid,
       nom: apiDon.nom,
       type_don: apiDon.type_don,
       description: apiDon.description,
       prix: apiDon.prix,
-      image: buildImageUrl(apiDon.image),
+      image: imageUrl,
       image_key: apiDon.image_key,
       localisation: apiDon.localisation,
       statut: apiDon.statut,
@@ -748,13 +750,18 @@ export default function DonDetailPage() {
   const transformDonSimilaireData = (
     apiSimilaire: DonSimilaireAPI,
   ): DonSimilaire => {
+    let imageUrl = "";
+    if (apiSimilaire.image) {
+      imageUrl = buildImageUrl(apiSimilaire.image);
+    }
+
     return {
       uuid: apiSimilaire.uuid,
       nom: apiSimilaire.nom,
       type_don: apiSimilaire.type_don,
       description: apiSimilaire.description,
       prix: apiSimilaire.prix,
-      image: buildImageUrl(apiSimilaire.image),
+      image: imageUrl,
       localisation: apiSimilaire.localisation,
       statut: apiSimilaire.statut,
       disponible: apiSimilaire.disponible,
@@ -850,13 +857,10 @@ export default function DonDetailPage() {
 
       try {
         setLoadingComments(true);
-        console.log("📥 Chargement des commentaires pour le don:", donUuid);
 
         const response = await api.get<CommentairesResponse>(
           API_ENDPOINTS.COMMENTAIRES.FIND_COMMENTS_DON_BY_UUID(donUuid),
         );
-
-        console.log("✅ Réponse commentaires:", response);
 
         if (response && response.commentaires) {
           const commentairesData = response.commentaires.map(
@@ -867,7 +871,6 @@ export default function DonDetailPage() {
             (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
           );
 
-          console.log(`📝 ${commentairesData.length} commentaires chargés`);
           setCommentaires(commentairesData);
 
           if (response.stats) {
@@ -911,7 +914,6 @@ export default function DonDetailPage() {
 
           setCommentairesFetched(true);
         } else {
-          console.log("ℹ️ Aucun commentaire trouvé");
           setCommentaires([]);
           setCommentairesFetched(true);
         }
@@ -962,15 +964,19 @@ export default function DonDetailPage() {
         setCreateur(createurData);
       }
 
+      // Construire la liste des images
       const imageUrls: string[] = [donData.image];
 
       response.similaires.slice(0, 4).forEach((similaire) => {
-        const imgUrl = buildImageUrl(similaire.image);
-        if (imgUrl && !imageUrls.includes(imgUrl)) {
-          imageUrls.push(imgUrl);
+        if (similaire.image) {
+          const imgUrl = buildImageUrl(similaire.image);
+          if (imgUrl && !imageUrls.includes(imgUrl)) {
+            imageUrls.push(imgUrl);
+          }
         }
       });
 
+      // Ajouter des placeholders si nécessaire
       while (imageUrls.length < 5) {
         imageUrls.push(getDefaultDonImage());
       }
@@ -1000,10 +1006,10 @@ export default function DonDetailPage() {
   }, [uuid, fetchCommentaires, fetchDonsRecents]);
 
   useEffect(() => {
-    if (uuid && loading && !don) {
+    if (uuid) {
       fetchDonDetails();
     }
-  }, [uuid, fetchDonDetails, loading, don]);
+  }, [uuid, fetchDonDetails]);
 
   // ============================================
   // FONCTIONS D'AFFICHAGE
@@ -1097,7 +1103,7 @@ export default function DonDetailPage() {
   const noteStats = calculateNoteStats();
 
   // ============================================
-  // FONCTIONS D'ACTIONS - AVEC TOASTS
+  // FONCTIONS D'ACTIONS
   // ============================================
   const showToast = (type: "success" | "error" | "info", message: string) => {
     setToast({ show: true, type, message });
@@ -1107,7 +1113,6 @@ export default function DonDetailPage() {
     if (!createur) return;
 
     let phoneNumber = createur.telephone || createur.whatsapp_url || "";
-
     phoneNumber = phoneNumber.replace(/\D/g, "");
 
     if (phoneNumber.startsWith("225")) {
@@ -1211,12 +1216,8 @@ export default function DonDetailPage() {
     }
 
     try {
-      console.log(`🔄 ${favori ? "Retrait" : "Ajout"} aux favoris...`);
-
       if (favori) {
         const endpoint = API_ENDPOINTS.FAVORIS.REMOVE_DON(don.uuid);
-        console.log(`📤 Appel API: DELETE ${endpoint}`);
-
         await api.delete(endpoint);
         setFavori(false);
         showToast("success", "Don retiré des favoris");
@@ -1225,15 +1226,12 @@ export default function DonDetailPage() {
           itemUuid: don.uuid,
           type: "don",
         };
-        console.log(`📤 Appel API: POST ${API_ENDPOINTS.FAVORIS.ADD}`, payload);
-
-        const response = await api.post(API_ENDPOINTS.FAVORIS.ADD, payload);
-        console.log("✅ Réponse favoris:", response);
+        await api.post(API_ENDPOINTS.FAVORIS.ADD, payload);
         setFavori(true);
         showToast("success", "Don ajouté aux favoris");
       }
     } catch (err: any) {
-      console.error("❌ Erreur détaillée mise à jour favoris:", err);
+      console.error("❌ Erreur mise à jour favoris:", err);
 
       let errorMessage = "Une erreur est survenue. Veuillez réessayer.";
 
@@ -1759,7 +1757,7 @@ export default function DonDetailPage() {
               </div>
             </div>
 
-            {/* Avis et évaluations - SECTION AMÉLIORÉE */}
+            {/* Avis et évaluations */}
             <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
               <h2 className="h2 fw-bold mb-4">Évaluations et Avis</h2>
 
@@ -2019,7 +2017,6 @@ export default function DonDetailPage() {
                                       openLoginModal();
                                       return;
                                     }
-                                    // Fonction pour répondre au commentaire (à implémenter)
                                   }}
                                   style={{ fontSize: "0.9rem" }}
                                 >

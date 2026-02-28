@@ -9,6 +9,7 @@ import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { API_CONFIG } from "@/config/env";
 import { useAuth } from "@/app/(front-office)/auth/AuthContext";
+import { buildImageUrl } from "@/app/shared/utils/image-utils";
 
 // Import des icônes FontAwesome
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -27,7 +28,6 @@ import {
   faCertificate,
   faStar,
   faHeart as FaHeartSolid,
-  faHeart as FaHeartRegular,
   faShoppingBag,
   faCheckCircle,
   faTimesCircle,
@@ -389,7 +389,7 @@ interface NoteStats {
 }
 
 // ============================================
-// COMPOSANT D'IMAGE SÉCURISÉ
+// COMPOSANT D'IMAGE SÉCURISÉ AMÉLIORÉ
 // ============================================
 const SecureImage = ({
   src,
@@ -420,6 +420,7 @@ const SecureImage = ({
   const [loading, setLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
+  const [key, setKey] = useState(Date.now());
 
   useEffect(() => {
     if (src && src !== "null" && src !== "undefined" && src.trim() !== "") {
@@ -427,6 +428,7 @@ const SecureImage = ({
       setLoading(true);
       setHasError(false);
       setRetryCount(0);
+      setKey(Date.now());
     } else {
       setCurrentSrc(fallbackSrc);
       setLoading(false);
@@ -434,6 +436,8 @@ const SecureImage = ({
   }, [src, fallbackSrc]);
 
   const handleError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    console.error(`Erreur chargement image: ${currentSrc}`);
+
     if (currentSrc === fallbackSrc || currentSrc.includes("default")) {
       return;
     }
@@ -441,30 +445,31 @@ const SecureImage = ({
     if (!hasError) {
       setHasError(true);
 
-      if (src && src.includes("15.236.142.141:9000/oskar-bucket/")) {
-        try {
-          const key = src.replace(
-            "http://15.236.142.141:9000/oskar-bucket/",
-            "",
-          );
-          const encodedKey = encodeURIComponent(key);
-          const proxyUrl = `http://localhost:3005/api/files/${encodedKey}`;
-          setCurrentSrc(proxyUrl);
+      if (retryCount < 3) {
+        setRetryCount((prev) => prev + 1);
+
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+        const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+
+        if (retryCount === 0) {
+          const path = currentSrc.split('/').pop();
+          if (path) {
+            setCurrentSrc(`${apiUrl}${filesUrl}/${path}`);
+            return;
+          }
+        } else if (retryCount === 1) {
+          if (!currentSrc.startsWith('http')) {
+            setCurrentSrc(`${apiUrl}${filesUrl}/${currentSrc}`);
+            return;
+          }
+        } else if (retryCount === 2) {
+          const baseUrl = currentSrc.split('?')[0];
+          setCurrentSrc(`${baseUrl}?t=${Date.now()}`);
           return;
-        } catch (err) {
-          console.debug("Erreur conversion proxy:", err);
         }
       }
 
-      if (retryCount >= 2) {
-        setCurrentSrc(fallbackSrc);
-      } else {
-        setRetryCount((prev) => prev + 1);
-        setTimeout(() => {
-          setCurrentSrc(src || fallbackSrc);
-          setHasError(false);
-        }, 1000);
-      }
+      setCurrentSrc(fallbackSrc);
     }
 
     if (onError) {
@@ -495,7 +500,7 @@ const SecureImage = ({
         </div>
       )}
       <img
-        key={currentSrc}
+        key={key}
         src={currentSrc}
         alt={alt}
         className={`${className} ${loading && !hasError && currentSrc !== fallbackSrc ? "opacity-0" : "opacity-100"}`}
@@ -565,7 +570,6 @@ export default function ProduitDetailPage() {
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [favoriInitialized, setFavoriInitialized] = useState(false);
 
-  // ✅ Ref pour suivre si le chargement a déjà été effectué
   const initialLoadDone = useRef(false);
 
   // Timer pour le toast
@@ -611,58 +615,11 @@ export default function ProduitDetailPage() {
   // FONCTIONS UTILITAIRES
   // ============================================
   const getDefaultAvatarUrl = (): string => {
-    return `${API_CONFIG.BASE_URL || "http://localhost:3005"}/images/default-avatar.png`;
+    return `${API_CONFIG.BASE_URL || "https://oskar-api.mysonec.pro"}/images/default-avatar.png`;
   };
 
   const getDefaultProductImage = (): string => {
-    return `${API_CONFIG.BASE_URL || "http://localhost:3005"}/images/default-product.png`;
-  };
-
-  const normalizeImageUrl = (
-    url: string | null,
-    key: string | null = null,
-  ): string => {
-    if (!url || url === "null" || url === "undefined" || url.trim() === "") {
-      return getDefaultProductImage();
-    }
-
-    const cleanUrl = url.trim();
-
-    // Si l'URL utilise déjà le proxy /api/files/
-    if (cleanUrl.includes("/api/files/")) {
-      if (cleanUrl.startsWith("http")) {
-        return cleanUrl;
-      }
-      // Si c'est un chemin relatif vers /api/files/, ajouter la base
-      return `${API_CONFIG.BASE_URL || "http://localhost:3005"}${cleanUrl}`;
-    }
-
-    // Gestion des URLs MinIO
-    if (cleanUrl.includes("15.236.142.141:9000/oskar-bucket/")) {
-      try {
-        const key = cleanUrl.replace(
-          "http://15.236.142.141:9000/oskar-bucket/",
-          "",
-        );
-        const encodedKey = encodeURIComponent(key);
-        return `http://localhost:3005/api/files/${encodedKey}`;
-      } catch (err) {
-        console.debug("Erreur conversion MinIO:", err);
-        return getDefaultProductImage();
-      }
-    }
-
-    // URLs HTTP/HTTPS normales
-    if (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://")) {
-      return cleanUrl;
-    }
-
-    // Chemins relatifs
-    if (cleanUrl.startsWith("/")) {
-      return `${API_CONFIG.BASE_URL || "http://localhost:3005"}${cleanUrl}`;
-    }
-
-    return getDefaultProductImage();
+    return `${API_CONFIG.BASE_URL || "https://oskar-api.mysonec.pro"}/images/default-product.png`;
   };
 
   const safeToFixed = (
@@ -811,7 +768,7 @@ export default function ProduitDetailPage() {
   };
 
   // ============================================
-  // FONCTIONS DE TRANSFORMATION
+  // FONCTIONS DE TRANSFORMATION AVEC buildImageUrl
   // ============================================
   const transformCreateurInfo = (apiCreateur: any): CreateurInfo => {
     return {
@@ -820,7 +777,7 @@ export default function ProduitDetailPage() {
       prenoms: apiCreateur.prenoms || "",
       email: apiCreateur.email || "",
       telephone: apiCreateur.telephone || "",
-      avatar: apiCreateur.avatar ? normalizeImageUrl(apiCreateur.avatar) : null,
+      avatar: apiCreateur.avatar ? buildImageUrl(apiCreateur.avatar) : null,
       facebook_url: apiCreateur.facebook_url || null,
       whatsapp_url: apiCreateur.whatsapp_url || null,
       twitter_url: apiCreateur.twitter_url || null,
@@ -842,12 +799,20 @@ export default function ProduitDetailPage() {
         ? apiProduit.note_moyenne
         : 0;
 
+    let imageUrl = "";
+    if (apiProduit.image) {
+      imageUrl = buildImageUrl(apiProduit.image);
+      if (process.env.NODE_ENV === 'development') {
+        imageUrl = `${imageUrl}?t=${Date.now()}`;
+      }
+    }
+
     return {
       uuid: apiProduit.uuid,
       nom: apiProduit.libelle,
       libelle: apiProduit.libelle,
       slug: apiProduit.slug,
-      image: normalizeImageUrl(apiProduit.image, apiProduit.image_key),
+      image: imageUrl,
       image_key: apiProduit.image_key,
       disponible: apiProduit.disponible,
       statut: apiProduit.statut,
@@ -885,6 +850,11 @@ export default function ProduitDetailPage() {
   const transformProduitSimilaireData = (
     apiSimilaire: ProduitSimilaireAPI,
   ): ProduitSimilaire => {
+    let imageUrl = "";
+    if (apiSimilaire.image) {
+      imageUrl = buildImageUrl(apiSimilaire.image);
+    }
+
     return {
       uuid: apiSimilaire.uuid,
       nom: apiSimilaire.libelle,
@@ -893,7 +863,7 @@ export default function ProduitDetailPage() {
         typeof apiSimilaire.prix === "string"
           ? parseFloat(apiSimilaire.prix) || 0
           : apiSimilaire.prix || 0,
-      image: normalizeImageUrl(apiSimilaire.image, apiSimilaire.image_key),
+      image: imageUrl,
       statut: apiSimilaire.statut,
       note_moyenne: apiSimilaire.note_moyenne || 0,
       disponible: apiSimilaire.disponible,
@@ -915,11 +885,8 @@ export default function ProduitDetailPage() {
   };
 
   const transformBoutiqueData = (apiBoutique: BoutiqueAPI): Boutique => {
-    const logoUrl = normalizeImageUrl(apiBoutique.logo, apiBoutique.logo_key);
-    const banniereUrl = normalizeImageUrl(
-      apiBoutique.banniere,
-      apiBoutique.banniere_key,
-    );
+    const logoUrl = apiBoutique.logo ? buildImageUrl(apiBoutique.logo) : null;
+    const banniereUrl = apiBoutique.banniere ? buildImageUrl(apiBoutique.banniere) : null;
 
     const vendeurBoutique = apiBoutique.vendeur
       ? transformCreateurInfo(apiBoutique.vendeur)
@@ -963,7 +930,7 @@ export default function ProduitDetailPage() {
 
     let avatarUrl = null;
     if (auteur?.avatar) {
-      avatarUrl = normalizeImageUrl(auteur.avatar);
+      avatarUrl = buildImageUrl(auteur.avatar);
     }
 
     return {
@@ -1011,7 +978,7 @@ export default function ProduitDetailPage() {
           nom: item.libelle || item.nom || item.titre || "Produit récent",
           libelle: item.libelle || item.nom || item.titre || "Produit récent",
           prix: item.prix || 0,
-          image: normalizeImageUrl(item.image, item.image_key),
+          image: buildImageUrl(item.image),
           note_moyenne: item.note_moyenne || 0,
           disponible: item.disponible || true,
           vendeur_uuid: item.vendeur_uuid || "",
@@ -1119,7 +1086,6 @@ export default function ProduitDetailPage() {
   const fetchProduitDetails = useCallback(async () => {
     if (!uuid) return;
 
-    // ✅ Éviter les chargements multiples
     if (initialLoadDone.current) return;
     initialLoadDone.current = true;
 
@@ -1145,7 +1111,6 @@ export default function ProduitDetailPage() {
       setProduit(produitData);
       setProduitsSimilaires(similairesData);
 
-      // ✅ Initialisation correcte des favoris
       if (isLoggedIn) {
         console.log("🔴 Produit is_favoris:", response.produit.is_favoris);
         setFavori(response.produit.is_favoris === true);
@@ -1154,7 +1119,6 @@ export default function ProduitDetailPage() {
       }
       setFavoriInitialized(true);
 
-      // Récupération du créateur
       if (response.produit.createur) {
         const createurData = transformCreateurInfo(response.produit.createur);
         createurData.userType = response.produit.createurType || "utilisateur";
@@ -1167,19 +1131,19 @@ export default function ProduitDetailPage() {
         setCreateur(createurData);
       }
 
-      // Récupération de la boutique
       if (response.produit.boutique) {
         const boutiqueData = transformBoutiqueData(response.produit.boutique);
         setBoutique(boutiqueData);
       }
 
-      // Construction des images
       const imageUrls: string[] = [produitData.image];
 
       response.similaires.slice(0, 4).forEach((similaire) => {
-        const imgUrl = normalizeImageUrl(similaire.image, similaire.image_key);
-        if (imgUrl && !imageUrls.includes(imgUrl)) {
-          imageUrls.push(imgUrl);
+        if (similaire.image) {
+          const imgUrl = buildImageUrl(similaire.image);
+          if (imgUrl && !imageUrls.includes(imgUrl)) {
+            imageUrls.push(imgUrl);
+          }
         }
       });
 
@@ -1190,12 +1154,11 @@ export default function ProduitDetailPage() {
       setImages(imageUrls.slice(0, 5));
       setImagePrincipale(imageUrls[0]);
 
-      // Chargement des commentaires et produits récents
       fetchCommentaires(produitData.uuid);
       fetchProduitsRecents();
     } catch (err: any) {
       console.error("Erreur détail produit:", err);
-      initialLoadDone.current = false; // Réinitialiser en cas d'erreur
+      initialLoadDone.current = false;
 
       if (
         err.response?.status === 404 ||
@@ -1216,7 +1179,6 @@ export default function ProduitDetailPage() {
     }
   }, [uuid, isLoggedIn, fetchCommentaires, fetchProduitsRecents]);
 
-  // ✅ useEffect simplifié avec une seule dépendance
   useEffect(() => {
     if (uuid && !initialLoadDone.current) {
       fetchProduitDetails();
