@@ -3,7 +3,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation"; // 🔴 IMPORTANT: utiliser useParams
+import { useParams, useRouter } from "next/navigation";
+import { api } from "@/lib/api-client";
+import { API_ENDPOINTS } from "@/config/api-endpoints";
+import { buildImageUrl } from "@/app/shared/utils/image-utils"; // ✅ IMPORTATION DE buildImageUrl
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faStore,
@@ -97,7 +100,7 @@ interface Boutique {
 }
 
 export default function BoutiquePremium() {
-  const params = useParams(); // 🔴 Récupérer les paramètres d'URL
+  const params = useParams();
   const router = useRouter();
   const [boutique, setBoutique] = useState<Boutique | null>(null);
   const [loading, setLoading] = useState(true);
@@ -124,24 +127,30 @@ export default function BoutiquePremium() {
 
       console.log(`📥 Chargement de la boutique: ${boutiqueUuid}`);
 
-      const response = await fetch(
-        `http://localhost:3005/boutiques/${boutiqueUuid}`,
+      // ✅ Utiliser votre client API
+      const response = await api.get<Boutique>(
+        `/boutiques/${boutiqueUuid}`
       );
 
-      if (!response.ok) {
-        throw new Error(`Erreur ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      console.log("✅ Boutique chargée:", data);
-      setBoutique(data);
-    } catch (err) {
+      console.log("✅ Boutique chargée:", response);
+      setBoutique(response);
+    } catch (err: any) {
       console.error("❌ Erreur lors du chargement de la boutique:", err);
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Erreur lors du chargement des données",
-      );
+      
+      // Gestion des erreurs plus détaillée
+      if (err.response?.status === 404) {
+        setError("Boutique non trouvée (404)");
+      } else if (err.response?.status === 401) {
+        setError("Non autorisé - Veuillez vous connecter");
+      } else if (err.response?.status === 403) {
+        setError("Accès interdit à cette boutique");
+      } else {
+        setError(
+          err.response?.data?.message || 
+          err.message || 
+          "Erreur lors du chargement des données"
+        );
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -171,7 +180,7 @@ export default function BoutiquePremium() {
     }, 300);
 
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [boutiqueUuid]); // 🔴 Dépendance à boutiqueUuid
+  }, [boutiqueUuid]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -411,7 +420,7 @@ export default function BoutiquePremium() {
         <div
           className="position-absolute top-0 start-0 w-100 h-100 bg-cover bg-center"
           style={{
-            backgroundImage: `url(${boutique.banniere})`,
+            backgroundImage: `url(${buildImageUrl(boutique.banniere)})`, // ✅ UTILISATION DE buildImageUrl
             filter: "brightness(0.6)",
           }}
         />
@@ -425,7 +434,7 @@ export default function BoutiquePremium() {
                 <div className="me-4">
                   <div className="logo-container rounded-circle border-4 border-white shadow-lg eco-pulse">
                     <img
-                      src={boutique.logo}
+                      src={buildImageUrl(boutique.logo)} // ✅ UTILISATION DE buildImageUrl
                       alt={boutique.nom}
                       className="img-fluid"
                       onError={(e) => {
@@ -620,7 +629,7 @@ export default function BoutiquePremium() {
               <div className="card-body">
                 <div className="d-flex align-items-start gap-3 mb-3">
                   <img
-                    src={boutique.type_boutique.image}
+                    src={buildImageUrl(boutique.type_boutique.image)} // ✅ UTILISATION DE buildImageUrl
                     alt={boutique.type_boutique.libelle}
                     className="rounded eco-img hover-rotate-slow"
                     style={{
@@ -802,7 +811,7 @@ export default function BoutiquePremium() {
                                     }}
                                   >
                                     <img
-                                      src={produit.image}
+                                      src={buildImageUrl(produit.image)} // ✅ UTILISATION DE buildImageUrl
                                       alt={produit.libelle}
                                       className="img-fluid w-100 h-100 object-fit-cover"
                                       onError={(e) => {

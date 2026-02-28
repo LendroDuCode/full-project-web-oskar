@@ -46,6 +46,7 @@ import {
 
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
+import { buildImageUrl } from "@/app/shared/utils/image-utils"; // ✅ IMPORTATION DE buildImageUrl
 
 // Types
 interface Stats {
@@ -238,17 +239,58 @@ interface ApiResponseBoutiques {
   totalPages?: number;
 }
 
-// Fonction utilitaire pour les images placeholder
+// ✅ FONCTION POUR OBTENIR L'URL DE L'IMAGE AVEC buildImageUrl
+const getImageUrl = (imagePath: string | null | undefined): string => {
+  if (!imagePath) return '';
+  
+  // Utiliser buildImageUrl pour construire l'URL complète
+  const url = buildImageUrl(imagePath);
+  return url || '';
+};
+
+// ✅ FONCTION POUR LES IMAGES PLACEHOLDER AVEC FALLBACK
 const getPlaceholderImage = (
   size: number,
   text?: string,
   color?: string,
   bgColor?: string,
-) => {
+): string => {
   const defaultText = text || size.toString();
   const defaultColor = color || "ffffff";
   const defaultBgColor = bgColor || "28a745";
   return `https://via.placeholder.com/${size}/${defaultBgColor}/${defaultColor}?text=${encodeURIComponent(defaultText)}`;
+};
+
+// ✅ FONCTION POUR OBTENIR L'IMAGE D'UN ÉLÉMENT AVEC FALLBACK
+const getItemImage = (item: any, type: string, defaultText: string): string => {
+  // Déterminer le chemin de l'image selon le type
+  let imagePath = null;
+  
+  if (type === "produit") {
+    imagePath = item.image || item.image_key || item.image_direct_url;
+  } else if (type === "don") {
+    imagePath = item.image || item.image_key || item.image_url;
+  } else if (type === "echange") {
+    imagePath = item.image || item.image_key || item.image_url;
+  } else if (type === "boutique") {
+    imagePath = item.logo || item.logo_key;
+  }
+  
+  // Essayer d'obtenir l'URL avec buildImageUrl
+  if (imagePath) {
+    const url = getImageUrl(imagePath);
+    if (url) return url;
+  }
+  
+  // Fallback vers placeholder
+  const bgColor = 
+    type === "produit" ? "28a745" :
+    type === "don" ? "8b5cf6" :
+    type === "echange" ? "f59e0b" :
+    type === "boutique" ? "0d6efd" : "6c757d";
+  
+    const size = 0;
+  return getPlaceholderImage(size, defaultText, "ffffff", bgColor);
 };
 
 // Formatage
@@ -495,7 +537,7 @@ export default function VendeurDashboard() {
         }));
         setProduits(produitsData);
 
-        // ✅ CORRECTION: Récupérer le vendeur depuis la réponse si disponible
+        // Récupérer le vendeur depuis la réponse si disponible
         if (produitsRes && "vendeur" in produitsRes && produitsRes.vendeur) {
           setVendeur(produitsRes.vendeur);
         }
@@ -587,7 +629,7 @@ export default function VendeurDashboard() {
     } finally {
       setLoading(false);
     }
-  }, []); // ✅ Supprimer les dépendances pour éviter les boucles
+  }, []); // Supprimer les dépendances pour éviter les boucles
 
   useEffect(() => {
     fetchDashboardData();
@@ -671,7 +713,7 @@ export default function VendeurDashboard() {
           uuid: item.uuid,
           libelle: item.libelle || "Produit",
           description: item.description || "Pas de description",
-          image: item.image || getPlaceholderImage(60, "P"),
+          image: getItemImage(item, "produit", "P"),
           prix: item.prix || null,
           statut: item.statut || "inconnu",
           estPublie: item.estPublie || false,
@@ -689,7 +731,7 @@ export default function VendeurDashboard() {
           uuid: item.uuid,
           libelle: item.nom || "Don",
           description: item.description || "Pas de description",
-          image: item.image || getPlaceholderImage(60, "D"),
+          image: getItemImage(item, "don", "D"),
           prix: item.prix || null,
           statut: item.statut || "inconnu",
           estPublie: item.estPublie || false,
@@ -704,7 +746,7 @@ export default function VendeurDashboard() {
           uuid: item.uuid,
           libelle: item.nomElementEchange || "Échange",
           description: item.message || "Pas de description",
-          image: item.image || getPlaceholderImage(60, "E"),
+          image: getItemImage(item, "echange", "E"),
           prix: item.prix || null,
           statut: item.statut || "inconnu",
           estPublie: item.estPublie || false,
@@ -719,7 +761,7 @@ export default function VendeurDashboard() {
           uuid: item.uuid,
           libelle: item.nom || "Boutique",
           description: item.description || "Pas de description",
-          image: item.logo || getPlaceholderImage(60, "B"),
+          image: getItemImage(item, "boutique", "B"),
           statut: item.statut || "inconnu",
           estBloque: item.est_bloque || false,
           estFerme: item.est_ferme || false,
@@ -728,6 +770,20 @@ export default function VendeurDashboard() {
           produits_count: item.produits_count || 0,
         };
     }
+  };
+
+  // ✅ Fonction pour obtenir l'image de l'avatar du vendeur
+  const getVendeurAvatar = (): string => {
+    if (vendeur?.avatar) {
+      const url = getImageUrl(vendeur.avatar);
+      if (url) return url;
+    }
+    return getPlaceholderImage(
+      80, 
+      `${vendeur?.prenoms?.charAt(0) || 'V'}${vendeur?.nom?.charAt(0) || 'D'}`,
+      "ffffff",
+      "28a745"
+    );
   };
 
   if (loading) return <LoadingSpinner />;
@@ -753,13 +809,7 @@ export default function VendeurDashboard() {
                 {vendeur && (
                   <div className="position-relative me-4">
                     <img
-                      src={
-                        vendeur.avatar ||
-                        getPlaceholderImage(
-                          80,
-                          `${vendeur.prenoms?.charAt(0)}${vendeur.nom?.charAt(0)}`,
-                        )
-                      }
+                      src={getVendeurAvatar()}
                       alt={`${vendeur.prenoms} ${vendeur.nom}`}
                       className="rounded-circle border border-4 border-white shadow"
                       style={{
@@ -769,7 +819,7 @@ export default function VendeurDashboard() {
                       }}
                       onError={(e) => {
                         (e.target as HTMLImageElement).src =
-                          getPlaceholderImage(80, "V");
+                          getPlaceholderImage(80, "V", "ffffff", "28a745");
                       }}
                     />
                     <span
@@ -1380,8 +1430,13 @@ export default function VendeurDashboard() {
                                   objectFit: "cover",
                                 }}
                                 onError={(e) => {
+                                  const bgColor = 
+                                    activeSection === "produits" ? "28a745" :
+                                    activeSection === "dons" ? "8b5cf6" :
+                                    activeSection === "echanges" ? "f59e0b" :
+                                    activeSection === "boutiques" ? "0d6efd" : "6c757d";
                                   (e.target as HTMLImageElement).src =
-                                    getPlaceholderImage(60, "I");
+                                    getPlaceholderImage(60, "I", "ffffff", bgColor);
                                 }}
                               />
                             </div>

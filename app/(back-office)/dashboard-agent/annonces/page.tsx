@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
+import { buildImageUrl } from "@/app/shared/utils/image-utils"; // ✅ IMPORTATION DE buildImageUrl
 import FilterBar from "./components/FilterBar";
 import DataTable from "./components/DataTable";
 import { ToastContainer, toast } from "react-toastify";
@@ -820,12 +821,43 @@ export default function Annonces() {
     return sorted;
   }, [allData, selectedType, selectedStatus, searchQuery]);
 
+  // ✅ FONCTION POUR OBTENIR L'URL DE L'IMAGE AVEC buildImageUrl
+  const getItemImageUrl = useCallback((item: any): string => {
+    if (!item) return `https://via.placeholder.com/64?text=?`;
+    
+    // Déterminer le chemin de l'image selon le type
+    let imagePath = null;
+    
+    if (item.type === "produit") {
+      imagePath = item.image || item.image_key;
+    } else if (item.type === "don") {
+      imagePath = item.image || item.image_key;
+    } else if (item.type === "echange") {
+      imagePath = item.image || item.image_key || item.photo;
+    }
+    
+    if (imagePath) {
+      const url = buildImageUrl(imagePath);
+      if (url) return url;
+    }
+    
+    // Fallback par type
+    if (item.type === "produit") {
+      return `https://via.placeholder.com/64/10b981/ffffff?text=P`;
+    } else if (item.type === "don") {
+      return `https://via.placeholder.com/64/8b5cf6/ffffff?text=D`;
+    } else if (item.type === "echange") {
+      return `https://via.placeholder.com/64/f59e0b/ffffff?text=E`;
+    }
+    
+    return `https://via.placeholder.com/64/6c757d/ffffff?text=?`;
+  }, []);
+
   // Préparer les données pour le DataTable (sans la colonne vendeur)
   const preparedData = useMemo(() => {
     return filteredAndSortedData.map((item) => {
       let title = "";
       let description = "";
-      let image = "";
       let status = "";
       let date = new Date().toISOString();
 
@@ -836,28 +868,11 @@ export default function Annonces() {
           item.statut?.toLowerCase() ||
           (item.estPublie ? "publie" : "en-attente");
         date = item.createdAt || item.updatedAt || new Date().toISOString();
-
-        // Construction correcte de l'URL de l'image
-        if (item.image && item.image.startsWith("/")) {
-          image = `${process.env.NEXT_PUBLIC_API_URL}${item.image}`;
-        } else if (item.image) {
-          image = item.image;
-        } else {
-          image = `https://via.placeholder.com/64?text=P`;
-        }
       } else if (item.type === "don") {
         title = item.nom || "Don sans nom";
         description = item.description || "";
         status = item.statut?.toLowerCase() || "en-attente";
         date = item.date_debut || new Date().toISOString();
-
-        if (item.image && item.image.startsWith("/")) {
-          image = `${process.env.NEXT_PUBLIC_API_URL}${item.image}`;
-        } else if (item.image) {
-          image = item.image;
-        } else {
-          image = `https://via.placeholder.com/64?text=D`;
-        }
       } else if (item.type === "echange") {
         title =
           item.nomElementEchange ||
@@ -866,15 +881,10 @@ export default function Annonces() {
         description = item.description || "";
         status = item.statut?.toLowerCase() || "en-attente";
         date = item.dateProposition || new Date().toISOString();
-
-        if (item.image && item.image.startsWith("/")) {
-          image = `${process.env.NEXT_PUBLIC_API_URL}${item.image}`;
-        } else if (item.image) {
-          image = item.image;
-        } else {
-          image = `https://via.placeholder.com/64?text=E`;
-        }
       }
+
+      // ✅ UTILISATION DE getItemImageUrl POUR L'IMAGE
+      const image = getItemImageUrl(item);
 
       return {
         id: item.id?.toString() || item.uuid,
@@ -893,7 +903,7 @@ export default function Annonces() {
         originalData: item,
       };
     });
-  }, [filteredAndSortedData]);
+  }, [filteredAndSortedData, getItemImageUrl]);
 
   const handleValidate = useCallback(
     async (id: string, type: string) => {
