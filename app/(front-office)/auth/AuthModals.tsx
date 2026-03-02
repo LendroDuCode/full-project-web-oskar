@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "./AuthContext";
 import LoginModal from "./login/page";
-import RegisterModal from "./register/page";
+import UserRegisterModal from "./register/UserRegisterModal";
+import VendeurRegisterModal from "./register/VendeurRegisterModal";
 import CreateBoutiqueModal from "@/app/(back-office)/dashboard-vendeur/boutique/apercu/components/modals/CreateBoutiqueModal";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -14,7 +15,6 @@ import {
   faStore,
   faTimes,
 } from "@fortawesome/free-solid-svg-icons";
-import { api } from "@/lib/api-client";
 
 const AuthModals = () => {
   const {
@@ -27,12 +27,27 @@ const AuthModals = () => {
     openLoginModal,
   } = useAuth();
 
+  const [showUserRegister, setShowUserRegister] = useState(false);
+  const [showVendeurRegister, setShowVendeurRegister] = useState(false);
   const [showBoutiquePrompt, setShowBoutiquePrompt] = useState(false);
   const [showBoutiqueCreation, setShowBoutiqueCreation] = useState(false);
   const [vendeurData, setVendeurData] = useState<any>(null);
   const [loadingBoutique, setLoadingBoutique] = useState(false);
   const [boutiqueError, setBoutiqueError] = useState<string | null>(null);
   const [promptVisible, setPromptVisible] = useState(false);
+  const [verificationDone, setVerificationDone] = useState(false);
+  const [hasActiveBoutique, setHasActiveBoutique] = useState(false);
+
+  // Gestion de l'affichage du modal d'inscription
+  useEffect(() => {
+    if (showRegisterModal) {
+      setShowUserRegister(true);
+      setShowVendeurRegister(false);
+    } else {
+      setShowUserRegister(false);
+      setShowVendeurRegister(false);
+    }
+  }, [showRegisterModal]);
 
   useEffect(() => {
     if (showBoutiquePrompt) {
@@ -44,55 +59,106 @@ const AuthModals = () => {
     }
   }, [showBoutiquePrompt]);
 
-  // app/(front-office)/auth/AuthModals.tsx
-  // Modifiez la fonction handleLoginSuccess
-
   const handleLoginSuccess = (userData: any) => {
     console.log("✅ Login success - userData:", userData);
+    setVerificationDone(false);
+    setHasActiveBoutique(false);
 
     if (userData.type === "vendeur") {
       console.log("👤 Vendeur connecté, vérification des boutiques...");
 
-      // Vérifier si le vendeur a déjà une boutique
       const checkExistingBoutique = async () => {
         try {
-          // Appeler l'API pour récupérer les boutiques du vendeur
           const token = userData.token || userData.temp_token;
-          const response = await fetch(API_ENDPOINTS.BOUTIQUES.LIST, {
+          console.log("🔑 Token utilisé:", token?.substring(0, 20) + "...");
+          
+          const endpoint = API_ENDPOINTS.BOUTIQUES.LISTE_BOUTIQUES_CREE_PAR_VENDEUR;
+          console.log("📡 Appel API:", endpoint);
+          
+          const response = await fetch(endpoint, {
             headers: {
               Authorization: `Bearer ${token}`,
             },
           });
 
+          console.log("📡 Statut réponse:", response.status);
+
           if (response.ok) {
             const data = await response.json();
-            const boutiques = Array.isArray(data) ? data : data.data || [];
+            console.log("📦 Réponse API boutiques (brute):", data);
+            
+            // ✅ Extraire correctement les boutiques selon la structure de l'API
+            let boutiquesArray = [];
+            
+            if (Array.isArray(data)) {
+              boutiquesArray = data;
+              console.log("📦 Format: tableau direct");
+            } else if (data.data && Array.isArray(data.data)) {
+              boutiquesArray = data.data;
+              console.log("📦 Format: { data: [...] }");
+            } else if (data.boutiques && Array.isArray(data.boutiques)) {
+              boutiquesArray = data.boutiques;
+              console.log("📦 Format: { boutiques: [...] }");
+            } else if (data.results && Array.isArray(data.results)) {
+              boutiquesArray = data.results;
+              console.log("📦 Format: { results: [...] }");
+            } else {
+              console.log("📦 Format non reconnu, recherche de propriété tableau...");
+              for (const key in data) {
+                if (Array.isArray(data[key])) {
+                  boutiquesArray = data[key];
+                  console.log(`📦 Propriété tableau trouvée: ${key}`);
+                  break;
+                }
+              }
+            }
 
-            if (boutiques.length > 0) {
-              // Le vendeur a déjà des boutiques
-              console.log(
-                "✅ Vendeur avec boutique(s) existante(s):",
-                boutiques.length,
-              );
+            console.log(`📊 ${boutiquesArray.length} boutique(s) trouvée(s) avant filtrage`);
+            
+            // 🔍 AFFICHER LE DÉTAIL COMPLET DE CHAQUE BOUTIQUE POUR DIAGNOSTIC
+            if (boutiquesArray.length > 0) {
+              boutiquesArray.forEach((boutique: any, index: number) => {
+                console.log(`🔍 Boutique ${index + 1} - Détail complet:`, {
+                  uuid: boutique.uuid,
+                  nom: boutique.nom,
+                  statut: boutique.statut,
+                  est_bloque: boutique.est_bloque,
+                  est_ferme: boutique.est_ferme,
+                  type_statut: typeof boutique.statut,
+                  tous_les_champs: Object.keys(boutique),
+                  valeurs: Object.entries(boutique).map(([key, val]) => ({ key, val }))
+                });
+              });
+            }
 
-              // Mettre à jour les données du vendeur
+            // ✅ Vérifier si une boutique existe (même si elle n'est pas "active")
+            if (boutiquesArray.length > 0) {
+              console.log("✅ Vendeur avec boutique(s) existante(s)");
+              
+              // Sauvegarder toutes les boutiques, pas seulement les actives
               const updatedUser = {
                 ...userData,
                 has_boutique: true,
-                boutiques: boutiques,
+                boutiques: boutiquesArray,
+                boutique_uuid: boutiquesArray[0]?.uuid,
               };
 
-              // Sauvegarder dans localStorage
               localStorage.setItem("oskar_user", JSON.stringify(updatedUser));
               setVendeurData(updatedUser);
+              setHasActiveBoutique(true); // Considérer qu'il a une boutique
 
-              // Connecter directement sans prompt
+              console.log("🔑 Connexion directe du vendeur avec boutique");
               closeModals();
-              login(updatedUser, userData.token || userData.temp_token, true);
+              // ✅ IMPORTANT: Le 3ème paramètre false signifie "pas de redirection"
+              login(updatedUser, userData.token || userData.temp_token, false);
+              
+              // S'assurer que le prompt ne s'affiche pas
+              setShowBoutiquePrompt(false);
+              setPromptVisible(false);
             } else {
-              // Le vendeur n'a pas de boutique
               console.log("🆕 Nouveau vendeur sans boutique");
               setVendeurData(userData);
+              setHasActiveBoutique(false);
               closeModals();
 
               setTimeout(() => {
@@ -100,25 +166,32 @@ const AuthModals = () => {
                 setShowBoutiquePrompt(true);
               }, 300);
             }
+            
+            setVerificationDone(true);
           } else {
-            // En cas d'erreur, on suppose qu'il n'a pas de boutique
-            console.warn(
-              "⚠️ Erreur vérification boutique, on suppose nouveau vendeur",
-            );
+            console.warn("⚠️ Erreur vérification boutique, statut:", response.status);
+            const errorText = await response.text();
+            console.warn("📦 Réponse erreur:", errorText);
+            
+            setVerificationDone(true);
             setVendeurData(userData);
+            setHasActiveBoutique(false);
             closeModals();
 
             setTimeout(() => {
+              console.log("🔄 Ouverture du prompt (par défaut)");
               setShowBoutiquePrompt(true);
             }, 300);
           }
         } catch (error) {
           console.error("❌ Erreur vérification boutique:", error);
-          // En cas d'erreur, on laisse le prompt s'afficher
+          setVerificationDone(true);
           setVendeurData(userData);
+          setHasActiveBoutique(false);
           closeModals();
 
           setTimeout(() => {
+            console.log("🔄 Ouverture du prompt (après erreur)");
             setShowBoutiquePrompt(true);
           }, 300);
         }
@@ -127,6 +200,7 @@ const AuthModals = () => {
       checkExistingBoutique();
     } else {
       console.log("👤 Utilisateur normal connecté, reste sur la page");
+      // ✅ IMPORTANT: Le 3ème paramètre false signifie "pas de redirection"
       login(userData, userData.token || userData.temp_token, false);
       closeModals();
     }
@@ -135,20 +209,29 @@ const AuthModals = () => {
   const handleVendeurRegistered = (vendeurData: any) => {
     console.log("👤 Vendeur inscrit, données stockées:", vendeurData);
     setVendeurData(vendeurData);
+    setVerificationDone(false);
+    setHasActiveBoutique(false);
   };
 
-  const handleRegisterSuccess = (userData: any) => {
-    console.log("✅ Register success - userData:", userData);
-    if (userData.type !== "vendeur") {
-      console.log("👤 Utilisateur normal inscrit, ouverture login");
-      setTimeout(() => {
-        switchToLogin();
-      }, 500);
-    }
+  const handleUserRegisterSuccess = (userData: any) => {
+    console.log("✅ Utilisateur inscrit avec succès");
+    closeModals();
+    setTimeout(() => {
+      switchToLogin();
+    }, 500);
   };
 
-  // app/(front-office)/auth/AuthModals.tsx
-  // Modifiez la fonction handleCreateBoutique
+  const switchToVendeurRegister = () => {
+    console.log("🔄 Passage au modal vendeur");
+    setShowUserRegister(false);
+    setShowVendeurRegister(true);
+  };
+
+  const switchToUserRegister = () => {
+    console.log("🔄 Passage au modal utilisateur");
+    setShowVendeurRegister(false);
+    setShowUserRegister(true);
+  };
 
   const handleCreateBoutique = async (boutiqueData: any) => {
     console.log("🏪 Création de boutique demandée");
@@ -156,7 +239,6 @@ const AuthModals = () => {
     setBoutiqueError(null);
 
     try {
-      // Récupérer le token depuis toutes les sources possibles
       const token =
         vendeurData?.token ||
         localStorage.getItem("oskar_token") ||
@@ -169,68 +251,43 @@ const AuthModals = () => {
 
       console.log("🔑 Token trouvé, longueur:", token.length);
 
-      // Créer un nouveau FormData
       const formDataToSend = new FormData();
 
-      // Ajouter les champs requis
       formDataToSend.append("nom", boutiqueData.get("nom"));
-      formDataToSend.append(
-        "type_boutique_uuid",
-        boutiqueData.get("type_boutique_uuid"),
-      );
+      formDataToSend.append("type_boutique_uuid", boutiqueData.get("type_boutique_uuid"));
 
-      // Ajouter les champs optionnels s'ils existent
       const description = boutiqueData.get("description");
       if (description) formDataToSend.append("description", description);
 
       const politique_retour = boutiqueData.get("politique_retour");
-      if (politique_retour)
-        formDataToSend.append("politique_retour", politique_retour);
+      if (politique_retour) formDataToSend.append("politique_retour", politique_retour);
 
       const conditions_utilisation = boutiqueData.get("conditions_utilisation");
       if (conditions_utilisation)
         formDataToSend.append("conditions_utilisation", conditions_utilisation);
 
-      // Ajouter les fichiers
       const logo = boutiqueData.get("logo");
       if (logo instanceof File) formDataToSend.append("logo", logo);
 
       const banniere = boutiqueData.get("banniere");
       if (banniere instanceof File) formDataToSend.append("banniere", banniere);
 
-      // Ajouter l'UUID du vendeur
       if (vendeurData?.vendeurId) {
         formDataToSend.append("vendeur_uuid", vendeurData.vendeurId);
       } else if (vendeurData?.uuid) {
         formDataToSend.append("vendeur_uuid", vendeurData.uuid);
       }
 
-      // LOGS DE DÉBOGAGE
-      console.log("📦 Données envoyées:");
-      for (let pair of (formDataToSend as any).entries()) {
-        if (pair[1] instanceof File) {
-          console.log(
-            `   ${pair[0]}: [Fichier] ${pair[1].name} (${pair[1].type}, ${pair[1].size} octets)`,
-          );
-        } else {
-          console.log(`   ${pair[0]}: ${pair[1]}`);
-        }
-      }
-
-      // ✅ IMPORTANT: Utiliser fetch DIRECTEMENT, pas api.post
       const response = await fetch(API_ENDPOINTS.BOUTIQUES.CREATE, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
-          // NE PAS mettre Content-Type, le navigateur le fera automatiquement avec FormData
         },
         body: formDataToSend,
       });
 
       console.log("📦 Statut réponse:", response.status);
-      console.log("📦 Status text:", response.statusText);
 
-      // Lire la réponse
       let responseData;
       const contentType = response.headers.get("content-type");
 
@@ -253,12 +310,10 @@ const AuthModals = () => {
 
       console.log("✅ Réponse API création boutique:", responseData);
 
-      // SUCCÈS
       setShowBoutiqueCreation(false);
       setShowBoutiquePrompt(false);
       setPromptVisible(false);
 
-      // Mettre à jour le user dans localStorage
       if (vendeurData) {
         const updatedUser = {
           ...vendeurData,
@@ -266,10 +321,21 @@ const AuthModals = () => {
           boutique_uuid: responseData.boutique?.uuid || responseData.uuid,
         };
 
-        // Sauvegarder dans localStorage
+        if (token) {
+          console.log("💾 Sauvegarde du token");
+          localStorage.setItem("oskar_token", token);
+          localStorage.setItem("temp_token", token);
+          localStorage.setItem("tempToken", token);
+          localStorage.setItem("token", token);
+          
+          const expires = new Date();
+          expires.setDate(expires.getDate() + 1);
+          document.cookie = `oskar_token=${token}; path=/; expires=${expires.toUTCString()}; SameSite=Lax`;
+        }
+        
         localStorage.setItem("oskar_user", JSON.stringify(updatedUser));
+        localStorage.setItem("oskar_user_type", "vendeur");
 
-        // Dispatcher les événements
         if (typeof window !== "undefined") {
           window.dispatchEvent(
             new CustomEvent("auth-state-changed", {
@@ -279,21 +345,28 @@ const AuthModals = () => {
           window.dispatchEvent(new Event("force-header-update"));
         }
 
-        // Connecter l'utilisateur après un délai
-        setTimeout(() => {
-          console.log("🔑 Connexion du vendeur après création boutique");
-          login(updatedUser, vendeurData.token, true);
-          setVendeurData(null);
-        }, 500);
+        console.log("🔑 Connexion du vendeur après création boutique");
+        // ✅ IMPORTANT: Le 3ème paramètre false signifie "pas de redirection"
+        login(updatedUser, token, false);
+        
+        setVendeurData(null);
+        setLoadingBoutique(false);
+        setVerificationDone(true);
+        setHasActiveBoutique(true);
+
+        showSuccessNotification("Boutique créée avec succès !");
       }
     } catch (error: any) {
       console.error("❌ Erreur création boutique:", error);
       setBoutiqueError(
         error.message || "Erreur lors de la création de la boutique",
       );
-    } finally {
       setLoadingBoutique(false);
     }
+  };
+
+  const showSuccessNotification = (message: string) => {
+    console.log("✅", message);
   };
 
   const handleStartBoutiqueCreation = () => {
@@ -310,14 +383,8 @@ const AuthModals = () => {
     console.log("❌ Fermeture modal création boutique");
     setShowBoutiqueCreation(false);
     setBoutiqueError(null);
-
-    setTimeout(() => {
-      if (vendeurData) {
-        console.log("🔑 Connexion du vendeur sans création boutique");
-        login(vendeurData.userData || vendeurData, vendeurData.token, true);
-        setVendeurData(null);
-      }
-    }, 300);
+    setLoadingBoutique(false);
+    setVendeurData(null);
   };
 
   const handleSkipBoutiqueCreation = () => {
@@ -327,10 +394,28 @@ const AuthModals = () => {
 
     if (vendeurData) {
       console.log("🔑 Connexion du vendeur sans boutique");
-      login(vendeurData.userData || vendeurData, vendeurData.token, true);
+      // ✅ IMPORTANT: Le 3ème paramètre false signifie "pas de redirection"
+      login(vendeurData.userData || vendeurData, vendeurData.token, false);
       setVendeurData(null);
+      setVerificationDone(true);
+      setHasActiveBoutique(false);
     }
   };
+
+  // ✅ Condition d'affichage du prompt : seulement si pas de boutique du tout
+  const shouldShowPrompt = 
+    showBoutiquePrompt && 
+    vendeurData && 
+    verificationDone && 
+    !hasActiveBoutique;
+
+  console.log("🔄 État actuel:", {
+    showBoutiquePrompt,
+    hasActiveBoutique,
+    verificationDone,
+    shouldShowPrompt,
+    vendeurData: vendeurData ? "présent" : "absent"
+  });
 
   return (
     <>
@@ -341,17 +426,31 @@ const AuthModals = () => {
         onLoginSuccess={handleLoginSuccess}
       />
 
-      <RegisterModal
-        visible={showRegisterModal}
-        onHide={closeModals}
+      <UserRegisterModal
+        visible={showUserRegister}
+        onHide={() => {
+          setShowUserRegister(false);
+          closeModals();
+        }}
         onSwitchToLogin={switchToLogin}
-        onRegisterSuccess={handleRegisterSuccess}
-        onVendeurRegistered={handleVendeurRegistered}
-        onShowLoginAfterRegister={openLoginModal}
+        onRegisterSuccess={handleUserRegisterSuccess}
+        onSwitchToVendeur={switchToVendeurRegister}
       />
 
-      {/* PROMPT DE CRÉATION DE BOUTIQUE */}
-      {showBoutiquePrompt && vendeurData && (
+      <VendeurRegisterModal
+        visible={showVendeurRegister}
+        onHide={() => {
+          setShowVendeurRegister(false);
+          closeModals();
+        }}
+        onSwitchToLogin={switchToLogin}
+        onVendeurRegistered={handleVendeurRegistered}
+        onShowLoginAfterRegister={openLoginModal}
+        onSwitchToUser={switchToUserRegister}
+      />
+
+      {/* PROMPT DE CRÉATION DE BOUTIQUE - UNIQUEMENT SI PAS DE BOUTIQUE */}
+      {shouldShowPrompt && (
         <div
           style={{
             position: "fixed",

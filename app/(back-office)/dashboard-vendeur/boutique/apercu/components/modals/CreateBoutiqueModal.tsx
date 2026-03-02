@@ -364,7 +364,7 @@ const CreateBoutiqueModal = ({
   return (
     <div
       className="modal fade show d-block"
-      style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1050 }}
+      style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1060 }} // Augmenté de 1050 à 1060
       tabIndex={-1}
       onClick={(e) => {
         if (e.target === e.currentTarget) handleClose();

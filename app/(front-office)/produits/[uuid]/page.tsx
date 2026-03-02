@@ -1274,157 +1274,165 @@ export default function ProduitDetailPage() {
   const noteStats = calculateNoteStats();
 
   // ============================================
-  // FONCTIONS D'ACTIONS
+  // FONCTIONS D'ACTIONS AVEC AUTH
   // ============================================
   const showToast = (type: "success" | "error" | "info", message: string) => {
     setToast({ show: true, type, message });
   };
 
+  const requireAuth = (action: () => void) => {
+    if (!isLoggedIn) {
+      openLoginModal();
+      return;
+    }
+    action();
+  };
+
   const handleContactWhatsApp = () => {
-    if (!createur) return;
+    requireAuth(() => {
+      if (!createur) return;
 
-    let phoneNumber = createur.telephone || createur.whatsapp_url || "";
-    phoneNumber = phoneNumber.replace(/\D/g, "");
+      let phoneNumber = createur.telephone || createur.whatsapp_url || "";
+      phoneNumber = phoneNumber.replace(/\D/g, "");
 
-    if (phoneNumber.startsWith("225")) {
-      phoneNumber = phoneNumber.substring(3);
-    }
+      if (phoneNumber.startsWith("225")) {
+        phoneNumber = phoneNumber.substring(3);
+      }
 
-    if (phoneNumber && !phoneNumber.startsWith("+")) {
-      phoneNumber = `+225${phoneNumber}`;
-    }
+      if (phoneNumber && !phoneNumber.startsWith("+")) {
+        phoneNumber = `+225${phoneNumber}`;
+      }
 
-    const message = `Bonjour ${createur.prenoms}, je suis intéressé(e) par votre produit "${produit?.libelle}" sur OSKAR. Pourrions-nous discuter ?`;
-    const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+      const message = `Bonjour ${createur.prenoms}, je suis intéressé(e) par votre produit "${produit?.libelle}" sur OSKAR. Pourrions-nous discuter ?`;
+      const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
 
-    window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+      window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+    });
   };
 
   const handleContactFacebook = () => {
-    if (!createur) return;
+    requireAuth(() => {
+      if (!createur) return;
 
-    if (createur.facebook_url) {
-      window.open(createur.facebook_url, "_blank", "noopener,noreferrer");
-    } else {
-      const searchQuery = encodeURIComponent(
-        `${createur.prenoms} ${createur.nom} OSKAR`,
-      );
-      window.open(
-        `https://www.facebook.com/search/top?q=${searchQuery}`,
-        "_blank",
-        "noopener,noreferrer",
-      );
-    }
+      if (createur.facebook_url) {
+        window.open(createur.facebook_url, "_blank", "noopener,noreferrer");
+      } else {
+        const searchQuery = encodeURIComponent(
+          `${createur.prenoms} ${createur.nom} OSKAR`,
+        );
+        window.open(
+          `https://www.facebook.com/search/top?q=${searchQuery}`,
+          "_blank",
+          "noopener,noreferrer",
+        );
+      }
+    });
   };
 
   const handleCopyContactInfo = () => {
-    if (!createur) return;
+    requireAuth(() => {
+      if (!createur) return;
 
-    const contactInfo =
-      `Créateur du produit: ${createur.prenoms} ${createur.nom}\n` +
-      `Téléphone: ${createur.telephone || "Non disponible"}\n` +
-      `Email: ${createur.email || "Non disponible"}`;
+      const contactInfo =
+        `Créateur du produit: ${createur.prenoms} ${createur.nom}\n` +
+        `Téléphone: ${createur.telephone || "Non disponible"}\n` +
+        `Email: ${createur.email || "Non disponible"}`;
 
-    navigator.clipboard
-      .writeText(contactInfo)
-      .then(() => {
-        showToast("success", "Informations de contact copiées !");
-      })
-      .catch((err) => {
-        console.error("Erreur lors de la copie:", err);
-        showToast("error", "Impossible de copier les informations.");
-      });
+      navigator.clipboard
+        .writeText(contactInfo)
+        .then(() => {
+          showToast("success", "Informations de contact copiées !");
+        })
+        .catch((err) => {
+          console.error("Erreur lors de la copie:", err);
+          showToast("error", "Impossible de copier les informations.");
+        });
+    });
   };
 
   const handleContactVendeur = () => {
-    if (!isLoggedIn) {
-      openLoginModal();
-      return;
-    }
+    requireAuth(() => {
+      if (!createur) {
+        showToast("error", "Informations du vendeur non disponibles");
+        return;
+      }
 
-    if (!createur) {
-      showToast("error", "Informations du vendeur non disponibles");
-      return;
-    }
+      const userType = user?.type || "utilisateur";
 
-    const userType = user?.type || "utilisateur";
+      let dashboardPath = "";
+      switch (userType) {
+        case "admin":
+          dashboardPath = "/dashboard-admin";
+          break;
+        case "agent":
+          dashboardPath = "/dashboard-agent";
+          break;
+        case "vendeur":
+          dashboardPath = "/dashboard-vendeur";
+          break;
+        case "utilisateur":
+          dashboardPath = "/dashboard-utilisateur";
+          break;
+        default:
+          dashboardPath = "/dashboard-utilisateur";
+      }
 
-    let dashboardPath = "";
-    switch (userType) {
-      case "admin":
-        dashboardPath = "/dashboard-admin";
-        break;
-      case "agent":
-        dashboardPath = "/dashboard-agent";
-        break;
-      case "vendeur":
-        dashboardPath = "/dashboard-vendeur";
-        break;
-      case "utilisateur":
-        dashboardPath = "/dashboard-utilisateur";
-        break;
-      default:
-        dashboardPath = "/dashboard-utilisateur";
-    }
+      const params = new URLSearchParams({
+        destinataireUuid: createur.uuid,
+        destinataireEmail: createur.email || "",
+        destinataireNom: `${createur.prenoms} ${createur.nom}`,
+        sujet: `Question concernant votre produit: ${produit?.libelle}`,
+        produitUuid: produit?.uuid || "",
+      });
 
-    const params = new URLSearchParams({
-      destinataireUuid: createur.uuid,
-      destinataireEmail: createur.email || "",
-      destinataireNom: `${createur.prenoms} ${createur.nom}`,
-      sujet: `Question concernant votre produit: ${produit?.libelle}`,
-      produitUuid: produit?.uuid || "",
+      router.push(`${dashboardPath}/messages?${params.toString()}`);
     });
-
-    router.push(`${dashboardPath}/messages?${params.toString()}`);
   };
 
-  const handleAddToFavorites = async () => {
-    if (!produit) return;
+  const handleAddToFavorites = () => {
+    requireAuth(async () => {
+      if (!produit) return;
 
-    if (!isLoggedIn) {
-      openLoginModal();
-      return;
-    }
+      try {
+        console.log(`🔄 ${favori ? "Retrait" : "Ajout"} aux favoris...`);
 
-    try {
-      console.log(`🔄 ${favori ? "Retrait" : "Ajout"} aux favoris...`);
+        if (favori) {
+          const endpoint = API_ENDPOINTS.FAVORIS.REMOVE_PRODUIT(produit.uuid);
+          console.log(`📤 Appel API: DELETE ${endpoint}`);
 
-      if (favori) {
-        const endpoint = API_ENDPOINTS.FAVORIS.REMOVE_PRODUIT(produit.uuid);
-        console.log(`📤 Appel API: DELETE ${endpoint}`);
+          await api.delete(endpoint);
+          setFavori(false);
+          showToast("success", "Produit retiré des favoris");
+        } else {
+          const payload = {
+            itemUuid: produit.uuid,
+            type: "produit",
+          };
+          console.log(`📤 Appel API: POST ${API_ENDPOINTS.FAVORIS.ADD}`, payload);
 
-        await api.delete(endpoint);
-        setFavori(false);
-        showToast("success", "Produit retiré des favoris");
-      } else {
-        const payload = {
-          itemUuid: produit.uuid,
-          type: "produit",
-        };
-        console.log(`📤 Appel API: POST ${API_ENDPOINTS.FAVORIS.ADD}`, payload);
+          const response = await api.post(API_ENDPOINTS.FAVORIS.ADD, payload);
+          console.log("✅ Réponse favoris:", response);
 
-        const response = await api.post(API_ENDPOINTS.FAVORIS.ADD, payload);
-        console.log("✅ Réponse favoris:", response);
+          setFavori(true);
+          showToast("success", "Produit ajouté aux favoris");
+        }
+      } catch (err: any) {
+        console.error("❌ Erreur détaillée mise à jour favoris:", err);
 
-        setFavori(true);
-        showToast("success", "Produit ajouté aux favoris");
+        let errorMessage = "Une erreur est survenue. Veuillez réessayer.";
+
+        if (err.response?.status === 401) {
+          errorMessage = "Votre session a expiré. Veuillez vous reconnecter.";
+          openLoginModal();
+        } else if (err.response?.data?.message) {
+          errorMessage = err.response.data.message;
+        } else if (err.message) {
+          errorMessage = err.message;
+        }
+
+        showToast("error", errorMessage);
       }
-    } catch (err: any) {
-      console.error("❌ Erreur détaillée mise à jour favoris:", err);
-
-      let errorMessage = "Une erreur est survenue. Veuillez réessayer.";
-
-      if (err.response?.status === 401) {
-        errorMessage = "Votre session a expiré. Veuillez vous reconnecter.";
-        openLoginModal();
-      } else if (err.response?.data?.message) {
-        errorMessage = err.response.data.message;
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-
-      showToast("error", errorMessage);
-    }
+    });
   };
 
   const handleShare = (platform: string) => {
@@ -1458,87 +1466,90 @@ export default function ProduitDetailPage() {
       });
   };
 
-  const handleLikeComment = async (commentUuid: string) => {
-    try {
-      await api.post(`/commentaires/${commentUuid}/like`, {});
-      setCommentaires((prev) =>
-        prev.map((comment) =>
-          comment.uuid === commentUuid
-            ? { ...comment, likes: comment.likes + 1 }
-            : comment,
-        ),
-      );
-      showToast("success", "Merci pour votre retour !");
-    } catch (err) {
-      console.error("Erreur lors du like:", err);
-      showToast("error", "Impossible d'aimer le commentaire");
-    }
-  };
-
-  const handleReportComment = async (commentUuid: string) => {
-    if (window.confirm("Signaler ce commentaire comme inapproprié ?")) {
+  const handleLikeComment = (commentUuid: string) => {
+    requireAuth(async () => {
       try {
-        await api.post(API_ENDPOINTS.COMMENTAIRES.REPORT(commentUuid), {});
-        showToast(
-          "success",
-          "Commentaire signalé. Notre équipe le vérifiera sous 24h.",
+        await api.post(`/commentaires/${commentUuid}/like`, {});
+        setCommentaires((prev) =>
+          prev.map((comment) =>
+            comment.uuid === commentUuid
+              ? { ...comment, likes: comment.likes + 1 }
+              : comment,
+          ),
         );
+        showToast("success", "Merci pour votre retour !");
       } catch (err) {
-        console.error("Erreur signalement:", err);
-        showToast("error", "Une erreur est survenue lors du signalement.");
+        console.error("Erreur lors du like:", err);
+        showToast("error", "Impossible d'aimer le commentaire");
       }
-    }
+    });
   };
 
-  const handleSubmitReview = async () => {
-    if (!produit) return;
-
-    if (!isLoggedIn) {
-      openLoginModal();
-      return;
-    }
-
-    if (!newReview.commentaire.trim()) {
-      showToast("error", "Veuillez saisir un commentaire.");
-      return;
-    }
-
-    setSubmittingReview(true);
-
-    try {
-      await api.post<{ commentaire: CommentaireAPI }>(
-        API_ENDPOINTS.COMMENTAIRES.CREATE,
-        {
-          contenu: newReview.commentaire,
-          produitUuid: produit.uuid,
-          note: newReview.note,
-        },
-      );
-
-      setCommentairesFetched(false);
-      await fetchCommentaires(produit.uuid);
-
-      setNewReview({
-        note: 5,
-        commentaire: "",
-      });
-      setShowAddReview(false);
-
-      showToast("success", "Votre avis a été ajouté avec succès !");
-    } catch (err: any) {
-      console.error("Erreur ajout avis:", err);
-      if (err.response?.status === 401) {
-        showToast(
-          "error",
-          "Votre session a expiré. Veuillez vous reconnecter.",
-        );
-        openLoginModal();
-      } else {
-        showToast("error", "Une erreur est survenue. Veuillez réessayer.");
+  const handleReportComment = (commentUuid: string) => {
+    requireAuth(() => {
+      if (window.confirm("Signaler ce commentaire comme inapproprié ?")) {
+        api
+          .post(API_ENDPOINTS.COMMENTAIRES.REPORT(commentUuid), {})
+          .then(() => {
+            showToast(
+              "success",
+              "Commentaire signalé. Notre équipe le vérifiera sous 24h.",
+            );
+          })
+          .catch((err) => {
+            console.error("Erreur signalement:", err);
+            showToast("error", "Une erreur est survenue lors du signalement.");
+          });
       }
-    } finally {
-      setSubmittingReview(false);
-    }
+    });
+  };
+
+  const handleSubmitReview = () => {
+    requireAuth(async () => {
+      if (!produit) return;
+
+      if (!newReview.commentaire.trim()) {
+        showToast("error", "Veuillez saisir un commentaire.");
+        return;
+      }
+
+      setSubmittingReview(true);
+
+      try {
+        await api.post<{ commentaire: CommentaireAPI }>(
+          API_ENDPOINTS.COMMENTAIRES.CREATE,
+          {
+            contenu: newReview.commentaire,
+            produitUuid: produit.uuid,
+            note: newReview.note,
+          },
+        );
+
+        setCommentairesFetched(false);
+        await fetchCommentaires(produit.uuid);
+
+        setNewReview({
+          note: 5,
+          commentaire: "",
+        });
+        setShowAddReview(false);
+
+        showToast("success", "Votre avis a été ajouté avec succès !");
+      } catch (err: any) {
+        console.error("Erreur ajout avis:", err);
+        if (err.response?.status === 401) {
+          showToast(
+            "error",
+            "Votre session a expiré. Veuillez vous reconnecter.",
+          );
+          openLoginModal();
+        } else {
+          showToast("error", "Une erreur est survenue. Veuillez réessayer.");
+        }
+      } finally {
+        setSubmittingReview(false);
+      }
+    });
   };
 
   const handleVisitBoutique = () => {
@@ -1551,6 +1562,14 @@ export default function ProduitDetailPage() {
     if (createur) {
       router.push(`/utilisateurs/${createur.uuid}`);
     }
+  };
+
+  const handleReportProduit = () => {
+    requireAuth(() => {
+      if (window.confirm("Signaler ce produit comme inapproprié ?")) {
+        showToast("info", "Fonctionnalité de signalement bientôt disponible");
+      }
+    });
   };
 
   // ============================================
@@ -2543,7 +2562,10 @@ export default function ProduitDetailPage() {
 
               {/* Bouton signaler */}
               <div className="border-top mt-4 pt-4">
-                <button className="btn btn-link text-danger w-100 py-2 text-decoration-none">
+                <button
+                  onClick={handleReportProduit}
+                  className="btn btn-link text-danger w-100 py-2 text-decoration-none"
+                >
                   <FontAwesomeIcon icon={faFlag} className="me-2" />
                   Signaler cette annonce
                 </button>

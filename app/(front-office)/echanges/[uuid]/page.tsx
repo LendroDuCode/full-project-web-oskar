@@ -631,7 +631,7 @@ export default function EchangeDetailPage() {
   const [loadingRecents, setLoadingRecents] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [quantite, setQuantite] = useState(1);
-  const [favori, setFavori] = useState(false); // État basé sur la réponse API
+  const [favori, setFavori] = useState(false);
   const [showMoreComments, setShowMoreComments] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
   const [commentairesFetched, setCommentairesFetched] = useState(false);
@@ -651,8 +651,6 @@ export default function EchangeDetailPage() {
   const [selectedThumbnail, setSelectedThumbnail] = useState(0);
   const [contactVisible, setContactVisible] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
-
-  // 🔴 SUPPRIMER LE STOCKAGE LOCAL DES FAVORIS - On utilise uniquement l'API
 
   // Timer pour le toast
   useEffect(() => {
@@ -1093,7 +1091,6 @@ export default function EchangeDetailPage() {
       setEchange(echangeData);
       setEchangesSimilaires(similairesData);
 
-      // 🔴 Utiliser l'état is_favoris de l'API, pas localStorage
       setFavori(response.echange.is_favoris || false);
 
       if (response.echange.createur) {
@@ -1227,10 +1224,19 @@ export default function EchangeDetailPage() {
   const noteStats = calculateNoteStats();
 
   // ============================================
-  // FONCTIONS D'ACTIONS - AVEC TOASTS
+  // FONCTIONS D'ACTIONS - AVEC VÉRIFICATION D'AUTH
   // ============================================
   const showToast = (type: "success" | "error" | "info", message: string) => {
     setToast({ show: true, type, message });
+  };
+
+  // ✅ Vérification d'authentification pour toutes les actions
+  const requireAuth = (action: () => void) => {
+    if (!isLoggedIn) {
+      openLoginModal();
+      return;
+    }
+    action();
   };
 
   const handleContactWhatsApp = () => {
@@ -1272,119 +1278,111 @@ export default function EchangeDetailPage() {
   };
 
   const handleCopyContactInfo = () => {
-    if (!createur) return;
+    requireAuth(() => {
+      if (!createur) return;
 
-    const contactInfo =
-      `Créateur de l'échange: ${createur.prenoms} ${createur.nom}\n` +
-      `Téléphone: ${createur.telephone || "Non disponible"}\n` +
-      `Email: ${createur.email || "Non disponible"}`;
+      const contactInfo =
+        `Créateur de l'échange: ${createur.prenoms} ${createur.nom}\n` +
+        `Téléphone: ${createur.telephone || "Non disponible"}\n` +
+        `Email: ${createur.email || "Non disponible"}`;
 
-    navigator.clipboard
-      .writeText(contactInfo)
-      .then(() => {
-        showToast("success", "Informations de contact copiées !");
-      })
-      .catch((err) => {
-        console.error("Erreur lors de la copie:", err);
-        showToast("error", "Impossible de copier les informations.");
-      });
+      navigator.clipboard
+        .writeText(contactInfo)
+        .then(() => {
+          showToast("success", "Informations de contact copiées !");
+        })
+        .catch((err) => {
+          console.error("Erreur lors de la copie:", err);
+          showToast("error", "Impossible de copier les informations.");
+        });
+    });
   };
 
   const handleContactCreateur = () => {
-    if (!isLoggedIn) {
-      openLoginModal();
-      return;
-    }
+    requireAuth(() => {
+      if (!createur) {
+        showToast("error", "Informations du créateur non disponibles");
+        return;
+      }
 
-    if (!createur) {
-      showToast("error", "Informations du créateur non disponibles");
-      return;
-    }
+      const userType = user?.type || "utilisateur";
 
-    const userType = user?.type || "utilisateur";
+      let dashboardPath = "";
+      switch (userType) {
+        case "admin":
+          dashboardPath = "/dashboard-admin";
+          break;
+        case "agent":
+          dashboardPath = "/dashboard-agent";
+          break;
+        case "vendeur":
+          dashboardPath = "/dashboard-vendeur";
+          break;
+        case "utilisateur":
+          dashboardPath = "/dashboard-utilisateur";
+          break;
+        default:
+          dashboardPath = "/dashboard-utilisateur";
+      }
 
-    let dashboardPath = "";
-    switch (userType) {
-      case "admin":
-        dashboardPath = "/dashboard-admin";
-        break;
-      case "agent":
-        dashboardPath = "/dashboard-agent";
-        break;
-      case "vendeur":
-        dashboardPath = "/dashboard-vendeur";
-        break;
-      case "utilisateur":
-        dashboardPath = "/dashboard-utilisateur";
-        break;
-      default:
-        dashboardPath = "/dashboard-utilisateur";
-    }
+      const params = new URLSearchParams({
+        destinataireUuid: createur.uuid,
+        destinataireEmail: createur.email || "",
+        destinataireNom: `${createur.prenoms} ${createur.nom}`,
+        sujet: `Question concernant votre échange: ${echange?.nomElementEchange}`,
+        echangeUuid: echange?.uuid || "",
+      });
 
-    const params = new URLSearchParams({
-      destinataireUuid: createur.uuid,
-      destinataireEmail: createur.email || "",
-      destinataireNom: `${createur.prenoms} ${createur.nom}`,
-      sujet: `Question concernant votre échange: ${echange?.nomElementEchange}`,
-      echangeUuid: echange?.uuid || "",
+      router.push(`${dashboardPath}/messages?${params.toString()}`);
     });
-
-    router.push(`${dashboardPath}/messages?${params.toString()}`);
   };
 
-  // ✅ FONCTION POUR LES FAVORIS - CORRIGÉE (SANS LOCALSTORAGE)
-  const handleAddToFavorites = async () => {
-    if (!echange) return;
+  // ✅ FONCTION POUR LES FAVORIS - AVEC AUTH
+  const handleAddToFavorites = () => {
+    requireAuth(async () => {
+      if (!echange) return;
 
-    if (!isLoggedIn) {
-      openLoginModal();
-      return;
-    }
+      try {
+        console.log(`🔄 ${favori ? "Retrait" : "Ajout"} aux favoris...`);
 
-    try {
-      console.log(`🔄 ${favori ? "Retrait" : "Ajout"} aux favoris...`);
+        if (favori) {
+          const endpoint = API_ENDPOINTS.FAVORIS.REMOVE_ECHANGE(echange.uuid);
+          console.log(`📤 Appel API: DELETE ${endpoint}`);
 
-      if (favori) {
-        // 🔴 RETRAIT DES FAVORIS - Utiliser REMOVE_ECHANGE
-        const endpoint = API_ENDPOINTS.FAVORIS.REMOVE_ECHANGE(echange.uuid);
-        console.log(`📤 Appel API: DELETE ${endpoint}`);
+          await api.delete(endpoint);
 
-        await api.delete(endpoint);
+          setFavori(false);
+          showToast("success", "Échange retiré des favoris");
+        } else {
+          const payload = {
+            itemUuid: echange.uuid,
+            type: "echange",
+          };
+          console.log(`📤 Appel API: POST ${API_ENDPOINTS.FAVORIS.ADD}`, payload);
 
-        // Mise à jour de l'état local uniquement
-        setFavori(false);
-        showToast("success", "Échange retiré des favoris");
-      } else {
-        // 🔴 AJOUT AUX FAVORIS - Utiliser ADD
-        const payload = {
-          itemUuid: echange.uuid,
-          type: "echange",
-        };
-        console.log(`📤 Appel API: POST ${API_ENDPOINTS.FAVORIS.ADD}`, payload);
+          const response = await api.post(API_ENDPOINTS.FAVORIS.ADD, payload);
+          console.log("✅ Réponse favoris:", response);
 
-        const response = await api.post(API_ENDPOINTS.FAVORIS.ADD, payload);
-        console.log("✅ Réponse favoris:", response);
+          setFavori(true);
+          showToast("success", "Échange ajouté aux favoris");
+        }
+      } catch (err: any) {
+        console.error("❌ Erreur détaillée mise à jour favoris:", err);
 
-        // Mise à jour de l'état local uniquement
-        setFavori(true);
-        showToast("success", "Échange ajouté aux favoris");
+        let errorMessage = "Une erreur est survenue. Veuillez réessayer.";
+
+        if (err.response?.status === 401) {
+          errorMessage = "Votre session a expiré. Veuillez vous reconnecter.";
+          openLoginModal();
+        } else if (err.response?.data?.message) {
+          errorMessage = err.response.data.message;
+        } else if (err.message) {
+          errorMessage = err.message;
+        }
+
+        showToast("error", errorMessage);
       }
-    } catch (err: any) {
-      console.error("❌ Erreur détaillée mise à jour favoris:", err);
-
-      let errorMessage = "Une erreur est survenue. Veuillez réessayer.";
-
-      if (err.response?.status === 401) {
-        errorMessage = "Votre session a expiré. Veuillez vous reconnecter.";
-        openLoginModal();
-      } else if (err.response?.data?.message) {
-        errorMessage = err.response.data.message;
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-
-      showToast("error", errorMessage);
-    }
+    });
   };
 
   const handleShare = (platform: string) => {
@@ -1418,104 +1416,112 @@ export default function EchangeDetailPage() {
       });
   };
 
-  const handleLikeComment = async (commentUuid: string) => {
-    try {
-      await api.post(`/commentaires/${commentUuid}/like`, {});
-      setCommentaires((prev) =>
-        prev.map((comment) =>
-          comment.uuid === commentUuid
-            ? { ...comment, likes: comment.likes + 1 }
-            : comment,
-        ),
-      );
-      showToast("success", "Merci pour votre retour !");
-    } catch (err) {
-      console.error("Erreur lors du like:", err);
-      showToast("error", "Impossible d'aimer le commentaire");
-    }
-  };
-
-  const handleReportComment = async (commentUuid: string) => {
-    if (window.confirm("Signaler ce commentaire comme inapproprié ?")) {
+  const handleLikeComment = (commentUuid: string) => {
+    requireAuth(async () => {
       try {
-        await api.post(API_ENDPOINTS.COMMENTAIRES.REPORT(commentUuid), {});
-        showToast(
-          "success",
-          "Commentaire signalé. Notre équipe le vérifiera sous 24h.",
+        await api.post(`/commentaires/${commentUuid}/like`, {});
+        setCommentaires((prev) =>
+          prev.map((comment) =>
+            comment.uuid === commentUuid
+              ? { ...comment, likes: comment.likes + 1 }
+              : comment,
+          ),
         );
+        showToast("success", "Merci pour votre retour !");
       } catch (err) {
-        console.error("Erreur signalement:", err);
-        showToast("error", "Une erreur est survenue lors du signalement.");
+        console.error("Erreur lors du like:", err);
+        showToast("error", "Impossible d'aimer le commentaire");
       }
-    }
+    });
   };
 
-  const handleSubmitReview = async () => {
-    if (!echange) return;
-
-    if (!isLoggedIn) {
-      openLoginModal();
-      return;
-    }
-
-    if (!newReview.commentaire.trim()) {
-      showToast("error", "Veuillez saisir un commentaire.");
-      return;
-    }
-
-    setSubmittingReview(true);
-
-    try {
-      await api.post<{ commentaire: CommentaireAPI }>(
-        API_ENDPOINTS.COMMENTAIRES.CREATE,
-        {
-          contenu: newReview.commentaire,
-          echangeUuid: echange.uuid,
-          note: newReview.note,
-        },
-      );
-
-      // Réinitialiser commentairesFetched pour forcer un rechargement
-      setCommentairesFetched(false);
-      await fetchCommentaires(echange.uuid);
-
-      setNewReview({
-        note: 5,
-        commentaire: "",
-      });
-      setShowAddReview(false);
-
-      showToast("success", "Votre avis a été ajouté avec succès !");
-      await fetchEchangeDetails();
-    } catch (err: any) {
-      console.error("Erreur ajout avis:", err);
-      if (err.response?.status === 401) {
-        showToast(
-          "error",
-          "Votre session a expiré. Veuillez vous reconnecter.",
-        );
-        openLoginModal();
-      } else {
-        showToast("error", "Une erreur est survenue. Veuillez réessayer.");
+  const handleReportComment = (commentUuid: string) => {
+    requireAuth(() => {
+      if (window.confirm("Signaler ce commentaire comme inapproprié ?")) {
+        api
+          .post(API_ENDPOINTS.COMMENTAIRES.REPORT(commentUuid), {})
+          .then(() => {
+            showToast(
+              "success",
+              "Commentaire signalé. Notre équipe le vérifiera sous 24h.",
+            );
+          })
+          .catch((err) => {
+            console.error("Erreur signalement:", err);
+            showToast("error", "Une erreur est survenue lors du signalement.");
+          });
       }
-    } finally {
-      setSubmittingReview(false);
-    }
+    });
+  };
+
+  const handleSubmitReview = () => {
+    requireAuth(async () => {
+      if (!echange) return;
+
+      if (!newReview.commentaire.trim()) {
+        showToast("error", "Veuillez saisir un commentaire.");
+        return;
+      }
+
+      setSubmittingReview(true);
+
+      try {
+        await api.post<{ commentaire: CommentaireAPI }>(
+          API_ENDPOINTS.COMMENTAIRES.CREATE,
+          {
+            contenu: newReview.commentaire,
+            echangeUuid: echange.uuid,
+            note: newReview.note,
+          },
+        );
+
+        setCommentairesFetched(false);
+        await fetchCommentaires(echange.uuid);
+
+        setNewReview({
+          note: 5,
+          commentaire: "",
+        });
+        setShowAddReview(false);
+
+        showToast("success", "Votre avis a été ajouté avec succès !");
+        await fetchEchangeDetails();
+      } catch (err: any) {
+        console.error("Erreur ajout avis:", err);
+        if (err.response?.status === 401) {
+          showToast(
+            "error",
+            "Votre session a expiré. Veuillez vous reconnecter.",
+          );
+          openLoginModal();
+        } else {
+          showToast("error", "Une erreur est survenue. Veuillez réessayer.");
+        }
+      } finally {
+        setSubmittingReview(false);
+      }
+    });
   };
 
   const handleVisitUtilisateur = () => {
-    if (createur) {
-      router.push(`/utilisateurs/${createur.uuid}`);
-    }
+    requireAuth(() => {
+      if (createur) {
+        router.push(`/utilisateurs/${createur.uuid}`);
+      }
+    });
   };
 
   const handleInterest = () => {
-    if (!isLoggedIn) {
-      openLoginModal();
-      return;
-    }
+    requireAuth(() => {
+      handleContactCreateur();
+    });
+  };
 
-    handleContactCreateur();
+  const handleReplyToComment = (commentUuid: string) => {
+    requireAuth(() => {
+      // Fonction pour répondre au commentaire (à implémenter)
+      console.log("Répondre au commentaire:", commentUuid);
+    });
   };
 
   // ============================================
@@ -2162,13 +2168,7 @@ export default function EchangeDetailPage() {
                                 </button>
                                 <button
                                   className="btn btn-link text-muted p-0 text-decoration-none hover-text-warning"
-                                  onClick={() => {
-                                    if (!isLoggedIn) {
-                                      openLoginModal();
-                                      return;
-                                    }
-                                    // Fonction pour répondre au commentaire (à implémenter)
-                                  }}
+                                  onClick={() => handleReplyToComment(comment.uuid)}
                                   style={{ fontSize: "0.9rem" }}
                                 >
                                   <FontAwesomeIcon
@@ -2344,7 +2344,7 @@ export default function EchangeDetailPage() {
                     : "Non disponible"}
                 </button>
                 <button
-                  onClick={handleContactWhatsApp}
+                  onClick={() => requireAuth(handleContactWhatsApp)}
                   className="btn btn-success btn-lg fw-bold py-4"
                   disabled={!createur?.telephone && !createur?.whatsapp_url}
                 >
@@ -2495,7 +2495,15 @@ export default function EchangeDetailPage() {
 
               {/* Bouton signaler */}
               <div className="border-top mt-4 pt-4">
-                <button className="btn btn-link text-danger w-100 py-2 text-decoration-none">
+                <button 
+                  onClick={() => requireAuth(() => {
+                    if (window.confirm("Signaler cet échange comme inapproprié ?")) {
+                      // Logique de signalement à implémenter
+                      showToast("info", "Fonctionnalité de signalement bientôt disponible");
+                    }
+                  })}
+                  className="btn btn-link text-danger w-100 py-2 text-decoration-none"
+                >
                   <FontAwesomeIcon icon={faFlag} className="me-2" />
                   Signaler cet échange
                 </button>

@@ -7,7 +7,6 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
-import { API_CONFIG } from "@/config/env";
 import { useAuth } from "@/app/(front-office)/auth/AuthContext";
 import { buildImageUrl } from "@/app/shared/utils/image-utils";
 
@@ -76,7 +75,7 @@ import {
 import { faHeart as FaHeartRegular } from "@fortawesome/free-regular-svg-icons";
 
 // ============================================
-// TYPES
+// TYPES (inchangés)
 // ============================================
 interface CreateurInfo {
   uuid: string;
@@ -330,7 +329,7 @@ interface NoteStats {
 }
 
 // ============================================
-// COMPOSANT D'IMAGE SÉCURISÉ AMÉLIORÉ
+// COMPOSANT D'IMAGE SÉCURISÉ AMÉLIORÉ AVEC FALLBACK EXTERNE
 // ============================================
 const SecureImage = ({
   src,
@@ -380,7 +379,8 @@ const SecureImage = ({
   const handleError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
     console.error(`Erreur chargement image: ${currentSrc}`);
 
-    if (currentSrc === fallbackSrc || currentSrc.includes("default")) {
+    // ✅ CORRECTION: Ignorer les erreurs pour les images par défaut
+    if (currentSrc === fallbackSrc || currentSrc.includes("default") || currentSrc.includes("placeholder")) {
       return;
     }
 
@@ -416,8 +416,8 @@ const SecureImage = ({
         }
       }
 
-      // Si tous les essais échouent, utiliser le fallback
-      setCurrentSrc(fallbackSrc);
+      // Si tous les essais échouent, utiliser une URL externe comme fallback
+      setCurrentSrc("https://via.placeholder.com/800x600/9c27b0/ffffff?text=Image+non+disponible");
     }
 
     if (onError) {
@@ -501,6 +501,40 @@ const formatDate = (dateString: string | null | undefined): string => {
 };
 
 // ============================================
+// FONCTION DE FORMATAGE DE PRIX
+// ============================================
+const formatPrice = (price: number | null): string => {
+  if (price === null || price === undefined || isNaN(price)) {
+    return "Gratuit";
+  }
+  if (price === 0) {
+    return "Gratuit";
+  }
+  return price.toLocaleString("fr-FR") + " FCFA";
+};
+
+// ============================================
+// FONCTION DE FORMATAGE DE NOMBRE
+// ============================================
+const formatNumber = (value: number | null | undefined): string => {
+  if (value === null || value === undefined || isNaN(value)) {
+    return "0";
+  }
+  return value.toLocaleString("fr-FR");
+};
+
+// ============================================
+// FONCTIONS POUR LES IMAGES PAR DÉFAUT
+// ============================================
+const getDefaultAvatarUrl = (): string => {
+  return "https://ui-avatars.com/api/?name=U&background=9c27b0&color=fff&size=256";
+};
+
+const getDefaultDonImage = (): string => {
+  return "https://via.placeholder.com/800x600/9c27b0/ffffff?text=Don+OSKAR";
+};
+
+// ============================================
 // COMPOSANT PRINCIPAL
 // ============================================
 export default function DonDetailPage() {
@@ -526,7 +560,6 @@ export default function DonDetailPage() {
   const [loading, setLoading] = useState(true);
   const [loadingRecents, setLoadingRecents] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [quantite, setQuantite] = useState(1);
   const [favori, setFavori] = useState(false);
   const [showMoreComments, setShowMoreComments] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
@@ -545,8 +578,6 @@ export default function DonDetailPage() {
   } | null>(null);
 
   const [selectedThumbnail, setSelectedThumbnail] = useState(0);
-  const [contactVisible, setContactVisible] = useState(false);
-  const [showShareMenu, setShowShareMenu] = useState(false);
 
   // 🔴 Ref pour éviter les chargements multiples
   const initialLoadDone = useRef(false);
@@ -595,14 +626,6 @@ export default function DonDetailPage() {
   // ============================================
   // FONCTIONS UTILITAIRES
   // ============================================
-  const getDefaultAvatarUrl = (): string => {
-    return `${API_CONFIG.BASE_URL || "https://oskar-api.mysonec.pro"}/images/default-avatar.png`;
-  };
-
-  const getDefaultDonImage = (): string => {
-    return `${API_CONFIG.BASE_URL || "https://oskar-api.mysonec.pro"}/images/default-don.png`;
-  };
-
   const safeToFixed = (
     value: number | null | undefined,
     decimals: number = 1,
@@ -636,10 +659,6 @@ export default function DonDetailPage() {
     } catch {
       return "mars 2023";
     }
-  };
-
-  const getTypeIcon = (type: string | undefined) => {
-    return faGift;
   };
 
   const getConditionBadge = (statut: string) => {
@@ -713,10 +732,6 @@ export default function DonDetailPage() {
     let imageUrl = "";
     if (apiDon.image) {
       imageUrl = buildImageUrl(apiDon.image);
-      // Ajouter un timestamp pour éviter le cache en développement
-      if (process.env.NODE_ENV === 'development') {
-        imageUrl = `${imageUrl}?t=${Date.now()}`;
-      }
     }
 
     return {
@@ -725,7 +740,7 @@ export default function DonDetailPage() {
       type_don: apiDon.type_don,
       description: apiDon.description,
       prix: apiDon.prix,
-      image: imageUrl,
+      image: imageUrl || getDefaultDonImage(),
       image_key: apiDon.image_key,
       localisation: apiDon.localisation,
       statut: apiDon.statut,
@@ -766,7 +781,7 @@ export default function DonDetailPage() {
       type_don: apiSimilaire.type_don,
       description: apiSimilaire.description,
       prix: apiSimilaire.prix,
-      image: imageUrl,
+      image: imageUrl || getDefaultDonImage(),
       localisation: apiSimilaire.localisation,
       statut: apiSimilaire.statut,
       disponible: apiSimilaire.disponible,
@@ -836,7 +851,7 @@ export default function DonDetailPage() {
           type_don: item.type_don || "objet",
           description: item.description || "",
           prix: item.prix || null,
-          image: buildImageUrl(item.image),
+          image: item.image ? buildImageUrl(item.image) : getDefaultDonImage(),
           localisation: item.localisation || "",
           statut: item.statut || "disponible",
           disponible: item.disponible || true,
@@ -1030,16 +1045,6 @@ export default function DonDetailPage() {
   // ============================================
   // FONCTIONS D'AFFICHAGE
   // ============================================
-  const formatPrice = (price: number | null) => {
-    if (price === null || price === undefined || isNaN(price)) {
-      return "Gratuit";
-    }
-    if (price === 0) {
-      return "Gratuit";
-    }
-    return price.toLocaleString("fr-FR") + " FCFA";
-  };
-
   const renderStars = (rating: number | null | undefined) => {
     if (rating === null || rating === undefined || isNaN(rating)) {
       rating = 0;
@@ -1119,149 +1124,157 @@ export default function DonDetailPage() {
   const noteStats = calculateNoteStats();
 
   // ============================================
-  // FONCTIONS D'ACTIONS
+  // FONCTIONS D'ACTIONS - AVEC VÉRIFICATION D'AUTH
   // ============================================
   const showToast = (type: "success" | "error" | "info", message: string) => {
     setToast({ show: true, type, message });
   };
 
+  const requireAuth = (action: () => void) => {
+    if (!isLoggedIn) {
+      openLoginModal();
+      return;
+    }
+    action();
+  };
+
   const handleContactWhatsApp = () => {
-    if (!createur) return;
+    requireAuth(() => {
+      if (!createur) return;
 
-    let phoneNumber = createur.telephone || createur.whatsapp_url || "";
-    phoneNumber = phoneNumber.replace(/\D/g, "");
+      let phoneNumber = createur.telephone || createur.whatsapp_url || "";
+      phoneNumber = phoneNumber.replace(/\D/g, "");
 
-    if (phoneNumber.startsWith("225")) {
-      phoneNumber = phoneNumber.substring(3);
-    }
+      if (phoneNumber.startsWith("225")) {
+        phoneNumber = phoneNumber.substring(3);
+      }
 
-    if (phoneNumber && !phoneNumber.startsWith("+")) {
-      phoneNumber = `+225${phoneNumber}`;
-    }
+      if (phoneNumber && !phoneNumber.startsWith("+")) {
+        phoneNumber = `+225${phoneNumber}`;
+      }
 
-    const message = `Bonjour ${createur.prenoms}, je suis intéressé(e) par votre don "${don?.nom}" sur OSKAR. Pourrions-nous discuter ?`;
-    const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+      const message = `Bonjour ${createur.prenoms}, je suis intéressé(e) par votre don "${don?.nom}" sur OSKAR. Pourrions-nous discuter ?`;
+      const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
 
-    window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+      window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+    });
   };
 
   const handleContactFacebook = () => {
-    if (!createur) return;
+    requireAuth(() => {
+      if (!createur) return;
 
-    if (createur.facebook_url) {
-      window.open(createur.facebook_url, "_blank", "noopener,noreferrer");
-    } else {
-      const searchQuery = encodeURIComponent(
-        `${createur.prenoms} ${createur.nom} OSKAR`,
-      );
-      window.open(
-        `https://www.facebook.com/search/top?q=${searchQuery}`,
-        "_blank",
-        "noopener,noreferrer",
-      );
-    }
+      if (createur.facebook_url) {
+        window.open(createur.facebook_url, "_blank", "noopener,noreferrer");
+      } else {
+        const searchQuery = encodeURIComponent(
+          `${createur.prenoms} ${createur.nom} OSKAR`,
+        );
+        window.open(
+          `https://www.facebook.com/search/top?q=${searchQuery}`,
+          "_blank",
+          "noopener,noreferrer",
+        );
+      }
+    });
   };
 
   const handleCopyContactInfo = () => {
-    if (!createur) return;
+    requireAuth(() => {
+      if (!createur) return;
 
-    const contactInfo =
-      `Donateur: ${createur.prenoms} ${createur.nom}\n` +
-      `Téléphone: ${createur.telephone || "Non disponible"}\n` +
-      `Email: ${createur.email || "Non disponible"}`;
+      const contactInfo =
+        `Donateur: ${createur.prenoms} ${createur.nom}\n` +
+        `Téléphone: ${createur.telephone || "Non disponible"}\n` +
+        `Email: ${createur.email || "Non disponible"}`;
 
-    navigator.clipboard
-      .writeText(contactInfo)
-      .then(() => {
-        showToast("success", "Informations de contact copiées !");
-      })
-      .catch((err) => {
-        console.error("Erreur lors de la copie:", err);
-        showToast("error", "Impossible de copier les informations.");
-      });
+      navigator.clipboard
+        .writeText(contactInfo)
+        .then(() => {
+          showToast("success", "Informations de contact copiées !");
+        })
+        .catch((err) => {
+          console.error("Erreur lors de la copie:", err);
+          showToast("error", "Impossible de copier les informations.");
+        });
+    });
   };
 
   const handleContactDonateur = () => {
-    if (!isLoggedIn) {
-      openLoginModal();
-      return;
-    }
+    requireAuth(() => {
+      if (!createur) {
+        showToast("error", "Informations du donateur non disponibles");
+        return;
+      }
 
-    if (!createur) {
-      showToast("error", "Informations du donateur non disponibles");
-      return;
-    }
+      const userType = user?.type || "utilisateur";
 
-    const userType = user?.type || "utilisateur";
+      let dashboardPath = "";
+      switch (userType) {
+        case "admin":
+          dashboardPath = "/dashboard-admin";
+          break;
+        case "agent":
+          dashboardPath = "/dashboard-agent";
+          break;
+        case "vendeur":
+          dashboardPath = "/dashboard-vendeur";
+          break;
+        case "utilisateur":
+          dashboardPath = "/dashboard-utilisateur";
+          break;
+        default:
+          dashboardPath = "/dashboard-utilisateur";
+      }
 
-    let dashboardPath = "";
-    switch (userType) {
-      case "admin":
-        dashboardPath = "/dashboard-admin";
-        break;
-      case "agent":
-        dashboardPath = "/dashboard-agent";
-        break;
-      case "vendeur":
-        dashboardPath = "/dashboard-vendeur";
-        break;
-      case "utilisateur":
-        dashboardPath = "/dashboard-utilisateur";
-        break;
-      default:
-        dashboardPath = "/dashboard-utilisateur";
-    }
+      const params = new URLSearchParams({
+        destinataireUuid: createur.uuid,
+        destinataireEmail: createur.email || "",
+        destinataireNom: `${createur.prenoms} ${createur.nom}`,
+        sujet: `Question concernant votre don: ${don?.nom}`,
+        donUuid: don?.uuid || "",
+      });
 
-    const params = new URLSearchParams({
-      destinataireUuid: createur.uuid,
-      destinataireEmail: createur.email || "",
-      destinataireNom: `${createur.prenoms} ${createur.nom}`,
-      sujet: `Question concernant votre don: ${don?.nom}`,
-      donUuid: don?.uuid || "",
+      router.push(`${dashboardPath}/messages?${params.toString()}`);
     });
-
-    router.push(`${dashboardPath}/messages?${params.toString()}`);
   };
 
-  const handleAddToFavorites = async () => {
-    if (!don) return;
+  const handleAddToFavorites = () => {
+    requireAuth(async () => {
+      if (!don) return;
 
-    if (!isLoggedIn) {
-      openLoginModal();
-      return;
-    }
+      try {
+        if (favori) {
+          const endpoint = API_ENDPOINTS.FAVORIS.REMOVE_DON(don.uuid);
+          await api.delete(endpoint);
+          setFavori(false);
+          showToast("success", "Don retiré des favoris");
+        } else {
+          const payload = {
+            itemUuid: don.uuid,
+            type: "don",
+          };
+          await api.post(API_ENDPOINTS.FAVORIS.ADD, payload);
+          setFavori(true);
+          showToast("success", "Don ajouté aux favoris");
+        }
+      } catch (err: any) {
+        console.error("❌ Erreur mise à jour favoris:", err);
 
-    try {
-      if (favori) {
-        const endpoint = API_ENDPOINTS.FAVORIS.REMOVE_DON(don.uuid);
-        await api.delete(endpoint);
-        setFavori(false);
-        showToast("success", "Don retiré des favoris");
-      } else {
-        const payload = {
-          itemUuid: don.uuid,
-          type: "don",
-        };
-        await api.post(API_ENDPOINTS.FAVORIS.ADD, payload);
-        setFavori(true);
-        showToast("success", "Don ajouté aux favoris");
+        let errorMessage = "Une erreur est survenue. Veuillez réessayer.";
+
+        if (err.response?.status === 401) {
+          errorMessage = "Votre session a expiré. Veuillez vous reconnecter.";
+          openLoginModal();
+        } else if (err.response?.data?.message) {
+          errorMessage = err.response.data.message;
+        } else if (err.message) {
+          errorMessage = err.message;
+        }
+
+        showToast("error", errorMessage);
       }
-    } catch (err: any) {
-      console.error("❌ Erreur mise à jour favoris:", err);
-
-      let errorMessage = "Une erreur est survenue. Veuillez réessayer.";
-
-      if (err.response?.status === 401) {
-        errorMessage = "Votre session a expiré. Veuillez vous reconnecter.";
-        openLoginModal();
-      } else if (err.response?.data?.message) {
-        errorMessage = err.response.data.message;
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-
-      showToast("error", errorMessage);
-    }
+    });
   };
 
   const handleShare = (platform: string) => {
@@ -1278,8 +1291,6 @@ export default function DonDetailPage() {
     if (urls[platform]) {
       window.open(urls[platform], "_blank", "noopener,noreferrer");
     }
-
-    setShowShareMenu(false);
   };
 
   const handleCopyLink = () => {
@@ -1287,7 +1298,6 @@ export default function DonDetailPage() {
       .writeText(window.location.href)
       .then(() => {
         showToast("success", "Lien copié dans le presse-papier !");
-        setShowShareMenu(false);
       })
       .catch((err) => {
         console.error("Erreur copie lien:", err);
@@ -1295,90 +1305,93 @@ export default function DonDetailPage() {
       });
   };
 
-  const handleLikeComment = async (commentUuid: string) => {
-    try {
-      await api.post(`/commentaires/${commentUuid}/like`, {});
-      setCommentaires((prev) =>
-        prev.map((comment) =>
-          comment.uuid === commentUuid
-            ? { ...comment, likes: comment.likes + 1 }
-            : comment,
-        ),
-      );
-      showToast("success", "Merci pour votre retour !");
-    } catch (err) {
-      console.error("Erreur lors du like:", err);
-      showToast("error", "Impossible d'aimer le commentaire");
-    }
-  };
-
-  const handleReportComment = async (commentUuid: string) => {
-    if (window.confirm("Signaler ce commentaire comme inapproprié ?")) {
+  const handleLikeComment = (commentUuid: string) => {
+    requireAuth(async () => {
       try {
-        await api.post(API_ENDPOINTS.COMMENTAIRES.REPORT(commentUuid), {});
-        showToast(
-          "success",
-          "Commentaire signalé. Notre équipe le vérifiera sous 24h.",
+        await api.post(`/commentaires/${commentUuid}/like`, {});
+        setCommentaires((prev) =>
+          prev.map((comment) =>
+            comment.uuid === commentUuid
+              ? { ...comment, likes: comment.likes + 1 }
+              : comment,
+          ),
         );
+        showToast("success", "Merci pour votre retour !");
       } catch (err) {
-        console.error("Erreur signalement:", err);
-        showToast("error", "Une erreur est survenue lors du signalement.");
+        console.error("Erreur lors du like:", err);
+        showToast("error", "Impossible d'aimer le commentaire");
       }
-    }
+    });
   };
 
-  const handleSubmitReview = async () => {
-    if (!don) return;
-
-    if (!isLoggedIn) {
-      openLoginModal();
-      return;
-    }
-
-    if (!newReview.commentaire.trim()) {
-      showToast("error", "Veuillez saisir un commentaire.");
-      return;
-    }
-
-    setSubmittingReview(true);
-
-    try {
-      await api.post<{ commentaire: CommentaireAPI }>(
-        API_ENDPOINTS.COMMENTAIRES.CREATE,
-        {
-          contenu: newReview.commentaire,
-          donUuid: don.uuid,
-          note: newReview.note,
-        },
-      );
-
-      // Réinitialiser les flags pour forcer le rechargement
-      setCommentairesFetched(false);
-      commentsLoadDone.current = false;
-      await fetchCommentaires(don.uuid);
-
-      setNewReview({
-        note: 5,
-        commentaire: "",
-      });
-      setShowAddReview(false);
-
-      showToast("success", "Votre avis a été ajouté avec succès !");
-      await fetchDonDetails();
-    } catch (err: any) {
-      console.error("Erreur ajout avis:", err);
-      if (err.response?.status === 401) {
-        showToast(
-          "error",
-          "Votre session a expiré. Veuillez vous reconnecter.",
-        );
-        openLoginModal();
-      } else {
-        showToast("error", "Une erreur est survenue. Veuillez réessayer.");
+  const handleReportComment = (commentUuid: string) => {
+    requireAuth(() => {
+      if (window.confirm("Signaler ce commentaire comme inapproprié ?")) {
+        api
+          .post(API_ENDPOINTS.COMMENTAIRES.REPORT(commentUuid), {})
+          .then(() => {
+            showToast(
+              "success",
+              "Commentaire signalé. Notre équipe le vérifiera sous 24h.",
+            );
+          })
+          .catch((err) => {
+            console.error("Erreur signalement:", err);
+            showToast("error", "Une erreur est survenue lors du signalement.");
+          });
       }
-    } finally {
-      setSubmittingReview(false);
-    }
+    });
+  };
+
+  const handleSubmitReview = () => {
+    requireAuth(async () => {
+      if (!don) return;
+
+      if (!newReview.commentaire.trim()) {
+        showToast("error", "Veuillez saisir un commentaire.");
+        return;
+      }
+
+      setSubmittingReview(true);
+
+      try {
+        await api.post<{ commentaire: CommentaireAPI }>(
+          API_ENDPOINTS.COMMENTAIRES.CREATE,
+          {
+            contenu: newReview.commentaire,
+            donUuid: don.uuid,
+            note: newReview.note,
+          },
+        );
+
+        // Réinitialiser les flags pour forcer le rechargement
+        setCommentairesFetched(false);
+        commentsLoadDone.current = false;
+        await fetchCommentaires(don.uuid);
+
+        setNewReview({
+          note: 5,
+          commentaire: "",
+        });
+        setShowAddReview(false);
+
+        showToast("success", "Votre avis a été ajouté avec succès !");
+        await fetchDonDetails();
+      } catch (err: any) {
+        console.error("Erreur ajout avis:", err);
+        if (err.response?.status === 401) {
+          showToast(
+            "error",
+            "Votre session a expiré. Veuillez vous reconnecter.",
+          );
+          openLoginModal();
+        } else {
+          showToast("error", "Une erreur est survenue. Veuillez réessayer.");
+        }
+      } finally {
+        setSubmittingReview(false);
+      }
+    });
   };
 
   const handleVisitUtilisateur = () => {
@@ -1388,12 +1401,15 @@ export default function DonDetailPage() {
   };
 
   const handleInterest = () => {
-    if (!isLoggedIn) {
-      openLoginModal();
-      return;
-    }
-
     handleContactDonateur();
+  };
+
+  const handleReportDon = () => {
+    requireAuth(() => {
+      if (window.confirm("Signaler ce don comme inapproprié ?")) {
+        showToast("info", "Fonctionnalité de signalement bientôt disponible");
+      }
+    });
   };
 
   // ============================================
@@ -2035,6 +2051,7 @@ export default function DonDetailPage() {
                                       openLoginModal();
                                       return;
                                     }
+                                    // Fonction pour répondre (à implémenter)
                                   }}
                                   style={{ fontSize: "0.9rem" }}
                                 >
@@ -2127,7 +2144,7 @@ export default function DonDetailPage() {
                                 <h6 className="fw-bold text-dark mb-2 text-truncate">
                                   {item.nom}
                                 </h6>
-                                <p className="fw-bold text-warning mb-2">
+                                <p className="fw-bold text-success mb-2">
                                   {item.prix === null
                                     ? "Gratuit"
                                     : formatPrice(item.prix)}
@@ -2355,7 +2372,10 @@ export default function DonDetailPage() {
 
               {/* Bouton signaler */}
               <div className="border-top mt-4 pt-4">
-                <button className="btn btn-link text-danger w-100 py-2 text-decoration-none">
+                <button
+                  onClick={handleReportDon}
+                  className="btn btn-link text-danger w-100 py-2 text-decoration-none"
+                >
                   <FontAwesomeIcon icon={faFlag} className="me-2" />
                   Signaler ce don
                 </button>

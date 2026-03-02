@@ -1,6 +1,7 @@
 // components/PublishAdModal/types.ts
 
 import { IconDefinition } from "@fortawesome/fontawesome-svg-core";
+import { ChangeEvent } from "react";
 
 // ============== TYPES DE BASE ==============
 export type AdType = "don" | "exchange" | "sale";
@@ -63,6 +64,7 @@ export interface DonData {
   lieu_retrait: string; // Lieu de retrait
   image: File | null;
   categorie_uuid: string;
+  sous_categorie_uuid: string;
   numero: string; // Numéro de téléphone
   quantite: string;
   nom_donataire: string; // Nom de la personne qui fait le don
@@ -76,6 +78,7 @@ export interface EchangeData {
   numero: string; // Numéro de téléphone
   nom_initiateur: string; // Nom de la personne qui initie l'échange
   typeEchange: EchangeType; // Type d'échange (produit ou service)
+  sous_categorie_uuid: string;
   objetPropose: string; // Objet proposé
   objetDemande: string; // Objet demandé
   message: string; // Message supplémentaire
@@ -88,10 +91,9 @@ export interface EchangeData {
   status?: "publie" | "brouillon"; // Statut de publication
 }
 
-// types.ts
 export interface VenteData {
-  // Utilisez boutiqueUuid (camelCase) au lieu de boutique_uuid
   boutiqueUuid: string;
+  sous_categorie_uuid: string;
   boutiqueNom: string;
   libelle: string;
   type: string;
@@ -106,22 +108,16 @@ export interface VenteData {
   lieu: string;
   condition: string;
   garantie: string;
-  // Soit enlevez saleMode, soit rendez-le optionnel
   saleMode?: string;
 }
 
 export interface BoutiqueData {
-  // Information de base
   type_boutique_uuid: string; // Type de boutique
   nom: string; // Nom de la boutique
   description: string; // Description
-
-  // Médias
   logo: File | null;
   banniere: File | null;
   registre_commerce: File | null; // Facultatif
-
-  // Métadonnées
   status?: "en_review" | "actif"; // Statut de la boutique
   createdUuid?: string; // UUID de la boutique créée
 }
@@ -159,10 +155,23 @@ export interface Category {
   label: string;
   value: string;
   uuid: string;
+  path: string;
+  libelle: string;
   icon?: IconDefinition;
   type?: string; // Type de catégorie
   parent_uuid?: string | null; // Pour les sous-catégories
   children?: Category[]; // Sous-catégories
+  enfants?: Category[]; // Alias pour children (compatibilité)
+}
+
+// ✅ DÉFINITION DU TYPE Condition (manquant)
+export interface Condition {
+  value: string;
+  label: string;
+  description?: string;
+  icon?: IconDefinition;
+  color?: string;
+  badge?: string;
 }
 
 export interface ConditionOption {
@@ -177,6 +186,7 @@ export interface ConditionOption {
 export interface DonFormProps {
   donData: DonData;
   categories: Category[];
+  sous_categorie_uuid: string;
   conditions: ConditionOption[];
   imagePreview: string | null;
   onChange: (newData: DonData) => void;
@@ -196,26 +206,29 @@ export interface EchangeFormProps {
   step: number;
 }
 
-// components/PublishAdModal/types.ts
+// ✅ CORRECTION: Remplacer Condition[] par ConditionOption[]
+// components/PublishAdModal/types.ts (extrait modifié)
+
+// ... (code précédent inchangé jusqu'à VenteFormProps)
 
 export interface VenteFormProps {
   venteData: VenteData;
   conditions: ConditionOption[];
   imagePreview: string | null;
-  onChange: (newData: VenteData) => void;
-  onImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onChange: (data: VenteData) => void;
+  onImageUpload: (e: ChangeEvent<HTMLInputElement>) => void;
   onRemoveImage: () => void;
   step: number;
-  saleMode: SaleMode;
-  boutiqueCreated?: boolean;
-  createdBoutiqueUuid?: string | null;
-  // Rendre ces props optionnelles avec ? et valeurs par défaut dans le composant
+  user?: any;
+  validationErrors?: Record<string, string>;
   boutiques?: Boutique[];
   selectedBoutique?: Boutique | null;
-  onBoutiqueChange?: (boutiqueUuid: string) => void;
-  user?: UserInfo | null | undefined;
-  validationErrors?: Record<string, string>;
+  onBoutiqueChange?: (uuid: string) => void;
+  saleMode?: SaleMode; // ✅ AJOUT DE LA PROPRIÉTÉ MANQUANTE
+  onOpenCreateBoutique?: () => void;
+  onOpenVendeurRegister?: () => void; // ✅ AJOUT POUR COHÉRENCE
 }
+
 export interface BoutiqueFormProps {
   boutiqueData: BoutiqueData;
   onChange: (data: BoutiqueData) => void;
@@ -394,6 +407,9 @@ export interface UserInfo {
   type: string;
   role: string | undefined;
   temp_token?: string;
+  userData: {
+    type: string;
+  };
 }
 
 export interface SellerInfo {
@@ -598,8 +614,6 @@ export interface Notification {
 // ============== EXPORT DE TOUTES LES INTERFACES ==============
 
 export type {
-  // Alias pour compatibilité
   ProductCreationFormProps as ProductFormProps,
-  //BoutiqueCreationFormProps as BoutiqueFormProps,
   SellerConversionFormProps as ConversionFormProps,
 };

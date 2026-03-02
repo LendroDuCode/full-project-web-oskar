@@ -87,13 +87,6 @@ interface AnnonceItem {
   quantity?: number;
   estPublie?: boolean;
   estBloque?: boolean;
-  seller?: {
-    name: string;
-    avatar?: string;
-    avatar_key?: string;
-    isPro?: boolean;
-    type?: string;
-  };
   category?: string;
   originalData?: any;
 }
@@ -240,21 +233,6 @@ export default function DataTable({
     }
 
     return `https://via.placeholder.com/48?text=${item.title?.charAt(0) || "?"}`;
-  };
-
-  // ✅ Obtenir l'URL de l'avatar du vendeur
-  const getSellerAvatarUrl = (item: AnnonceItem): string | null => {
-    if (!item.seller) return null;
-
-    if (item.seller.avatar_key) {
-      return buildImageUrl(item.seller.avatar_key);
-    }
-
-    if (item.seller.avatar) {
-      return buildImageUrl(item.seller.avatar);
-    }
-
-    return null;
   };
 
   const toggleSelectAll = () => {
@@ -543,7 +521,6 @@ export default function DataTable({
                 </div>
               </th>
               <th className="py-3 text-muted small fw-semibold">Annonce</th>
-              <th className="py-3 text-muted small fw-semibold">Vendeur</th>
               <th className="py-3 text-muted small fw-semibold">Type</th>
               <th className="py-3 text-muted small fw-semibold">Statut</th>
               <th className="py-3 text-muted small fw-semibold">Prix</th>
@@ -563,7 +540,6 @@ export default function DataTable({
               const isEnAttente =
                 item.status === "en-attente" || item.status === "en_attente";
               const imageUrl = getImageUrl(item);
-              const sellerAvatarUrl = getSellerAvatarUrl(item);
 
               return (
                 <tr
@@ -638,18 +614,18 @@ export default function DataTable({
                             style={{ fontSize: "0.75rem" }}
                           >
                             <div className="row">
-                              <div className="col-6">
+                              <div className="col-12">
                                 <span className="text-muted">UUID:</span>{" "}
                                 <span className="fw-medium">{item.uuid}</span>
                               </div>
-                              <div className="col-6">
+                              <div className="col-12 mt-1">
                                 <span className="text-muted">Catégorie:</span>{" "}
                                 <span className="fw-medium">
                                   {item.category || "Non définie"}
                                 </span>
                               </div>
                               {item.quantity && (
-                                <div className="col-6 mt-1">
+                                <div className="col-12 mt-1">
                                   <span className="text-muted">Quantité:</span>{" "}
                                   <span className="fw-medium">
                                     {item.quantity}
@@ -658,68 +634,6 @@ export default function DataTable({
                               )}
                             </div>
                           </div>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-
-                  <td>
-                    <div className="d-flex align-items-center gap-2">
-                      <div
-                        className="rounded-circle overflow-hidden d-flex align-items-center justify-content-center"
-                        style={{
-                          width: "28px",
-                          height: "28px",
-                          backgroundColor: colors.oskar.lightGrey,
-                          flexShrink: 0,
-                        }}
-                      >
-                        {sellerAvatarUrl ? (
-                          <img
-                            src={sellerAvatarUrl}
-                            alt={item.seller?.name}
-                            className="w-100 h-100 object-cover"
-                            onError={(e) => {
-                              e.currentTarget.style.display = "none";
-                              const parent = e.currentTarget.parentElement;
-                              if (parent) {
-                                const icon = document.createElement("span");
-                                icon.className = "text-muted";
-                                icon.innerHTML = item.seller?.isPro
-                                  ? "🏪"
-                                  : "👤";
-                                parent.appendChild(icon);
-                              }
-                            }}
-                          />
-                        ) : (
-                          <FontAwesomeIcon
-                            icon={item.seller?.isPro ? faStore : faUser}
-                            size="xs"
-                            style={{ color: colors.oskar.grey }}
-                          />
-                        )}
-                      </div>
-
-                      <div>
-                        <div
-                          className="small"
-                          style={{ color: colors.oskar.black }}
-                        >
-                          {truncateText(item.seller?.name || "Inconnu", 20)}
-                        </div>
-                        {item.seller?.isPro && (
-                          <span
-                            className="badge rounded-pill x-small"
-                            style={{
-                              backgroundColor: colors.oskar.blueHover,
-                              color: colors.oskar.lightGray,
-                              fontSize: "0.6rem",
-                              padding: "0.1rem 0.4rem",
-                            }}
-                          >
-                            Pro
-                          </span>
                         )}
                       </div>
                     </div>

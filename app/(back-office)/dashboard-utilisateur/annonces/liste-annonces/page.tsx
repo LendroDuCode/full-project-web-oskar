@@ -1,3 +1,5 @@
+// app/(back-office)/dashboard-utilisateur/annonces/liste-annonces/page.tsx
+
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -21,12 +23,6 @@ interface AnnonceData {
   quantity?: number;
   estPublie?: boolean;
   estBloque?: boolean;
-  seller?: {
-    name: string;
-    avatar?: string;
-    isPro?: boolean;
-    type?: string;
-  };
   category?: string;
   originalData?: any;
 }
@@ -68,12 +64,6 @@ export default function AnnoncesPage() {
           quantity: item.quantite,
           estPublie: item.estPublie || false,
           estBloque: item.estBloque || item.est_bloque || false,
-          seller: {
-            name: item.vendeur?.nom || item.utilisateur?.nom || "Inconnu",
-            avatar: item.vendeur?.avatar || item.utilisateur?.avatar,
-            isPro: !!item.boutique?.nom || false,
-            type: item.source?.type || "inconnu",
-          },
           category: item.categorie?.libelle || item.categorie,
           originalData: item,
         };
@@ -91,14 +81,6 @@ export default function AnnoncesPage() {
           quantity: item.quantite,
           estPublie: item.estPublie || false,
           estBloque: item.est_bloque || false,
-          seller: {
-            name:
-              item.utilisateur ||
-              item.vendeur ||
-              item.nom_donataire ||
-              "Donateur inconnu",
-            type: item.utilisateur ? "utilisateur" : "vendeur",
-          },
           category: item.categorie,
           originalData: item,
         };
@@ -117,14 +99,6 @@ export default function AnnoncesPage() {
           quantity: item.quantite,
           estPublie: item.estPublie || false,
           estBloque: item.estBloque || false,
-          seller: {
-            name:
-              item.utilisateur ||
-              item.vendeur ||
-              item.nom_initiateur ||
-              "Initié par",
-            type: item.typeDestinataire || "inconnu",
-          },
           category: item.categorie,
           originalData: item,
         };
@@ -352,13 +326,11 @@ export default function AnnoncesPage() {
       const filtered = annonces.filter((item) => {
         const title = item.title.toLowerCase();
         const description = item.description?.toLowerCase() || "";
-        const sellerName = item.seller?.name?.toLowerCase() || "";
         const category = item.category?.toLowerCase() || "";
 
         return (
           title.includes(query) ||
           description.includes(query) ||
-          sellerName.includes(query) ||
           category.includes(query)
         );
       });

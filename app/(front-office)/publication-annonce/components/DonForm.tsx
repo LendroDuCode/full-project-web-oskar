@@ -4,36 +4,20 @@ import { useState, useEffect, ChangeEvent } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faGift,
-  faTag,
-  faAlignLeft,
-  faMapMarkerAlt,
-  faBox,
-  faUser,
-  faCamera,
-  faImage,
   faInfoCircle,
-  faCheckCircle,
-  faSpinner,
-  faExclamationCircle,
+  faMapMarkerAlt,
   faPhone,
-  faGlobe,
-  faList,
-  faHome,
-  faClock,
+  faBox,
+  faTag,
+  faImage,
+  faCamera,
+  faCheckCircle,
+  faChevronDown,
+  faTimes,
 } from "@fortawesome/free-solid-svg-icons";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { api } from "@/lib/api-client";
-import { Category, DonData, ConditionOption } from "./constantes/types";
-
-interface DonFormProps {
-  donData: DonData;
-  conditions: ConditionOption[];
-  imagePreview: string | null;
-  onChange: (newData: DonData) => void;
-  onImageUpload: (e: ChangeEvent<HTMLInputElement>) => void;
-  onRemoveImage: () => void;
-  step: number;
-}
+import { DonFormProps, Category } from "./constantes/types";
 
 const DonForm: React.FC<DonFormProps> = ({
   donData,
@@ -43,700 +27,765 @@ const DonForm: React.FC<DonFormProps> = ({
   onImageUpload,
   onRemoveImage,
   step,
+  categories: externalCategories = [],
+  sous_categorie_uuid: externalSousCategorieUuid,
 }) => {
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [categories, setCategories] = useState<Category[]>(externalCategories);
+  const [sousCategories, setSousCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [phoneError, setPhoneError] = useState<string | null>(null);
 
-  const setDonData = (newData: DonData) => onChange(newData);
+  const setDonData = (newData: any) => onChange(newData);
 
-  // Charger les catégories au montage
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const response = await api.get(API_ENDPOINTS.CATEGORIES.LIST);
-
-        let categoriesData = [];
-        if (Array.isArray(response)) {
-          categoriesData = response;
-        } else if (response?.data && Array.isArray(response.data)) {
-          categoriesData = response.data;
-        } else if (response?.success && Array.isArray(response.data)) {
-          categoriesData = response.data;
-        }
-
-        const formattedCategories: Category[] = categoriesData.map(
-          (item: any) => ({
-            label: item.libelle || item.nom || item.type || "Sans nom",
-            value: item.uuid,
-            uuid: item.uuid,
-            icon: faList,
-          }),
-        );
-
-        setCategories(formattedCategories);
-      } catch (err: any) {
-        console.error("Erreur chargement catégories:", err);
-        setError("Impossible de charger les catégories. Veuillez réessayer.");
-      } finally {
-        setLoading(false);
+  // ✅ Fonction pour formater le numéro de téléphone avec +225
+  const formatPhoneNumber = (value: string): string => {
+    // Garder seulement le préfixe +225 et les chiffres
+    let cleaned = value.replace(/[^\d+]/g, '');
+    
+    // Si ça commence par +225, on le garde, sinon on l'ajoute
+    if (!cleaned.startsWith('+225')) {
+      cleaned = '+225' + cleaned.replace(/^0+/, '');
+    }
+    
+    // Extraire les chiffres après +225
+    let numbers = cleaned.replace('+225', '').replace(/\s/g, '');
+    
+    // Limiter à 10 chiffres
+    numbers = numbers.slice(0, 10);
+    
+    // Formater avec des espaces tous les 2 chiffres
+    let formatted = '+225';
+    if (numbers.length > 0) {
+      // Format: +225 07 09 18 18 64
+      const parts = [];
+      for (let i = 0; i < numbers.length; i += 2) {
+        parts.push(numbers.substr(i, 2));
       }
-    };
-
-    fetchCategories();
-  }, []);
-
-  // Validation des champs requis pour l'étape 2
-  const validateStep2 = (): boolean => {
-    const errors: Record<string, string> = {};
-
-    if (!donData.titre?.trim()) errors.titre = "Le titre est requis";
-    if (!donData.type_don?.trim())
-      errors.type_don = "Le type de don est requis";
-    if (!donData.localisation?.trim())
-      errors.localisation = "La localisation est requise";
-    if (!donData.description?.trim())
-      errors.description = "La description est requise";
-    if (!donData.lieu_retrait?.trim())
-      errors.lieu_retrait = "Le lieu de retrait est requis";
-    if (!donData.categorie_uuid)
-      errors.categorie_uuid = "La catégorie est requise";
-    if (!donData.numero?.trim())
-      errors.numero = "Le numéro de contact est requis";
-    if (!donData.nom_donataire?.trim())
-      errors.nom_donataire = "Le nom du donataire est requis";
-    if (!donData.quantite || parseInt(donData.quantite) < 1)
-      errors.quantite = "La quantité doit être supérieure à 0";
-    if (!imagePreview) errors.image = "Une photo est requise";
-
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
+      formatted += ' ' + parts.join(' ');
+    }
+    
+    return formatted;
   };
 
-  // Exposer la fonction de validation au parent
+  // ✅ Fonction pour valider le numéro de téléphone
+  const validatePhoneNumber = (phone: string): boolean => {
+    // Enlever le préfixe +225 et les espaces
+    const numbers = phone.replace(/^\+225\s*/, '').replace(/\s/g, '');
+    // Vérifier qu'il reste exactement 10 chiffres
+    return /^\d{10}$/.test(numbers);
+  };
+
+  // ✅ Gestionnaire de changement pour le téléphone
+  const handlePhoneChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPhoneNumber(e.target.value);
+    
+    // Mettre à jour les données
+    setDonData({ ...donData, numero: formatted });
+    
+    // Valider et afficher une erreur si nécessaire
+    if (formatted !== '+225 ') {
+      const isValid = validatePhoneNumber(formatted);
+      setPhoneError(isValid ? null : "Le numéro doit contenir 10 chiffres (ex: 07 09 18 18 64)");
+    } else {
+      setPhoneError(null);
+    }
+  };
+
+  // Charger les catégories seulement si externalCategories n'est pas fourni
   useEffect(() => {
-    if (step === 2) {
-      // On peut stocker la fonction de validation dans une ref ou utiliser un contexte
-      // Pour l'instant, on va simplement logger
-      console.log("Validation disponible pour l'étape 2");
-    }
-  }, [step, donData, imagePreview]);
+    if (externalCategories.length === 0) {
+      const fetchCategories = async () => {
+        try {
+          setLoading(true);
+          setError(null);
+          const response = await api.get(API_ENDPOINTS.CATEGORIES.LIST);
+          console.log("📦 Réponse catégories brute:", response);
 
-  const handleInputChange = (field: keyof DonData, value: any) => {
-    setDonData({ ...donData, [field]: value });
-    // Effacer l'erreur pour ce champ
-    if (formErrors[field]) {
-      const newErrors = { ...formErrors };
-      delete newErrors[field as string];
-      setFormErrors(newErrors);
+          if (Array.isArray(response)) {
+            // Filtrer pour garder seulement les catégories principales (sans path ou path null)
+            const mainCategories = response.filter(
+              (cat: Category) => !cat.path || cat.path === null
+            );
+            
+            console.log("📊 Catégories principales:", mainCategories.map(c => ({ 
+              libelle: c.libelle, 
+              uuid: c.uuid,
+              enfants: c.enfants?.length || 0 
+            })));
+            
+            setCategories(mainCategories);
+            
+            // Si une catégorie est déjà sélectionnée, charger ses sous-catégories
+            if (donData.categorie_uuid) {
+              const selectedCat = response.find(c => c.uuid === donData.categorie_uuid);
+              if (selectedCat?.enfants && selectedCat.enfants.length > 0) {
+                setSousCategories(selectedCat.enfants);
+              }
+            }
+          } else {
+            throw new Error("Format invalide");
+          }
+        } catch (err: any) {
+          console.error("Erreur catégories:", err);
+          setError("Impossible de charger les catégories.");
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchCategories();
+    } else {
+      // Si des catégories sont fournies de l'extérieur, les utiliser
+      setCategories(externalCategories);
+      
+      // Charger les sous-catégories si une catégorie est sélectionnée
+      if (donData.categorie_uuid) {
+        const selectedCat = externalCategories.find(c => c.uuid === donData.categorie_uuid);
+        if (selectedCat?.enfants && selectedCat.enfants.length > 0) {
+          setSousCategories(selectedCat.enfants);
+        }
+      }
+    }
+  }, [externalCategories, donData.categorie_uuid]);
+
+  // Gérer le changement de catégorie principale
+  const handleCategorieChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    const categorieUuid = e.target.value;
+    const selectedCategory = categories.find(c => c.uuid === categorieUuid);
+    
+    // Mettre à jour la catégorie principale
+    setDonData({
+      ...donData,
+      categorie_uuid: categorieUuid,
+      sous_categorie_uuid: "", // Réinitialiser la sous-catégorie
+    });
+
+    // Charger les sous-catégories
+    if (selectedCategory?.enfants && selectedCategory.enfants.length > 0) {
+      setSousCategories(selectedCategory.enfants);
+    } else {
+      setSousCategories([]);
     }
   };
 
-  const renderDonStep2 = () => (
-    <div className="p-4">
-      <div className="d-flex align-items-center mb-5">
-        <div className="rounded-circle bg-warning bg-opacity-10 p-3 me-3">
-          <FontAwesomeIcon icon={faGift} className="text-warning fs-3" />
-        </div>
-        <div>
-          <h3 className="fw-bold text-dark mb-1">Informations principales</h3>
-          <p className="text-muted mb-0">Remplissez les détails de votre don</p>
-        </div>
-      </div>
+  // Gérer le changement de sous-catégorie
+  const handleSousCategorieChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    const sousCategorieUuid = e.target.value;
+    setDonData({
+      ...donData,
+      sous_categorie_uuid: sousCategorieUuid,
+    });
+  };
 
-      {error && (
-        <div className="alert alert-warning border-0 mb-4">
-          <FontAwesomeIcon icon={faExclamationCircle} className="me-2" />
-          {error}
-        </div>
-      )}
-
-      {/* Résumé des erreurs */}
-      {Object.keys(formErrors).length > 0 && (
-        <div className="alert alert-danger border-0 mb-4">
-          <FontAwesomeIcon icon={faExclamationCircle} className="me-2" />
-          Veuillez corriger les erreurs suivantes :
-          <ul className="mb-0 mt-2">
-            {Object.values(formErrors).map((err, idx) => (
-              <li key={idx}>{err}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div className="row g-4">
-        <div className="col-lg-8">
-          <div className="card border-0 shadow-sm mb-4">
-            <div className="card-header bg-white border-0 py-4">
-              <h5 className="fw-bold mb-0 text-dark">
+  if (step === 2) {
+    return (
+      <div className="container-fluid p-4">
+        {/* En-tête */}
+        <div className="row mb-5">
+          <div className="col-12">
+            <div className="d-flex align-items-center bg-warning bg-opacity-10 p-4 rounded-4 border border-warning border-opacity-25">
+              <div className="rounded-circle bg-warning p-3 me-4 shadow-sm">
                 <FontAwesomeIcon
-                  icon={faInfoCircle}
-                  className="text-warning me-2"
+                  icon={faGift}
+                  className="text-white fs-3"
                 />
-                Description du don
-              </h5>
+              </div>
+              <div>
+                <h2 className="fw-bold text-dark mb-2 display-6">Détails du don</h2>
+                <p className="text-secondary mb-0 fs-5">
+                  Décrivez ce que vous souhaitez offrir
+                </p>
+              </div>
             </div>
-            <div className="card-body">
-              <div className="mb-4">
-                <label className="form-label fw-semibold d-flex align-items-center">
-                  <FontAwesomeIcon icon={faTag} className="me-2 text-warning" />
-                  Titre du don *
-                </label>
-                <input
-                  type="text"
-                  className={`form-control form-control-lg border-light ${formErrors.titre ? "is-invalid" : ""}`}
-                  placeholder="Ex: Livres, Vêtements, Meubles..."
-                  value={donData.titre}
-                  onChange={(e) => handleInputChange("titre", e.target.value)}
-                  required
-                />
-                {formErrors.titre && (
-                  <div className="invalid-feedback">{formErrors.titre}</div>
-                )}
-              </div>
+          </div>
+        </div>
 
-              <div className="mb-4">
-                <label className="form-label fw-semibold d-flex align-items-center">
-                  <FontAwesomeIcon icon={faTag} className="me-2 text-warning" />
-                  Type de don *
-                </label>
-                <input
-                  type="text"
-                  className={`form-control form-control-lg border-light ${formErrors.type_don ? "is-invalid" : ""}`}
-                  placeholder="Ex: Alimentaire, Vestimentaire, Matériel..."
-                  value={donData.type_don}
-                  onChange={(e) =>
-                    handleInputChange("type_don", e.target.value)
-                  }
-                  required
-                />
-                {formErrors.type_don && (
-                  <div className="invalid-feedback">{formErrors.type_don}</div>
-                )}
-                <small className="text-muted">
-                  <FontAwesomeIcon icon={faInfoCircle} className="me-1" />
-                  Précisez le type d'article que vous donnez
-                </small>
+        {error && (
+          <div className="row mb-4">
+            <div className="col-12">
+              <div className="alert alert-warning border d-flex align-items-center p-4 rounded-4">
+                <FontAwesomeIcon icon={faInfoCircle} className="fs-3 me-3 text-warning" />
+                <div>
+                  <strong className="d-block fs-5 mb-1">Erreur de chargement</strong>
+                  <span className="fs-6">{error}</span>
+                </div>
               </div>
+            </div>
+          </div>
+        )}
 
-              <div className="mb-4">
-                <label className="form-label fw-semibold d-flex align-items-center">
+        <div className="row g-4">
+          {/* Colonne principale - Formulaire */}
+          <div className="col-lg-8">
+            <div className="card border shadow-lg rounded-4 mb-4 hover-shadow transition-all">
+              <div className="card-header bg-white border-bottom py-4 px-4 rounded-top-4">
+                <h4 className="fw-bold mb-0 text-dark d-flex align-items-center">
                   <FontAwesomeIcon
-                    icon={faGlobe}
-                    className="me-2 text-warning"
+                    icon={faInfoCircle}
+                    className="text-warning me-3 fs-3"
                   />
-                  Localisation *
-                </label>
-                <input
-                  type="text"
-                  className={`form-control border-light ${formErrors.localisation ? "is-invalid" : ""}`}
-                  placeholder="Ex: Abidjan, Cocody"
-                  value={donData.localisation}
-                  onChange={(e) =>
-                    handleInputChange("localisation", e.target.value)
-                  }
-                  required
-                />
-                {formErrors.localisation && (
-                  <div className="invalid-feedback">
-                    {formErrors.localisation}
-                  </div>
-                )}
+                  Informations du don
+                </h4>
               </div>
+              
+              <div className="card-body p-4">
+                {/* Type de don */}
+                <div className="mb-4" style={{ minHeight: "100px" }}>
+                  <label className="form-label fw-bold fs-5 mb-3">
+                    Type de don <span className="text-danger">*</span>
+                  </label>
+                  <div className="position-relative">
+                    <select
+                      className="form-select form-select-lg border border-secondary rounded-4 py-3 px-4 bg-white"
+                      style={{ 
+                        fontSize: "1.1rem",
+                        WebkitAppearance: "none",
+                        MozAppearance: "none",
+                        appearance: "none",
+                        backgroundImage: "none",
+                        paddingRight: "3rem"
+                      }}
+                      value={donData.type_don}
+                      onChange={(e) =>
+                        setDonData({ ...donData, type_don: e.target.value })
+                      }
+                      required
+                    >
+                      <option value="">Sélectionnez un type</option>
+                      <option value="alimentaire">Alimentaire</option>
+                      <option value="vestimentaire">Vestimentaire</option>
+                      <option value="mobilier">Mobilier</option>
+                      <option value="scolaire">Scolaire</option>
+                      <option value="autre">Autre</option>
+                    </select>
+                    <FontAwesomeIcon 
+                      icon={faChevronDown} 
+                      className="position-absolute end-0 top-50 translate-middle-y me-4 text-secondary"
+                      style={{ 
+                        pointerEvents: "none", 
+                        fontSize: "1rem",
+                        zIndex: 2
+                      }}
+                    />
+                  </div>
+                </div>
 
-              <div className="mb-4">
-                <label className="form-label fw-semibold d-flex align-items-center">
-                  <FontAwesomeIcon
-                    icon={faAlignLeft}
-                    className="me-2 text-warning"
+                {/* Titre */}
+                <div className="mb-4" style={{ minHeight: "110px" }}>
+                  <label className="form-label fw-bold fs-5 mb-3 d-flex align-items-center">
+                    <FontAwesomeIcon
+                      icon={faTag}
+                      className="me-2 text-warning"
+                    />
+                    Titre du don <span className="text-danger ms-1">*</span>
+                  </label>
+                  <div className="position-relative">
+                    <input
+                      type="text"
+                      className="form-control form-control-lg border border-secondary rounded-4 py-3 px-4"
+                      style={{ fontSize: "1.1rem" }}
+                      placeholder="Ex: Don de vêtements pour enfants"
+                      value={donData.titre}
+                      onChange={(e) =>
+                        setDonData({ ...donData, titre: e.target.value })
+                      }
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div className="mb-4" style={{ minHeight: "120px" }}>
+                  <label className="form-label fw-bold fs-5 mb-3">
+                    Description
+                  </label>
+                  <textarea
+                    className="form-control form-control-lg border border-secondary rounded-4 py-3 px-4"
+                    style={{ fontSize: "1.1rem", minHeight: "100px" }}
+                    rows={3}
+                    placeholder="Décrivez l'objet que vous souhaitez donner..."
+                    value={donData.description}
+                    onChange={(e) =>
+                      setDonData({ ...donData, description: e.target.value })
+                    }
                   />
-                  Description détaillée *
-                </label>
-                <textarea
-                  className={`form-control border-light ${formErrors.description ? "is-invalid" : ""}`}
-                  rows={4}
-                  placeholder="Décrivez ce que vous donnez (état, caractéristiques, etc.)..."
-                  value={donData.description}
-                  onChange={(e) =>
-                    handleInputChange("description", e.target.value)
-                  }
-                  required
-                />
-                {formErrors.description && (
-                  <div className="invalid-feedback">
-                    {formErrors.description}
-                  </div>
-                )}
-              </div>
+                </div>
 
-              <div className="row g-3">
-                <div className="col-md-6">
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold d-flex align-items-center">
+                {/* Localisation et Lieu de retrait */}
+                <div className="row g-4 mb-4">
+                  <div className="col-md-6" style={{ minHeight: "100px" }}>
+                    <label className="form-label fw-bold fs-5 mb-3 d-flex align-items-center">
                       <FontAwesomeIcon
                         icon={faMapMarkerAlt}
                         className="me-2 text-warning"
                       />
-                      Lieu de retrait *
+                      Localisation <span className="text-danger">*</span>
                     </label>
                     <input
                       type="text"
-                      className={`form-control border-light ${formErrors.lieu_retrait ? "is-invalid" : ""}`}
-                      placeholder="Ex: Centre jeunesse Abobo Baoulé"
-                      value={donData.lieu_retrait}
+                      className="form-control form-control-lg border border-secondary rounded-4 py-3 px-4"
+                      style={{ fontSize: "1.1rem" }}
+                      placeholder="Ex: Abidjan, Cocody"
+                      value={donData.localisation}
                       onChange={(e) =>
-                        handleInputChange("lieu_retrait", e.target.value)
+                        setDonData({ ...donData, localisation: e.target.value })
                       }
                       required
                     />
-                    {formErrors.lieu_retrait && (
-                      <div className="invalid-feedback">
-                        {formErrors.lieu_retrait}
-                      </div>
-                    )}
                   </div>
-                </div>
-                <div className="col-md-6">
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold d-flex align-items-center">
+                  <div className="col-md-6" style={{ minHeight: "100px" }}>
+                    <label className="form-label fw-bold fs-5 mb-3 d-flex align-items-center">
                       <FontAwesomeIcon
-                        icon={faBox}
+                        icon={faMapMarkerAlt}
                         className="me-2 text-warning"
                       />
-                      Quantité *
+                      Lieu de retrait <span className="text-danger">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control form-control-lg border border-secondary rounded-4 py-3 px-4"
+                      style={{ fontSize: "1.1rem" }}
+                      placeholder="Ex: Rue 12, Angré"
+                      value={donData.lieu_retrait}
+                      onChange={(e) =>
+                        setDonData({ ...donData, lieu_retrait: e.target.value })
+                      }
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Contact et Quantité - avec gestion améliorée du téléphone */}
+                <div className="row g-4 mb-4">
+                  <div className="col-md-6" style={{ minHeight: "100px" }}>
+                    <label className="form-label fw-bold fs-5 mb-3 d-flex align-items-center">
+                      <FontAwesomeIcon
+                        icon={faPhone}
+                        className="me-2 text-warning"
+                      />
+                      Numéro de contact <span className="text-danger">*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      className={`form-control form-control-lg border ${phoneError ? 'border-danger' : 'border-secondary'} rounded-4 py-3 px-4`}
+                      style={{ fontSize: "1.1rem" }}
+                      placeholder="+225 07 09 18 18 64"
+                      value={donData.numero}
+                      onChange={handlePhoneChange}
+                      required
+                    />
+                    {phoneError && (
+                      <div className="text-danger mt-2 small">
+                        <FontAwesomeIcon icon={faInfoCircle} className="me-1" />
+                        {phoneError}
+                      </div>
+                    )}
+                    <small className="text-muted mt-1 d-block">
+                      Format: +225 suivi de 10 chiffres
+                    </small>
+                  </div>
+                  <div className="col-md-6" style={{ minHeight: "100px" }}>
+                    <label className="form-label fw-bold fs-5 mb-3">
+                      Quantité <span className="text-danger">*</span>
                     </label>
                     <input
                       type="number"
-                      className={`form-control border-light ${formErrors.quantite ? "is-invalid" : ""}`}
+                      className="form-control form-control-lg border border-secondary rounded-4 py-3 px-4"
+                      style={{ fontSize: "1.1rem" }}
                       value={donData.quantite}
                       onChange={(e) =>
-                        handleInputChange("quantite", e.target.value)
+                        setDonData({ ...donData, quantite: e.target.value })
                       }
                       min="1"
                       required
                     />
-                    {formErrors.quantite && (
-                      <div className="invalid-feedback">
-                        {formErrors.quantite}
-                      </div>
-                    )}
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
 
-          <div className="card border-0 shadow-sm">
-            <div className="card-header bg-white border-0 py-4">
-              <h5 className="fw-bold mb-0 text-dark">
-                <FontAwesomeIcon icon={faUser} className="text-warning me-2" />
-                Informations personnelles
-              </h5>
-            </div>
-            <div className="card-body">
-              <div className="row g-3">
-                <div className="col-md-6">
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold">
-                      Nom du donataire *
-                    </label>
-                    <input
-                      type="text"
-                      className={`form-control border-light ${formErrors.nom_donataire ? "is-invalid" : ""}`}
-                      placeholder="Votre nom ou organisation"
-                      value={donData.nom_donataire}
-                      onChange={(e) =>
-                        handleInputChange("nom_donataire", e.target.value)
-                      }
-                      required
-                    />
-                    {formErrors.nom_donataire && (
-                      <div className="invalid-feedback">
-                        {formErrors.nom_donataire}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="col-md-6">
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold">
-                      Numéro de contact *
-                    </label>
-                    <input
-                      type="tel"
-                      className={`form-control border-light ${formErrors.numero ? "is-invalid" : ""}`}
-                      placeholder="Ex: 0700000000"
-                      value={donData.numero}
-                      onChange={(e) =>
-                        handleInputChange("numero", e.target.value)
-                      }
-                      required
-                    />
-                    {formErrors.numero && (
-                      <div className="invalid-feedback">
-                        {formErrors.numero}
-                      </div>
-                    )}
-                    <small className="text-muted">
-                      <FontAwesomeIcon icon={faPhone} className="me-1" />
-                      Format: 0700000000
-                    </small>
-                  </div>
-                </div>
-                <div className="col-md-6">
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold">
-                      État du produit
-                    </label>
-                    <select
-                      className="form-select border-light"
-                      value={donData.condition}
-                      onChange={(e) =>
-                        handleInputChange("condition", e.target.value)
-                      }
-                    >
-                      {conditions.map((cond) => (
-                        <option key={cond.value} value={cond.value}>
-                          {cond.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                <div className="col-md-6">
-                  <div className="mb-3">
-                    <label className="form-label fw-semibold">
-                      Disponibilité
-                    </label>
-                    <select
-                      className="form-select border-light"
-                      value={donData.disponibilite}
-                      onChange={(e) =>
-                        handleInputChange("disponibilite", e.target.value)
-                      }
-                    >
-                      <option value="immediate">Immédiate</option>
-                      <option value="semaine">Cette semaine</option>
-                      <option value="mois">Ce mois-ci</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="col-lg-4">
-          <div
-            className="card border-0 shadow-sm sticky-top"
-            style={{ top: "20px" }}
-          >
-            <div className="card-header bg-white border-0 py-4">
-              <h5 className="fw-bold mb-0 text-dark">
-                <FontAwesomeIcon
-                  icon={faCamera}
-                  className="text-warning me-2"
-                />
-                Photo & Catégorie
-              </h5>
-            </div>
-            <div className="card-body">
-              <div className="mb-4">
-                <label className="form-label fw-semibold">Photo du don *</label>
-                {imagePreview ? (
-                  <div className="position-relative mb-3">
-                    <img
-                      src={imagePreview}
-                      alt="Preview"
-                      className="img-fluid rounded-3 border"
-                      style={{
-                        maxHeight: "200px",
-                        objectFit: "cover",
-                        width: "100%",
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={onRemoveImage}
-                      className="btn btn-danger btn-sm position-absolute top-0 end-0 m-2 rounded-circle shadow"
-                      style={{ width: "32px", height: "32px" }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ) : (
-                  <div
-                    className={`text-center border-dashed border-2 rounded-3 p-5 mb-3 bg-light bg-opacity-25 ${formErrors.image ? "border-danger" : "border-light"}`}
-                  >
-                    <FontAwesomeIcon
-                      icon={faImage}
-                      className="text-muted fs-1 mb-3"
-                    />
-                    <p className="text-muted small mb-0">
-                      Ajoutez une photo claire
-                    </p>
-                    {formErrors.image && (
-                      <p className="text-danger small mt-2">
-                        {formErrors.image}
-                      </p>
-                    )}
-                  </div>
-                )}
-                <div className="d-grid">
-                  <label className="btn btn-outline-warning btn-lg">
-                    <FontAwesomeIcon icon={faCamera} className="me-2" />
-                    {imagePreview ? "Changer la photo" : "Ajouter une photo"}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="d-none"
-                      onChange={onImageUpload}
-                    />
+                {/* Nom du donataire */}
+                <div className="mb-4" style={{ minHeight: "100px" }}>
+                  <label className="form-label fw-bold fs-5 mb-3">
+                    Nom du donataire
                   </label>
+                  <input
+                    type="text"
+                    className="form-control form-control-lg border border-secondary rounded-4 py-3 px-4"
+                    style={{ fontSize: "1.1rem" }}
+                    placeholder="Ex: Association Caritas"
+                    value={donData.nom_donataire}
+                    onChange={(e) =>
+                      setDonData({ ...donData, nom_donataire: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Colonne latérale - Photo et Catégorie */}
+          <div className="col-lg-4">
+            <div className="sticky-top" style={{ top: "20px" }}>
+              {/* Photo */}
+              <div className="card border shadow-lg rounded-4 mb-4 hover-shadow transition-all">
+                <div className="card-header bg-white border-bottom py-4 px-4 rounded-top-4">
+                  <h4 className="fw-bold mb-0 text-dark d-flex align-items-center">
+                    <FontAwesomeIcon
+                      icon={faCamera}
+                      className="text-warning me-3 fs-3"
+                    />
+                    Photo
+                  </h4>
+                </div>
+                
+                <div className="card-body p-4" style={{ minHeight: "350px" }}>
+                  {imagePreview ? (
+                    <div className="position-relative mb-4">
+                      <img
+                        src={imagePreview}
+                        alt="Preview"
+                        className="img-fluid rounded-4 border shadow-sm"
+                        style={{
+                          maxHeight: "250px",
+                          objectFit: "cover",
+                          width: "100%",
+                        }}
+                        onError={(e) => {
+                          e.currentTarget.src = "/images/default-product.png";
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={onRemoveImage}
+                        className="btn btn-danger position-absolute top-0 end-0 m-3 rounded-circle shadow"
+                        style={{ width: "40px", height: "40px" }}
+                      >
+                        <FontAwesomeIcon icon={faTimes} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div 
+                      className="text-center border border-dashed border-secondary rounded-4 p-5 mb-4 bg-light bg-opacity-25"
+                      onClick={() => document.getElementById('fileInputDon')?.click()}
+                      style={{ cursor: 'pointer', minHeight: "250px", display: "flex", flexDirection: "column", justifyContent: "center" }}
+                    >
+                      <FontAwesomeIcon
+                        icon={faImage}
+                        className="text-secondary fs-1 mb-3"
+                      />
+                      <p className="text-secondary fs-6 mb-0">
+                        Cliquez pour ajouter une photo
+                      </p>
+                    </div>
+                  )}
+                  
+                  <div className="d-grid mt-3">
+                    <label className="btn btn-outline-warning btn-lg rounded-4 py-3 border fw-bold">
+                      <FontAwesomeIcon icon={faCamera} className="me-2" />
+                      {imagePreview ? "Changer la photo" : "Ajouter une photo"}
+                      <input
+                        id="fileInputDon"
+                        type="file"
+                        accept="image/*"
+                        className="d-none"
+                        onChange={onImageUpload}
+                      />
+                    </label>
+                  </div>
                 </div>
               </div>
 
-              <div className="mb-4">
-                <label className="form-label fw-semibold">Catégorie *</label>
-                {loading ? (
-                  <div className="text-center py-2">
-                    <FontAwesomeIcon icon={faSpinner} spin className="me-2" />
-                    Chargement...
-                  </div>
-                ) : error ? (
-                  <div className="text-danger small">Erreur de chargement</div>
-                ) : (
-                  <>
-                    <select
-                      className={`form-select border-light ${formErrors.categorie_uuid ? "is-invalid" : ""}`}
-                      value={donData.categorie_uuid}
-                      onChange={(e) =>
-                        handleInputChange("categorie_uuid", e.target.value)
-                      }
-                      required
-                    >
-                      <option value="">Sélectionnez une catégorie</option>
-                      {categories.map((category) => (
-                        <option key={category.uuid} value={category.uuid}>
-                          {category.label}
-                        </option>
-                      ))}
-                    </select>
-                    {formErrors.categorie_uuid && (
-                      <div className="invalid-feedback">
-                        {formErrors.categorie_uuid}
+              {/* Catégorie principale */}
+              <div className="card border shadow-lg rounded-4 mb-4 hover-shadow transition-all">
+                <div className="card-header bg-white border-bottom py-4 px-4 rounded-top-4">
+                  <h4 className="fw-bold mb-0 text-dark d-flex align-items-center">
+                    <FontAwesomeIcon
+                      icon={faBox}
+                      className="text-warning me-3 fs-3"
+                    />
+                    Catégorie
+                  </h4>
+                </div>
+                
+                <div className="card-body p-4" style={{ minHeight: "200px" }}>
+                  {loading ? (
+                    <div className="text-center py-4">
+                      <div className="spinner-border text-warning mb-3" role="status">
+                        <span className="visually-hidden">Chargement...</span>
                       </div>
-                    )}
-                  </>
-                )}
-              </div>
+                      <p className="text-secondary">Chargement des catégories...</p>
+                    </div>
+                  ) : error ? (
+                    <div className="alert alert-danger rounded-4 py-3">
+                      <FontAwesomeIcon icon={faInfoCircle} className="me-2" />
+                      {error}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="mb-4" style={{ minHeight: "100px" }}>
+                        <label className="form-label fw-bold fs-6 mb-3">
+                          Catégorie principale <span className="text-danger">*</span>
+                        </label>
+                        <div className="position-relative">
+                          <select
+                            className="form-select form-select-lg border border-secondary rounded-4 py-3 px-4 bg-white"
+                            style={{ 
+                              fontSize: "1rem",
+                              WebkitAppearance: "none",
+                              MozAppearance: "none",
+                              appearance: "none",
+                              backgroundImage: "none",
+                              paddingRight: "3rem"
+                            }}
+                            value={donData.categorie_uuid}
+                            onChange={handleCategorieChange}
+                            required
+                          >
+                            <option value="" className="py-2">📦 Choisir une catégorie</option>
+                            {categories.map((cat) => (
+                              <option key={cat.uuid} value={cat.uuid} className="py-2">
+                                {cat.libelle}
+                              </option>
+                            ))}
+                          </select>
+                          <FontAwesomeIcon 
+                            icon={faChevronDown} 
+                            className="position-absolute end-0 top-50 translate-middle-y me-4 text-secondary"
+                            style={{ 
+                              pointerEvents: "none", 
+                              fontSize: "1rem",
+                              zIndex: 2
+                            }}
+                          />
+                        </div>
+                      </div>
 
-              <div className="alert alert-warning border-0">
-                <small className="d-flex align-items-center">
-                  <FontAwesomeIcon icon={faInfoCircle} className="me-2" />
-                  Une photo claire augmente les chances que votre don trouve
-                  preneur
-                </small>
-              </div>
-
-              <div className="alert alert-info border-0 mt-3">
-                <h6 className="fw-bold mb-2">
-                  <FontAwesomeIcon icon={faClock} className="me-2" />
-                  Conseils
-                </h6>
-                <ul className="small mb-0 ps-3">
-                  <li>Soyez précis dans la description</li>
-                  <li>Indiquez un lieu de retrait exact</li>
-                  <li>Restez disponible pour répondre aux questions</li>
-                </ul>
+                      {/* Sous-catégorie */}
+                      {sousCategories.length > 0 && (
+                        <div className="mb-3" style={{ minHeight: "100px" }}>
+                          <label className="form-label fw-bold fs-6 mb-3">
+                            Sous-catégorie
+                          </label>
+                          <div className="position-relative">
+                            <select
+                              className="form-select form-select-lg border border-secondary rounded-4 py-3 px-4 bg-white"
+                              style={{ 
+                                fontSize: "1rem",
+                                WebkitAppearance: "none",
+                                MozAppearance: "none",
+                                appearance: "none",
+                                backgroundImage: "none",
+                                paddingRight: "3rem"
+                              }}
+                              value={donData.sous_categorie_uuid || ""}
+                              onChange={handleSousCategorieChange}
+                            >
+                              <option value="" className="py-2">🔽 Sous-catégorie</option>
+                              {sousCategories.map((sousCat) => (
+                                <option key={sousCat.uuid} value={sousCat.uuid} className="py-2">
+                                  {sousCat.libelle}
+                                </option>
+                              ))}
+                            </select>
+                            <FontAwesomeIcon 
+                              icon={faChevronDown} 
+                              className="position-absolute end-0 top-50 translate-middle-y me-4 text-secondary"
+                              style={{ 
+                                pointerEvents: "none", 
+                                fontSize: "1rem",
+                                zIndex: 2
+                              }}
+                            />
+                          </div>
+                          <small className="text-secondary mt-2 d-block">
+                            <i className="fa-regular fa-circle-question me-1"></i>
+                            Optionnel - Affinez votre catégorie
+                          </small>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
 
-  const renderDonStep3 = () => {
-    // Trouver la catégorie sélectionnée
-    const selectedCategory = categories.find(
-      (c) => c.uuid === donData.categorie_uuid,
+  if (step === 3) {
+    const selectedCategory = categories.find(c => c.uuid === donData.categorie_uuid);
+    const selectedSousCategorie = sousCategories.find(
+      sc => sc.uuid === donData.sous_categorie_uuid
     );
 
     return (
-      <div className="p-4">
-        <div className="text-center mb-5">
-          <div className="rounded-circle bg-success bg-opacity-10 p-4 d-inline-flex align-items-center justify-content-center mb-3">
-            <FontAwesomeIcon
-              icon={faCheckCircle}
-              className="text-success fs-1"
-            />
+      <div className="container-fluid p-4">
+        <div className="row mb-5">
+          <div className="col-12">
+            <div className="text-center">
+              <div className="rounded-circle bg-success bg-opacity-10 p-4 d-inline-flex align-items-center justify-content-center mb-4">
+                <FontAwesomeIcon
+                  icon={faCheckCircle}
+                  className="text-success fs-1"
+                />
+              </div>
+              <h2 className="fw-bold text-dark mb-3 display-5">Récapitulatif du don</h2>
+              <p className="text-secondary fs-5">
+                Vérifiez les informations avant publication
+              </p>
+            </div>
           </div>
-          <h3 className="fw-bold text-dark mb-2">Récapitulatif du don</h3>
-          <p className="text-muted">
-            Vérifiez les informations avant publication
-          </p>
         </div>
 
         <div className="row g-4">
           <div className="col-lg-8">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body">
-                <h5 className="fw-bold text-dark mb-4 border-bottom pb-3">
-                  Détails du don
-                </h5>
-
-                <div className="row">
-                  <div className="col-md-6 mb-3">
-                    <p className="text-muted mb-1">Titre</p>
-                    <p className="fw-bold text-dark">
-                      {donData.titre || "Non renseigné"}
-                    </p>
+            <div className="card border shadow-lg rounded-4 hover-shadow transition-all">
+              <div className="card-body p-5">
+                {/* En-tête avec badge */}
+                <div className="d-flex justify-content-between align-items-start mb-5 pb-4 border-bottom">
+                  <div>
+                    <h4 className="fw-bold text-dark mb-2">Détails du don</h4>
+                    <p className="text-secondary mb-0">Informations principales</p>
                   </div>
-
-                  <div className="col-md-6 mb-3">
-                    <p className="text-muted mb-1">Type de don</p>
-                    <p className="fw-bold text-dark">
-                      {donData.type_don || "Non renseigné"}
-                    </p>
-                  </div>
-
-                  <div className="col-md-6 mb-3">
-                    <p className="text-muted mb-1">Catégorie</p>
-                    <p className="fw-bold text-dark">
-                      {selectedCategory?.label || "Non renseigné"}
-                    </p>
-                  </div>
-
-                  <div className="col-md-6 mb-3">
-                    <p className="text-muted mb-1">Quantité</p>
-                    <p className="fw-bold text-dark">{donData.quantite}</p>
-                  </div>
-
-                  <div className="col-md-6 mb-3">
-                    <p className="text-muted mb-1">État</p>
-                    <p className="fw-bold text-dark">
-                      {conditions.find((c) => c.value === donData.condition)
-                        ?.label || "Non renseigné"}
-                    </p>
-                  </div>
-
-                  <div className="col-md-6 mb-3">
-                    <p className="text-muted mb-1">Localisation</p>
-                    <p className="fw-bold text-dark">
-                      {donData.localisation || "Non renseigné"}
-                    </p>
-                  </div>
-
-                  <div className="col-md-6 mb-3">
-                    <p className="text-muted mb-1">Lieu de retrait</p>
-                    <p className="fw-bold text-dark">
-                      {donData.lieu_retrait || "Non renseigné"}
-                    </p>
-                  </div>
-
-                  <div className="col-md-6 mb-3">
-                    <p className="text-muted mb-1">Disponibilité</p>
-                    <p className="fw-bold text-dark">
-                      {donData.disponibilite === "immediate"
-                        ? "Immédiate"
-                        : donData.disponibilite === "semaine"
-                          ? "Cette semaine"
-                          : "Ce mois-ci"}
-                    </p>
+                  <div className="badge bg-warning bg-opacity-10 text-warning fs-6 p-3 rounded-pill border border-warning">
+                    <FontAwesomeIcon icon={faGift} className="me-2" />
+                    Don
                   </div>
                 </div>
 
-                <div className="mt-4">
-                  <p className="text-muted mb-2">Description</p>
-                  <div className="bg-light rounded p-3">
-                    <p className="mb-0">
-                      {donData.description || "Aucune description"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4">
-                  <h6 className="fw-bold text-dark mb-3">
-                    Informations de contact
-                  </h6>
-                  <div className="row">
-                    <div className="col-md-6">
-                      <p className="text-muted mb-1">Nom du donataire</p>
-                      <p className="fw-bold text-dark">
-                        {donData.nom_donataire || "Non renseigné"}
+                {/* Informations principales */}
+                <div className="row g-4">
+                  <div className="col-md-6">
+                    <div className="p-4 bg-light rounded-4 border">
+                      <p className="text-secondary mb-2 small">Titre</p>
+                      <p className="fw-bold text-dark mb-0 fs-5">
+                        {donData.titre || "Non renseigné"}
                       </p>
                     </div>
-                    <div className="col-md-6">
-                      <p className="text-muted mb-1">Numéro de contact</p>
-                      <p className="fw-bold text-dark">
+                  </div>
+                  <div className="col-md-6">
+                    <div className="p-4 bg-light rounded-4 border">
+                      <p className="text-secondary mb-2 small">Type de don</p>
+                      <p className="fw-bold text-dark mb-0 fs-5">
+                        {donData.type_don || "Non renseigné"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="col-md-6">
+                    <div className="p-4 bg-light rounded-4 border">
+                      <p className="text-secondary mb-2 small">Catégorie</p>
+                      <p className="fw-bold text-dark mb-0 fs-5">
+                        {selectedCategory?.label || "Non renseigné"}
+                      </p>
+                      {selectedSousCategorie && (
+                        <p className="text-secondary mb-0 small">
+                          Sous-catégorie: {selectedSousCategorie.libelle}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="col-md-6">
+                    <div className="p-4 bg-light rounded-4 border">
+                      <p className="text-secondary mb-2 small">Quantité</p>
+                      <p className="fw-bold text-dark mb-0 fs-5">
+                        {donData.quantite}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="col-md-6">
+                    <div className="p-4 bg-light rounded-4 border">
+                      <p className="text-secondary mb-2 small">Localisation</p>
+                      <p className="fw-bold text-dark mb-0 fs-5">
+                        {donData.localisation || "Non renseigné"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="col-md-6">
+                    <div className="p-4 bg-light rounded-4 border">
+                      <p className="text-secondary mb-2 small">Lieu de retrait</p>
+                      <p className="fw-bold text-dark mb-0 fs-5">
+                        {donData.lieu_retrait || "Non renseigné"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="col-md-6">
+                    <div className="p-4 bg-light rounded-4 border">
+                      <p className="text-secondary mb-2 small">Contact</p>
+                      <p className="fw-bold text-dark mb-0 fs-5">
                         {donData.numero || "Non renseigné"}
                       </p>
                     </div>
                   </div>
+                  {donData.nom_donataire && (
+                    <div className="col-md-6">
+                      <div className="p-4 bg-light rounded-4 border">
+                        <p className="text-secondary mb-2 small">Donataire</p>
+                        <p className="fw-bold text-dark mb-0 fs-5">
+                          {donData.nom_donataire}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
+
+                {/* Description */}
+                {donData.description && (
+                  <div className="mt-5">
+                    <p className="text-secondary mb-3 fw-bold">Description</p>
+                    <div className="bg-light rounded-4 p-4 border">
+                      <p className="mb-0 fs-5" style={{ lineHeight: 1.8 }}>
+                        {donData.description}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
           <div className="col-lg-4">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body">
-                <h5 className="fw-bold text-dark mb-4">Photo du don</h5>
+            <div className="card border shadow-lg rounded-4 hover-shadow transition-all sticky-top" style={{ top: "20px" }}>
+              <div className="card-body p-4">
+                <h5 className="fw-bold text-dark mb-4 d-flex align-items-center">
+                  <FontAwesomeIcon icon={faImage} className="me-2 text-warning" />
+                  Photo de l'objet
+                </h5>
+                
                 {imagePreview ? (
-                  <div className="text-center mb-4">
+                  <div className="text-center">
                     <img
                       src={imagePreview}
                       alt="Preview"
-                      className="img-fluid rounded-3 border shadow-sm"
-                      style={{ maxHeight: "200px", objectFit: "cover" }}
+                      className="img-fluid rounded-4 border shadow-sm"
+                      style={{ maxHeight: "300px", objectFit: "cover", width: "100%" }}
+                      onError={(e) => {
+                        e.currentTarget.src = "/images/default-product.png";
+                      }}
                     />
+                    <p className="text-success mt-3 small">
+                      <FontAwesomeIcon icon={faCheckCircle} className="me-1" />
+                      Photo ajoutée
+                    </p>
                   </div>
                 ) : (
-                  <div className="text-center border-dashed border-2 border-light rounded-3 p-4 mb-4">
+                  <div className="text-center border border-dashed border-secondary rounded-4 p-5">
                     <FontAwesomeIcon
                       icon={faImage}
-                      className="text-muted fs-1 mb-3"
+                      className="text-secondary fs-1 mb-3"
                     />
-                    <p className="text-muted small mb-0">Aucune photo</p>
+                    <p className="text-secondary mb-0">Aucune photo</p>
                   </div>
                 )}
-
-                <div className="alert alert-success border-0">
-                  <h6 className="fw-bold mb-2">
-                    <FontAwesomeIcon icon={faCheckCircle} className="me-2" />
-                    Prêt à publier
-                  </h6>
-                  <p className="small mb-0">
-                    Votre don sera visible par toute la communauté dès
-                    validation.
-                  </p>
-                </div>
-
-                <div className="alert alert-info border-0 mt-3">
-                  <h6 className="fw-bold mb-2">
-                    <FontAwesomeIcon icon={faInfoCircle} className="me-2" />
-                    Conseils pour un don réussi
-                  </h6>
-                  <ul className="small mb-0 ps-3">
-                    <li>Répondez rapidement aux demandes</li>
-                    <li>Précisez bien le lieu de retrait</li>
-                    <li>Soyez disponible pour les échanges</li>
-                  </ul>
-                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
     );
-  };
+  }
 
-  if (step === 2) return renderDonStep2();
-  if (step === 3) return renderDonStep3();
   return null;
 };
 

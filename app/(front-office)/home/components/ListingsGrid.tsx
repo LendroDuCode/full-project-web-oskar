@@ -18,14 +18,10 @@ interface ListingsGridProps {
 // FONCTION DE CONSTRUCTION D'URL D'IMAGE ROBUSTE
 // ============================================
 const buildImageUrl = (imagePath: string | null): string | null => {
-  // if (!imagePath) return null;
-  //console.log({ imagePath });
-
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
   const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
   const testUrl = `${apiUrl}${filesUrl}/${imagePath}`;
   console.log({ testUrl });
-
   return testUrl;
 };
 
@@ -46,8 +42,13 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
   const isMountedRef = useRef(true);
 
   // Récupérer les filtres de recherche depuis le contexte
-  const { searchQuery, selectedCategory, selectedLocation, maxPrice } =
-    useSearch();
+  const { 
+    searchQuery, 
+    selectedCategory, 
+    selectedSousCategorie, // ✅ AJOUTÉ
+    selectedLocation, 
+    maxPrice 
+  } = useSearch();
 
   const MAX_RETRIES = 3;
 
@@ -89,8 +90,13 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
     try {
       let endpoint = "";
 
-      // Si categoryUuid est fourni, charger les annonces de la catégorie spécifique
-      if (categoryUuid) {
+      // ✅ PRIORITÉ 1: Si une sous-catégorie est sélectionnée, utiliser son API spécifique
+      if (selectedSousCategorie) {
+        endpoint = API_ENDPOINTS.CATEGORIES.LISTE_SOUS_CATEGORIE_UUI(selectedSousCategorie);
+        console.log(`📦 Chargement des annonces pour la sous-catégorie: ${selectedSousCategorie}`);
+      }
+      // Sinon, utiliser les endpoints standards
+      else if (categoryUuid) {
         endpoint = API_ENDPOINTS.ANNONCES.LIST_TOUTES_ANNONCES;
       } else {
         switch (filterType) {
@@ -166,72 +172,33 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
       if (!isMountedRef.current) return;
 
       let transformedData: ListingItem[] = [];
-      const dataArray = Array.isArray(apiData) ? apiData : [apiData];
 
-      if (filterType === "all") {
-        transformedData = dataArray.map((item: any) => ({
-          uuid: item.uuid || `item-${Math.random().toString(36).substr(2, 9)}`,
-          type: item.type || "produit",
-          titre: item.titre || item.nom || item.libelle || "Sans titre",
-          libelle: item.libelle,
-          description: item.description,
-          prix: item.prix,
-          image: item.image,
-          date: item.date || item.createdAt || item.publieLe,
-          disponible: item.disponible,
-          statut: item.statut,
-          numero: item.numero,
-          localisation:
-            item.localisation || item.ville || item.lieu_rencontre || "",
-          seller: item.createurDetails
-            ? {
-                name: item.createurDetails.nom || "Annonceur",
-                avatar:
-                  item.createurDetails.avatar || "/images/default-avatar.png",
-              }
-            : item.createur
-              ? {
-                  name:
-                    `${item.createur.prenoms || ""} ${item.createur.nom || ""}`.trim() ||
-                    "Annonceur",
-                  avatar: item.createur.avatar || "/images/default-avatar.png",
-                }
-              : undefined,
-          createdAt: item.createdAt,
-        }));
-      } else if (filterType === "donation") {
-        transformedData = dataArray.map((item: any) => ({
-          uuid: item.uuid || `don-${Math.random().toString(36).substr(2, 9)}`,
+      // ✅ SI C'EST L'API DE SOUS-CATÉGORIE
+      if (selectedSousCategorie && apiData.data?.annonces) {
+        console.log("📦 Données de sous-catégorie reçues:", apiData.data.annonces);
+        
+        // Transformer les dons
+        const dons = (apiData.data.annonces.dons || []).map((item: any) => ({
+          uuid: item.uuid,
           type: "don" as const,
           titre: item.nom || item.titre || "Don sans titre",
           description: item.description,
           prix: item.prix,
-          image: item.image || "",
+          image: item.image,
           statut: item.statut,
           numero: item.numero,
-          localisation:
-            item.localisation || item.ville || item.lieu_retrait || "",
-          date: item.createdAt || item.publieLe,
-          seller: item.createurDetails
-            ? {
-                name: item.createurDetails.nom || "Donateur",
-                avatar:
-                  item.createurDetails.avatar || "/images/default-avatar.png",
-              }
-            : item.createur
-              ? {
-                  name:
-                    `${item.createur.prenoms || ""} ${item.createur.nom || ""}`.trim() ||
-                    "Donateur",
-                  avatar: item.createur.avatar || "/images/default-avatar.png",
-                }
-              : undefined,
+          localisation: item.localisation || item.ville || item.lieu_retrait || "",
+          date: item.createdAt || item.publieLe || item.date_debut,
+          seller: {
+            name: "Donateur",
+            avatar: "/images/default-avatar.png",
+          },
           createdAt: item.createdAt,
         }));
-      } else if (filterType === "exchange") {
-        transformedData = dataArray.map((item: any) => ({
-          uuid:
-            item.uuid || `echange-${Math.random().toString(36).substr(2, 9)}`,
+
+        // Transformer les échanges
+        const echanges = (apiData.data.annonces.echanges || []).map((item: any) => ({
+          uuid: item.uuid,
           type: "echange" as const,
           titre: item.nomElementEchange || item.titre || "Échange sans titre",
           description: item.message || item.description,
@@ -239,29 +206,18 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           image: item.image,
           statut: item.statut,
           numero: item.numero,
-          localisation:
-            item.localisation || item.ville || item.lieu_rencontre || "",
+          localisation: item.localisation || item.ville || item.lieu_rencontre || "",
           date: item.createdAt || item.publieLe,
-          seller: item.createurDetails
-            ? {
-                name: item.createurDetails.nom || "Initiateur",
-                avatar:
-                  item.createurDetails.avatar || "/images/default-avatar.png",
-              }
-            : item.createur
-              ? {
-                  name:
-                    `${item.createur.prenoms || ""} ${item.createur.nom || ""}`.trim() ||
-                    "Initiateur",
-                  avatar: item.createur.avatar || "/images/default-avatar.png",
-                }
-              : undefined,
+          seller: {
+            name: "Initiateur",
+            avatar: "/images/default-avatar.png",
+          },
           createdAt: item.createdAt,
         }));
-      } else if (filterType === "sale") {
-        transformedData = dataArray.map((item: any) => ({
-          uuid:
-            item.uuid || `produit-${Math.random().toString(36).substr(2, 9)}`,
+
+        // Transformer les produits
+        const produits = (apiData.data.annonces.produits || []).map((item: any) => ({
+          uuid: item.uuid,
           type: "produit" as const,
           titre: item.nom || item.libelle || "Produit sans nom",
           libelle: item.libelle,
@@ -272,117 +228,227 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           disponible: item.disponible,
           statut: item.statut,
           localisation: item.localisation || item.ville || "",
-          seller: item.createurDetails
-            ? {
-                name: item.createurDetails.nom || "Vendeur",
-                avatar:
-                  item.createurDetails.avatar || "/images/default-avatar.png",
-              }
-            : item.vendeur || item.createur
-              ? {
-                  name:
-                    `${(item.vendeur || item.createur)?.prenoms || ""} ${(item.vendeur || item.createur)?.nom || ""}`.trim() ||
-                    "Vendeur",
-                  avatar:
-                    (item.vendeur || item.createur)?.avatar ||
-                    "/images/default-avatar.png",
-                }
-              : undefined,
+          seller: {
+            name: item.vendeur?.nom || item.createur?.nom || "Vendeur",
+            avatar: item.vendeur?.avatar || item.createur?.avatar || "/images/default-avatar.png",
+          },
         }));
+
+        transformedData = [...dons, ...echanges, ...produits];
+        console.log(`✅ ${transformedData.length} annonces transformées pour la sous-catégorie`);
+      } 
+      // TRAITEMENT STANDARD POUR LES AUTRES ENDPOINTS
+      else {
+        const dataArray = Array.isArray(apiData) ? apiData : [apiData];
+
+        if (filterType === "all") {
+          transformedData = dataArray.map((item: any) => ({
+            uuid: item.uuid || `item-${Math.random().toString(36).substr(2, 9)}`,
+            type: item.type || "produit",
+            titre: item.titre || item.nom || item.libelle || "Sans titre",
+            libelle: item.libelle,
+            description: item.description,
+            prix: item.prix,
+            image: item.image,
+            date: item.date || item.createdAt || item.publieLe,
+            disponible: item.disponible,
+            statut: item.statut,
+            numero: item.numero,
+            localisation:
+              item.localisation || item.ville || item.lieu_rencontre || "",
+            seller: item.createurDetails
+              ? {
+                  name: item.createurDetails.nom || "Annonceur",
+                  avatar:
+                    item.createurDetails.avatar || "/images/default-avatar.png",
+                }
+              : item.createur
+                ? {
+                    name:
+                      `${item.createur.prenoms || ""} ${item.createur.nom || ""}`.trim() ||
+                      "Annonceur",
+                    avatar: item.createur.avatar || "/images/default-avatar.png",
+                  }
+                : undefined,
+            createdAt: item.createdAt,
+          }));
+        } else if (filterType === "donation") {
+          transformedData = dataArray.map((item: any) => ({
+            uuid: item.uuid || `don-${Math.random().toString(36).substr(2, 9)}`,
+            type: "don" as const,
+            titre: item.nom || item.titre || "Don sans titre",
+            description: item.description,
+            prix: item.prix,
+            image: item.image || "",
+            statut: item.statut,
+            numero: item.numero,
+            localisation:
+              item.localisation || item.ville || item.lieu_retrait || "",
+            date: item.createdAt || item.publieLe,
+            seller: item.createurDetails
+              ? {
+                  name: item.createurDetails.nom || "Donateur",
+                  avatar:
+                    item.createurDetails.avatar || "/images/default-avatar.png",
+                }
+              : item.createur
+                ? {
+                    name:
+                      `${item.createur.prenoms || ""} ${item.createur.nom || ""}`.trim() ||
+                      "Donateur",
+                    avatar: item.createur.avatar || "/images/default-avatar.png",
+                  }
+                : undefined,
+            createdAt: item.createdAt,
+          }));
+        } else if (filterType === "exchange") {
+          transformedData = dataArray.map((item: any) => ({
+            uuid:
+              item.uuid || `echange-${Math.random().toString(36).substr(2, 9)}`,
+            type: "echange" as const,
+            titre: item.nomElementEchange || item.titre || "Échange sans titre",
+            description: item.message || item.description,
+            prix: item.prix,
+            image: item.image,
+            statut: item.statut,
+            numero: item.numero,
+            localisation:
+              item.localisation || item.ville || item.lieu_rencontre || "",
+            date: item.createdAt || item.publieLe,
+            seller: item.createurDetails
+              ? {
+                  name: item.createurDetails.nom || "Initiateur",
+                  avatar:
+                    item.createurDetails.avatar || "/images/default-avatar.png",
+                }
+              : item.createur
+                ? {
+                    name:
+                      `${item.createur.prenoms || ""} ${item.createur.nom || ""}`.trim() ||
+                      "Initiateur",
+                    avatar: item.createur.avatar || "/images/default-avatar.png",
+                  }
+                : undefined,
+            createdAt: item.createdAt,
+          }));
+        } else if (filterType === "sale") {
+          transformedData = dataArray.map((item: any) => ({
+            uuid:
+              item.uuid || `produit-${Math.random().toString(36).substr(2, 9)}`,
+            type: "produit" as const,
+            titre: item.nom || item.libelle || "Produit sans nom",
+            libelle: item.libelle,
+            description: item.description,
+            prix: item.prix,
+            image: item.image,
+            date: item.date || item.createdAt || item.publieLe,
+            disponible: item.disponible,
+            statut: item.statut,
+            localisation: item.localisation || item.ville || "",
+            seller: item.createurDetails
+              ? {
+                  name: item.createurDetails.nom || "Vendeur",
+                  avatar:
+                    item.createurDetails.avatar || "/images/default-avatar.png",
+                }
+              : item.vendeur || item.createur
+                ? {
+                    name:
+                      `${(item.vendeur || item.createur)?.prenoms || ""} ${(item.vendeur || item.createur)?.nom || ""}`.trim() ||
+                      "Vendeur",
+                    avatar:
+                      (item.vendeur || item.createur)?.avatar ||
+                      "/images/default-avatar.png",
+                  }
+                : undefined,
+          }));
+        }
       }
 
       // ============================================
-      // APPLICATION DES FILTRES DE RECHERCHE
+      // APPLICATION DES FILTRES DE RECHERCHE (seulement pour les données standards)
       // ============================================
       let filteredData = transformedData;
 
-      // 1. Filtre par texte de recherche
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase().trim();
-        filteredData = filteredData.filter((item) => {
-          const titre = item.titre?.toLowerCase() || "";
-          const description = item.description?.toLowerCase() || "";
-          return titre.includes(query) || description.includes(query);
-        });
-        console.log(
-          `🔍 Filtre texte "${searchQuery}": ${filteredData.length} résultats`,
-        );
+      // Pour les données de sous-catégorie, on ne filtre que par texte/localisation/prix
+      // (la catégorie est déjà filtrée par l'API)
+      if (!selectedSousCategorie) {
+        // 1. Filtre par texte de recherche
+        if (searchQuery) {
+          const query = searchQuery.toLowerCase().trim();
+          filteredData = filteredData.filter((item) => {
+            const titre = item.titre?.toLowerCase() || "";
+            const description = item.description?.toLowerCase() || "";
+            return titre.includes(query) || description.includes(query);
+          });
+        }
+
+        // 2. Filtre par catégorie (simulé)
+        if (selectedCategory) {
+          filteredData = filteredData.filter((item) => {
+            if (selectedCategory === "electronique") {
+              return (
+                item.titre?.toLowerCase().includes("téléphone") ||
+                item.titre?.toLowerCase().includes("ordinateur") ||
+                item.titre?.toLowerCase().includes("laptop") ||
+                item.titre?.toLowerCase().includes("smartphone")
+              );
+            }
+            if (selectedCategory === "mode") {
+              return (
+                item.titre?.toLowerCase().includes("vêtement") ||
+                item.titre?.toLowerCase().includes("robe") ||
+                item.titre?.toLowerCase().includes("chaussure")
+              );
+            }
+            if (selectedCategory === "maison") {
+              return (
+                item.titre?.toLowerCase().includes("meuble") ||
+                item.titre?.toLowerCase().includes("canapé") ||
+                item.titre?.toLowerCase().includes("table")
+              );
+            }
+            if (selectedCategory === "vehicules") {
+              return (
+                item.titre?.toLowerCase().includes("voiture") ||
+                item.titre?.toLowerCase().includes("moto") ||
+                item.titre?.toLowerCase().includes("vélo")
+              );
+            }
+            if (selectedCategory === "education") {
+              return (
+                item.titre?.toLowerCase().includes("livre") ||
+                item.titre?.toLowerCase().includes("cours") ||
+                item.titre?.toLowerCase().includes("manuel")
+              );
+            }
+            if (selectedCategory === "services") {
+              return (
+                item.titre?.toLowerCase().includes("service") ||
+                item.titre?.toLowerCase().includes("réparation")
+              );
+            }
+            return true;
+          });
+        }
       }
 
-      // 2. Filtre par catégorie
-      if (selectedCategory) {
-        filteredData = filteredData.filter((item) => {
-          if (selectedCategory === "electronique") {
-            return (
-              item.titre?.toLowerCase().includes("téléphone") ||
-              item.titre?.toLowerCase().includes("ordinateur") ||
-              item.titre?.toLowerCase().includes("laptop") ||
-              item.titre?.toLowerCase().includes("smartphone")
-            );
-          }
-          if (selectedCategory === "mode") {
-            return (
-              item.titre?.toLowerCase().includes("vêtement") ||
-              item.titre?.toLowerCase().includes("robe") ||
-              item.titre?.toLowerCase().includes("chaussure")
-            );
-          }
-          if (selectedCategory === "maison") {
-            return (
-              item.titre?.toLowerCase().includes("meuble") ||
-              item.titre?.toLowerCase().includes("canapé") ||
-              item.titre?.toLowerCase().includes("table")
-            );
-          }
-          if (selectedCategory === "vehicules") {
-            return (
-              item.titre?.toLowerCase().includes("voiture") ||
-              item.titre?.toLowerCase().includes("moto") ||
-              item.titre?.toLowerCase().includes("vélo")
-            );
-          }
-          if (selectedCategory === "education") {
-            return (
-              item.titre?.toLowerCase().includes("livre") ||
-              item.titre?.toLowerCase().includes("cours") ||
-              item.titre?.toLowerCase().includes("manuel")
-            );
-          }
-          if (selectedCategory === "services") {
-            return (
-              item.titre?.toLowerCase().includes("service") ||
-              item.titre?.toLowerCase().includes("réparation")
-            );
-          }
-          return true;
-        });
-        console.log(
-          `📁 Filtre catégorie "${selectedCategory}": ${filteredData.length} résultats`,
-        );
-      }
-
-      // 3. Filtre par localisation
+      // 3. Filtre par localisation (toujours appliqué)
       if (selectedLocation) {
         const location = selectedLocation.toLowerCase();
         filteredData = filteredData.filter((item) => {
           const localisation = item.localisation?.toLowerCase() || "";
           return localisation.includes(location);
         });
-        console.log(
-          `📍 Filtre localisation "${selectedLocation}": ${filteredData.length} résultats`,
-        );
       }
 
-      // 4. Filtre par prix maximum
+      // 4. Filtre par prix maximum (toujours appliqué)
       if (maxPrice) {
         const max = parseFloat(maxPrice);
         filteredData = filteredData.filter((item) => {
           const price = item.prix ? parseFloat(item.prix.toString()) : 0;
           return price <= max;
         });
-        console.log(
-          `💰 Filtre prix max ${maxPrice}: ${filteredData.length} résultats`,
-        );
       }
 
       // Tri des données
@@ -399,7 +465,6 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
             return priceB - priceA;
           }
           case "popular": {
-            // Simuler la popularité par le nombre de favoris ou commentaires
             return 0;
           }
           case "recent":
@@ -463,6 +528,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
     categoryUuid,
     searchQuery,
     selectedCategory,
+    selectedSousCategorie, // ✅ AJOUTÉ
     selectedLocation,
     maxPrice,
     onDataLoaded,
@@ -565,11 +631,15 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
         </div>
         <h5 className="text-muted mb-2">Aucune annonce trouvée</h5>
         <p className="text-muted mb-4">
-          {searchQuery || selectedCategory || selectedLocation || maxPrice
-            ? "Aucun résultat ne correspond à vos critères de recherche."
-            : filterType === "all"
-              ? "Aucune annonce n'est disponible pour le moment."
-              : `Aucun ${filterType === "donation" ? "don" : filterType === "exchange" ? "échange" : "produit"} n'est disponible.`}
+          {selectedSousCategorie ? (
+            "Aucune annonce n'est disponible pour cette sous-catégorie."
+          ) : searchQuery || selectedCategory || selectedLocation || maxPrice ? (
+            "Aucun résultat ne correspond à vos critères de recherche."
+          ) : filterType === "all" ? (
+            "Aucune annonce n'est disponible pour le moment."
+          ) : (
+            `Aucun ${filterType === "donation" ? "don" : filterType === "exchange" ? "échange" : "produit"} n'est disponible.`
+          )}
         </p>
         <button className="btn btn-success" onClick={handleRefresh}>
           <i className="fa-solid fa-rotate me-2"></i>Rafraîchir
@@ -608,8 +678,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
         <div className="d-flex align-items-center justify-content-between mb-4">
           <h2 className="h4 fw-bold text-dark">Toutes les annonces</h2>
           <p className="text-muted mb-0">
-            Affichage de 1-{listings.length} sur{" "}
-            {featuredListings.length + listings.length} résultats
+            {featuredListings.length + listings.length} résultat(s)
           </p>
         </div>
 

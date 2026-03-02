@@ -533,6 +533,7 @@ export const API_ENDPOINTS = {
   CATEGORIES: {
     LIST: withBaseUrl("/categories"),
     DETAIL: (uuid: string) => withBaseUrl(`/categories/${uuid}`),
+    LISTE_SOUS_CATEGORIE_UUI: (uuid: string) => withBaseUrl(`/categories/${uuid}/annonces-simples`),
     BY_SLUG: (slug: string) => withBaseUrl(`/categories/by-slug/${slug}`),
     CREATE: withBaseUrl("/categories/creer-categorie"),
     CREATE_SOUS_CATEGORIE: (uuid: string) =>

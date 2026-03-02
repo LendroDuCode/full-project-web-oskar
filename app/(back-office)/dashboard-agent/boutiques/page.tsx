@@ -173,7 +173,7 @@ const BoutiqueImage = ({
       title={`Cliquer pour agrandir ${type === "logo" ? "le logo" : type === "banniere" ? "la bannière" : "l'image"}`}
     >
       <img
-        src={imageSrc || ''}
+        src={imageSrc || undefined}
         alt={alt}
         className="img-fluid rounded border"
         style={{
@@ -290,7 +290,7 @@ const TypeBoutiqueBadge = ({
   return (
     <div className="d-flex align-items-center gap-2">
       <BoutiqueImage
-        src={typeBoutique.image}
+        src={typeBoutique.image ?? null}
         alt={typeBoutique.libelle}
         type="type"
         onView={handleViewTypeImage}

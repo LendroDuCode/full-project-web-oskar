@@ -313,6 +313,7 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
             searchQuery: query,
             category: selectedCategory,
             sousCategorie: selectedSousCategorie,
+            sousCategorieLibelle: selectedSousCategorieLibelle,
             location: selectedLocation,
             maxPrice,
           },
@@ -329,6 +330,8 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
   // ============================================
   const handleSubCategoryClick = useCallback(
     (subCategory: SubCategory, categoryName: string) => {
+      console.log("🖱️ Clic sur sous-catégorie:", subCategory.libelle, subCategory.uuid);
+      
       // Mettre à jour tous les filtres dans le contexte
       setSearchQuery(subCategory.libelle);
       setSelectedSousCategorie(subCategory.uuid);
@@ -350,8 +353,21 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
         setSelectedCategory(categoryValue);
       }
 
-      // Effectuer la recherche
-      handleSearch();
+      // ✅ ÉMETTRE L'ÉVÉNEMENT POUR FILTRER LA GRILLE
+      if (typeof window !== "undefined") {
+        const event = new CustomEvent("search-filters-updated", {
+          detail: {
+            searchQuery: subCategory.libelle,
+            category: categoryValue,
+            sousCategorie: subCategory.uuid,
+            sousCategorieLibelle: subCategory.libelle,
+            location: selectedLocation,
+            maxPrice,
+          },
+        });
+        window.dispatchEvent(event);
+      }
+
       setShowSuggestions(false);
     },
     [
@@ -360,7 +376,8 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
       setSelectedSousCategorieLibelle,
       setActiveTag,
       setSelectedCategory,
-      handleSearch,
+      selectedLocation,
+      maxPrice,
     ],
   );
 
@@ -398,6 +415,7 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
           searchQuery: "",
           category: "",
           sousCategorie: "",
+          sousCategorieLibelle: "",
           location: "",
           maxPrice: "",
         },
@@ -683,433 +701,7 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
             )}
           </div>
 
-          {/* FILTRES AVANCÉS - DESKTOP */}
-          {!compactMode && !isMobile && (
-            <div className="mt-3 mb-4">
-              <div className="d-flex flex-wrap justify-content-center align-items-stretch gap-3">
-                {/* CATÉGORIE - NOUVEAU FILTRE */}
-                <div
-                  className="position-relative"
-                  style={{ minWidth: "220px", flex: "0 1 auto" }}
-                >
-                  <div className="position-relative">
-                    <select
-                      className="form-select"
-                      style={{
-                        width: "100%",
-                        padding: "0.75rem 2.5rem 0.75rem 2.5rem",
-                        borderColor: selectedCategory
-                          ? colors.oskar.green
-                          : colors.oskar.lightGrey,
-                        fontSize: "0.95rem",
-                        backgroundColor: "white",
-                        color: selectedCategory
-                          ? colors.oskar.black
-                          : "#6c757d",
-                        appearance: "none",
-                        cursor: "pointer",
-                        borderWidth: "1.5px",
-                        transition: "all 0.2s",
-                        borderRadius: "10px",
-                        fontWeight: selectedCategory ? "500" : "400",
-                        height: "54px",
-                        lineHeight: "1.5",
-                      }}
-                      value={selectedCategory}
-                      onChange={(e) => {
-                        setSelectedCategory(e.target.value);
-                        // Émettre un événement pour mettre à jour les filtres
-                        if (typeof window !== "undefined") {
-                          const event = new CustomEvent(
-                            "search-filters-updated",
-                            {
-                              detail: {
-                                searchQuery,
-                                category: e.target.value,
-                                sousCategorie: selectedSousCategorie,
-                                location: selectedLocation,
-                                maxPrice,
-                              },
-                            },
-                          );
-                          window.dispatchEvent(event);
-                        }
-                      }}
-                    >
-                      {categoryOptions.map((cat) => (
-                        <option key={cat.value} value={cat.value}>
-                          {cat.label}
-                        </option>
-                      ))}
-                    </select>
-
-                    {/* Icône gauche */}
-                    <div
-                      className="position-absolute top-50 start-0 translate-middle-y"
-                      style={{
-                        color: selectedCategory
-                          ? colors.oskar.green
-                          : colors.oskar.grey,
-                        left: "15px",
-                        pointerEvents: "none",
-                        zIndex: 2,
-                      }}
-                    >
-                      <i className="fa-solid fa-tag"></i>
-                    </div>
-
-                    {/* Icône droite */}
-                    <div
-                      className="position-absolute top-50 end-0 translate-middle-y pe-3"
-                      style={{
-                        color: colors.oskar.green,
-                        pointerEvents: "none",
-                        zIndex: 2,
-                        right: "10px",
-                      }}
-                    >
-                      <i className="fa-solid fa-chevron-down"></i>
-                    </div>
-
-                    {/* Texte sélectionné */}
-                    {selectedCategory && (
-                      <div
-                        className="position-absolute top-50 start-0 translate-middle-y"
-                        style={{
-                          left: "45px",
-                          pointerEvents: "none",
-                          zIndex: 2,
-                          color: colors.oskar.black,
-                          fontSize: "0.95rem",
-                          fontWeight: "500",
-                          maxWidth: "120px",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {categoryOptions.find(
-                          (c) => c.value === selectedCategory,
-                        )?.label || ""}
-                      </div>
-                    )}
-                  </div>
-
-                  <span
-                    className="position-absolute px-2"
-                    style={{
-                      top: "-10px",
-                      left: "15px",
-                      fontSize: "0.7rem",
-                      color: selectedCategory
-                        ? colors.oskar.green
-                        : colors.oskar.grey,
-                      backgroundColor: "white",
-                      padding: "0 6px",
-                      fontWeight: 600,
-                      letterSpacing: "0.3px",
-                      zIndex: 3,
-                      lineHeight: "1",
-                    }}
-                  >
-                    CATÉGORIE
-                  </span>
-                </div>
-
-                {/* LOCALISATION */}
-                <div
-                  className="position-relative"
-                  style={{ minWidth: "220px", flex: "0 1 auto" }}
-                >
-                  <div className="position-relative">
-                    <select
-                      className="form-select"
-                      style={{
-                        width: "100%",
-                        padding: "0.75rem 2.5rem 0.75rem 2.5rem",
-                        borderColor: selectedLocation
-                          ? colors.oskar.green
-                          : colors.oskar.lightGrey,
-                        fontSize: "0.95rem",
-                        backgroundColor: "white",
-                        color: selectedLocation
-                          ? colors.oskar.black
-                          : "#6c757d",
-                        appearance: "none",
-                        cursor: "pointer",
-                        borderWidth: "1.5px",
-                        transition: "all 0.2s",
-                        borderRadius: "10px",
-                        fontWeight: selectedLocation ? "500" : "400",
-                        height: "54px",
-                        lineHeight: "1.5",
-                      }}
-                      value={selectedLocation}
-                      onChange={(e) => {
-                        setSelectedLocation(e.target.value);
-                        // Émettre un événement pour mettre à jour les filtres
-                        if (typeof window !== "undefined") {
-                          const event = new CustomEvent(
-                            "search-filters-updated",
-                            {
-                              detail: {
-                                searchQuery,
-                                category: selectedCategory,
-                                sousCategorie: selectedSousCategorie,
-                                location: e.target.value,
-                                maxPrice,
-                              },
-                            },
-                          );
-                          window.dispatchEvent(event);
-                        }
-                      }}
-                    >
-                      {locations.map((loc) => (
-                        <option key={loc.value} value={loc.value}>
-                          {loc.label}
-                        </option>
-                      ))}
-                    </select>
-
-                    {/* Icône gauche */}
-                    <div
-                      className="position-absolute top-50 start-0 translate-middle-y"
-                      style={{
-                        color: selectedLocation
-                          ? colors.oskar.green
-                          : colors.oskar.grey,
-                        left: "15px",
-                        pointerEvents: "none",
-                        zIndex: 2,
-                      }}
-                    >
-                      <i className="fa-solid fa-location-dot"></i>
-                    </div>
-
-                    {/* Icône droite */}
-                    <div
-                      className="position-absolute top-50 end-0 translate-middle-y pe-3"
-                      style={{
-                        color: colors.oskar.green,
-                        pointerEvents: "none",
-                        zIndex: 2,
-                        right: "10px",
-                      }}
-                    >
-                      <i className="fa-solid fa-chevron-down"></i>
-                    </div>
-
-                    {/* Texte sélectionné */}
-                    {selectedLocation && (
-                      <div
-                        className="position-absolute top-50 start-0 translate-middle-y"
-                        style={{
-                          left: "45px",
-                          pointerEvents: "none",
-                          zIndex: 2,
-                          color: colors.oskar.black,
-                          fontSize: "0.95rem",
-                          fontWeight: "500",
-                          maxWidth: "120px",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {locations.find((l) => l.value === selectedLocation)
-                          ?.label || ""}
-                      </div>
-                    )}
-                  </div>
-
-                  <span
-                    className="position-absolute px-2"
-                    style={{
-                      top: "-10px",
-                      left: "15px",
-                      fontSize: "0.7rem",
-                      color: selectedLocation
-                        ? colors.oskar.green
-                        : colors.oskar.grey,
-                      backgroundColor: "white",
-                      padding: "0 6px",
-                      fontWeight: 600,
-                      letterSpacing: "0.3px",
-                      zIndex: 3,
-                      lineHeight: "1",
-                    }}
-                  >
-                    LOCALISATION
-                  </span>
-                </div>
-
-                {/* PRIX MAX */}
-                <div
-                  className="position-relative"
-                  style={{ minWidth: "220px", flex: "0 1 auto" }}
-                >
-                  <div className="position-relative">
-                    <select
-                      className="form-select"
-                      style={{
-                        width: "100%",
-                        padding: "0.75rem 2.5rem 0.75rem 2.5rem",
-                        borderColor: maxPrice
-                          ? colors.oskar.green
-                          : colors.oskar.lightGrey,
-                        fontSize: "0.95rem",
-                        backgroundColor: "white",
-                        color: maxPrice ? colors.oskar.black : "#6c757d",
-                        appearance: "none",
-                        cursor: "pointer",
-                        borderWidth: "1.5px",
-                        transition: "all 0.2s",
-                        borderRadius: "10px",
-                        fontWeight: maxPrice ? "500" : "400",
-                        height: "54px",
-                        lineHeight: "1.5",
-                      }}
-                      value={maxPrice}
-                      onChange={(e) => {
-                        setMaxPrice(e.target.value);
-                        // Émettre un événement pour mettre à jour les filtres
-                        if (typeof window !== "undefined") {
-                          const event = new CustomEvent(
-                            "search-filters-updated",
-                            {
-                              detail: {
-                                searchQuery,
-                                category: selectedCategory,
-                                sousCategorie: selectedSousCategorie,
-                                location: selectedLocation,
-                                maxPrice: e.target.value,
-                              },
-                            },
-                          );
-                          window.dispatchEvent(event);
-                        }
-                      }}
-                    >
-                      {priceRanges.map((price) => (
-                        <option key={price.value} value={price.value}>
-                          {price.label}
-                        </option>
-                      ))}
-                    </select>
-
-                    {/* Icône gauche */}
-                    <div
-                      className="position-absolute top-50 start-0 translate-middle-y"
-                      style={{
-                        color: maxPrice
-                          ? colors.oskar.green
-                          : colors.oskar.grey,
-                        left: "15px",
-                        pointerEvents: "none",
-                        zIndex: 2,
-                      }}
-                    >
-                      <i className="fa-solid fa-coins"></i>
-                    </div>
-
-                    {/* Icône droite */}
-                    <div
-                      className="position-absolute top-50 end-0 translate-middle-y pe-3"
-                      style={{
-                        color: colors.oskar.green,
-                        pointerEvents: "none",
-                        zIndex: 2,
-                        right: "10px",
-                      }}
-                    >
-                      <i className="fa-solid fa-chevron-down"></i>
-                    </div>
-
-                    {/* Texte sélectionné */}
-                    {maxPrice && (
-                      <div
-                        className="position-absolute top-50 start-0 translate-middle-y"
-                        style={{
-                          left: "45px",
-                          pointerEvents: "none",
-                          zIndex: 2,
-                          color: colors.oskar.black,
-                          fontSize: "0.95rem",
-                          fontWeight: "500",
-                          maxWidth: "120px",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {priceRanges.find((p) => p.value === maxPrice)?.label ||
-                          ""}
-                      </div>
-                    )}
-                  </div>
-
-                  <span
-                    className="position-absolute px-2"
-                    style={{
-                      top: "-10px",
-                      left: "15px",
-                      fontSize: "0.7rem",
-                      color: maxPrice ? colors.oskar.green : colors.oskar.grey,
-                      backgroundColor: "white",
-                      padding: "0 6px",
-                      fontWeight: 600,
-                      letterSpacing: "0.3px",
-                      zIndex: 3,
-                      lineHeight: "1",
-                    }}
-                  >
-                    BUDGET MAX
-                  </span>
-                </div>
-
-                {/* BOUTON EFFACER */}
-                {hasActiveFilters && (
-                  <div className="d-flex align-items-center">
-                    <button
-                      onClick={clearAllFilters}
-                      className="btn d-flex align-items-center justify-content-center gap-2"
-                      style={{
-                        fontSize: "0.95rem",
-                        padding: "0.75rem 1.5rem",
-                        borderColor: colors.oskar.lightGrey,
-                        color: colors.oskar.grey,
-                        backgroundColor: "white",
-                        whiteSpace: "nowrap",
-                        borderRadius: "10px",
-                        borderWidth: "1.5px",
-                        transition: "all 0.2s",
-                        height: "54px",
-                        fontWeight: "500",
-                        boxShadow: "0 2px 6px rgba(0,0,0,0.03)",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor =
-                          colors.oskar.lightGrey + "40";
-                        e.currentTarget.style.borderColor = colors.oskar.grey;
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = "white";
-                        e.currentTarget.style.borderColor =
-                          colors.oskar.lightGrey;
-                      }}
-                    >
-                      <i
-                        className="fa-solid fa-rotate-left"
-                        style={{ color: colors.oskar.green }}
-                      ></i>
-                      <span>Effacer</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+    
 
           {/* FILTRES RAPIDES - MOBILE */}
           {!compactMode && isMobile && (
@@ -1118,87 +710,6 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
                 className="d-flex gap-2 overflow-auto pb-2"
                 style={{ scrollbarWidth: "none" }}
               >
-                {/* Catégorie - Mobile */}
-                <div
-                  className="position-relative flex-shrink-0"
-                  style={{ minWidth: "160px" }}
-                >
-                  <div className="position-relative">
-                    <select
-                      className="form-select"
-                      style={{
-                        width: "100%",
-                        padding: "0.7rem 2.2rem 0.7rem 2.2rem",
-                        borderColor: selectedCategory
-                          ? colors.oskar.green
-                          : colors.oskar.lightGrey,
-                        fontSize: "0.85rem",
-                        backgroundColor: "white",
-                        color: selectedCategory
-                          ? colors.oskar.black
-                          : "#6c757d",
-                        appearance: "none",
-                        cursor: "pointer",
-                        borderWidth: "1.5px",
-                        height: "48px",
-                        borderRadius: "10px",
-                        fontWeight: selectedCategory ? "500" : "400",
-                      }}
-                      value={selectedCategory}
-                      onChange={(e) => {
-                        setSelectedCategory(e.target.value);
-                        if (typeof window !== "undefined") {
-                          const event = new CustomEvent(
-                            "search-filters-updated",
-                            {
-                              detail: {
-                                searchQuery,
-                                category: e.target.value,
-                                sousCategorie: selectedSousCategorie,
-                                location: selectedLocation,
-                                maxPrice,
-                              },
-                            },
-                          );
-                          window.dispatchEvent(event);
-                        }
-                      }}
-                    >
-                      {categoryOptions.map((cat) => (
-                        <option key={cat.value} value={cat.value}>
-                          {cat.label}
-                        </option>
-                      ))}
-                    </select>
-
-                    <div
-                      className="position-absolute top-50 start-0 translate-middle-y"
-                      style={{
-                        color: selectedCategory
-                          ? colors.oskar.green
-                          : colors.oskar.grey,
-                        left: "12px",
-                        pointerEvents: "none",
-                        zIndex: 2,
-                      }}
-                    >
-                      <i className="fa-solid fa-tag"></i>
-                    </div>
-
-                    <div
-                      className="position-absolute top-50 end-0 translate-middle-y"
-                      style={{
-                        color: colors.oskar.green,
-                        pointerEvents: "none",
-                        zIndex: 2,
-                        right: "12px",
-                      }}
-                    >
-                      <i className="fa-solid fa-chevron-down"></i>
-                    </div>
-                  </div>
-                </div>
-
                 {/* Localisation - Mobile */}
                 <div
                   className="position-relative flex-shrink-0"
@@ -1236,6 +747,7 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
                                 searchQuery,
                                 category: selectedCategory,
                                 sousCategorie: selectedSousCategorie,
+                                sousCategorieLibelle: selectedSousCategorieLibelle,
                                 location: e.target.value,
                                 maxPrice,
                               },
@@ -1315,6 +827,7 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
                                 searchQuery,
                                 category: selectedCategory,
                                 sousCategorie: selectedSousCategorie,
+                                sousCategorieLibelle: selectedSousCategorieLibelle,
                                 location: selectedLocation,
                                 maxPrice: e.target.value,
                               },
@@ -1387,7 +900,7 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
             </div>
           )}
 
-          {/* SOUS-CATÉGORIES POPULAIRES - TOUTES SUR LA MÊME LIGNE */}
+          {/* SOUS-CATÉGORIES POPULAIRES - SANS LES BADGES DE CATÉGORIES PRINCIPALES */}
           {showPopularSearches &&
             !loadingSubs &&
             categoriesWithSubs.length > 0 && (
@@ -1410,110 +923,82 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
                 </h3>
 
                 {/* Conteneur avec Flexbox pour alignement horizontal */}
-                <div className="d-flex flex-wrap justify-content-center gap-4">
+                <div className="d-flex flex-wrap justify-content-center gap-2 gap-md-3">
                   {categoriesWithSubs.map((item) => (
                     <div
                       key={item.category.uuid}
-                      className="text-center"
-                      style={{
-                        minWidth: isMobile ? "120px" : "150px",
-                        flex: "0 1 auto",
-                      }}
+                      className="d-flex flex-wrap justify-content-center gap-2"
                     >
-                      {/* Badge de catégorie */}
-                      <div className="mb-3">
-                        <span
-                          className="badge px-3 py-2"
+                      {/* SOUS-CATÉGORIES SANS LE BADGE DE CATÉGORIE PRINCIPALE */}
+                      {item.subCategories.map((sub) => (
+                        <button
+                          key={sub.uuid}
+                          onClick={() =>
+                            handleSubCategoryClick(sub, item.category.libelle)
+                          }
+                          className="btn rounded-pill d-flex align-items-center justify-content-center"
                           style={{
-                            backgroundColor: `${getCategoryColor(
-                              item.category.type,
-                            )}15`,
-                            color: getCategoryColor(item.category.type),
-                            fontSize: "0.8rem",
-                            fontWeight: 600,
-                            borderRadius: "20px",
-                            border: `1px solid ${getCategoryColor(item.category.type)}30`,
+                            backgroundColor:
+                              selectedSousCategorie === sub.uuid
+                                ? getCategoryColor(item.category.type)
+                                : "white",
+                            color:
+                              selectedSousCategorie === sub.uuid
+                                ? "white"
+                                : colors.oskar.grey,
+                            fontSize: isMobile ? "0.75rem" : "0.8125rem",
+                            padding: isMobile
+                              ? "0.4rem 1rem"
+                              : "0.5rem 1.25rem",
+                            transition:
+                              "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                            border:
+                              selectedSousCategorie === sub.uuid
+                                ? "none"
+                                : `1px solid ${colors.oskar.lightGrey}`,
+                            whiteSpace: "nowrap",
+                            boxShadow:
+                              selectedSousCategorie === sub.uuid
+                                ? `0 4px 12px ${getCategoryColor(item.category.type)}40`
+                                : "0 2px 4px rgba(0,0,0,0.02)",
+                            fontWeight:
+                              selectedSousCategorie === sub.uuid
+                                ? "600"
+                                : "400",
                           }}
+                          onMouseEnter={(e) => {
+                            if (selectedSousCategorie !== sub.uuid) {
+                              e.currentTarget.style.backgroundColor =
+                                getCategoryColor(item.category.type) + "10";
+                              e.currentTarget.style.color = getCategoryColor(
+                                item.category.type,
+                              );
+                              e.currentTarget.style.borderColor =
+                                getCategoryColor(item.category.type);
+                              e.currentTarget.style.transform =
+                                "translateY(-2px)";
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (selectedSousCategorie !== sub.uuid) {
+                              e.currentTarget.style.backgroundColor = "white";
+                              e.currentTarget.style.color = colors.oskar.grey;
+                              e.currentTarget.style.borderColor =
+                                colors.oskar.lightGrey;
+                              e.currentTarget.style.transform =
+                                "translateY(0)";
+                            }
+                          }}
+                          aria-label={`Rechercher ${sub.libelle}`}
+                          type="button"
                         >
                           <i
-                            className={`fas ${getCategoryIcon(item.category.type)} me-1`}
+                            className="fa-solid fa-tag me-1"
+                            style={{ fontSize: "0.7rem" }}
                           ></i>
-                          {item.category.libelle}
-                        </span>
-                      </div>
-
-                      {/* SOUS-CATÉGORIES SUR LA MÊME LIGNE */}
-                      <div className="d-flex flex-wrap justify-content-center gap-2">
-                        {item.subCategories.map((sub) => (
-                          <button
-                            key={sub.uuid}
-                            onClick={() =>
-                              handleSubCategoryClick(sub, item.category.libelle)
-                            }
-                            className="btn rounded-pill d-flex align-items-center justify-content-center"
-                            style={{
-                              backgroundColor:
-                                selectedSousCategorie === sub.uuid
-                                  ? getCategoryColor(item.category.type)
-                                  : "white",
-                              color:
-                                selectedSousCategorie === sub.uuid
-                                  ? "white"
-                                  : colors.oskar.grey,
-                              fontSize: isMobile ? "0.75rem" : "0.8125rem",
-                              padding: isMobile
-                                ? "0.4rem 1rem"
-                                : "0.5rem 1.25rem",
-                              transition:
-                                "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                              border:
-                                selectedSousCategorie === sub.uuid
-                                  ? "none"
-                                  : `1px solid ${colors.oskar.lightGrey}`,
-                              whiteSpace: "nowrap",
-                              boxShadow:
-                                selectedSousCategorie === sub.uuid
-                                  ? `0 4px 12px ${getCategoryColor(item.category.type)}40`
-                                  : "0 2px 4px rgba(0,0,0,0.02)",
-                              fontWeight:
-                                selectedSousCategorie === sub.uuid
-                                  ? "600"
-                                  : "400",
-                            }}
-                            onMouseEnter={(e) => {
-                              if (selectedSousCategorie !== sub.uuid) {
-                                e.currentTarget.style.backgroundColor =
-                                  getCategoryColor(item.category.type) + "10";
-                                e.currentTarget.style.color = getCategoryColor(
-                                  item.category.type,
-                                );
-                                e.currentTarget.style.borderColor =
-                                  getCategoryColor(item.category.type);
-                                e.currentTarget.style.transform =
-                                  "translateY(-2px)";
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              if (selectedSousCategorie !== sub.uuid) {
-                                e.currentTarget.style.backgroundColor = "white";
-                                e.currentTarget.style.color = colors.oskar.grey;
-                                e.currentTarget.style.borderColor =
-                                  colors.oskar.lightGrey;
-                                e.currentTarget.style.transform =
-                                  "translateY(0)";
-                              }
-                            }}
-                            aria-label={`Rechercher ${sub.libelle}`}
-                            type="button"
-                          >
-                            <i
-                              className="fa-solid fa-tag me-1"
-                              style={{ fontSize: "0.7rem" }}
-                            ></i>
-                            {sub.libelle}
-                          </button>
-                        ))}
-                      </div>
+                          {sub.libelle}
+                        </button>
+                      ))}
                     </div>
                   ))}
                 </div>

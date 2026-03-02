@@ -65,9 +65,16 @@ class ApiClient {
   private getAuthToken(): string | null {
     if (typeof window === "undefined") return null;
 
+    // LOGS POUR DÉBOGAGE
+    const allKeys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      allKeys.push(localStorage.key(i) || "");
+    }
+    console.log("📦 localStorage keys:", allKeys);
+
     // Priorité 1: Token spécifique Oskar (stocké après connexion)
     const oskarToken = localStorage.getItem("oskar_token");
-    if (oskarToken) {
+    if (oskarToken && oskarToken !== "undefined" && oskarToken !== "null") {
       if (!this.isProduction) {
         console.log(
           "🔑 Token Oskar trouvé:",
@@ -79,7 +86,7 @@ class ApiClient {
 
     // Priorité 2: temp_token (utilisé par vendeur, admin, agent)
     const tempToken = localStorage.getItem("temp_token");
-    if (tempToken) {
+    if (tempToken && tempToken !== "undefined" && tempToken !== "null") {
       if (!this.isProduction) {
         console.log(
           "🔑 Token temporaire trouvé (temp_token):",
@@ -91,7 +98,7 @@ class ApiClient {
 
     // Priorité 3: tempToken (utilisé par utilisateur)
     const tempTokenAlt = localStorage.getItem("tempToken");
-    if (tempTokenAlt) {
+    if (tempTokenAlt && tempTokenAlt !== "undefined" && tempTokenAlt !== "null") {
       if (!this.isProduction) {
         console.log(
           "🔑 Token temporaire trouvé (tempToken):",
@@ -101,7 +108,16 @@ class ApiClient {
       return tempTokenAlt;
     }
 
-    // Priorité 4: Cookies
+    // Priorité 4: token (générique)
+    const token = localStorage.getItem("token");
+    if (token && token !== "undefined" && token !== "null") {
+      if (!this.isProduction) {
+        console.log("🔑 Token générique trouvé (token)");
+      }
+      return token;
+    }
+
+    // Priorité 5: Cookies
     const getCookie = (name: string) => {
       const value = `; ${document.cookie}`;
       const parts = value.split(`; ${name}=`);
@@ -120,24 +136,6 @@ class ApiClient {
         console.log("🍪 Token cookie trouvé");
       }
       return cookieToken;
-    }
-
-    // Priorité 5: Autres local storage
-    const otherTokens = [
-      localStorage.getItem("access_token"),
-      localStorage.getItem("token"),
-      sessionStorage.getItem("oskar_token"),
-      sessionStorage.getItem("access_token"),
-      sessionStorage.getItem("temp_token"),
-      sessionStorage.getItem("tempToken"),
-    ];
-
-    const foundToken = otherTokens.find((token) => token !== null);
-    if (foundToken) {
-      if (!this.isProduction) {
-        console.log("🔑 Token alternatif trouvé");
-      }
-      return foundToken;
     }
 
     if (!this.isProduction) {
@@ -159,7 +157,7 @@ class ApiClient {
     // Sinon, essayer d'extraire de oskar_user
     try {
       const userStr = localStorage.getItem("oskar_user");
-      if (userStr) {
+      if (userStr && userStr !== "undefined" && userStr !== "null") {
         const user = JSON.parse(userStr);
         return user.type || null;
       }
@@ -328,34 +326,6 @@ class ApiClient {
     if (status === 401) {
       console.warn("⚠️ Erreur 401 (Non authentifié) - URL:", requestUrl);
       console.warn("Message:", errorMessage);
-
-      // On peut rediriger vers la page de connexion pour les erreurs d'authentification claires
-      if (
-        errorMessage.includes("token") ||
-        errorMessage.includes("authentification")
-      ) {
-        // Attendre un peu avant de rediriger pour éviter les boucles
-        setTimeout(() => {
-          if (
-            typeof window !== "undefined" &&
-            !window.location.pathname.includes("connexion") &&
-            !window.location.pathname.includes("login")
-          ) {
-            console.log("🔐 Redirection vers la page de connexion...");
-            // Rediriger vers la page de connexion appropriée
-            const userType = this.getUserType();
-            if (userType === "admin") {
-              window.location.href = "/auth/admin/login";
-            } else if (userType === "vendeur") {
-              window.location.href = "/auth/vendeur/login";
-            } else if (userType === "agent") {
-              window.location.href = "/auth/agent/login";
-            } else {
-              window.location.href = "/connexion";
-            }
-          }
-        }, 1000);
-      }
     }
 
     throw error;
@@ -483,6 +453,10 @@ class ApiClient {
       const userType = this.getUserType();
       if (userType) {
         headers["X-User-Type"] = userType;
+      }
+
+      if (!this.isProduction) {
+        console.log("🔑 Token utilisé dans la requête:", token.substring(0, 20) + "...");
       }
     } else if (options.requiresAuth === true) {
       throw new Error("Authentification requise. Aucun token trouvé.");
@@ -723,10 +697,16 @@ class ApiClient {
 
   // ✅ Nouvelle méthode pour sauvegarder le token après connexion
   saveAuthData(token: string, user: any, userType: string) {
+    if (!token || token === "undefined" || token === "null") {
+      console.error("❌ Tentative de sauvegarde d'un token invalide");
+      return;
+    }
+
     // Sauvegarder le token sous toutes ses formes pour compatibilité
     localStorage.setItem("oskar_token", token);
     localStorage.setItem("temp_token", token);
     localStorage.setItem("tempToken", token);
+    localStorage.setItem("token", token);
 
     // Sauvegarder l'utilisateur
     localStorage.setItem("oskar_user", JSON.stringify(user));
@@ -734,11 +714,22 @@ class ApiClient {
     // Sauvegarder le type d'utilisateur
     localStorage.setItem("oskar_user_type", userType);
 
+    // Cookie pour plus de sécurité
+    const expires = new Date();
+    expires.setDate(expires.getDate() + 1);
+    document.cookie = `oskar_token=${token}; path=/; expires=${expires.toUTCString()}; SameSite=Lax`;
+
     console.log("✅ Données d'authentification sauvegardées:", {
       token: token.substring(0, 20) + "...",
       userType,
       email: user.email,
     });
+
+    // Vérifier que la sauvegarde a fonctionné
+    setTimeout(() => {
+      const savedToken = localStorage.getItem("oskar_token");
+      console.log("🔍 Vérification après sauvegarde - Token présent:", !!savedToken);
+    }, 100);
   }
 }
 
