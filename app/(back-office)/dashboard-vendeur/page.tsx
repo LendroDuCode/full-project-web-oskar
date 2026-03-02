@@ -46,7 +46,7 @@ import {
 
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
-import { buildImageUrl } from "@/app/shared/utils/image-utils"; // ✅ IMPORTATION DE buildImageUrl
+import { buildImageUrl } from "@/app/shared/utils/image-utils";
 
 // Types
 interface Stats {
@@ -243,7 +243,6 @@ interface ApiResponseBoutiques {
 const getImageUrl = (imagePath: string | null | undefined): string => {
   if (!imagePath) return '';
   
-  // Utiliser buildImageUrl pour construire l'URL complète
   const url = buildImageUrl(imagePath);
   return url || '';
 };
@@ -263,7 +262,6 @@ const getPlaceholderImage = (
 
 // ✅ FONCTION POUR OBTENIR L'IMAGE D'UN ÉLÉMENT AVEC FALLBACK
 const getItemImage = (item: any, type: string, defaultText: string): string => {
-  // Déterminer le chemin de l'image selon le type
   let imagePath = null;
   
   if (type === "produit") {
@@ -276,20 +274,18 @@ const getItemImage = (item: any, type: string, defaultText: string): string => {
     imagePath = item.logo || item.logo_key;
   }
   
-  // Essayer d'obtenir l'URL avec buildImageUrl
   if (imagePath) {
     const url = getImageUrl(imagePath);
     if (url) return url;
   }
   
-  // Fallback vers placeholder
   const bgColor = 
     type === "produit" ? "28a745" :
     type === "don" ? "8b5cf6" :
     type === "echange" ? "f59e0b" :
     type === "boutique" ? "0d6efd" : "6c757d";
   
-    const size = 0;
+  const size = 60;
   return getPlaceholderImage(size, defaultText, "ffffff", bgColor);
 };
 
@@ -311,6 +307,38 @@ const formatPrix = (prix: string | number | null) => {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(montant);
+};
+
+// ✅ Fonction pour formater les grands nombres avec adaptation de la taille
+const formatLargeNumber = (num: number): { value: string; size: string } => {
+  const absNum = Math.abs(num);
+  
+  if (absNum >= 1_000_000_000) {
+    return { 
+      value: (num / 1_000_000_000).toFixed(1) + 'B', 
+      size: 'h1' 
+    };
+  } else if (absNum >= 1_000_000) {
+    return { 
+      value: (num / 1_000_000).toFixed(1) + 'M', 
+      size: 'h2' 
+    };
+  } else if (absNum >= 10_000) {
+    return { 
+      value: (num / 1000).toFixed(1) + 'k', 
+      size: 'h2' 
+    };
+  } else if (absNum >= 1000) {
+    return { 
+      value: num.toLocaleString('fr-FR'), 
+      size: 'h2' 
+    };
+  } else {
+    return { 
+      value: num.toString(), 
+      size: absNum >= 100 ? 'h2' : 'display-6' 
+    };
+  }
 };
 
 const formatDate = (dateString: string | null) => {
@@ -361,7 +389,7 @@ const LoadingSpinner = () => (
   </div>
 );
 
-// Composant de carte de stat
+// Composant de carte de stat avec gestion adaptative de la taille
 const StatCard = ({
   title,
   value,
@@ -409,6 +437,27 @@ const StatCard = ({
     dark: "bg-dark bg-opacity-10 text-dark border-dark",
   };
 
+  // Déterminer la taille de la police en fonction de la longueur du nombre
+  const getFontSizeClass = (val: string | number): string => {
+    const str = val.toString();
+    const length = str.length;
+    
+    if (str.includes('B') || str.includes('M') || str.includes('k')) {
+      if (length <= 4) return 'fs-1';
+      if (length <= 6) return 'fs-2';
+      return 'fs-3';
+    }
+    
+    if (length <= 4) return 'display-6';
+    if (length <= 6) return 'fs-1';
+    if (length <= 8) return 'fs-2';
+    if (length <= 10) return 'fs-3';
+    return 'fs-4';
+  };
+
+  const fontSizeClass = getFontSizeClass(value);
+  const isNumericValue = typeof value === 'number' || !isNaN(Number(value?.toString().replace(/[^0-9.-]/g, '')));
+
   return (
     <div
       className={`card border-0 shadow-sm h-100 hover-lift`}
@@ -426,29 +475,43 @@ const StatCard = ({
         e.currentTarget.style.boxShadow = "0 2px 10px rgba(0,0,0,0.05)";
       }}
     >
-      <div className="card-body p-4">
-        <div className="d-flex justify-content-between align-items-start mb-3">
-          <div>
+      <div className="card-body p-3 p-lg-4">
+        <div className="d-flex justify-content-between align-items-start mb-2">
+          <div className="flex-grow-1 me-2">
             <h6 className="text-uppercase text-muted mb-1 fw-semibold small">
               {title}
             </h6>
-            <h2 className="fw-bold mb-0 display-6">{value}</h2>
+            <div className="d-flex align-items-baseline flex-wrap">
+              <h2 className={`fw-bold mb-0 ${fontSizeClass} text-truncate`} style={{ maxWidth: "calc(100% - 40px)" }}>
+                {value}
+              </h2>
+              {isNumericValue && (
+                <small className="text-muted ms-1 d-none d-sm-inline">
+                  {typeof value === 'number' && value >= 1000 ? (
+                    <span className="badge bg-light text-dark">{value.toLocaleString('fr-FR')}</span>
+                  ) : null}
+                </small>
+              )}
+            </div>
             {subtitle && (
-              <p className="text-muted mb-0 small mt-1">{subtitle}</p>
+              <p className="text-muted mb-0 small mt-1 text-truncate" style={{ maxWidth: "200px" }}>
+                {subtitle}
+              </p>
             )}
           </div>
           <div
-            className={`rounded-circle p-3 ${colorClasses[color]} d-flex align-items-center justify-content-center`}
-            style={{ width: "60px", height: "60px" }}
+            className={`rounded-circle p-2 p-sm-3 ${colorClasses[color]} d-flex align-items-center justify-content-center flex-shrink-0`}
+            style={{ width: "clamp(40px, 5vw, 60px)", height: "clamp(40px, 5vw, 60px)" }}
           >
-            <FontAwesomeIcon icon={icon} className={`fs-3`} />
+            <FontAwesomeIcon icon={icon} className={`fs-5 fs-sm-4 fs-md-3`} />
           </div>
         </div>
         {trend && trendText && (
-          <div className="d-flex align-items-center mt-2">
+          <div className="d-flex align-items-center mt-2 small">
             {getTrendIcon()}
             <span
-              className={`fw-semibold ms-1 ${trend === "up" ? "text-success" : trend === "down" ? "text-danger" : "text-muted"}`}
+              className={`fw-semibold ms-1 ${trend === "up" ? "text-success" : trend === "down" ? "text-danger" : "text-muted"} text-truncate`}
+              style={{ maxWidth: "150px" }}
             >
               {trendText}
             </span>
@@ -518,7 +581,6 @@ export default function VendeurDashboard() {
             "/produits/liste-produits-cree-vendeur",
         );
 
-        // Gérer les différents formats de réponse
         if (produitsRes) {
           if (Array.isArray(produitsRes)) {
             produitsData = produitsRes;
@@ -537,7 +599,6 @@ export default function VendeurDashboard() {
         }));
         setProduits(produitsData);
 
-        // Récupérer le vendeur depuis la réponse si disponible
         if (produitsRes && "vendeur" in produitsRes && produitsRes.vendeur) {
           setVendeur(produitsRes.vendeur);
         }
@@ -605,7 +666,10 @@ export default function VendeurDashboard() {
             (sum, p) => sum + (p.nombreFavoris || 0),
             0,
           ),
-          avisMoyen: 0,
+          avisMoyen: produitsData.reduce((sum, p) => {
+            const note = typeof p.note_moyenne === 'string' ? parseFloat(p.note_moyenne) : (p.note_moyenne || 0);
+            return sum + note;
+          }, 0) / (produitsData.length || 1),
           totalAvis: produitsData.reduce(
             (sum, p) => sum + (p.nombre_avis || 0),
             0,
@@ -629,7 +693,7 @@ export default function VendeurDashboard() {
     } finally {
       setLoading(false);
     }
-  }, []); // Supprimer les dépendances pour éviter les boucles
+  }, []);
 
   useEffect(() => {
     fetchDashboardData();
@@ -793,7 +857,7 @@ export default function VendeurDashboard() {
       {/* Header principal */}
       <div className="mb-5">
         <div
-          className="rounded-4 p-4 shadow-lg mb-4 hero-gradient"
+          className="rounded-4 p-3 p-md-4 shadow-lg mb-4 hero-gradient"
           style={{
             background: "linear-gradient(135deg, #28a745 0%, #20c997 100%)",
             position: "relative",
@@ -807,14 +871,14 @@ export default function VendeurDashboard() {
             <div className="col-md-8">
               <div className="d-flex align-items-center">
                 {vendeur && (
-                  <div className="position-relative me-4">
+                  <div className="position-relative me-2 me-md-3">
                     <img
                       src={getVendeurAvatar()}
                       alt={`${vendeur.prenoms} ${vendeur.nom}`}
-                      className="rounded-circle border border-4 border-white shadow"
+                      className="rounded-circle border border-3 border-white shadow"
                       style={{
-                        width: "80px",
-                        height: "80px",
+                        width: "clamp(50px, 8vw, 80px)",
+                        height: "clamp(50px, 8vw, 80px)",
                         objectFit: "cover",
                       }}
                       onError={(e) => {
@@ -823,53 +887,53 @@ export default function VendeurDashboard() {
                       }}
                     />
                     <span
-                      className="position-absolute bottom-0 end-0 bg-success rounded-circle border border-3 border-white d-flex align-items-center justify-content-center"
-                      style={{ width: "20px", height: "20px" }}
+                      className="position-absolute bottom-0 end-0 bg-success rounded-circle border border-2 border-white d-flex align-items-center justify-content-center"
+                      style={{ width: "clamp(12px, 2vw, 20px)", height: "clamp(12px, 2vw, 20px)" }}
                     >
                       <FontAwesomeIcon
                         icon={faCheck}
                         className="text-white"
-                        style={{ fontSize: "8px" }}
+                        style={{ fontSize: "clamp(6px, 1vw, 8px)" }}
                       />
                     </span>
                   </div>
                 )}
-                <div>
-                  <h1 className="h2 fw-bold text-white mb-1">
+                <div className="min-w-0">
+                  <h1 className="h4 h3-sm h2-md fw-bold text-white mb-1 text-truncate">
                     <FontAwesomeIcon icon={faTachometerAlt} className="me-2" />
                     Dashboard Vendeur
                   </h1>
-                  <p className="text-white mb-2" style={{ opacity: 0.9 }}>
+                  <p className="text-white mb-2 small small-md text-truncate" style={{ opacity: 0.9, maxWidth: "100%" }}>
                     {vendeur
                       ? `Bonjour ${vendeur.prenoms}, voici le résumé de votre activité`
                       : "Vue d'ensemble de votre activité"}
                   </p>
-                  <div className="d-flex flex-wrap gap-2 align-items-center">
-                    <span className="badge bg-white bg-opacity-20 text-white fw-semibold border-0">
+                  <div className="d-flex flex-wrap gap-1 gap-md-2 align-items-center">
+                    <span className="badge bg-white bg-opacity-20 text-white fw-semibold border-0 small">
                       <FontAwesomeIcon icon={faStore} className="me-1" />
-                      {stats?.totalBoutiques || 0} boutiques
+                      {stats?.totalBoutiques || 0}
                     </span>
-                    <span className="badge bg-white bg-opacity-20 text-white fw-semibold border-0">
+                    <span className="badge bg-white bg-opacity-20 text-white fw-semibold border-0 small">
                       <FontAwesomeIcon icon={faShoppingBag} className="me-1" />
-                      {stats?.totalProduits || 0} produits
+                      {stats?.totalProduits || 0}
                     </span>
-                    <span className="badge bg-white bg-opacity-20 text-white fw-semibold border-0">
+                    <span className="badge bg-white bg-opacity-20 text-white fw-semibold border-0 small">
                       <FontAwesomeIcon icon={faGift} className="me-1" />
-                      {stats?.totalDons || 0} dons
+                      {stats?.totalDons || 0}
                     </span>
-                    <span className="badge bg-white bg-opacity-20 text-white fw-semibold border-0">
+                    <span className="badge bg-white bg-opacity-20 text-white fw-semibold border-0 small">
                       <FontAwesomeIcon icon={faExchangeAlt} className="me-1" />
-                      {stats?.totalEchanges || 0} échanges
+                      {stats?.totalEchanges || 0}
                     </span>
                   </div>
                 </div>
               </div>
             </div>
-            <div className="col-md-4">
+            <div className="col-md-4 mt-2 mt-md-0">
               <div className="d-flex flex-column flex-md-row gap-2 justify-content-end align-items-start align-items-md-center">
-                <div className="dropdown">
+                <div className="dropdown w-100 w-md-auto">
                   <button
-                    className="btn btn-outline-light d-flex align-items-center gap-2 w-100"
+                    className="btn btn-outline-light d-flex align-items-center gap-2 w-100 w-md-auto"
                     type="button"
                     data-bs-toggle="dropdown"
                   >
@@ -918,7 +982,7 @@ export default function VendeurDashboard() {
                 </div>
                 <button
                   onClick={fetchDashboardData}
-                  className="btn btn-outline-light d-flex align-items-center justify-content-center gap-2 w-100"
+                  className="btn btn-outline-light d-flex align-items-center justify-content-center gap-2 w-100 w-md-auto"
                   disabled={loading}
                   title="Rafraîchir"
                 >
@@ -931,7 +995,7 @@ export default function VendeurDashboard() {
         </div>
 
         {/* Cartes de statistiques */}
-        <div className="row g-4 mb-4">
+        <div className="row g-3 g-md-4 mb-4">
           <div className="col-xl-3 col-lg-4 col-md-6">
             <StatCard
               title="Boutiques"
@@ -985,7 +1049,7 @@ export default function VendeurDashboard() {
           </div>
         </div>
 
-        <div className="row g-4 mb-4">
+        <div className="row g-3 g-md-4 mb-4">
           <div className="col-xl-3 col-lg-4 col-md-6">
             <StatCard
               title="Valeur du stock"
@@ -1051,7 +1115,7 @@ export default function VendeurDashboard() {
               </div>
               <div className="flex-grow-1 ms-3">
                 <h6 className="alert-heading mb-1">Erreur</h6>
-                <p className="mb-0">{error}</p>
+                <p className="mb-0 small">{error}</p>
               </div>
               <button
                 type="button"
@@ -1073,7 +1137,7 @@ export default function VendeurDashboard() {
               </div>
               <div className="flex-grow-1 ms-3">
                 <h6 className="alert-heading mb-1">Succès</h6>
-                <p className="mb-0">{successMessage}</p>
+                <p className="mb-0 small">{successMessage}</p>
               </div>
               <button
                 type="button"
@@ -1086,10 +1150,10 @@ export default function VendeurDashboard() {
 
         {/* Navigation par sections */}
         <div className="card border-0 shadow-sm mb-4">
-          <div className="card-body p-3">
+          <div className="card-body p-2 p-md-3">
             <div className="d-flex flex-wrap gap-2">
               <button
-                className={`btn btn-lg d-flex align-items-center gap-2 ${activeSection === "produits" ? "btn-success" : "btn-outline-success"}`}
+                className={`btn btn-sm btn-lg-md d-flex align-items-center gap-1 gap-md-2 ${activeSection === "produits" ? "btn-success" : "btn-outline-success"}`}
                 onClick={() => {
                   setActiveSection("produits");
                   setActiveTab("tous");
@@ -1097,14 +1161,14 @@ export default function VendeurDashboard() {
                 }}
               >
                 <FontAwesomeIcon icon={faShoppingBag} />
-                Produits
+                <span className="d-none d-sm-inline">Produits</span>
                 <span className="badge bg-white text-success ms-1">
                   {stats?.totalProduits || 0}
                 </span>
               </button>
 
               <button
-                className={`btn btn-lg d-flex align-items-center gap-2 ${activeSection === "dons" ? "btn-warning" : "btn-outline-warning"}`}
+                className={`btn btn-sm btn-lg-md d-flex align-items-center gap-1 gap-md-2 ${activeSection === "dons" ? "btn-warning" : "btn-outline-warning"}`}
                 onClick={() => {
                   setActiveSection("dons");
                   setActiveTab("tous");
@@ -1112,14 +1176,14 @@ export default function VendeurDashboard() {
                 }}
               >
                 <FontAwesomeIcon icon={faGift} />
-                Dons
+                <span className="d-none d-sm-inline">Dons</span>
                 <span className="badge bg-white text-warning ms-1">
                   {stats?.totalDons || 0}
                 </span>
               </button>
 
               <button
-                className={`btn btn-lg d-flex align-items-center gap-2 ${activeSection === "echanges" ? "btn-info" : "btn-outline-info"}`}
+                className={`btn btn-sm btn-lg-md d-flex align-items-center gap-1 gap-md-2 ${activeSection === "echanges" ? "btn-info" : "btn-outline-info"}`}
                 onClick={() => {
                   setActiveSection("echanges");
                   setActiveTab("tous");
@@ -1127,21 +1191,21 @@ export default function VendeurDashboard() {
                 }}
               >
                 <FontAwesomeIcon icon={faExchangeAlt} />
-                Échanges
+                <span className="d-none d-sm-inline">Échanges</span>
                 <span className="badge bg-white text-info ms-1">
                   {stats?.totalEchanges || 0}
                 </span>
               </button>
 
               <button
-                className={`btn btn-lg d-flex align-items-center gap-2 ${activeSection === "boutiques" ? "btn-primary" : "btn-outline-primary"}`}
+                className={`btn btn-sm btn-lg-md d-flex align-items-center gap-1 gap-md-2 ${activeSection === "boutiques" ? "btn-primary" : "btn-outline-primary"}`}
                 onClick={() => {
                   setActiveSection("boutiques");
                   setSearchTerm("");
                 }}
               >
                 <FontAwesomeIcon icon={faStore} />
-                Boutiques
+                <span className="d-none d-sm-inline">Boutiques</span>
                 <span className="badge bg-white text-primary ms-1">
                   {stats?.totalBoutiques || 0}
                 </span>
@@ -1153,10 +1217,10 @@ export default function VendeurDashboard() {
         {/* Onglets pour produits, dons et échanges */}
         {activeSection !== "boutiques" && (
           <div className="card border-0 shadow-sm mb-4">
-            <div className="card-body p-3">
+            <div className="card-body p-2 p-md-3">
               <div className="d-flex flex-wrap gap-2">
                 <button
-                  className={`btn ${activeTab === "tous" ? "btn-primary" : "btn-outline-primary"}`}
+                  className={`btn btn-sm ${activeTab === "tous" ? "btn-primary" : "btn-outline-primary"}`}
                   onClick={() => setActiveTab("tous")}
                 >
                   Tous (
@@ -1169,7 +1233,7 @@ export default function VendeurDashboard() {
                 </button>
 
                 <button
-                  className={`btn ${activeTab === "publies" ? "btn-success" : "btn-outline-success"}`}
+                  className={`btn btn-sm ${activeTab === "publies" ? "btn-success" : "btn-outline-success"}`}
                   onClick={() => setActiveTab("publies")}
                 >
                   Publiés (
@@ -1182,7 +1246,7 @@ export default function VendeurDashboard() {
                 </button>
 
                 <button
-                  className={`btn ${activeTab === "bloques" ? "btn-danger" : "btn-outline-danger"}`}
+                  className={`btn btn-sm ${activeTab === "bloques" ? "btn-danger" : "btn-outline-danger"}`}
                   onClick={() => setActiveTab("bloques")}
                 >
                   Bloqués (
@@ -1200,7 +1264,7 @@ export default function VendeurDashboard() {
 
         {/* Barre de recherche */}
         <div className="card border-0 shadow-sm mb-4">
-          <div className="card-body">
+          <div className="card-body p-3">
             <div className="row g-3 align-items-center">
               <div className="col-lg-6">
                 <div className="input-group">
@@ -1231,52 +1295,52 @@ export default function VendeurDashboard() {
                   {activeSection === "produits" && (
                     <Link
                       href="/dashboard/produits/create"
-                      className="btn btn-success d-flex align-items-center gap-2"
+                      className="btn btn-success btn-sm d-flex align-items-center gap-2"
                     >
                       <FontAwesomeIcon icon={faPlus} />
-                      Nouveau produit
+                      <span className="d-none d-sm-inline">Nouveau produit</span>
                     </Link>
                   )}
 
                   {activeSection === "dons" && (
                     <Link
                       href="/dashboard/dons/create"
-                      className="btn btn-warning d-flex align-items-center gap-2"
+                      className="btn btn-warning btn-sm d-flex align-items-center gap-2"
                     >
                       <FontAwesomeIcon icon={faPlus} />
-                      Nouveau don
+                      <span className="d-none d-sm-inline">Nouveau don</span>
                     </Link>
                   )}
 
                   {activeSection === "echanges" && (
                     <Link
                       href="/dashboard/echanges/create"
-                      className="btn btn-info d-flex align-items-center gap-2"
+                      className="btn btn-info btn-sm d-flex align-items-center gap-2"
                     >
                       <FontAwesomeIcon icon={faPlus} />
-                      Nouvel échange
+                      <span className="d-none d-sm-inline">Nouvel échange</span>
                     </Link>
                   )}
 
                   {activeSection === "boutiques" && (
                     <Link
                       href="/dashboard/boutiques/create"
-                      className="btn btn-primary d-flex align-items-center gap-2"
+                      className="btn btn-primary btn-sm d-flex align-items-center gap-2"
                     >
                       <FontAwesomeIcon icon={faPlus} />
-                      Nouvelle boutique
+                      <span className="d-none d-sm-inline">Nouvelle boutique</span>
                     </Link>
                   )}
 
                   <button
-                    className="btn btn-outline-secondary d-flex align-items-center gap-2"
+                    className="btn btn-outline-secondary btn-sm d-flex align-items-center gap-2"
                     onClick={() => {
                       setSelectedItems([]);
                       setSearchTerm("");
                     }}
                   >
                     <FontAwesomeIcon icon={faFilter} />
-                    Réinitialiser
+                    <span className="d-none d-sm-inline">Réinitialiser</span>
                   </button>
                 </div>
               </div>
@@ -1347,7 +1411,7 @@ export default function VendeurDashboard() {
                 <table className="table table-hover align-middle mb-0">
                   <thead className="table-light">
                     <tr>
-                      <th style={{ width: "50px" }} className="ps-4">
+                      <th style={{ width: "40px" }} className="ps-3">
                         <div className="form-check">
                           <input
                             type="checkbox"
@@ -1370,15 +1434,15 @@ export default function VendeurDashboard() {
                           />
                         </div>
                       </th>
-                      <th style={{ width: "80px" }}>Image</th>
+                      <th style={{ width: "60px" }}>Image</th>
                       <th>Nom</th>
                       {activeSection !== "boutiques" && (
-                        <th style={{ width: "120px" }}>Prix/Valeur</th>
+                        <th style={{ width: "100px" }}>Prix/Valeur</th>
                       )}
-                      <th style={{ width: "100px" }}>Statut</th>
-                      <th style={{ width: "120px" }}>Catégorie</th>
-                      <th style={{ width: "150px" }}>Date</th>
-                      <th style={{ width: "150px" }} className="text-end pe-4">
+                      <th style={{ width: "90px" }}>Statut</th>
+                      <th style={{ width: "100px" }}>Catégorie</th>
+                      <th style={{ width: "120px" }}>Date</th>
+                      <th style={{ width: "120px" }} className="text-end pe-3">
                         Actions
                       </th>
                     </tr>
@@ -1395,7 +1459,7 @@ export default function VendeurDashboard() {
                               : ""
                           }
                         >
-                          <td className="ps-4">
+                          <td className="ps-3">
                             <div className="form-check">
                               <input
                                 type="checkbox"
@@ -1418,7 +1482,7 @@ export default function VendeurDashboard() {
                           <td>
                             <div
                               className="position-relative"
-                              style={{ width: "60px", height: "60px" }}
+                              style={{ width: "50px", height: "50px" }}
                             >
                               <img
                                 src={displayData.image}
@@ -1436,21 +1500,21 @@ export default function VendeurDashboard() {
                                     activeSection === "echanges" ? "f59e0b" :
                                     activeSection === "boutiques" ? "0d6efd" : "6c757d";
                                   (e.target as HTMLImageElement).src =
-                                    getPlaceholderImage(60, "I", "ffffff", bgColor);
+                                    getPlaceholderImage(50, "I", "ffffff", bgColor);
                                 }}
                               />
                             </div>
                           </td>
                           <td>
                             <div className="d-flex flex-column">
-                              <span className="fw-semibold">
+                              <span className="fw-semibold small">
                                 {displayData.libelle}
                               </span>
                               <small
                                 className="text-muted text-truncate"
-                                style={{ maxWidth: "200px" }}
+                                style={{ maxWidth: "180px" }}
                               >
-                                {displayData.description?.substring(0, 60) ||
+                                {displayData.description?.substring(0, 40) ||
                                   "Pas de description"}
                               </small>
                               {activeSection === "produits" && (
@@ -1494,7 +1558,7 @@ export default function VendeurDashboard() {
                           </td>
                           {activeSection !== "boutiques" && (
                             <td>
-                              <span className="fw-bold text-success">
+                              <span className="fw-bold text-success small">
                                 {formatPrix(displayData.prix)}
                               </span>
                               {activeSection === "produits" && (
@@ -1511,7 +1575,7 @@ export default function VendeurDashboard() {
                               <>
                                 {displayData.estBloque ||
                                 displayData.estFerme ? (
-                                  <span className="badge bg-danger bg-opacity-10 text-danger border border-danger">
+                                  <span className="badge bg-danger bg-opacity-10 text-danger border border-danger small">
                                     <FontAwesomeIcon
                                       icon={faBan}
                                       className="me-1"
@@ -1521,7 +1585,7 @@ export default function VendeurDashboard() {
                                       : "Fermée"}
                                   </span>
                                 ) : displayData.statut === "actif" ? (
-                                  <span className="badge bg-success bg-opacity-10 text-success border border-success">
+                                  <span className="badge bg-success bg-opacity-10 text-success border border-success small">
                                     <FontAwesomeIcon
                                       icon={faCheckCircle}
                                       className="me-1"
@@ -1529,7 +1593,7 @@ export default function VendeurDashboard() {
                                     Active
                                   </span>
                                 ) : displayData.statut === "en_attente" ? (
-                                  <span className="badge bg-warning bg-opacity-10 text-warning border border-warning">
+                                  <span className="badge bg-warning bg-opacity-10 text-warning border border-warning small">
                                     <FontAwesomeIcon
                                       icon={faClock}
                                       className="me-1"
@@ -1537,7 +1601,7 @@ export default function VendeurDashboard() {
                                     En attente
                                   </span>
                                 ) : (
-                                  <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary">
+                                  <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary small">
                                     <FontAwesomeIcon
                                       icon={faQuestion}
                                       className="me-1"
@@ -1547,7 +1611,7 @@ export default function VendeurDashboard() {
                                 )}
                               </>
                             ) : displayData.estBloque ? (
-                              <span className="badge bg-danger bg-opacity-10 text-danger border border-danger">
+                              <span className="badge bg-danger bg-opacity-10 text-danger border border-danger small">
                                 <FontAwesomeIcon
                                   icon={faBan}
                                   className="me-1"
@@ -1555,7 +1619,7 @@ export default function VendeurDashboard() {
                                 Bloqué
                               </span>
                             ) : displayData.estPublie ? (
-                              <span className="badge bg-success bg-opacity-10 text-success border border-success">
+                              <span className="badge bg-success bg-opacity-10 text-success border border-success small">
                                 <FontAwesomeIcon
                                   icon={faCheckCircle}
                                   className="me-1"
@@ -1563,7 +1627,7 @@ export default function VendeurDashboard() {
                                 Publié
                               </span>
                             ) : (
-                              <span className="badge bg-warning bg-opacity-10 text-warning border border-warning">
+                              <span className="badge bg-warning bg-opacity-10 text-warning border border-warning small">
                                 <FontAwesomeIcon
                                   icon={faClock}
                                   className="me-1"
@@ -1588,7 +1652,7 @@ export default function VendeurDashboard() {
                               )}
                           </td>
                           <td>
-                            <span className="badge bg-info bg-opacity-10 text-info border border-info">
+                            <span className="badge bg-info bg-opacity-10 text-info border border-info small">
                               {displayData.categorie}
                             </span>
                           </td>
@@ -1597,7 +1661,7 @@ export default function VendeurDashboard() {
                               {formatDate(displayData.date)}
                             </small>
                           </td>
-                          <td className="text-end pe-4">
+                          <td className="text-end pe-3">
                             <div
                               className="btn-group btn-group-sm"
                               role="group"
@@ -1652,10 +1716,10 @@ export default function VendeurDashboard() {
 
           {/* Pagination */}
           {filteredData.length > 10 && (
-            <div className="card-footer bg-white border-0 py-3">
+            <div className="card-footer bg-white border-0 py-2 py-md-3">
               <div className="d-flex justify-content-between align-items-center">
                 <div>
-                  <p className="mb-0 text-muted">
+                  <p className="mb-0 text-muted small">
                     Affichage de <strong>1</strong> à{" "}
                     <strong>{Math.min(10, filteredData.length)}</strong> sur{" "}
                     <strong>{filteredData.length}</strong> éléments
@@ -1690,11 +1754,11 @@ export default function VendeurDashboard() {
         </div>
 
         {/* Section informations */}
-        <div className="row g-4 mt-4">
+        <div className="row g-3 g-md-4 mt-4">
           <div className="col-md-6">
             <div className="card border-0 shadow-sm h-100">
-              <div className="card-body">
-                <h5 className="card-title fw-bold mb-3">
+              <div className="card-body p-3 p-md-4">
+                <h5 className="card-title fw-bold mb-3 h6">
                   <FontAwesomeIcon
                     icon={faInfoCircle}
                     className="me-2 text-info"
@@ -1704,45 +1768,39 @@ export default function VendeurDashboard() {
                 <div className="list-group list-group-flush">
                   <div className="list-group-item border-0 px-0 py-2">
                     <div className="d-flex justify-content-between align-items-center">
-                      <span>Boutiques créées</span>
-                      <span className="fw-bold">
-                        {stats?.totalBoutiques || 0}
-                      </span>
+                      <span className="small">Boutiques créées</span>
+                      <span className="fw-bold">{stats?.totalBoutiques || 0}</span>
                     </div>
                   </div>
                   <div className="list-group-item border-0 px-0 py-2">
                     <div className="d-flex justify-content-between align-items-center">
-                      <span>Produits créés</span>
-                      <span className="fw-bold">
-                        {stats?.totalProduits || 0}
-                      </span>
+                      <span className="small">Produits créés</span>
+                      <span className="fw-bold">{stats?.totalProduits || 0}</span>
                     </div>
                   </div>
                   <div className="list-group-item border-0 px-0 py-2">
                     <div className="d-flex justify-content-between align-items-center">
-                      <span>Dons créés</span>
+                      <span className="small">Dons créés</span>
                       <span className="fw-bold">{stats?.totalDons || 0}</span>
                     </div>
                   </div>
                   <div className="list-group-item border-0 px-0 py-2">
                     <div className="d-flex justify-content-between align-items-center">
-                      <span>Échanges créés</span>
-                      <span className="fw-bold">
-                        {stats?.totalEchanges || 0}
-                      </span>
+                      <span className="small">Échanges créés</span>
+                      <span className="fw-bold">{stats?.totalEchanges || 0}</span>
                     </div>
                   </div>
                   <div className="list-group-item border-0 px-0 py-2">
                     <div className="d-flex justify-content-between align-items-center">
-                      <span>Valeur totale du stock</span>
-                      <span className="fw-bold text-success">
+                      <span className="small">Valeur totale du stock</span>
+                      <span className="fw-bold text-success small">
                         {formatPrix(stats?.revenusTotaux || 0)}
                       </span>
                     </div>
                   </div>
                   <div className="list-group-item border-0 px-0 py-2">
                     <div className="d-flex justify-content-between align-items-center">
-                      <span>Contenu bloqué</span>
+                      <span className="small">Contenu bloqué</span>
                       <span className="fw-bold text-danger">
                         {(stats?.produitsBloques || 0) +
                           (stats?.donsBloques || 0) +
@@ -1757,8 +1815,8 @@ export default function VendeurDashboard() {
 
           <div className="col-md-6">
             <div className="card border-0 shadow-sm h-100">
-              <div className="card-body">
-                <h5 className="card-title fw-bold mb-3">
+              <div className="card-body p-3 p-md-4">
+                <h5 className="card-title fw-bold mb-3 h6">
                   <FontAwesomeIcon
                     icon={faBolt}
                     className="me-2 text-warning"
@@ -1770,12 +1828,12 @@ export default function VendeurDashboard() {
                     <>
                       <Link
                         href="/dashboard/produits/create"
-                        className="btn btn-success btn-lg"
+                        className="btn btn-success btn-sm"
                       >
                         <FontAwesomeIcon icon={faPlus} className="me-2" />
                         Ajouter un produit
                       </Link>
-                      <button className="btn btn-outline-success btn-lg">
+                      <button className="btn btn-outline-success btn-sm">
                         <FontAwesomeIcon icon={faDownload} className="me-2" />
                         Exporter mes produits
                       </button>
@@ -1785,12 +1843,12 @@ export default function VendeurDashboard() {
                     <>
                       <Link
                         href="/dashboard/dons/create"
-                        className="btn btn-warning btn-lg"
+                        className="btn btn-warning btn-sm"
                       >
                         <FontAwesomeIcon icon={faPlus} className="me-2" />
                         Créer un don
                       </Link>
-                      <button className="btn btn-outline-warning btn-lg">
+                      <button className="btn btn-outline-warning btn-sm">
                         <FontAwesomeIcon icon={faDownload} className="me-2" />
                         Exporter mes dons
                       </button>
@@ -1800,12 +1858,12 @@ export default function VendeurDashboard() {
                     <>
                       <Link
                         href="/dashboard/echanges/create"
-                        className="btn btn-info btn-lg"
+                        className="btn btn-info btn-sm"
                       >
                         <FontAwesomeIcon icon={faPlus} className="me-2" />
                         Proposer un échange
                       </Link>
-                      <button className="btn btn-outline-info btn-lg">
+                      <button className="btn btn-outline-info btn-sm">
                         <FontAwesomeIcon icon={faDownload} className="me-2" />
                         Exporter mes échanges
                       </button>
@@ -1815,12 +1873,12 @@ export default function VendeurDashboard() {
                     <>
                       <Link
                         href="/dashboard/boutiques/create"
-                        className="btn btn-primary btn-lg"
+                        className="btn btn-primary btn-sm"
                       >
                         <FontAwesomeIcon icon={faPlus} className="me-2" />
                         Créer une boutique
                       </Link>
-                      <button className="btn btn-outline-primary btn-lg">
+                      <button className="btn btn-outline-primary btn-sm">
                         <FontAwesomeIcon icon={faDownload} className="me-2" />
                         Gérer mes boutiques
                       </button>
@@ -1861,7 +1919,7 @@ export default function VendeurDashboard() {
         .badge {
           font-weight: 500;
           letter-spacing: 0.3px;
-          padding: 0.35em 0.65em;
+          padding: 0.3em 0.6em;
         }
 
         .card {
@@ -1938,10 +1996,6 @@ export default function VendeurDashboard() {
           background-color: rgba(40, 167, 69, 0.05) !important;
         }
 
-        .progress-bar {
-          border-radius: 10px;
-        }
-
         .list-group-item {
           border-left: none;
           border-right: none;
@@ -1957,6 +2011,42 @@ export default function VendeurDashboard() {
 
         .bg-opacity-20 {
           --bs-bg-opacity: 0.2;
+        }
+
+        /* Classes de tailles personnalisées */
+        .fs-7 {
+          font-size: 0.8rem !important;
+        }
+        .fs-8 {
+          font-size: 0.7rem !important;
+        }
+        .fs-9 {
+          font-size: 0.6rem !important;
+        }
+
+        /* Media queries pour les tailles de police */
+        @media (max-width: 768px) {
+          .display-6 {
+            font-size: 1.5rem;
+          }
+          .fs-1 {
+            font-size: 1.3rem;
+          }
+          .fs-2 {
+            font-size: 1.1rem;
+          }
+        }
+
+        /* Animation pour les cartes */
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
       `}</style>
     </div>

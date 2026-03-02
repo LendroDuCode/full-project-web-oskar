@@ -27,10 +27,8 @@ const DonForm: React.FC<DonFormProps> = ({
   onImageUpload,
   onRemoveImage,
   step,
-  categories: externalCategories = [],
-  sous_categorie_uuid: externalSousCategorieUuid,
 }) => {
-  const [categories, setCategories] = useState<Category[]>(externalCategories);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [sousCategories, setSousCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,62 +90,111 @@ const DonForm: React.FC<DonFormProps> = ({
     }
   };
 
-  // Charger les catégories seulement si externalCategories n'est pas fourni
+  // Charger les catégories
   useEffect(() => {
-    if (externalCategories.length === 0) {
-      const fetchCategories = async () => {
-        try {
-          setLoading(true);
-          setError(null);
-          const response = await api.get(API_ENDPOINTS.CATEGORIES.LIST);
-          console.log("📦 Réponse catégories brute:", response);
+    const fetchCategories = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await api.get(API_ENDPOINTS.CATEGORIES.LIST);
+        console.log("📦 Réponse catégories brute:", response);
 
-          if (Array.isArray(response)) {
-            // Filtrer pour garder seulement les catégories principales (sans path ou path null)
-            const mainCategories = response.filter(
-              (cat: Category) => !cat.path || cat.path === null
-            );
+        if (Array.isArray(response)) {
+          // ÉTAPE 1: Filtrer uniquement les catégories actives et non supprimées
+          const activeCategories = response.filter(
+            (cat: Category) => !cat.is_deleted && cat.deleted_at === null
+          );
+
+          console.log("📊 Catégories actives:", activeCategories.length);
+
+          // ÉTAPE 2: Identifier les catégories principales (sans parent ou path vide/null)
+          const mainCategories = activeCategories.filter(
+            (cat: Category) => !cat.path || cat.path === null || cat.path === ""
+          );
+          
+          console.log("📊 Catégories principales:", mainCategories.map(c => ({ 
+            libelle: c.libelle, 
+            uuid: c.uuid,
+            enfants: c.enfants?.length || 0 
+          })));
+          
+          // ÉTAPE 3: Éliminer les doublons basés sur le libellé
+          const uniqueCategoriesMap = new Map<string, Category>();
+          
+          mainCategories.forEach((category: Category) => {
+            const existing = uniqueCategoriesMap.get(category.libelle);
             
-            console.log("📊 Catégories principales:", mainCategories.map(c => ({ 
-              libelle: c.libelle, 
-              uuid: c.uuid,
-              enfants: c.enfants?.length || 0 
-            })));
-            
-            setCategories(mainCategories);
-            
-            // Si une catégorie est déjà sélectionnée, charger ses sous-catégories
-            if (donData.categorie_uuid) {
-              const selectedCat = response.find(c => c.uuid === donData.categorie_uuid);
-              if (selectedCat?.enfants && selectedCat.enfants.length > 0) {
-                setSousCategories(selectedCat.enfants);
+            if (!existing) {
+              uniqueCategoriesMap.set(category.libelle, category);
+            } else {
+              const existingId = existing.id || 0;
+              const currentId = category.id || 0;
+              
+              // Garder la catégorie avec l'ID le plus élevé (la plus récente)
+              if (currentId > existingId) {
+                uniqueCategoriesMap.set(category.libelle, category);
               }
             }
-          } else {
-            throw new Error("Format invalide");
+          });
+          
+          const uniqueMainCategories = Array.from(uniqueCategoriesMap.values());
+          
+          // ÉTAPE 4: Pour chaque catégorie principale, traiter les enfants
+          const processedCategories: Category[] = uniqueMainCategories.map((category: Category) => {
+            const enfants = category.enfants || [];
+            
+            const activeEnfants = enfants.filter(
+              (enfant: Category) => !enfant.is_deleted && enfant.deleted_at === null
+            );
+            
+            const uniqueChildrenMap = new Map<string, Category>();
+            activeEnfants.forEach((enfant: Category) => {
+              if (!uniqueChildrenMap.has(enfant.libelle)) {
+                uniqueChildrenMap.set(enfant.libelle, enfant);
+              } else {
+                const existing = uniqueChildrenMap.get(enfant.libelle)!;
+                if ((enfant.id || 0) > (existing.id || 0)) {
+                  uniqueChildrenMap.set(enfant.libelle, enfant);
+                }
+              }
+            });
+            
+            const uniqueChildren = Array.from(uniqueChildrenMap.values());
+            
+            // ✅ CORRECTION: Utiliser le spread operator pour conserver toutes les propriétés
+            return {
+              ...category,
+              enfants: uniqueChildren
+            };
+          });
+          
+          // ÉTAPE 5: Trier par libellé pour une navigation cohérente
+          const sortedCategories = processedCategories.sort(
+            (a: Category, b: Category) => a.libelle.localeCompare(b.libelle)
+          );
+          
+          setCategories(sortedCategories);
+          
+          // Si une catégorie est déjà sélectionnée, charger ses sous-catégories
+          if (donData.categorie_uuid) {
+            const selectedCat = sortedCategories.find(c => c.uuid === donData.categorie_uuid);
+            if (selectedCat?.enfants && selectedCat.enfants.length > 0) {
+              setSousCategories(selectedCat.enfants);
+            }
           }
-        } catch (err: any) {
-          console.error("Erreur catégories:", err);
-          setError("Impossible de charger les catégories.");
-        } finally {
-          setLoading(false);
+        } else {
+          throw new Error("Format invalide");
         }
-      };
-
-      fetchCategories();
-    } else {
-      // Si des catégories sont fournies de l'extérieur, les utiliser
-      setCategories(externalCategories);
-      
-      // Charger les sous-catégories si une catégorie est sélectionnée
-      if (donData.categorie_uuid) {
-        const selectedCat = externalCategories.find(c => c.uuid === donData.categorie_uuid);
-        if (selectedCat?.enfants && selectedCat.enfants.length > 0) {
-          setSousCategories(selectedCat.enfants);
-        }
+      } catch (err: any) {
+        console.error("Erreur catégories:", err);
+        setError("Impossible de charger les catégories.");
+      } finally {
+        setLoading(false);
       }
-    }
-  }, [externalCategories, donData.categorie_uuid]);
+    };
+
+    fetchCategories();
+  }, [donData.categorie_uuid]);
 
   // Gérer le changement de catégorie principale
   const handleCategorieChange = (e: ChangeEvent<HTMLSelectElement>) => {
@@ -677,7 +724,7 @@ const DonForm: React.FC<DonFormProps> = ({
                     <div className="p-4 bg-light rounded-4 border">
                       <p className="text-secondary mb-2 small">Catégorie</p>
                       <p className="fw-bold text-dark mb-0 fs-5">
-                        {selectedCategory?.label || "Non renseigné"}
+                        {selectedCategory?.libelle || "Non renseigné"}
                       </p>
                       {selectedSousCategorie && (
                         <p className="text-secondary mb-0 small">

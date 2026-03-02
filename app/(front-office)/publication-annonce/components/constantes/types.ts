@@ -156,8 +156,14 @@ export interface Category {
   value: string;
   uuid: string;
   path: string;
+  description:string;
+  image: string;
+  slug: string;
+  id: number;
   libelle: string;
+  deleted_at: Date;
   icon?: IconDefinition;
+  is_deleted: boolean;
   type?: string; // Type de catégorie
   parent_uuid?: string | null; // Pour les sous-catégories
   children?: Category[]; // Sous-catégories
@@ -185,8 +191,8 @@ export interface ConditionOption {
 
 export interface DonFormProps {
   donData: DonData;
-  categories: Category[];
-  sous_categorie_uuid: string;
+  categories: Category[];           // ⚠️ Propriété obligatoire
+  sous_categorie_uuid: string;      // ⚠️ Propriété obligatoire
   conditions: ConditionOption[];
   imagePreview: string | null;
   onChange: (newData: DonData) => void;
@@ -194,7 +200,6 @@ export interface DonFormProps {
   onRemoveImage: () => void;
   step: number;
 }
-
 export interface EchangeFormProps {
   echangeData: EchangeData;
   categories: Category[];

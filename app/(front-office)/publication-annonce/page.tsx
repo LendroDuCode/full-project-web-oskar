@@ -50,6 +50,11 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  
+  // État pour les catégories
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
 
   // États pour la création de boutique
   const [showBoutiqueModal, setShowBoutiqueModal] = useState(false);
@@ -149,74 +154,6 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     },
   ];
 
-  // ✅ CORRECTION: Ajout des propriétés manquantes à Category
-  const categories: Category[] = [
-    {
-      uuid: "6b1c309e-e2ae-44c9-bcc3-e11bdf077d1f",
-      libelle: "Don & Échange",
-      path: "/dons-echanges",
-      label: "Don & Échange",
-      value: "dons-echanges",
-      icon: faHandHoldingHeart,
-    },
-    {
-      uuid: "vetements-chaussures-uuid",
-      libelle: "Vêtements & Chaussures",
-      path: "/vetements-chaussures",
-      label: "Vêtements & Chaussures",
-      value: "vetements-chaussures",
-      icon: faHandHoldingHeart,
-    },
-    {
-      uuid: "electroniques-uuid",
-      libelle: "Électronique",
-      path: "/electroniques",
-      label: "Électronique",
-      value: "electroniques",
-      icon: faHandHoldingHeart,
-    },
-    {
-      uuid: "education-culture-uuid",
-      libelle: "Éducation & Culture",
-      path: "/education-culture",
-      label: "Éducation & Culture",
-      value: "education-culture",
-      icon: faHandHoldingHeart,
-    },
-    {
-      uuid: "services-proximite-uuid",
-      libelle: "Services de proximité",
-      path: "/services-proximite",
-      label: "Services de proximité",
-      value: "services-proximite",
-      icon: faHandHoldingHeart,
-    },
-    {
-      uuid: "maison-jardin-uuid",
-      libelle: "Maison & Jardin",
-      path: "/maison-jardin",
-      label: "Maison & Jardin",
-      value: "maison-jardin",
-      icon: faHandHoldingHeart,
-    },
-    {
-      uuid: "vehicules-uuid",
-      libelle: "Véhicules",
-      path: "/vehicules",
-      label: "Véhicules",
-      value: "vehicules",
-      icon: faHandHoldingHeart,
-    },
-    {
-      uuid: "emploi-services-uuid",
-      libelle: "Emploi & Services",
-      path: "/emploi-services",
-      label: "Emploi & Services",
-      value: "emploi-services",
-      icon: faHandHoldingHeart,
-    },
-  ];
-
   // Conditions pour les produits
   const conditions: ConditionOption[] = [
     { value: "neuf", label: "Neuf (jamais utilisé)" },
@@ -228,6 +165,120 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
 
   // Vérifier si l'utilisateur est un vendeur
   const isVendeur = user?.type?.toLowerCase() === "vendeur";
+
+  // Charger les catégories quand le modal s'ouvre
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        setLoadingCategories(true);
+        setCategoriesError(null);
+        console.log("🟡 PublishAdModal - Fetching categories from API...");
+
+        const response = await api.get(API_ENDPOINTS.CATEGORIES.LIST);
+        console.log("🟢 PublishAdModal - Categories API raw response:", response);
+
+        if (Array.isArray(response)) {
+          // ÉTAPE 1: Filtrer uniquement les catégories actives et non supprimées
+          const activeCategories = response.filter(
+            (cat: Category) => !cat.is_deleted && cat.deleted_at === null
+          );
+
+          console.log("🟢 PublishAdModal - Active categories:", activeCategories.length);
+
+          // ÉTAPE 2: Identifier les catégories principales (sans parent ou path vide/null)
+          const mainCategories = activeCategories.filter(
+            (cat: Category) => !cat.path || cat.path === null || cat.path === ""
+          );
+
+          console.log(
+            "🟢 PublishAdModal - Main categories found:",
+            mainCategories.map((c: Category) => ({
+              libelle: c.libelle,
+              id: c.id,
+              hasEnfants: c.enfants?.length || 0,
+            })),
+          );
+
+          // ÉTAPE 3: Éliminer les doublons basés sur le libellé
+          const uniqueCategoriesMap = new Map<string, Category>();
+
+          mainCategories.forEach((category: Category) => {
+            const existing = uniqueCategoriesMap.get(category.libelle);
+
+            if (!existing) {
+              uniqueCategoriesMap.set(category.libelle, category);
+            } else {
+              const existingId = existing.id || 0;
+              const currentId = category.id || 0;
+
+              // Garder la catégorie avec l'ID le plus élevé (la plus récente)
+              if (currentId > existingId) {
+                uniqueCategoriesMap.set(category.libelle, category);
+              }
+            }
+          });
+
+          const uniqueMainCategories = Array.from(uniqueCategoriesMap.values());
+
+          // ÉTAPE 4: Pour chaque catégorie principale, traiter les enfants
+          const processedCategories: Category[] = uniqueMainCategories.map((category: Category) => {
+            const enfants = category.enfants || [];
+
+            const activeEnfants = enfants.filter(
+              (enfant: Category) => !enfant.is_deleted && enfant.deleted_at === null
+            );
+
+            const uniqueChildrenMap = new Map<string, Category>();
+            activeEnfants.forEach((enfant: Category) => {
+              if (!uniqueChildrenMap.has(enfant.libelle)) {
+                uniqueChildrenMap.set(enfant.libelle, enfant);
+              } else {
+                const existing = uniqueChildrenMap.get(enfant.libelle)!;
+                if ((enfant.id || 0) > (existing.id || 0)) {
+                  uniqueChildrenMap.set(enfant.libelle, enfant);
+                }
+              }
+            });
+
+            const uniqueChildren = Array.from(uniqueChildrenMap.values());
+
+            // ✅ CORRECTION: Utiliser le spread operator pour conserver toutes les propriétés
+            return {
+              ...category,
+              enfants: uniqueChildren
+            };
+          });
+
+          // ÉTAPE 5: Trier par libellé pour une navigation cohérente
+          const sortedCategories = processedCategories.sort(
+            (a: Category, b: Category) => a.libelle.localeCompare(b.libelle)
+          );
+
+          console.log(
+            "🟢 PublishAdModal - Final categories to display:",
+            sortedCategories.map((c: Category) => ({
+              libelle: c.libelle,
+              slug: c.slug,
+              enfantsCount: c.enfants?.length || 0,
+            })),
+          );
+
+          setCategories(sortedCategories);
+        } else {
+          throw new Error("Format de réponse invalide");
+        }
+      } catch (error: any) {
+        console.error("🔴 PublishAdModal - Error loading categories:", error);
+        setCategoriesError("Impossible de charger les catégories");
+      } finally {
+        setLoadingCategories(false);
+      }
+    };
+
+    if (visible) {
+      fetchCategories();
+    }
+  }, [visible]);
 
   // Charger les boutiques seulement si c'est un vendeur
   useEffect(() => {
@@ -1022,6 +1073,13 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
                   </div>
                 )}
 
+                {categoriesError && (
+                  <div className="alert alert-warning border-0 mb-3">
+                    <FontAwesomeIcon icon={faInfoCircle} className="me-2" />
+                    {categoriesError} - Utilisation des catégories par défaut
+                  </div>
+                )}
+
                 <div className="stepper-wrapper">
                   <div className="stepper-item completed">
                     <div className="step-counter">1</div>
@@ -1053,19 +1111,21 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
             >
               <form onSubmit={handleSubmit}>
                 {step === 1 && renderStep1()}
+                
 {adType === "don" && (
   <DonForm
     donData={donData}
     conditions={conditions}
-    categories={categories} // ✅ AJOUT
-    sous_categorie_uuid={donData.sous_categorie_uuid} // ✅ AJOUT
     imagePreview={imagePreview}
     onChange={setDonData}
     onImageUpload={handleImageUpload}
     onRemoveImage={removeImage}
     step={step}
+    categories={categories} // ✅ AJOUT OBLIGATOIRE
+    sous_categorie_uuid={donData.sous_categorie_uuid} // ✅ AJOUT OBLIGATOIRE
   />
 )}
+                
                 {adType === "exchange" && (
                   <EchangeForm
                     echangeData={echangeData}
@@ -1079,24 +1139,24 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
                   />
                 )}
 
-             {adType === "sale" && (
-  <VenteForm
-    venteData={venteData}
-    conditions={conditions}
-    imagePreview={imagePreview}
-    onChange={setVenteData}
-    onImageUpload={handleImageUpload}
-    onRemoveImage={removeImage}
-    step={step}
-    boutiques={boutiques}
-    selectedBoutique={selectedBoutique}
-    onBoutiqueChange={handleBoutiqueChange}
-    user={user || null}
-    saleMode={saleMode} // ✅ MAINTENANT VALIDE
-    onOpenCreateBoutique={handleOpenCreateBoutique}
-    onOpenVendeurRegister={handleOpenVendeurRegister}
-  />
-)}
+                {adType === "sale" && (
+                  <VenteForm
+                    venteData={venteData}
+                    conditions={conditions}
+                    imagePreview={imagePreview}
+                    onChange={setVenteData}
+                    onImageUpload={handleImageUpload}
+                    onRemoveImage={removeImage}
+                    step={step}
+                    boutiques={boutiques}
+                    selectedBoutique={selectedBoutique}
+                    onBoutiqueChange={handleBoutiqueChange}
+                    user={user || null}
+                    saleMode={saleMode}
+                    onOpenCreateBoutique={handleOpenCreateBoutique}
+                    onOpenVendeurRegister={handleOpenVendeurRegister}
+                  />
+                )}
 
                 <div className="d-flex justify-content-between mt-5 pt-4 border-top">
                   {step > 1 ? (

@@ -310,9 +310,16 @@ const VenteForm: React.FC<VenteFormProps> = ({
         console.log("📦 Réponse catégories brute:", response);
 
         if (Array.isArray(response)) {
-          // Filtrer pour garder seulement les catégories principales (sans path ou path null)
-          const mainCategories = response.filter(
-            (cat: Category) => !cat.path || cat.path === null
+          // ÉTAPE 1: Filtrer uniquement les catégories actives et non supprimées
+          const activeCategories = response.filter(
+            (cat: Category) => !cat.is_deleted && cat.deleted_at === null
+          );
+
+          console.log("📊 Catégories actives:", activeCategories.length);
+
+          // ÉTAPE 2: Identifier les catégories principales (sans parent ou path vide/null)
+          const mainCategories = activeCategories.filter(
+            (cat: Category) => !cat.path || cat.path === null || cat.path === ""
           );
           
           console.log("📊 Catégories principales:", mainCategories.map(c => ({ 
@@ -321,11 +328,66 @@ const VenteForm: React.FC<VenteFormProps> = ({
             enfants: c.enfants?.length || 0 
           })));
           
-          setCategories(mainCategories);
+          // ÉTAPE 3: Éliminer les doublons basés sur le libellé
+          const uniqueCategoriesMap = new Map<string, Category>();
+          
+          mainCategories.forEach((category: Category) => {
+            const existing = uniqueCategoriesMap.get(category.libelle);
+            
+            if (!existing) {
+              uniqueCategoriesMap.set(category.libelle, category);
+            } else {
+              const existingId = existing.id || 0;
+              const currentId = category.id || 0;
+              
+              // Garder la catégorie avec l'ID le plus élevé (la plus récente)
+              if (currentId > existingId) {
+                uniqueCategoriesMap.set(category.libelle, category);
+              }
+            }
+          });
+          
+          const uniqueMainCategories = Array.from(uniqueCategoriesMap.values());
+          
+          // ÉTAPE 4: Pour chaque catégorie principale, traiter les enfants
+          const processedCategories: Category[] = uniqueMainCategories.map((category: Category) => {
+            const enfants = category.enfants || [];
+            
+            const activeEnfants = enfants.filter(
+              (enfant: Category) => !enfant.is_deleted && enfant.deleted_at === null
+            );
+            
+            const uniqueChildrenMap = new Map<string, Category>();
+            activeEnfants.forEach((enfant: Category) => {
+              if (!uniqueChildrenMap.has(enfant.libelle)) {
+                uniqueChildrenMap.set(enfant.libelle, enfant);
+              } else {
+                const existing = uniqueChildrenMap.get(enfant.libelle)!;
+                if ((enfant.id || 0) > (existing.id || 0)) {
+                  uniqueChildrenMap.set(enfant.libelle, enfant);
+                }
+              }
+            });
+            
+            const uniqueChildren = Array.from(uniqueChildrenMap.values());
+            
+            // ✅ CORRECTION: Utiliser le spread operator pour conserver toutes les propriétés
+            return {
+              ...category,
+              enfants: uniqueChildren
+            };
+          });
+          
+          // ÉTAPE 5: Trier par libellé pour une navigation cohérente
+          const sortedCategories = processedCategories.sort(
+            (a: Category, b: Category) => a.libelle.localeCompare(b.libelle)
+          );
+          
+          setCategories(sortedCategories);
           
           // Si une catégorie est déjà sélectionnée, charger ses sous-catégories
           if (venteData.categorie_uuid) {
-            const selectedCat = response.find(c => c.uuid === venteData.categorie_uuid);
+            const selectedCat = sortedCategories.find(c => c.uuid === venteData.categorie_uuid);
             if (selectedCat?.enfants && selectedCat.enfants.length > 0) {
               setSousCategories(selectedCat.enfants);
             }
