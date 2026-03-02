@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { api } from "@/lib/api-client";
 import { buildImageUrl } from "@/app/shared/utils/image-utils";
+import colors from "@/app/shared/constants/colors";
 
 interface ProfileData {
   uuid?: string;
@@ -16,6 +17,7 @@ interface ProfileData {
   date_naissance: string | null;
   avatar: string | null;
   photo?: string | null;
+  registre_commerce?: string | null;
   type?: "standard" | "premium";
   is_verified?: boolean;
   created_at?: string;
@@ -26,15 +28,31 @@ interface Civilité {
   libelle: string;
 }
 
+interface RegistreCommerce {
+  url: string;
+  key: string;
+  original_name: string;
+  size: number;
+  mimetype: string;
+  uploaded_at?: string;
+}
+
+interface UploadResponse {
+  success: boolean;
+  message: string;
+  data: RegistreCommerce;
+}
+
 export default function ProfileVendeurPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingRegistre, setUploadingRegistre] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [civilites, setCivilites] = useState<Civilité[]>([]);
-  const [activeTab, setActiveTab] = useState<"personal" | "security">(
+  const [activeTab, setActiveTab] = useState<"personal" | "security" | "registre">(
     "personal",
   );
   const [formData, setFormData] = useState<ProfileData>({
@@ -45,12 +63,21 @@ export default function ProfileVendeurPage() {
     date_naissance: null,
     avatar: null,
     photo: null,
+    registre_commerce: null,
     type: "standard",
     is_verified: false,
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [avatarError, setAvatarError] = useState(false);
+  
+  // États pour le registre de commerce
+  const [currentRegistre, setCurrentRegistre] = useState<RegistreCommerce | null>(null);
+  const [registreHistory, setRegistreHistory] = useState<RegistreCommerce[]>([]);
+  const [selectedRegistreFile, setSelectedRegistreFile] = useState<File | null>(null);
+  const [registrePreviewUrl, setRegistrePreviewUrl] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [dragActive, setDragActive] = useState(false);
 
   // Récupérer les civilités
   useEffect(() => {
@@ -163,6 +190,7 @@ export default function ProfileVendeurPage() {
           email: data.email,
           avatar: data.avatar,
           photo: data.photo,
+          registre_commerce: data.registre_commerce,
           type: data.type,
         });
 
@@ -175,6 +203,7 @@ export default function ProfileVendeurPage() {
           date_naissance: data.date_naissance || null,
           avatar: data.avatar || data.photo || null,
           photo: data.photo || null,
+          registre_commerce: data.registre_commerce || null,
           type: (data.type as "standard" | "premium") || "standard",
           is_verified: data.is_verified || false,
           created_at: data.created_at || data.date_creation,
@@ -182,6 +211,19 @@ export default function ProfileVendeurPage() {
 
         setProfile(profileData);
         setFormData(profileData);
+        
+        // Si un registre existe, le charger
+        if (data.registre_commerce) {
+          const registreData: RegistreCommerce = {
+            url: buildImageUrl(data.registre_commerce) || data.registre_commerce,
+            key: data.registre_commerce,
+            original_name: "Registre de commerce",
+            size: 0,
+            mimetype: "application/pdf",
+            uploaded_at: data.updated_at,
+          };
+          setCurrentRegistre(registreData);
+        }
       }
     } catch (err: any) {
       console.error("Erreur lors du chargement du profil vendeur:", err);
@@ -244,7 +286,148 @@ export default function ProfileVendeurPage() {
     setSuccess(null);
   };
 
-  // Soumission du formulaire
+  // ============================================
+  // GESTION DU REGISTRE DE COMMERCE
+  // ============================================
+
+  const handleRegistreFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    validateAndSetRegistreFile(file);
+  };
+
+  const validateAndSetRegistreFile = (file: File) => {
+    // Validation du type de fichier
+    const allowedTypes = [
+      "application/pdf",
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/gif",
+    ];
+    
+    if (!allowedTypes.includes(file.type)) {
+      setError("Format de fichier non supporté. Utilisez PDF, JPEG, PNG ou GIF.");
+      return;
+    }
+
+    // Validation de la taille (max 10MB)
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      setError("Le fichier est trop volumineux. Taille maximum : 10MB");
+      return;
+    }
+
+    setSelectedRegistreFile(file);
+    setError(null);
+
+    // Créer une prévisualisation pour les images
+    if (file.type.startsWith("image/")) {
+      const url = URL.createObjectURL(file);
+      setRegistrePreviewUrl(url);
+    } else {
+      setRegistrePreviewUrl(null);
+    }
+  };
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      validateAndSetRegistreFile(file);
+    }
+  };
+
+  const handleRemoveRegistreFile = () => {
+    setSelectedRegistreFile(null);
+    setRegistrePreviewUrl(null);
+  };
+
+  const uploadRegistre = async () => {
+    if (!selectedRegistreFile) {
+      setError("Veuillez sélectionner un fichier");
+      return;
+    }
+
+    try {
+      setUploadingRegistre(true);
+      setError(null);
+      setUploadProgress(0);
+
+      // Simuler la progression
+      const interval = setInterval(() => {
+        setUploadProgress((prev) => {
+          if (prev >= 90) {
+            clearInterval(interval);
+            return 90;
+          }
+          return prev + 10;
+        });
+      }, 200);
+
+      // Créer le FormData
+      const formData = new FormData();
+      formData.append("registre_commerce", selectedRegistreFile);
+
+      // Appel API
+      const response = await api.post<UploadResponse>(
+        "/auth/upload-regis-commerce",
+        formData,
+        { isFormData: true }
+      );
+
+      clearInterval(interval);
+      setUploadProgress(100);
+
+      if (response.success) {
+        setCurrentRegistre(response.data);
+        
+        // Ajouter à l'historique
+        const updatedHistory = [response.data, ...registreHistory];
+        setRegistreHistory(updatedHistory);
+
+        setSuccess("Registre de commerce uploadé avec succès !");
+        setTimeout(() => setSuccess(null), 5000);
+        
+        // Réinitialiser le formulaire
+        setTimeout(() => {
+          setSelectedRegistreFile(null);
+          setRegistrePreviewUrl(null);
+          setUploadProgress(0);
+        }, 2000);
+      }
+    } catch (err: any) {
+      console.error("Erreur upload registre:", err);
+      setError(err.message || "Erreur lors de l'upload du registre");
+    } finally {
+      setUploadingRegistre(false);
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  };
+
+  // Soumission du formulaire principal
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (saving) return;
@@ -389,8 +572,7 @@ export default function ProfileVendeurPage() {
                         Gestion du profil
                       </h1>
                       <p className="text-muted mb-0">
-                        Gérez vos informations personnelles et vos paramètres de
-                        sécurité
+                        Gérez vos informations personnelles, votre registre de commerce et vos paramètres de sécurité
                       </p>
                     </div>
                     <div className="mt-3 mt-md-0">
@@ -407,7 +589,7 @@ export default function ProfileVendeurPage() {
               </div>
             </div>
 
-            {/* Onglets */}
+            {/* Onglets - AJOUT DE L'ONGLET REGISTRE */}
             <div className="card border-0 shadow-sm mb-4">
               <div className="card-header bg-white border-0 p-0">
                 <ul className="nav nav-tabs nav-fill border-0">
@@ -418,6 +600,15 @@ export default function ProfileVendeurPage() {
                     >
                       <i className="fa-solid fa-user-pen me-2"></i>
                       Informations personnelles
+                    </button>
+                  </li>
+                  <li className="nav-item">
+                    <button
+                      className={`nav-link ${activeTab === "registre" ? "active" : ""}`}
+                      onClick={() => setActiveTab("registre")}
+                    >
+                      <i className="fa-solid fa-file-pdf me-2"></i>
+                      Registre de commerce
                     </button>
                   </li>
                   <li className="nav-item">
@@ -499,7 +690,7 @@ export default function ProfileVendeurPage() {
                     ) : (
                       <form onSubmit={handleSubmit}>
                         <div className="row">
-                          {/* Colonne gauche - Avatar (version admin) */}
+                          {/* Colonne gauche - Avatar */}
                           <div className="col-12 col-md-4 mb-4 mb-md-0">
                             <div className="sticky-top" style={{ top: "20px" }}>
                               <div className="card border-0 shadow-sm h-100">
@@ -878,6 +1069,308 @@ export default function ProfileVendeurPage() {
                 </div>
               </div>
 
+              {/* Onglet Registre de commerce */}
+              <div
+                className={`tab-pane fade ${activeTab === "registre" ? "show active" : ""}`}
+              >
+                <div className="card border-0 shadow-sm">
+                  <div className="card-header bg-white border-0 py-4">
+                    <h5 className="mb-0">
+                      <i className="fa-solid fa-file-pdf text-danger me-2"></i>
+                      Registre de commerce
+                    </h5>
+                    <p className="text-muted mb-0 mt-2 small">
+                      Gérez votre registre de commerce (RCCM) - Format PDF, JPEG, PNG (Max 10MB)
+                    </p>
+                  </div>
+                  <div className="card-body p-4">
+                    <div className="row">
+                      <div className="col-12 col-md-6 mb-4">
+                        {/* Registre actuel */}
+                        <div className="card h-100 border">
+                          <div className="card-header bg-light border-0 py-3">
+                            <h6 className="fw-bold mb-0">
+                              <i className="fa-solid fa-eye me-2 text-success"></i>
+                              Registre actuel
+                            </h6>
+                          </div>
+                          <div className="card-body p-4">
+                            {currentRegistre ? (
+                              <div className="text-center">
+                                <div className="mb-4">
+                                  <div
+                                    className="rounded-circle mx-auto d-flex align-items-center justify-content-center"
+                                    style={{
+                                      width: "80px",
+                                      height: "80px",
+                                      backgroundColor: currentRegistre.mimetype.includes("pdf") 
+                                        ? "#FEE2E2" 
+                                        : colors.oskar.green + "20",
+                                      color: currentRegistre.mimetype.includes("pdf")
+                                        ? "#DC2626"
+                                        : colors.oskar.green,
+                                      fontSize: "2rem",
+                                    }}
+                                  >
+                                    <i className={`fa-solid ${currentRegistre.mimetype.includes("pdf") ? "fa-file-pdf" : "fa-file-image"}`}></i>
+                                  </div>
+                                </div>
+                                <h6 className="fw-bold mb-2">{currentRegistre.original_name}</h6>
+                                <p className="text-muted small mb-3">
+                                  {formatFileSize(currentRegistre.size)}
+                                </p>
+                                <div className="d-flex justify-content-center gap-2">
+                                  <a
+                                    href={currentRegistre.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="btn btn-outline-primary btn-sm"
+                                  >
+                                    <i className="fa-solid fa-eye me-1"></i>
+                                    Voir
+                                  </a>
+                                  <a
+                                    href={currentRegistre.url}
+                                    download={currentRegistre.original_name}
+                                    className="btn btn-outline-success btn-sm"
+                                  >
+                                    <i className="fa-solid fa-download me-1"></i>
+                                    Télécharger
+                                  </a>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-center py-5">
+                                <div
+                                  className="rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center"
+                                  style={{
+                                    width: "64px",
+                                    height: "64px",
+                                    backgroundColor: colors.oskar.lightGrey,
+                                    color: colors.oskar.grey,
+                                    fontSize: "1.5rem",
+                                  }}
+                                >
+                                  <i className="fa-solid fa-file-pdf"></i>
+                                </div>
+                                <p className="text-muted mb-3">
+                                  Aucun registre de commerce uploadé
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="col-12 col-md-6 mb-4">
+                        {/* Upload nouveau registre */}
+                        <div className="card h-100 border">
+                          <div className="card-header bg-light border-0 py-3">
+                            <h6 className="fw-bold mb-0">
+                              <i className="fa-solid fa-upload me-2 text-warning"></i>
+                              Mettre à jour le registre
+                            </h6>
+                          </div>
+                          <div className="card-body p-4">
+                            {/* Zone de drop */}
+                            <div
+                              className={`border-2 border-dashed rounded-3 p-4 mb-3 text-center ${
+                                dragActive ? "bg-light" : ""
+                              }`}
+                              style={{
+                                borderColor: dragActive ? colors.oskar.green : colors.oskar.lightGrey,
+                                backgroundColor: dragActive ? colors.oskar.green + "10" : "white",
+                                transition: "all 0.2s ease",
+                                cursor: "pointer",
+                              }}
+                              onDragEnter={handleDrag}
+                              onDragLeave={handleDrag}
+                              onDragOver={handleDrag}
+                              onDrop={handleDrop}
+                              onClick={() => document.getElementById("registre-upload")?.click()}
+                            >
+                              <input
+                                id="registre-upload"
+                                type="file"
+                                accept=".pdf,.jpg,.jpeg,.png,.gif"
+                                onChange={handleRegistreFileChange}
+                                className="visually-hidden"
+                              />
+
+                              {selectedRegistreFile ? (
+                                <div className="text-center">
+                                  {registrePreviewUrl ? (
+                                    <img
+                                      src={registrePreviewUrl}
+                                      alt="Aperçu"
+                                      className="rounded-3 mb-3"
+                                      style={{
+                                        maxWidth: "150px",
+                                        maxHeight: "150px",
+                                        objectFit: "contain",
+                                      }}
+                                    />
+                                  ) : (
+                                    <div
+                                      className="rounded-circle mx-auto mb-3 d-flex align-items-center justify-content-center"
+                                      style={{
+                                        width: "50px",
+                                        height: "50px",
+                                        backgroundColor: colors.oskar.green + "20",
+                                        color: colors.oskar.green,
+                                        fontSize: "1.25rem",
+                                      }}
+                                    >
+                                      <i className="fa-solid fa-file-pdf"></i>
+                                    </div>
+                                  )}
+
+                                  <h6 className="fw-semibold mb-2 small">
+                                    {selectedRegistreFile.name}
+                                  </h6>
+                                  <p className="text-muted small mb-2">
+                                    {formatFileSize(selectedRegistreFile.size)}
+                                  </p>
+
+                                  <button
+                                    type="button"
+                                    className="btn btn-outline-danger btn-sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRemoveRegistreFile();
+                                    }}
+                                  >
+                                    <i className="fa-solid fa-times me-1"></i>
+                                    Supprimer
+                                  </button>
+                                </div>
+                              ) : (
+                                <>
+                                  <div
+                                    className="rounded-circle mx-auto mb-2 d-flex align-items-center justify-content-center"
+                                    style={{
+                                      width: "48px",
+                                      height: "48px",
+                                      backgroundColor: colors.oskar.green + "20",
+                                      color: colors.oskar.green,
+                                      fontSize: "1.25rem",
+                                    }}
+                                  >
+                                    <i className="fa-solid fa-cloud-upload-alt"></i>
+                                  </div>
+                                  <p className="fw-medium mb-1 small">
+                                    Glissez-déposez votre fichier
+                                  </p>
+                                  <p className="text-muted small mb-2">
+                                    ou cliquez pour parcourir
+                                  </p>
+                                  <p className="text-muted small mb-0">
+                                    PDF, JPEG, PNG (Max 10MB)
+                                  </p>
+                                </>
+                              )}
+                            </div>
+
+                            {/* Barre de progression */}
+                            {uploadProgress > 0 && uploadProgress < 100 && (
+                              <div className="mb-3">
+                                <div className="d-flex justify-content-between align-items-center mb-1">
+                                  <span className="small text-muted">Upload...</span>
+                                  <span className="small fw-semibold">{uploadProgress}%</span>
+                                </div>
+                                <div className="progress" style={{ height: "6px" }}>
+                                  <div
+                                    className="progress-bar"
+                                    role="progressbar"
+                                    style={{
+                                      width: `${uploadProgress}%`,
+                                      backgroundColor: colors.oskar.green,
+                                      transition: "width 0.2s ease",
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Bouton d'upload */}
+                            <button
+                              className="btn btn-success w-100 d-flex align-items-center justify-content-center gap-2 py-2"
+                              onClick={uploadRegistre}
+                              disabled={uploadingRegistre || !selectedRegistreFile}
+                            >
+                              {uploadingRegistre ? (
+                                <>
+                                  <span className="spinner-border spinner-border-sm" role="status"></span>
+                                  <span>Upload en cours...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <i className="fa-solid fa-upload"></i>
+                                  <span>Uploader le registre</span>
+                                </>
+                              )}
+                            </button>
+
+                            {currentRegistre && (
+                              <div className="mt-3 p-3 bg-light rounded-3">
+                                <div className="d-flex align-items-center gap-2">
+                                  <i className="fa-solid fa-clock text-muted" style={{ fontSize: "0.75rem" }}></i>
+                                  <p className="small text-muted mb-0">
+                                    Dernier upload : {currentRegistre.uploaded_at 
+                                      ? new Date(currentRegistre.uploaded_at).toLocaleDateString("fr-FR")
+                                      : "N/A"}
+                                  </p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Informations importantes */}
+                      <div className="col-12">
+                        <div
+                          className="p-3 rounded-3"
+                          style={{
+                            backgroundColor: colors.oskar.blue + "10",
+                            border: `1px solid ${colors.oskar.blue}30`,
+                          }}
+                        >
+                          <div className="d-flex gap-3">
+                            <i
+                              className="fa-solid fa-circle-info"
+                              style={{ color: colors.oskar.blue }}
+                            ></i>
+                            <div>
+                              <h6 className="fw-semibold mb-2">
+                                Informations importantes
+                              </h6>
+                              <ul className="small text-muted mb-0 ps-3">
+                                <li className="mb-1">
+                                  Le registre de commerce (RCCM) est obligatoire pour les vendeurs professionnels
+                                </li>
+                                <li className="mb-1">
+                                  Formats acceptés : PDF, JPEG, PNG, GIF (taille max : 10MB)
+                                </li>
+                                <li className="mb-1">
+                                  Assurez-vous que le document est lisible et à jour
+                                </li>
+                                <li className="mb-1">
+                                  Le registre sera vérifié par nos équipes dans un délai de 24-48h
+                                </li>
+                                <li>
+                                  Une fois vérifié, votre statut de vendeur sera mis à jour
+                                </li>
+                              </ul>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Onglet Sécurité */}
               <div
                 className={`tab-pane fade ${activeTab === "security" ? "show active" : ""}`}
@@ -1157,6 +1650,9 @@ export default function ProfileVendeurPage() {
         }
         .progress-bar {
           border-radius: 10px;
+        }
+        .border-dashed {
+          border-style: dashed !important;
         }
       `}</style>
     </div>

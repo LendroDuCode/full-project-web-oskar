@@ -28,6 +28,7 @@ export default function SidebarVendeur({
     commandes: false,
     stocks: false,
     categories: false,
+    registre: false, // Nouvel état pour le registre de commerce
     types: false,
     history: false,
     profile: false,
@@ -294,7 +295,19 @@ export default function SidebarVendeur({
           href: "/dashboard-vendeur/categories/liste",
           icon: "fa-list text-info",
         },
-        ,
+      ],
+    },
+    // NOUVEAU : Onglet Registre de commerce
+    {
+      id: "registre",
+      label: "Registre de Commerce",
+      icon: "fa-file-pdf",
+      submenu: [
+        {
+          label: "Mettre à jour le registre",
+          href: "/dashboard-vendeur/registre/mise-a-jour",
+          icon: "fa-upload text-warning",
+        },
       ],
     },
 

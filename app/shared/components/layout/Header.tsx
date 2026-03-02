@@ -60,7 +60,7 @@ interface UserProfile {
   prenoms?: string;
   firstName?: string;
   lastName?: string;
-  avatar?: string;
+  avatar?: string | null;
   avatar_key?: string;
   type: "admin" | "agent" | "vendeur" | "utilisateur";
   role?: string;
@@ -400,7 +400,7 @@ const Header: FC = () => {
                   uuid: response.data?.uuid || user.uuid || "",
                   email: response.data?.email || user.email || "",
                   nom: response.data?.nom || user.nom || "",
-                  avatar: response.data?.avatar || user.avatar,
+                  avatar: response.data?.avatar || user.avatar || null,
                   avatar_key:
                     response.data?.avatar_key || (user as any).avatar_key,
                   type: "admin",
@@ -417,7 +417,7 @@ const Header: FC = () => {
                   email: response.data?.email || user.email || "",
                   nom: response.data?.nom || user.nom || "",
                   prenoms: response.data?.prenoms || user.prenoms || "",
-                  avatar: response.data?.avatar || user.avatar,
+                  avatar: response.data?.avatar || user.avatar || null,
                   avatar_key:
                     response.data?.avatar_key || (user as any).avatar_key,
                   type: "agent",
@@ -431,7 +431,7 @@ const Header: FC = () => {
                   email: response.data?.email || user.email || "",
                   nom: response.data?.nom || user.nom || "",
                   prenoms: response.data?.prenoms || user.prenoms || "",
-                  avatar: response.data?.avatar || user.avatar,
+                  avatar: response.data?.avatar || user.avatar || null,
                   avatar_key:
                     response.data?.avatar_key || (user as any).avatar_key,
                   type: "vendeur",
@@ -446,7 +446,7 @@ const Header: FC = () => {
                   email: response.data?.email || user.email || "",
                   nom: response.data?.nom || user.nom || "",
                   prenoms: response.data?.prenoms || user.prenoms || "",
-                  avatar: response.data?.avatar || user.avatar,
+                  avatar: response.data?.avatar || user.avatar || null,
                   avatar_key:
                     response.data?.avatar_key || (user as any).avatar_key,
                   type: "utilisateur",
@@ -576,19 +576,36 @@ const Header: FC = () => {
     return { prenom, nom };
   }, [user, userProfile]);
 
-  // ✅ FONCTION AVEC buildImageUrl CENTRALISÉ - CORRIGÉE POUR AFFICHER LES INITIALES EN CAS D'ERREUR
+  // ✅ FONCTION POUR VÉRIFIER SI L'AVATAR EST VALIDE
+  const hasValidAvatar = useCallback((): boolean => {
+    if (!userProfile?.avatar || avatarError) {
+      return false;
+    }
+    
+    // Vérifier si l'avatar n'est pas une chaîne vide ou null
+    if (userProfile.avatar === "" || userProfile.avatar === null || userProfile.avatar === undefined) {
+      return false;
+    }
+    
+    return true;
+  }, [userProfile, avatarError]);
+
+  // ✅ FONCTION AVEC buildImageUrl CENTRALISÉ - CORRIGÉE POUR GÉRER undefined
   const getAvatarUrl = useCallback((): string => {
     const { prenom, nom } = getUserFirstAndLastName();
     
-    if (!userProfile?.avatar || avatarError) {
+    if (!hasValidAvatar() || !userProfile?.avatar) {
       return getDefaultAvatar(prenom, nom, 40);
     }
-    const url = buildImageUrl(userProfile.avatar);
+    
+    // S'assurer que userProfile.avatar est soit string, soit null
+    const avatarValue = userProfile.avatar === undefined ? null : userProfile.avatar;
+    const url = buildImageUrl(avatarValue);
     return (
       url ||
       getDefaultAvatar(prenom, nom, 40)
     );
-  }, [userProfile, avatarError, getUserFirstAndLastName]);
+  }, [userProfile, hasValidAvatar, getUserFirstAndLastName]);
 
   // ✅ GESTIONNAIRE D'ERREUR D'IMAGE
   const handleImageError = useCallback(
@@ -604,12 +621,13 @@ const Header: FC = () => {
     if (isLoggedIn && (user || userProfile)) {
       console.log("🔍 Avatar URL:", getAvatarUrl());
       console.log("🔍 Avatar brut:", user?.avatar || userProfile?.avatar);
+      console.log("🔍 hasValidAvatar:", hasValidAvatar());
       console.log(
         "🔍 Avatar_key:",
         (user as any)?.avatar_key || (userProfile as any)?.avatar_key,
       );
     }
-  }, [isLoggedIn, user, userProfile, getAvatarUrl]);
+  }, [isLoggedIn, user, userProfile, getAvatarUrl, hasValidAvatar]);
 
   // ✅ AUTRES CALLBACKS
   const handleLoginClick = useCallback(() => {
@@ -728,17 +746,22 @@ const Header: FC = () => {
     }
   }, [user, userProfile]);
 
+  // ✅ FONCTION MIS À JOUR POUR LES ANNONCES - LES AGENTS ONT ACCÈS
   const getUserAnnoncesUrl = useCallback(() => {
     const userType = user?.type || userProfile?.type;
-    if (!userType) return "/mes-annonces";
+    if (!userType) return "/";
 
     switch (userType) {
       case "vendeur":
         return "/dashboard-vendeur/annonces/liste-annonces";
+      case "agent":
+        return "/dashboard-agent/annonces";
       case "utilisateur":
         return "/dashboard-utilisateur/annonces/liste-annonces";
+      case "admin":
+        return "/dashboard-admin/annonces/liste-annonces";
       default:
-        return "/mes-annonces";
+        return "/";
     }
   }, [user, userProfile]);
 
@@ -760,9 +783,10 @@ const Header: FC = () => {
     }
   }, [user, userProfile]);
 
-  const isVendeurOrUtilisateur = useCallback(() => {
+  // ✅ FONCTION MIS À JOUR POUR DÉTERMINER QUI PEUT VOIR LES ANNONCES
+  const canViewAnnonces = useCallback(() => {
     const userType = user?.type || userProfile?.type;
-    return userType === "vendeur" || userType === "utilisateur";
+    return userType === "vendeur" || userType === "utilisateur" || userType === "agent" || userType === "admin";
   }, [user, userProfile]);
 
   const getEmailToDisplay = useCallback(() => {
@@ -1235,23 +1259,30 @@ const Header: FC = () => {
                       </div>
                     ) : (
                       <div
-                        className="rounded-circle overflow-hidden position-relative"
+                        className="rounded-circle overflow-hidden position-relative d-flex align-items-center justify-content-center"
                         style={{
                           width: "var(--size-avatar, 44px)",
                           height: "var(--size-avatar, 44px)",
                           border: `2px solid ${colors.oskar.green}`,
+                          backgroundColor: hasValidAvatar() ? 'transparent' : colors.oskar.green,
                         }}
                       >
-                        <img
-                          src={getAvatarUrl()}
-                          alt={getUserFullName()}
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                          }}
-                          onError={handleImageError}
-                        />
+                        {hasValidAvatar() ? (
+                          <img
+                            src={getAvatarUrl()}
+                            alt={getUserFullName()}
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                            }}
+                            onError={handleImageError}
+                          />
+                        ) : (
+                          <span className="text-white fw-bold" style={{ fontSize: 'calc(var(--size-avatar, 44px) * 0.4)' }}>
+                            {getUserInitials()}
+                          </span>
+                        )}
                       </div>
                     )}
                   </button>
@@ -1268,23 +1299,30 @@ const Header: FC = () => {
                       <div className="p-3 border-bottom">
                         <div className="d-flex align-items-center">
                           <div
-                            className="rounded-circle overflow-hidden me-3 flex-shrink-0 position-relative"
+                            className="rounded-circle overflow-hidden me-3 flex-shrink-0 position-relative d-flex align-items-center justify-content-center"
                             style={{
                               width: "48px",
                               height: "48px",
                               border: `2px solid ${colors.oskar.green}`,
+                              backgroundColor: hasValidAvatar() ? 'transparent' : colors.oskar.green,
                             }}
                           >
-                            <img
-                              src={getAvatarUrl()}
-                              alt={getUserFullName()}
-                              style={{
-                                width: "100%",
-                                height: "100%",
-                                objectFit: "cover",
-                              }}
-                              onError={handleImageError}
-                            />
+                            {hasValidAvatar() ? (
+                              <img
+                                src={getAvatarUrl()}
+                                alt={getUserFullName()}
+                                style={{
+                                  width: "100%",
+                                  height: "100%",
+                                  objectFit: "cover",
+                                }}
+                                onError={handleImageError}
+                              />
+                            ) : (
+                              <span className="text-white fw-bold" style={{ fontSize: '1.2rem' }}>
+                                {getUserInitials()}
+                              </span>
+                            )}
                           </div>
                           <div className="flex-grow-1 min-w-0">
                             <h6
@@ -1354,7 +1392,8 @@ const Header: FC = () => {
                           <span className="flex-grow-1">Mon profil</span>
                         </Link>
 
-                        {isVendeurOrUtilisateur() && (
+                        {/* ✅ LIEN VERS LES ANNONCES POUR TOUS LES TYPES D'UTILISATEURS */}
+                        {canViewAnnonces() && (
                           <Link
                             href={getUserAnnoncesUrl()}
                             className="dropdown-item d-flex align-items-center py-2 px-3"
@@ -1368,7 +1407,7 @@ const Header: FC = () => {
                               className="fa-solid fa-newspaper me-3 text-muted flex-shrink-0"
                               style={{ width: "18px", fontSize: "1rem" }}
                             ></i>
-                            <span className="flex-grow-1">Mes annonces</span>
+                            <span className="flex-grow-1">Les annonces</span>
                           </Link>
                         )}
 
@@ -1643,7 +1682,8 @@ const Header: FC = () => {
                     <span>Mon profil</span>
                   </Link>
 
-                  {isVendeurOrUtilisateur() && (
+                  {/* ✅ LIEN VERS LES ANNONCES DANS LE MENU MOBILE POUR TOUS LES TYPES */}
+                  {canViewAnnonces() && (
                     <Link
                       href={getUserAnnoncesUrl()}
                       className="d-flex align-items-center py-3 px-3 text-decoration-none"
@@ -1658,7 +1698,7 @@ const Header: FC = () => {
                         className="fa-solid fa-newspaper me-3"
                         style={{ width: "18px" }}
                       ></i>
-                      <span>Mes annonces</span>
+                      <span>Les annonces</span>
                     </Link>
                   )}
 

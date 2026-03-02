@@ -115,6 +115,7 @@ export const API_ENDPOINTS = {
     RESTORE: (uuid: string) => withBaseUrl(`/admin/restaurer-vendeur/${uuid}`),
     EXPORT_PDF: withBaseUrl("/admin/export-vendeurs-pdf"),
     EXPORT_BLOCKED_PDF: withBaseUrl("/admin/export-vendeurs-bloques-pdf"),
+    UPLOADER_REGISTRE_COMMERCE: withBaseUrl("auth/upload-regis-commerce"),
     EXPORT_DELETED_PDF: withBaseUrl("/admin/export-vendeurs-supprimes-pdf"),
   },
 

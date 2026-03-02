@@ -661,11 +661,6 @@ export default function EchangeDetailPage() {
                 Retour
               </a>
             </li>
-            <li className="breadcrumb-item">
-              <a href="/annonces" className="text-decoration-none">
-                Annonces
-              </a>
-            </li>
             <li className="breadcrumb-item active" aria-current="page">
               {echange.nomElementEchange || "Détails de l'échange"}
             </li>
