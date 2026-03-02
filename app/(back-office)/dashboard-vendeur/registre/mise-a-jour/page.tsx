@@ -1005,4 +1005,4 @@ export default function RegistreCommercePage() {
       `}</style>
     </div>
   );
-}
+}       

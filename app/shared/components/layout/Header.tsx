@@ -11,11 +11,24 @@ import { api } from "@/lib/api-client";
 import { buildImageUrl } from "../../utils/image-utils";
 
 // ============================================
-// FONCTION POUR LE FALLBACK AVATAR
+// FONCTION POUR LE FALLBACK AVATAR - MODIFIÉE POUR AFFICHER LES DEUX INITIALES
 // ============================================
-const getDefaultAvatar = (nom: string = "U", size: number = 40) => {
-  const initials = nom ? nom.charAt(0).toUpperCase() : "U";
-  return `https://ui-avatars.com/api/?name=${initials}&background=16a34a&color=fff&size=${size}`;
+const getDefaultAvatar = (prenom: string = "", nom: string = "", size: number = 40) => {
+  // Récupérer la première lettre du prénom et la première lettre du nom
+  const firstInitial = prenom ? prenom.charAt(0).toUpperCase() : "";
+  const lastInitial = nom ? nom.charAt(0).toUpperCase() : "";
+  
+  // Si les deux initiales sont disponibles, les combiner
+  let initials = "U";
+  if (firstInitial && lastInitial) {
+    initials = `${firstInitial}${lastInitial}`;
+  } else if (firstInitial) {
+    initials = firstInitial;
+  } else if (lastInitial) {
+    initials = lastInitial;
+  }
+  
+  return `https://ui-avatars.com/api/?name=${initials}&background=16a34a&color=fff&size=${size}&bold=true&length=2&font-size=0.5`;
 };
 
 interface NavLink {
@@ -47,7 +60,7 @@ interface UserProfile {
   prenoms?: string;
   firstName?: string;
   lastName?: string;
-  avatar?: string;
+  avatar?: string | null;
   avatar_key?: string;
   type: "admin" | "agent" | "vendeur" | "utilisateur";
   role?: string;
@@ -387,7 +400,7 @@ const Header: FC = () => {
                   uuid: response.data?.uuid || user.uuid || "",
                   email: response.data?.email || user.email || "",
                   nom: response.data?.nom || user.nom || "",
-                  avatar: response.data?.avatar || user.avatar,
+                  avatar: response.data?.avatar || user.avatar || null,
                   avatar_key:
                     response.data?.avatar_key || (user as any).avatar_key,
                   type: "admin",
@@ -404,7 +417,7 @@ const Header: FC = () => {
                   email: response.data?.email || user.email || "",
                   nom: response.data?.nom || user.nom || "",
                   prenoms: response.data?.prenoms || user.prenoms || "",
-                  avatar: response.data?.avatar || user.avatar,
+                  avatar: response.data?.avatar || user.avatar || null,
                   avatar_key:
                     response.data?.avatar_key || (user as any).avatar_key,
                   type: "agent",
@@ -418,7 +431,7 @@ const Header: FC = () => {
                   email: response.data?.email || user.email || "",
                   nom: response.data?.nom || user.nom || "",
                   prenoms: response.data?.prenoms || user.prenoms || "",
-                  avatar: response.data?.avatar || user.avatar,
+                  avatar: response.data?.avatar || user.avatar || null,
                   avatar_key:
                     response.data?.avatar_key || (user as any).avatar_key,
                   type: "vendeur",
@@ -433,7 +446,7 @@ const Header: FC = () => {
                   email: response.data?.email || user.email || "",
                   nom: response.data?.nom || user.nom || "",
                   prenoms: response.data?.prenoms || user.prenoms || "",
-                  avatar: response.data?.avatar || user.avatar,
+                  avatar: response.data?.avatar || user.avatar || null,
                   avatar_key:
                     response.data?.avatar_key || (user as any).avatar_key,
                   type: "utilisateur",
@@ -534,31 +547,65 @@ const Header: FC = () => {
     };
   }, [mobileMenuOpen]);
 
-  // ✅ FONCTION AVEC buildImageUrl CENTRALISÉ - CORRIGÉE POUR NE JAMAIS RETOURNER NULL
-  const getAvatarUrl = useCallback((): string => {
-    if (!userProfile?.avatar || avatarError) {
-      return getDefaultAvatar(
-        user?.nom ||
-          user?.prenoms ||
-          userProfile?.nom ||
-          userProfile?.prenoms ||
-          "U",
-        40,
-      );
+  // ✅ FONCTION POUR OBTENIR LE PRÉNOM ET LE NOM
+  const getUserFirstAndLastName = useCallback(() => {
+    const profile = user || userProfile;
+    
+    let prenom = "";
+    let nom = "";
+    
+    if (profile) {
+      // Essayer différentes sources pour le prénom
+      prenom = profile.firstName || profile.prenoms || "";
+      
+      // Essayer différentes sources pour le nom
+      nom = profile.lastName || profile.nom || "";
+      
+      // Si on a nom_complet mais pas de prénom/nom séparés, essayer de le découper
+      if (!prenom && !nom && profile.nom_complet) {
+        const nameParts = profile.nom_complet.split(' ');
+        if (nameParts.length >= 2) {
+          prenom = nameParts[0];
+          nom = nameParts[nameParts.length - 1];
+        } else {
+          prenom = profile.nom_complet;
+        }
+      }
     }
-    const url = buildImageUrl(userProfile.avatar);
+    
+    return { prenom, nom };
+  }, [user, userProfile]);
+
+  // ✅ FONCTION POUR VÉRIFIER SI L'AVATAR EST VALIDE
+  const hasValidAvatar = useCallback((): boolean => {
+    if (!userProfile?.avatar || avatarError) {
+      return false;
+    }
+    
+    // Vérifier si l'avatar n'est pas une chaîne vide ou null
+    if (userProfile.avatar === "" || userProfile.avatar === null || userProfile.avatar === undefined) {
+      return false;
+    }
+    
+    return true;
+  }, [userProfile, avatarError]);
+
+  // ✅ FONCTION AVEC buildImageUrl CENTRALISÉ - CORRIGÉE POUR GÉRER undefined
+  const getAvatarUrl = useCallback((): string => {
+    const { prenom, nom } = getUserFirstAndLastName();
+    
+    if (!hasValidAvatar() || !userProfile?.avatar) {
+      return getDefaultAvatar(prenom, nom, 40);
+    }
+    
+    // S'assurer que userProfile.avatar est soit string, soit null
+    const avatarValue = userProfile.avatar === undefined ? null : userProfile.avatar;
+    const url = buildImageUrl(avatarValue);
     return (
       url ||
-      getDefaultAvatar(
-        user?.nom ||
-          user?.prenoms ||
-          userProfile?.nom ||
-          userProfile?.prenoms ||
-          "U",
-        40,
-      )
+      getDefaultAvatar(prenom, nom, 40)
     );
-  }, [userProfile, user, avatarError]);
+  }, [userProfile, hasValidAvatar, getUserFirstAndLastName]);
 
   // ✅ GESTIONNAIRE D'ERREUR D'IMAGE
   const handleImageError = useCallback(
@@ -574,12 +621,13 @@ const Header: FC = () => {
     if (isLoggedIn && (user || userProfile)) {
       console.log("🔍 Avatar URL:", getAvatarUrl());
       console.log("🔍 Avatar brut:", user?.avatar || userProfile?.avatar);
+      console.log("🔍 hasValidAvatar:", hasValidAvatar());
       console.log(
         "🔍 Avatar_key:",
         (user as any)?.avatar_key || (userProfile as any)?.avatar_key,
       );
     }
-  }, [isLoggedIn, user, userProfile, getAvatarUrl]);
+  }, [isLoggedIn, user, userProfile, getAvatarUrl, hasValidAvatar]);
 
   // ✅ AUTRES CALLBACKS
   const handleLoginClick = useCallback(() => {
@@ -623,25 +671,21 @@ const Header: FC = () => {
   }, []);
 
   const getUserInitials = useCallback(() => {
-    const profile = user || userProfile;
-    if (!profile) return "U";
-
-    const firstName = profile.firstName || profile.prenoms || "";
-    const lastName = profile.lastName || profile.nom || "";
-
-    if (firstName && lastName) {
-      return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
-    } else if (firstName) {
-      return firstName.charAt(0).toUpperCase();
-    } else if (lastName) {
-      return lastName.charAt(0).toUpperCase();
-    } else if (profile.email) {
-      return profile.email.charAt(0).toUpperCase();
-    } else if (profile.nom_complet) {
-      return profile.nom_complet.charAt(0).toUpperCase();
+    const { prenom, nom } = getUserFirstAndLastName();
+    
+    if (prenom && nom) {
+      return `${prenom.charAt(0)}${nom.charAt(0)}`.toUpperCase();
+    } else if (prenom) {
+      return prenom.charAt(0).toUpperCase();
+    } else if (nom) {
+      return nom.charAt(0).toUpperCase();
+    } else if (user?.email || userProfile?.email) {
+      return (user?.email || userProfile?.email || "").charAt(0).toUpperCase();
+    } else if (user?.nom_complet || userProfile?.nom_complet) {
+      return (user?.nom_complet || userProfile?.nom_complet || "").charAt(0).toUpperCase();
     }
     return "U";
-  }, [user, userProfile]);
+  }, [user, userProfile, getUserFirstAndLastName]);
 
   const getUserFullName = useCallback(() => {
     const profile = user || userProfile;
@@ -702,17 +746,22 @@ const Header: FC = () => {
     }
   }, [user, userProfile]);
 
+  // ✅ FONCTION MIS À JOUR POUR LES ANNONCES - LES AGENTS ONT ACCÈS
   const getUserAnnoncesUrl = useCallback(() => {
     const userType = user?.type || userProfile?.type;
-    if (!userType) return "/mes-annonces";
+    if (!userType) return "/";
 
     switch (userType) {
       case "vendeur":
         return "/dashboard-vendeur/annonces/liste-annonces";
+      case "agent":
+        return "/dashboard-agent/annonces";
       case "utilisateur":
         return "/dashboard-utilisateur/annonces/liste-annonces";
+      case "admin":
+        return "/dashboard-admin/annonces/liste-annonces";
       default:
-        return "/mes-annonces";
+        return "/";
     }
   }, [user, userProfile]);
 
@@ -734,9 +783,10 @@ const Header: FC = () => {
     }
   }, [user, userProfile]);
 
-  const isVendeurOrUtilisateur = useCallback(() => {
+  // ✅ FONCTION MIS À JOUR POUR DÉTERMINER QUI PEUT VOIR LES ANNONCES
+  const canViewAnnonces = useCallback(() => {
     const userType = user?.type || userProfile?.type;
-    return userType === "vendeur" || userType === "utilisateur";
+    return userType === "vendeur" || userType === "utilisateur" || userType === "agent" || userType === "admin";
   }, [user, userProfile]);
 
   const getEmailToDisplay = useCallback(() => {
@@ -757,15 +807,13 @@ const Header: FC = () => {
     );
   }, []);
 
-  // GÉNÉRER LES LIENS DE NAVIGATION avec limitation responsive
+  // GÉNÉRER LES LIENS DE NAVIGATION avec toutes les catégories
   const generateNavLinks = (): NavLink[] => {
     const links: NavLink[] = [{ name: "Accueil", href: "/", exact: true }];
 
     if (!loadingCategories && categories.length > 0) {
-      // Limiter le nombre de catégories affichées en fonction de la largeur d'écran
-      const categoriesToShow = categories.slice(0, 7);
-
-      categoriesToShow.forEach((category: Category) => {
+      // Afficher TOUTES les catégories, sans limitation
+      categories.forEach((category: Category) => {
         const isDuplicate = links.some(
           (link) =>
             link.name === category.libelle ||
@@ -781,10 +829,8 @@ const Header: FC = () => {
           };
 
           if (category.enfants && category.enfants.length > 0) {
-            // Limiter le nombre de sous-catégories
-            const childrenToShow = category.enfants.slice(0, 5);
-
-            mainLink.children = childrenToShow.map((child: Category) => ({
+            // Garder tous les enfants
+            mainLink.children = category.enfants.map((child: Category) => ({
               name: child.libelle,
               href: `/categories/${category.slug}/${child.slug}`,
             }));
@@ -840,7 +886,7 @@ const Header: FC = () => {
         <div className="container-fluid px-2 px-sm-3 px-md-4 px-lg-5">
           <div className="d-flex align-items-center justify-content-between py-2 py-md-3">
             {/* Logo et Bouton Menu Mobile */}
-            <div className="d-flex align-items-center">
+            <div className="d-flex align-items-center flex-shrink-0">
               <button
                 className="btn btn-link border-0 p-0 me-2 me-sm-3 d-lg-none mobile-menu-toggle"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -849,9 +895,9 @@ const Header: FC = () => {
                 type="button"
                 style={{
                   color: colors.oskar.grey,
-                  fontSize: "clamp(1rem, 2vw, 1.25rem)",
-                  width: "clamp(32px, 5vw, 40px)",
-                  height: "clamp(32px, 5vw, 40px)",
+                  fontSize: "var(--font-size-icon, 1.25rem)",
+                  width: "var(--size-icon, 40px)",
+                  height: "var(--size-icon, 40px)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -866,14 +912,14 @@ const Header: FC = () => {
 
               <Link
                 href="/"
-                className="d-flex align-items-center text-decoration-none"
+                className="d-flex align-items-center text-decoration-none flex-shrink-0"
                 aria-label="Accueil OSKAR"
               >
                 <div
                   className="rounded d-flex align-items-center justify-content-center"
                   style={{
-                    width: "clamp(32px, 5vw, 48px)",
-                    height: "clamp(32px, 5vw, 48px)",
+                    width: "var(--size-logo, 48px)",
+                    height: "var(--size-logo, 48px)",
                     backgroundColor: colors.oskar.green,
                     transition: "background-color 0.3s",
                   }}
@@ -887,36 +933,44 @@ const Header: FC = () => {
                 >
                   <span
                     className="text-white fw-bold"
-                    style={{ fontSize: "clamp(0.875rem, 2vw, 1.25rem)" }}
+                    style={{ fontSize: "var(--font-size-logo-letter, 1.25rem)" }}
                   >
                     O
                   </span>
                 </div>
                 <span
-                  className="fw-bold ms-1 ms-sm-2"
+                  className="fw-bold ms-2"
                   style={{
                     color: colors.oskar.black,
-                    fontSize: "clamp(1rem, 3vw, 1.75rem)",
+                    fontSize: "var(--font-size-logo, 1.75rem)",
                     transition: "font-size 0.2s",
                   }}
                 >
                   OSKAR
                 </span>
               </Link>
+            </div>
 
-              {/* Navigation Desktop */}
-              <nav className="d-none d-lg-flex align-items-center ms-4 ms-xl-5 position-relative flex-wrap">
+            {/* Navigation Desktop - TOUJOURS sur UNE SEULE LIGNE sans scroll */}
+            <div className="flex-grow-1 mx-3 mx-xl-4 position-relative">
+              <nav 
+                className="d-flex align-items-center justify-content-center"
+                style={{
+                  flexWrap: "nowrap",
+                  gap: "var(--gap-nav, 0.5rem)",
+                }}
+              >
                 {loadingCategories ? (
-                  <div className="d-flex align-items-center gap-2">
-                    <div className="skeleton-loader" style={{ width: "60px", height: "20px" }}></div>
-                    <div className="skeleton-loader" style={{ width: "80px", height: "20px" }}></div>
-                    <div className="skeleton-loader" style={{ width: "50px", height: "20px" }}></div>
+                  <div className="d-flex align-items-center gap-2 flex-nowrap">
+                    <div className="skeleton-loader" style={{ width: "60px", height: "20px", flexShrink: 0 }}></div>
+                    <div className="skeleton-loader" style={{ width: "80px", height: "20px", flexShrink: 0 }}></div>
+                    <div className="skeleton-loader" style={{ width: "50px", height: "20px", flexShrink: 0 }}></div>
                   </div>
                 ) : (
                   navLinks.map((link, index) => (
                     <div
                       key={`${link.name}-${index}`}
-                      className="position-relative me-2 me-xl-3"
+                      className="position-relative flex-shrink-0"
                       ref={(el) => {
                         if (link.hasChildren && link.name) {
                           categoriesDropdownRef.current[link.name] = el;
@@ -925,14 +979,14 @@ const Header: FC = () => {
                     >
                       <Link
                         href={link.href}
-                        className="text-decoration-none position-relative d-flex align-items-center"
+                        className="text-decoration-none position-relative d-flex align-items-center nav-link"
                         style={{
                           transition: "color 0.3s",
                           color: getLinkColor(link),
                           fontWeight: isLinkActive(link) ? "600" : "400",
-                          fontSize: "clamp(0.75rem, 1vw, 0.875rem)",
+                          fontSize: "var(--font-size-nav, 0.875rem)",
                           whiteSpace: "nowrap",
-                          padding: "0.5rem 0",
+                          padding: "var(--padding-nav, 0.5rem 0)",
                         }}
                         onMouseEnter={() => {
                           if (link.hasChildren) {
@@ -954,7 +1008,7 @@ const Header: FC = () => {
                         {link.hasChildren && (
                           <i
                             className="fa-solid fa-chevron-down ms-1"
-                            style={{ fontSize: "0.625rem" }}
+                            style={{ fontSize: "var(--font-size-icon-small, 0.625rem)" }}
                           ></i>
                         )}
                         {isLinkActive(link) && !link.hasChildren && (
@@ -999,7 +1053,7 @@ const Header: FC = () => {
                                 href={child.href}
                                 className="dropdown-item py-2 px-3"
                                 style={{
-                                  fontSize: "0.875rem",
+                                  fontSize: "var(--font-size-dropdown, 0.875rem)",
                                   color: colors.oskar.grey,
                                   transition: "all 0.2s",
                                   minHeight: "40px",
@@ -1031,21 +1085,21 @@ const Header: FC = () => {
               </nav>
             </div>
 
-            {/* Actions Desktop */}
-            <div className="d-none d-lg-flex align-items-center">
+            {/* Actions Desktop - TOUJOURS visible, jamais cachée */}
+            <div className="d-flex align-items-center flex-shrink-0 action-buttons">
               <Link href={isLoggedIn ? getUserMessagesUrl() : "#"}>
                 <button
-                  className="btn btn-link border-0 position-relative me-2 me-xl-3"
+                  className="btn btn-link border-0 position-relative me-2 me-xl-3 action-button"
                   style={{
                     transition: "color 0.3s",
-                    fontSize: "clamp(1rem, 1.5vw, 1.25rem)",
+                    fontSize: "var(--font-size-icon, 1.25rem)",
                     color:
                       pathname.includes("/messages") ||
                       pathname.includes("/messagerie")
                         ? colors.oskar.green
                         : colors.oskar.grey,
-                    width: "clamp(36px, 3vw, 44px)",
-                    height: "clamp(36px, 3vw, 44px)",
+                    width: "var(--size-icon, 44px)",
+                    height: "var(--size-icon, 44px)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1077,9 +1131,9 @@ const Header: FC = () => {
                       style={{
                         backgroundColor: colors.oskar.orange || "#ff6b35",
                         color: "white",
-                        fontSize: "0.625rem",
-                        minWidth: "16px",
-                        height: "16px",
+                        fontSize: "var(--font-size-badge, 0.625rem)",
+                        minWidth: "var(--size-badge, 16px)",
+                        height: "var(--size-badge, 16px)",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -1096,16 +1150,16 @@ const Header: FC = () => {
 
               <Link href="/contact">
                 <button
-                  className="btn btn-link border-0 me-2 me-xl-3"
+                  className="btn btn-link border-0 me-2 me-xl-3 action-button"
                   style={{
                     transition: "color 0.3s",
-                    fontSize: "clamp(1rem, 1.5vw, 1.25rem)",
+                    fontSize: "var(--font-size-icon, 1.25rem)",
                     color:
                       pathname === "/contact"
                         ? colors.oskar.green
                         : colors.oskar.grey,
-                    width: "clamp(36px, 3vw, 44px)",
-                    height: "clamp(36px, 3vw, 44px)",
+                    width: "var(--size-icon, 44px)",
+                    height: "var(--size-icon, 44px)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1129,16 +1183,16 @@ const Header: FC = () => {
 
               <Link href="/liste-favoris">
                 <button
-                  className="btn btn-link border-0 me-3 me-xl-4"
+                  className="btn btn-link border-0 me-3 me-xl-4 action-button"
                   style={{
                     transition: "color 0.3s",
-                    fontSize: "clamp(1rem, 1.5vw, 1.25rem)",
+                    fontSize: "var(--font-size-icon, 1.25rem)",
                     color:
                       pathname === "/liste-favoris"
                         ? colors.oskar.green
                         : colors.oskar.grey,
-                    width: "clamp(36px, 3vw, 44px)",
-                    height: "clamp(36px, 3vw, 44px)",
+                    width: "var(--size-icon, 44px)",
+                    height: "var(--size-icon, 44px)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1189,8 +1243,8 @@ const Header: FC = () => {
                       <div
                         className="rounded-circle d-flex align-items-center justify-content-center"
                         style={{
-                          width: "clamp(36px, 3vw, 44px)",
-                          height: "clamp(36px, 3vw, 44px)",
+                          width: "var(--size-avatar, 44px)",
+                          height: "var(--size-avatar, 44px)",
                           backgroundColor: "#f3f4f6",
                         }}
                       >
@@ -1205,23 +1259,30 @@ const Header: FC = () => {
                       </div>
                     ) : (
                       <div
-                        className="rounded-circle overflow-hidden position-relative"
+                        className="rounded-circle overflow-hidden position-relative d-flex align-items-center justify-content-center"
                         style={{
-                          width: "clamp(36px, 3vw, 44px)",
-                          height: "clamp(36px, 3vw, 44px)",
+                          width: "var(--size-avatar, 44px)",
+                          height: "var(--size-avatar, 44px)",
                           border: `2px solid ${colors.oskar.green}`,
+                          backgroundColor: hasValidAvatar() ? 'transparent' : colors.oskar.green,
                         }}
                       >
-                        <img
-                          src={getAvatarUrl()}
-                          alt={getUserFullName()}
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                          }}
-                          onError={handleImageError}
-                        />
+                        {hasValidAvatar() ? (
+                          <img
+                            src={getAvatarUrl()}
+                            alt={getUserFullName()}
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              objectFit: "cover",
+                            }}
+                            onError={handleImageError}
+                          />
+                        ) : (
+                          <span className="text-white fw-bold" style={{ fontSize: 'calc(var(--size-avatar, 44px) * 0.4)' }}>
+                            {getUserInitials()}
+                          </span>
+                        )}
                       </div>
                     )}
                   </button>
@@ -1230,7 +1291,7 @@ const Header: FC = () => {
                     <div
                       className="dropdown-menu dropdown-menu-end shadow border-0 show"
                       style={{
-                        minWidth: "280px",
+                        minWidth: "clamp(240px, 20vw, 280px)",
                         maxWidth: "350px",
                         marginTop: "0.5rem",
                       }}
@@ -1238,23 +1299,30 @@ const Header: FC = () => {
                       <div className="p-3 border-bottom">
                         <div className="d-flex align-items-center">
                           <div
-                            className="rounded-circle overflow-hidden me-3 flex-shrink-0 position-relative"
+                            className="rounded-circle overflow-hidden me-3 flex-shrink-0 position-relative d-flex align-items-center justify-content-center"
                             style={{
                               width: "48px",
                               height: "48px",
                               border: `2px solid ${colors.oskar.green}`,
+                              backgroundColor: hasValidAvatar() ? 'transparent' : colors.oskar.green,
                             }}
                           >
-                            <img
-                              src={getAvatarUrl()}
-                              alt={getUserFullName()}
-                              style={{
-                                width: "100%",
-                                height: "100%",
-                                objectFit: "cover",
-                              }}
-                              onError={handleImageError}
-                            />
+                            {hasValidAvatar() ? (
+                              <img
+                                src={getAvatarUrl()}
+                                alt={getUserFullName()}
+                                style={{
+                                  width: "100%",
+                                  height: "100%",
+                                  objectFit: "cover",
+                                }}
+                                onError={handleImageError}
+                              />
+                            ) : (
+                              <span className="text-white fw-bold" style={{ fontSize: '1.2rem' }}>
+                                {getUserInitials()}
+                              </span>
+                            )}
                           </div>
                           <div className="flex-grow-1 min-w-0">
                             <h6
@@ -1303,7 +1371,7 @@ const Header: FC = () => {
                         >
                           <i
                             className="fa-solid fa-chart-line me-3 text-muted flex-shrink-0"
-                            style={{ width: "18px" }}
+                            style={{ width: "18px", fontSize: "1rem" }}
                           ></i>
                           <span className="flex-grow-1">Dashboard</span>
                         </Link>
@@ -1319,12 +1387,13 @@ const Header: FC = () => {
                         >
                           <i
                             className="fa-solid fa-user me-3 text-muted flex-shrink-0"
-                            style={{ width: "18px" }}
+                            style={{ width: "18px", fontSize: "1rem" }}
                           ></i>
                           <span className="flex-grow-1">Mon profil</span>
                         </Link>
 
-                        {isVendeurOrUtilisateur() && (
+                        {/* ✅ LIEN VERS LES ANNONCES POUR TOUS LES TYPES D'UTILISATEURS */}
+                        {canViewAnnonces() && (
                           <Link
                             href={getUserAnnoncesUrl()}
                             className="dropdown-item d-flex align-items-center py-2 px-3"
@@ -1336,9 +1405,9 @@ const Header: FC = () => {
                           >
                             <i
                               className="fa-solid fa-newspaper me-3 text-muted flex-shrink-0"
-                              style={{ width: "18px" }}
+                              style={{ width: "18px", fontSize: "1rem" }}
                             ></i>
-                            <span className="flex-grow-1">Mes annonces</span>
+                            <span className="flex-grow-1">Les annonces</span>
                           </Link>
                         )}
 
@@ -1353,7 +1422,7 @@ const Header: FC = () => {
                         >
                           <i
                             className="fa-solid fa-envelope me-3 text-muted flex-shrink-0"
-                            style={{ width: "18px" }}
+                            style={{ width: "18px", fontSize: "1rem" }}
                           ></i>
                           <span className="flex-grow-1">Messages</span>
                           {unreadMessagesCount > 0 && (
@@ -1384,7 +1453,7 @@ const Header: FC = () => {
                         >
                           <i
                             className="fa-solid fa-right-from-bracket me-3 flex-shrink-0"
-                            style={{ width: "18px" }}
+                            style={{ width: "18px", fontSize: "1rem" }}
                           ></i>
                           <span className="flex-grow-1">Déconnexion</span>
                         </button>
@@ -1394,13 +1463,13 @@ const Header: FC = () => {
                 </div>
               ) : (
                 <button
-                  className="btn btn-link border-0"
+                  className="btn btn-link border-0 action-button"
                   style={{
                     transition: "color 0.3s",
-                    fontSize: "clamp(1rem, 1.5vw, 1.25rem)",
+                    fontSize: "var(--font-size-icon, 1.25rem)",
                     color: colors.oskar.grey,
-                    width: "clamp(36px, 3vw, 44px)",
-                    height: "clamp(36px, 3vw, 44px)",
+                    width: "var(--size-icon, 44px)",
+                    height: "var(--size-icon, 44px)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1421,21 +1490,21 @@ const Header: FC = () => {
               )}
 
               <button
-                className="btn d-flex align-items-center ms-3 ms-xl-4"
+                className="btn d-flex align-items-center ms-3 ms-xl-4 publish-button"
                 style={{
                   backgroundColor:
                     hoveredButton === "publish"
                       ? colors.oskar.greenHover
                       : colors.oskar.green,
                   color: "white",
-                  padding: "0.5rem 1.25rem",
+                  padding: "var(--padding-button, 0.5rem 1.25rem)",
                   fontWeight: 600,
                   borderRadius: "8px",
                   border: "none",
                   transition: "background-color 0.3s",
-                  fontSize: "clamp(0.75rem, 1vw, 0.875rem)",
+                  fontSize: "var(--font-size-button, 0.875rem)",
                   whiteSpace: "nowrap",
-                  minHeight: "40px",
+                  minHeight: "var(--size-button, 40px)",
                 }}
                 onMouseEnter={() => setHoveredButton("publish")}
                 onMouseLeave={() => setHoveredButton(null)}
@@ -1443,152 +1512,14 @@ const Header: FC = () => {
                 onClick={handlePublishClick}
                 type="button"
               >
-                <i className="fa-solid fa-plus me-2"></i>
-                <span>Publier</span>
-              </button>
-            </div>
-
-            {/* Actions Mobile/Tablette */}
-            <div className="d-flex d-lg-none align-items-center">
-              <Link href={isLoggedIn ? getUserMessagesUrl() : "#"}>
-                <button
-                  className="btn btn-link border-0 position-relative"
-                  style={{
-                    color: colors.oskar.grey,
-                    fontSize: "1rem",
-                    width: "36px",
-                    height: "36px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: 0,
-                  }}
-                  aria-label="Messagerie"
-                  type="button"
-                  onClick={(e) => {
-                    if (!isLoggedIn) {
-                      e.preventDefault();
-                      handleLoginClick();
-                    }
-                  }}
-                >
-                  <i className="fa-solid fa-envelope"></i>
-                  {unreadMessagesCount > 0 && (
-                    <span
-                      className="position-absolute top-0 start-100 translate-middle badge rounded-pill"
-                      style={{
-                        backgroundColor: colors.oskar.orange || "#ff6b35",
-                        color: "white",
-                        fontSize: "0.5rem",
-                        minWidth: "14px",
-                        height: "14px",
-                        transform: "translate(-30%, -25%)",
-                      }}
-                    >
-                      {unreadMessagesCount > 9 ? "9+" : unreadMessagesCount}
-                    </span>
-                  )}
-                </button>
-              </Link>
-
-              <Link href="/liste-favoris">
-                <button
-                  className="btn btn-link border-0"
-                  style={{
-                    color: colors.oskar.grey,
-                    fontSize: "1rem",
-                    width: "36px",
-                    height: "36px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: 0,
-                  }}
-                  aria-label="Favoris"
-                  type="button"
-                >
-                  <i className="fa-solid fa-heart"></i>
-                </button>
-              </Link>
-
-              <Link href="/contact">
-                <button
-                  className="btn btn-link border-0"
-                  style={{
-                    color: colors.oskar.grey,
-                    fontSize: "1rem",
-                    width: "36px",
-                    height: "36px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: 0,
-                  }}
-                  aria-label="Contact"
-                  type="button"
-                >
-                  <i className="fa-solid fa-phone"></i>
-                </button>
-              </Link>
-
-              <button
-                className="btn ms-1"
-                style={{
-                  backgroundColor: colors.oskar.green,
-                  color: "white",
-                  padding: "0.375rem 0.75rem",
-                  borderRadius: "6px",
-                  fontSize: "0.875rem",
-                  border: "none",
-                  minHeight: "36px",
-                  whiteSpace: "nowrap",
-                }}
-                onClick={handlePublishClick}
-                aria-label="Publier"
-                type="button"
-              >
-                <i className="fa-solid fa-plus me-1"></i>
+                <i className="fa-solid fa-plus me-2" style={{ fontSize: "var(--font-size-icon-small, 0.875rem)" }}></i>
                 <span>Publier</span>
               </button>
             </div>
           </div>
 
-          {/* Barre de navigation mobile défilante */}
-          {!loadingCategories && categories.length > 0 && (
-            <div className="border-top d-lg-none">
-              <div className="scrollable-nav py-2 px-1">
-                <div
-                  className="d-flex overflow-auto hide-scrollbar"
-                  style={{
-                    scrollbarWidth: "none",
-                    msOverflowStyle: "none",
-                    gap: "0.5rem",
-                  }}
-                >
-                  {navLinks.map((link, index) => (
-                    <Link
-                      key={`${link.name}-${index}-mobile`}
-                      href={link.href}
-                      className={`text-decoration-none px-3 py-1 ${isLinkActive(link) ? "fw-semibold" : ""}`}
-                      style={{
-                        color: isLinkActive(link)
-                          ? colors.oskar.green
-                          : colors.oskar.grey,
-                        whiteSpace: "nowrap",
-                        borderBottom: isLinkActive(link)
-                          ? `2px solid ${colors.oskar.green}`
-                          : "2px solid transparent",
-                        fontSize: "0.875rem",
-                        padding: "0.25rem 0.75rem",
-                      }}
-                    >
-                      {link.name}
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Barre de navigation mobile défilante - SUPPRIMÉE */}
+          {/* La section avec border-top d-lg-none a été supprimée */}
         </div>
       </header>
 
@@ -1751,7 +1682,8 @@ const Header: FC = () => {
                     <span>Mon profil</span>
                   </Link>
 
-                  {isVendeurOrUtilisateur() && (
+                  {/* ✅ LIEN VERS LES ANNONCES DANS LE MENU MOBILE POUR TOUS LES TYPES */}
+                  {canViewAnnonces() && (
                     <Link
                       href={getUserAnnoncesUrl()}
                       className="d-flex align-items-center py-3 px-3 text-decoration-none"
@@ -1766,7 +1698,7 @@ const Header: FC = () => {
                         className="fa-solid fa-newspaper me-3"
                         style={{ width: "18px" }}
                       ></i>
-                      <span>Mes annonces</span>
+                      <span>Les annonces</span>
                     </Link>
                   )}
 
@@ -1897,19 +1829,194 @@ const Header: FC = () => {
           }
         }
 
+        /* Variables CSS pour la réduction progressive */
+        :root {
+          --font-size-nav: 0.875rem;
+          --font-size-icon: 1.25rem;
+          --font-size-icon-small: 0.875rem;
+          --font-size-button: 0.875rem;
+          --font-size-logo: 1.75rem;
+          --font-size-logo-letter: 1.25rem;
+          --font-size-dropdown: 0.875rem;
+          --font-size-badge: 0.625rem;
+          
+          --size-icon: 44px;
+          --size-avatar: 44px;
+          --size-logo: 48px;
+          --size-button: 40px;
+          --size-badge: 16px;
+          
+          --padding-button: 0.5rem 1.25rem;
+          --padding-nav: 0.5rem 0;
+          --gap-nav: 0.5rem;
+        }
+
+        /* Réduction progressive sur les écrans moyens */
+        @media (max-width: 1400px) {
+          :root {
+            --font-size-nav: 0.8rem;
+            --font-size-icon: 1.1rem;
+            --font-size-logo: 1.6rem;
+            --size-icon: 40px;
+            --size-avatar: 40px;
+            --gap-nav: 0.4rem;
+          }
+        }
+
+        @media (max-width: 1200px) {
+          :root {
+            --font-size-nav: 0.75rem;
+            --font-size-icon: 1rem;
+            --font-size-logo: 1.5rem;
+            --font-size-logo-letter: 1.1rem;
+            --size-icon: 38px;
+            --size-avatar: 38px;
+            --size-logo: 44px;
+            --gap-nav: 0.35rem;
+          }
+        }
+
+        @media (max-width: 992px) {
+          :root {
+            --font-size-nav: 0.7rem;
+            --font-size-icon: 0.95rem;
+            --font-size-button: 0.8rem;
+            --font-size-logo: 1.4rem;
+            --font-size-logo-letter: 1rem;
+            --size-icon: 36px;
+            --size-avatar: 36px;
+            --size-logo: 42px;
+            --size-button: 36px;
+            --padding-button: 0.4rem 1rem;
+            --gap-nav: 0.3rem;
+          }
+        }
+
+        @media (max-width: 768px) {
+          :root {
+            --font-size-nav: 0.65rem;
+            --font-size-icon: 0.9rem;
+            --font-size-icon-small: 0.7rem;
+            --font-size-button: 0.75rem;
+            --font-size-logo: 1.3rem;
+            --font-size-logo-letter: 0.9rem;
+            --size-icon: 34px;
+            --size-avatar: 34px;
+            --size-logo: 40px;
+            --size-button: 34px;
+            --padding-button: 0.35rem 0.8rem;
+            --gap-nav: 0.25rem;
+          }
+        }
+
+        @media (max-width: 640px) {
+          :root {
+            --font-size-nav: 0.6rem;
+            --font-size-icon: 0.85rem;
+            --font-size-button: 0.7rem;
+            --font-size-logo: 1.2rem;
+            --font-size-logo-letter: 0.85rem;
+            --size-icon: 32px;
+            --size-avatar: 32px;
+            --size-logo: 38px;
+            --size-button: 32px;
+            --padding-button: 0.3rem 0.7rem;
+            --gap-nav: 0.2rem;
+          }
+        }
+
+        @media (max-width: 576px) {
+          :root {
+            --font-size-nav: 0.55rem;
+            --font-size-icon: 0.8rem;
+            --font-size-icon-small: 0.65rem;
+            --font-size-button: 0.65rem;
+            --font-size-logo: 1.1rem;
+            --font-size-logo-letter: 0.8rem;
+            --font-size-badge: 0.5rem;
+            --size-icon: 30px;
+            --size-avatar: 30px;
+            --size-logo: 36px;
+            --size-button: 30px;
+            --size-badge: 14px;
+            --padding-button: 0.25rem 0.6rem;
+            --gap-nav: 0.15rem;
+          }
+        }
+
+        @media (max-width: 480px) {
+          :root {
+            --font-size-nav: 0.5rem;
+            --font-size-icon: 0.75rem;
+            --font-size-button: 0.6rem;
+            --font-size-logo: 1rem;
+            --font-size-logo-letter: 0.75rem;
+            --size-icon: 28px;
+            --size-avatar: 28px;
+            --size-logo: 34px;
+            --size-button: 28px;
+            --padding-button: 0.2rem 0.5rem;
+            --gap-nav: 0.1rem;
+          }
+        }
+
+        @media (max-width: 400px) {
+          :root {
+            --font-size-nav: 0.45rem;
+            --font-size-icon: 0.7rem;
+            --font-size-button: 0.55rem;
+            --font-size-logo: 0.9rem;
+            --font-size-logo-letter: 0.7rem;
+            --size-icon: 26px;
+            --size-avatar: 26px;
+            --size-logo: 32px;
+            --size-button: 26px;
+            --padding-button: 0.15rem 0.4rem;
+          }
+        }
+
+        @media (max-width: 360px) {
+          :root {
+            --font-size-nav: 0.4rem;
+            --font-size-icon: 0.65rem;
+            --font-size-button: 0.5rem;
+            --font-size-logo: 0.8rem;
+            --font-size-logo-letter: 0.65rem;
+            --size-icon: 24px;
+            --size-avatar: 24px;
+            --size-logo: 30px;
+            --size-button: 24px;
+            --padding-button: 0.1rem 0.3rem;
+          }
+        }
+
+        /* Styles de base */
+        .nav-link {
+          font-size: var(--font-size-nav) !important;
+          padding: var(--padding-nav) !important;
+        }
+
+        .action-button {
+          width: var(--size-icon) !important;
+          height: var(--size-icon) !important;
+          font-size: var(--font-size-icon) !important;
+        }
+
+        .publish-button {
+          font-size: var(--font-size-button) !important;
+          padding: var(--padding-button) !important;
+          min-height: var(--size-button) !important;
+        }
+
+        .publish-button i {
+          font-size: var(--font-size-icon-small) !important;
+        }
+
         /* Ultra large screens (4K) */
         @media (min-width: 2560px) {
           .container-fluid {
             max-width: 2000px;
             margin: 0 auto;
-          }
-          
-          .btn {
-            font-size: 1rem !important;
-          }
-          
-          .dropdown-menu {
-            font-size: 1rem;
           }
         }
 
@@ -1934,34 +2041,6 @@ const Header: FC = () => {
           .container-fluid {
             max-width: 960px;
             margin: 0 auto;
-          }
-          
-          .nav-link {
-            font-size: 0.875rem;
-          }
-        }
-
-        /* Tablets */
-        @media (min-width: 768px) and (max-width: 991px) {
-          .container-fluid {
-            max-width: 720px;
-            margin: 0 auto;
-          }
-        }
-
-        /* Mobile landscape */
-        @media (min-width: 576px) and (max-width: 767px) {
-          .container-fluid {
-            max-width: 540px;
-            margin: 0 auto;
-          }
-        }
-
-        /* Mobile portrait */
-        @media (max-width: 575px) {
-          .container-fluid {
-            padding-left: 0.75rem !important;
-            padding-right: 0.75rem !important;
           }
         }
 
