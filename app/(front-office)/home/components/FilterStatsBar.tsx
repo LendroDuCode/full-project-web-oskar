@@ -235,7 +235,7 @@ const FilterStatsBar: React.FC<FilterStatsBarProps> = ({
               </button>
             </div>
 
-            {/* Sélecteur de tri */}
+            {/* Sélecteur de tri - CORRIGÉ pour enlever la double flèche */}
             <div className="position-relative" style={{ minWidth: "160px" }}>
               <select
                 value={sortOption}
@@ -246,12 +246,15 @@ const FilterStatsBar: React.FC<FilterStatsBarProps> = ({
                   borderRadius: "8px",
                   color: colors.oskar.black,
                   fontSize: "0.85rem",
-                  padding: "4px 30px 4px 8px",
-                  appearance: "none",
+                  padding: "4px 8px 4px 8px", // Réduit le padding à droite
+                  appearance: "none", // Supprime l'apparence native
+                  WebkitAppearance: "none",
+                  MozAppearance: "none",
                   cursor: "pointer",
                   transition: "border-color 0.2s",
                   backgroundColor: "white",
                   height: "32px",
+                  backgroundImage: "none", // Supprime l'image de fond par défaut
                 }}
                 onFocus={(e) =>
                   (e.currentTarget.style.borderColor = colors.oskar.green)
@@ -267,18 +270,40 @@ const FilterStatsBar: React.FC<FilterStatsBarProps> = ({
                 ))}
               </select>
 
+              {/* ✅ UNE SEULE FLÈCHE - celle de FontAwesome */}
               <i
-                className="fa-solid fa-chevron-down position-absolute top-50 end-0 translate-middle-y me-2"
+                className="fa-solid fa-chevron-down position-absolute top-50 end-0 translate-middle-y"
                 style={{
                   color: colors.oskar.grey,
                   fontSize: "0.7rem",
                   pointerEvents: "none",
+                  right: "8px", // Position ajustée
+                  zIndex: 2,
                 }}
               />
             </div>
           </div>
         </div>
       </div>
+
+      {/* ✅ STYLES CSS POUR RENFORCER LA SUPPRESSION DE LA FLÈCHE NATIVE */}
+      <style jsx>{`
+        select {
+          background-image: none !important;
+        }
+        
+        select::-ms-expand {
+          display: none;
+        }
+        
+        @supports (-webkit-appearance: none) or (-moz-appearance: none) {
+          select {
+            background-image: none !important;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+          }
+        }
+      `}</style>
     </section>
   );
 };

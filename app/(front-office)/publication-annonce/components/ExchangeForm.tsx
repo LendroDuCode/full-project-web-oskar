@@ -200,16 +200,17 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
     fetchCategories();
   }, [echangeData.categorie_uuid]);
 
-  // Gérer le changement de catégorie principale
+  // ✅ CORRECTION: Gérer le changement de catégorie principale
   const handleCategorieChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const categorieUuid = e.target.value;
     const selectedCategory = categories.find(c => c.uuid === categorieUuid);
     
-    // Mettre à jour la catégorie principale
+    // Mettre à jour la catégorie principale avec final_categorie_uuid
     setEchangeData({
       ...echangeData,
-      categorie_uuid: categorieUuid,
-      sous_categorie_uuid: "", // Réinitialiser la sous-catégorie
+      categorie_uuid: categorieUuid,      // Garder pour l'UI
+      sous_categorie_uuid: "",             // Réinitialiser la sous-catégorie
+      final_categorie_uuid: categorieUuid  // Par défaut, c'est la catégorie principale
     });
 
     // Charger les sous-catégories
@@ -220,12 +221,16 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
     }
   };
 
-  // Gérer le changement de sous-catégorie
+  // ✅ CORRECTION: Gérer le changement de sous-catégorie - C'EST CETTE UUID QUI DOIT PARTIR EN BASE
   const handleSousCategorieChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const sousCategorieUuid = e.target.value;
+    
+    // Mettre à jour les données : la sous-catégorie devient la catégorie finale
     setEchangeData({
       ...echangeData,
       sous_categorie_uuid: sousCategorieUuid,
+      // Si sous-catégorie sélectionnée, utiliser son UUID, sinon garder la catégorie principale
+      final_categorie_uuid: sousCategorieUuid || echangeData.categorie_uuid
     });
   };
 
@@ -661,11 +666,11 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                         </div>
                       </div>
 
-                      {/* Sous-catégorie */}
+                      {/* ✅ Sous-catégorie - C'est SON UUID qui sera envoyé */}
                       {sousCategories.length > 0 && (
                         <div className="mb-3" style={{ minHeight: "100px" }}>
                           <label className="form-label fw-bold fs-6 mb-3">
-                            Sous-catégorie
+                            Sous-catégorie <span className="text-info">(Recommandé)</span>
                           </label>
                           <div className="position-relative">
                             <select
@@ -698,10 +703,16 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                               }}
                             />
                           </div>
-                          <small className="text-secondary mt-2 d-block">
-                            <i className="fa-regular fa-circle-question me-1"></i>
-                            Optionnel - Affinez votre catégorie
-                          </small>
+                          <div className="mt-2 p-2 bg-info bg-opacity-10 rounded-3">
+                            <small className="text-info">
+                              <i className="fa-regular fa-circle-info me-1"></i>
+                              {echangeData.sous_categorie_uuid ? (
+                                <>✅ La sous-catégorie sélectionnée sera enregistrée</>
+                              ) : (
+                                <>👉 Sélectionnez une sous-catégorie pour un ciblage plus précis</>
+                              )}
+                            </small>
+                          </div>
                         </div>
                       )}
                     </>
@@ -768,13 +779,15 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                   </div>
                   <div className="col-md-6">
                     <div className="p-4 bg-light rounded-4 border">
-                      <p className="text-secondary mb-2 small">Catégorie</p>
-                      <p className="fw-bold text-dark mb-0 fs-5">
-                        {selectedCategory?.libelle || "Non renseigné"}
+                      <p className="text-secondary mb-2 small">
+                        {selectedSousCategorie ? "Sous-catégorie" : "Catégorie"}
                       </p>
-                      {selectedSousCategorie && (
+                      <p className="fw-bold text-dark mb-0 fs-5">
+                        {selectedSousCategorie?.libelle || selectedCategory?.libelle || "Non renseigné"}
+                      </p>
+                      {selectedCategory && selectedSousCategorie && (
                         <p className="text-secondary mb-0 small">
-                          Sous-catégorie: {selectedSousCategorie.libelle}
+                          Catégorie principale: {selectedCategory.libelle}
                         </p>
                       )}
                     </div>

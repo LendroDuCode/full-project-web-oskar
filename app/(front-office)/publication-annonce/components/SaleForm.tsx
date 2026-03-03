@@ -130,6 +130,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
   const [boutiques, setBoutiques] = useState<Boutique[]>(externalBoutiques);
   const [userType, setUserType] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [isVendeur, setIsVendeur] = useState(false);
 
   // ✅ Fonction pour formater le numéro de téléphone avec +225
   const formatPhoneNumber = (value: string): string => {
@@ -185,71 +186,62 @@ const VenteForm: React.FC<VenteFormProps> = ({
     }
   };
 
-  // ✅ DÉTERMINER LE TYPE D'UTILISATEUR À PARTIR DU TOKEN
+  // ✅ RÉCUPÉRER LE TYPE D'UTILISATEUR DIRECTEMENT DEPUIS L'API CLIENT
   useEffect(() => {
-    const getUserTypeFromToken = () => {
+    const getUserTypeFromApiClient = () => {
       try {
+        // Utiliser la méthode getUserType() de l'ApiClient
+        // Note: Cette méthode n'est pas exposée publiquement, on va récupérer directement depuis localStorage
+        const userType = localStorage.getItem("oskar_user_type");
+        
+        if (userType) {
+          console.log("✅ Type utilisateur trouvé dans localStorage:", userType);
+          setIsVendeur(userType.toLowerCase() === "vendeur");
+          return;
+        }
+
+        // Si pas trouvé dans oskar_user_type, essayer de décoder le token
         const token = 
           localStorage.getItem("oskar_token") ||
           localStorage.getItem("temp_token") ||
           localStorage.getItem("tempToken") ||
           localStorage.getItem("token");
-        
-        console.log("🔍 Token trouvé:", token ? token.substring(0, 20) + "..." : "aucun");
-        
-        if (!token) {
-          console.log("ℹ️ Aucun token trouvé");
-          setUserType(null);
-          return;
+
+        if (token) {
+          const decoded = decodeToken(token);
+          if (decoded) {
+            const type = decoded.type || decoded.user_type || decoded.role;
+            console.log("✅ Type utilisateur extrait du token:", type);
+            setIsVendeur(type?.toLowerCase() === "vendeur");
+            return;
+          }
         }
 
-        const decoded = decodeToken(token);
-        console.log("📦 Token décodé:", decoded);
-        
-        if (decoded) {
-          const type = decoded.type || decoded.user_type || decoded.role;
-          console.log("✅ Type utilisateur extrait du token:", type);
-          setUserType(type ? type.toLowerCase() : null);
-        } else {
-          setUserType(null);
+        // Vérifier aussi l'objet user passé en props
+        if (user) {
+          const userType = user.type || user.role;
+          if (userType) {
+            console.log("✅ Type utilisateur trouvé dans props user:", userType);
+            setIsVendeur(userType.toLowerCase() === "vendeur");
+            return;
+          }
         }
+
+        console.log("ℹ️ Aucun type utilisateur trouvé");
+        setIsVendeur(false);
       } catch (error) {
-        console.error("❌ Erreur lors de la lecture du token:", error);
-        setUserType(null);
+        console.error("❌ Erreur lors de la détermination du type utilisateur:", error);
+        setIsVendeur(false);
       }
     };
 
-    getUserTypeFromToken();
-  }, []);
+    getUserTypeFromApiClient();
+  }, [user]);
 
   // Fonction pour vérifier si l'utilisateur est un vendeur
   const isUserVendeur = useCallback(() => {
-    console.log("🔍 Vérification type utilisateur - userType:", userType);
-    console.log("🔍 Vérification type utilisateur - user prop:", user);
-    
-    if (userType === "vendeur") {
-      console.log("✅ Utilisateur est un vendeur (basé sur token)");
-      return true;
-    }
-    
-    if (user) {
-      if (user.type?.toLowerCase() === "vendeur") {
-        console.log("✅ Utilisateur est un vendeur (basé sur user.type)");
-        return true;
-      }
-      if (user.role?.toLowerCase() === "vendeur") {
-        console.log("✅ Utilisateur est un vendeur (basé sur user.role)");
-        return true;
-      }
-      if (user.userData?.type?.toLowerCase() === "vendeur") {
-        console.log("✅ Utilisateur est un vendeur (basé sur userData)");
-        return true;
-      }
-    }
-    
-    console.log("❌ Utilisateur n'est pas un vendeur");
-    return false;
-  }, [user, userType]);
+    return isVendeur;
+  }, [isVendeur]);
 
   // Charger toutes les boutiques si aucune n'est fournie de l'extérieur
   useEffect(() => {
@@ -310,16 +302,9 @@ const VenteForm: React.FC<VenteFormProps> = ({
         console.log("📦 Réponse catégories brute:", response);
 
         if (Array.isArray(response)) {
-          // ÉTAPE 1: Filtrer uniquement les catégories actives et non supprimées
-          const activeCategories = response.filter(
-            (cat: Category) => !cat.is_deleted && cat.deleted_at === null
-          );
-
-          console.log("📊 Catégories actives:", activeCategories.length);
-
-          // ÉTAPE 2: Identifier les catégories principales (sans parent ou path vide/null)
-          const mainCategories = activeCategories.filter(
-            (cat: Category) => !cat.path || cat.path === null || cat.path === ""
+          // Filtrer pour garder seulement les catégories principales (sans path ou path null)
+          const mainCategories = response.filter(
+            (cat: Category) => !cat.path || cat.path === null
           );
           
           console.log("📊 Catégories principales:", mainCategories.map(c => ({ 
@@ -328,66 +313,11 @@ const VenteForm: React.FC<VenteFormProps> = ({
             enfants: c.enfants?.length || 0 
           })));
           
-          // ÉTAPE 3: Éliminer les doublons basés sur le libellé
-          const uniqueCategoriesMap = new Map<string, Category>();
-          
-          mainCategories.forEach((category: Category) => {
-            const existing = uniqueCategoriesMap.get(category.libelle);
-            
-            if (!existing) {
-              uniqueCategoriesMap.set(category.libelle, category);
-            } else {
-              const existingId = existing.id || 0;
-              const currentId = category.id || 0;
-              
-              // Garder la catégorie avec l'ID le plus élevé (la plus récente)
-              if (currentId > existingId) {
-                uniqueCategoriesMap.set(category.libelle, category);
-              }
-            }
-          });
-          
-          const uniqueMainCategories = Array.from(uniqueCategoriesMap.values());
-          
-          // ÉTAPE 4: Pour chaque catégorie principale, traiter les enfants
-          const processedCategories: Category[] = uniqueMainCategories.map((category: Category) => {
-            const enfants = category.enfants || [];
-            
-            const activeEnfants = enfants.filter(
-              (enfant: Category) => !enfant.is_deleted && enfant.deleted_at === null
-            );
-            
-            const uniqueChildrenMap = new Map<string, Category>();
-            activeEnfants.forEach((enfant: Category) => {
-              if (!uniqueChildrenMap.has(enfant.libelle)) {
-                uniqueChildrenMap.set(enfant.libelle, enfant);
-              } else {
-                const existing = uniqueChildrenMap.get(enfant.libelle)!;
-                if ((enfant.id || 0) > (existing.id || 0)) {
-                  uniqueChildrenMap.set(enfant.libelle, enfant);
-                }
-              }
-            });
-            
-            const uniqueChildren = Array.from(uniqueChildrenMap.values());
-            
-            // ✅ CORRECTION: Utiliser le spread operator pour conserver toutes les propriétés
-            return {
-              ...category,
-              enfants: uniqueChildren
-            };
-          });
-          
-          // ÉTAPE 5: Trier par libellé pour une navigation cohérente
-          const sortedCategories = processedCategories.sort(
-            (a: Category, b: Category) => a.libelle.localeCompare(b.libelle)
-          );
-          
-          setCategories(sortedCategories);
+          setCategories(mainCategories);
           
           // Si une catégorie est déjà sélectionnée, charger ses sous-catégories
           if (venteData.categorie_uuid) {
-            const selectedCat = sortedCategories.find(c => c.uuid === venteData.categorie_uuid);
+            const selectedCat = response.find(c => c.uuid === venteData.categorie_uuid);
             if (selectedCat?.enfants && selectedCat.enfants.length > 0) {
               setSousCategories(selectedCat.enfants);
             }

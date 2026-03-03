@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
+import { api } from "@/lib/api-client";
 import { useSearch } from "../contexts/SearchContext";
 import ListingCard, { ListingItem } from "./ListingCard";
 
@@ -34,7 +35,6 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
   showFeatured = true,
 }) => {
   const [listings, setListings] = useState<ListingItem[]>([]);
-  const [featuredListings, setFeaturedListings] = useState<ListingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
@@ -45,7 +45,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
   const { 
     searchQuery, 
     selectedCategory, 
-    selectedSousCategorie, // ✅ AJOUTÉ
+    selectedSousCategorie,
     selectedLocation, 
     maxPrice 
   } = useSearch();
@@ -79,6 +79,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
     return endpoint;
   }, []);
 
+  // ✅ DÉFINIR fetchListings AVANT de l'utiliser
   const fetchListings = useCallback(async () => {
     abortCurrentRequest();
 
@@ -116,58 +117,17 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
         }
       }
 
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
-      const { signal } = controller;
-
-      const timeoutId = setTimeout(() => {
-        if (isMountedRef.current) {
-          controller.abort();
-        }
-      }, 15000);
-
-      const url = getApiUrl(endpoint);
-      console.log("🌐 Fetching from:", url, "avec filtre:", filterType);
-
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
-        cache: "no-store",
-        credentials: "include",
-        signal,
+      console.log("🌐 Appel API avec endpoint:", endpoint);
+      console.log("🔍 Filtres actifs:", {
+        searchQuery,
+        selectedCategory,
+        selectedSousCategorie,
+        selectedLocation,
+        maxPrice
       });
 
-      clearTimeout(timeoutId);
-
-      if (!isMountedRef.current) return;
-
-      if (!response.ok) {
-        throw new Error(`Erreur ${response.status}: ${response.statusText}`);
-      }
-
-      const contentType = response.headers.get("content-type");
-      const responseText = await response.text();
-
-      if (
-        contentType?.includes("text/html") ||
-        responseText.trim().startsWith("<!DOCTYPE")
-      ) {
-        console.error("❌ HTML reçu:", responseText.substring(0, 300));
-        throw new Error(
-          `Le serveur a retourné une page HTML. Vérifiez l'endpoint '${endpoint}'.`,
-        );
-      }
-
-      let apiData;
-      try {
-        apiData = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error("❌ JSON invalide:", responseText.substring(0, 500));
-        throw new Error("Réponse invalide du serveur");
-      }
+      // ✅ UTILISER api.get AU LIEU DE fetch
+      const apiData = await api.get(endpoint);
 
       if (!isMountedRef.current) return;
 
@@ -189,7 +149,10 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           numero: item.numero,
           localisation: item.localisation || item.ville || item.lieu_retrait || "",
           date: item.createdAt || item.publieLe || item.date_debut,
-          seller: {
+          seller: item.createurDetails ? {
+            name: item.createurDetails.nom || "Donateur",
+            avatar: item.createurDetails.avatar || "/images/default-avatar.png",
+          } : {
             name: "Donateur",
             avatar: "/images/default-avatar.png",
           },
@@ -208,7 +171,10 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           numero: item.numero,
           localisation: item.localisation || item.ville || item.lieu_rencontre || "",
           date: item.createdAt || item.publieLe,
-          seller: {
+          seller: item.createurDetails ? {
+            name: item.createurDetails.nom || "Initiateur",
+            avatar: item.createurDetails.avatar || "/images/default-avatar.png",
+          } : {
             name: "Initiateur",
             avatar: "/images/default-avatar.png",
           },
@@ -228,9 +194,12 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           disponible: item.disponible,
           statut: item.statut,
           localisation: item.localisation || item.ville || "",
-          seller: {
-            name: item.vendeur?.nom || item.createur?.nom || "Vendeur",
-            avatar: item.vendeur?.avatar || item.createur?.avatar || "/images/default-avatar.png",
+          seller: item.vendeur || item.createurDetails ? {
+            name: item.vendeur?.nom || item.createurDetails?.nom || "Vendeur",
+            avatar: item.vendeur?.avatar || item.createurDetails?.avatar || "/images/default-avatar.png",
+          } : {
+            name: "Vendeur",
+            avatar: "/images/default-avatar.png",
           },
         }));
 
@@ -366,74 +335,22 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
       }
 
       // ============================================
-      // APPLICATION DES FILTRES DE RECHERCHE (seulement pour les données standards)
+      // APPLICATION DES FILTRES DE RECHERCHE
       // ============================================
       let filteredData = transformedData;
 
-      // Pour les données de sous-catégorie, on ne filtre que par texte/localisation/prix
-      // (la catégorie est déjà filtrée par l'API)
-      if (!selectedSousCategorie) {
-        // 1. Filtre par texte de recherche
-        if (searchQuery) {
-          const query = searchQuery.toLowerCase().trim();
-          filteredData = filteredData.filter((item) => {
-            const titre = item.titre?.toLowerCase() || "";
-            const description = item.description?.toLowerCase() || "";
-            return titre.includes(query) || description.includes(query);
-          });
-        }
-
-        // 2. Filtre par catégorie (simulé)
-        if (selectedCategory) {
-          filteredData = filteredData.filter((item) => {
-            if (selectedCategory === "electronique") {
-              return (
-                item.titre?.toLowerCase().includes("téléphone") ||
-                item.titre?.toLowerCase().includes("ordinateur") ||
-                item.titre?.toLowerCase().includes("laptop") ||
-                item.titre?.toLowerCase().includes("smartphone")
-              );
-            }
-            if (selectedCategory === "mode") {
-              return (
-                item.titre?.toLowerCase().includes("vêtement") ||
-                item.titre?.toLowerCase().includes("robe") ||
-                item.titre?.toLowerCase().includes("chaussure")
-              );
-            }
-            if (selectedCategory === "maison") {
-              return (
-                item.titre?.toLowerCase().includes("meuble") ||
-                item.titre?.toLowerCase().includes("canapé") ||
-                item.titre?.toLowerCase().includes("table")
-              );
-            }
-            if (selectedCategory === "vehicules") {
-              return (
-                item.titre?.toLowerCase().includes("voiture") ||
-                item.titre?.toLowerCase().includes("moto") ||
-                item.titre?.toLowerCase().includes("vélo")
-              );
-            }
-            if (selectedCategory === "education") {
-              return (
-                item.titre?.toLowerCase().includes("livre") ||
-                item.titre?.toLowerCase().includes("cours") ||
-                item.titre?.toLowerCase().includes("manuel")
-              );
-            }
-            if (selectedCategory === "services") {
-              return (
-                item.titre?.toLowerCase().includes("service") ||
-                item.titre?.toLowerCase().includes("réparation")
-              );
-            }
-            return true;
-          });
-        }
+      // 1. Filtre par texte de recherche
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase().trim();
+        filteredData = filteredData.filter((item) => {
+          const titre = item.titre?.toLowerCase() || "";
+          const description = item.description?.toLowerCase() || "";
+          const libelle = item.libelle?.toLowerCase() || "";
+          return titre.includes(query) || description.includes(query) || libelle.includes(query);
+        });
       }
 
-      // 3. Filtre par localisation (toujours appliqué)
+      // 3. Filtre par localisation
       if (selectedLocation) {
         const location = selectedLocation.toLowerCase();
         filteredData = filteredData.filter((item) => {
@@ -442,7 +359,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
         });
       }
 
-      // 4. Filtre par prix maximum (toujours appliqué)
+      // 4. Filtre par prix maximum
       if (maxPrice) {
         const max = parseFloat(maxPrice);
         filteredData = filteredData.filter((item) => {
@@ -477,12 +394,8 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
       });
 
       if (isMountedRef.current) {
-        // Simuler des annonces à la une (les 3 premières)
-        const featured = sortedData.slice(0, 3);
-        const regular = sortedData.slice(3);
-
-        setFeaturedListings(featured);
-        setListings(regular);
+        // ✅ TOUTES LES ANNONCES, PAS DE SECTION "À LA UNE"
+        setListings(sortedData);
         setRetryCount(0);
 
         if (onDataLoaded) {
@@ -512,7 +425,6 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
       setError(err.message || "Erreur de chargement");
       setRetryCount((prev) => prev + 1);
       setListings([]);
-      setFeaturedListings([]);
     } finally {
       if (isMountedRef.current) {
         setLoading(false);
@@ -523,16 +435,45 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
     filterType,
     sortOption,
     retryCount,
-    getApiUrl,
-    abortCurrentRequest,
     categoryUuid,
     searchQuery,
-    selectedCategory,
-    selectedSousCategorie, // ✅ AJOUTÉ
+    selectedSousCategorie,
     selectedLocation,
     maxPrice,
     onDataLoaded,
   ]);
+
+  // ============================================
+  // ÉCOUTER L'ÉVÉNEMENT search-filters-updated
+  // ============================================
+  useEffect(() => {
+    const handleSearchFiltersUpdated = (event: CustomEvent) => {
+      console.log("📢 Événement search-filters-updated reçu:", event.detail);
+      
+      // Les filtres sont déjà mis à jour dans le contexte via HeroSearch
+      // On déclenche juste un rechargement des données
+      if (isMountedRef.current) {
+        setRetryCount(0); // Réinitialiser le compteur de tentatives
+        fetchListings(); // Recharger les données
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener(
+        "search-filters-updated",
+        handleSearchFiltersUpdated as EventListener
+      );
+    }
+
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener(
+          "search-filters-updated",
+          handleSearchFiltersUpdated as EventListener
+        );
+      }
+    };
+  }, [fetchListings]);
 
   // Écouter les changements de filtre de type
   useEffect(() => {
@@ -575,6 +516,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
     };
   }, [fetchListings, filterType, sortOption]);
 
+  // Chargement initial
   useEffect(() => {
     isMountedRef.current = true;
     fetchListings();
@@ -623,7 +565,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
     );
   }
 
-  if (listings.length === 0 && featuredListings.length === 0) {
+  if (listings.length === 0) {
     return (
       <div className="text-center py-5">
         <div className="mb-3">
@@ -650,35 +592,12 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
 
   return (
     <div className="listings-grid flex-1">
-      {/* Annonces à la une */}
-      {showFeatured && featuredListings.length > 0 && (
-        <div className="featured-listings mb-5">
-          <div className="d-flex align-items-center justify-content-between mb-4">
-            <h2 className="h4 fw-bold text-dark d-flex align-items-center">
-              <i className="fa-solid fa-star text-warning me-2"></i>
-              Annonces à la Une
-            </h2>
-          </div>
-          <div className="row g-4">
-            {featuredListings.map((item) => (
-              <div key={item.uuid} className="col-lg-4 col-md-6">
-                <ListingCard
-                  listing={item}
-                  featured={true}
-                  viewMode={viewMode}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Toutes les annonces */}
+      {/* ✅ TOUTES LES ANNONCES - PLUS DE SECTION "À LA UNE" */}
       <div className="all-listings mb-5">
         <div className="d-flex align-items-center justify-content-between mb-4">
           <h2 className="h4 fw-bold text-dark">Toutes les annonces</h2>
           <p className="text-muted mb-0">
-            {featuredListings.length + listings.length} résultat(s)
+            {listings.length} résultat(s)
           </p>
         </div>
 

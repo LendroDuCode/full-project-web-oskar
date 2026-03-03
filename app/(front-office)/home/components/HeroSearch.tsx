@@ -326,14 +326,16 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
   };
 
   // ============================================
-  // GESTIONNAIRE DE CLIC SUR SOUS-CATÉGORIE
+  // GESTIONNAIRE DE CLIC SUR SOUS-CATÉGORIE - CORRIGÉ
   // ============================================
   const handleSubCategoryClick = useCallback(
     (subCategory: SubCategory, categoryName: string) => {
       console.log("🖱️ Clic sur sous-catégorie:", subCategory.libelle, subCategory.uuid);
       
-      // Mettre à jour tous les filtres dans le contexte
-      setSearchQuery(subCategory.libelle);
+      // ✅ NE PAS mettre à jour searchQuery avec le libellé
+      // setSearchQuery(subCategory.libelle); ← SUPPRIMER CETTE LIGNE
+      
+      // Mettre à jour uniquement les filtres de sous-catégorie
       setSelectedSousCategorie(subCategory.uuid);
       setSelectedSousCategorieLibelle(subCategory.libelle);
       setActiveTag(subCategory.libelle);
@@ -357,7 +359,7 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
       if (typeof window !== "undefined") {
         const event = new CustomEvent("search-filters-updated", {
           detail: {
-            searchQuery: subCategory.libelle,
+            searchQuery: "", // ✅ NE PAS envoyer le libellé comme searchQuery
             category: categoryValue,
             sousCategorie: subCategory.uuid,
             sousCategorieLibelle: subCategory.libelle,
@@ -371,7 +373,6 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
       setShowSuggestions(false);
     },
     [
-      setSearchQuery,
       setSelectedSousCategorie,
       setSelectedSousCategorieLibelle,
       setActiveTag,
@@ -700,8 +701,6 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
               </div>
             )}
           </div>
-
-    
 
           {/* FILTRES RAPIDES - MOBILE */}
           {!compactMode && isMobile && (

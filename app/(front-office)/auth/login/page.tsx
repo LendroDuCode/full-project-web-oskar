@@ -188,8 +188,6 @@ const LoginModal: React.FC<LoginModalProps> = ({
     }
   };
 
-  // Dans LoginModal.tsx - fonction saveUserData
-
   const saveUserData = (userType: string, userData: any, tempToken: string) => {
     const userToStore = {
       ...userData,
@@ -244,9 +242,6 @@ const LoginModal: React.FC<LoginModalProps> = ({
     setSuccess(null);
     setShowPassword(false);
   };
-
-  // app/(front-office)/auth/LoginModal.tsx
-  // Modifiez seulement la fonction handleLogin (lignes ~180-250)
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -351,8 +346,6 @@ const LoginModal: React.FC<LoginModalProps> = ({
             // 6. ✅ FERMER LE MODAL SANS REDIRECTION
             setTimeout(() => {
               onHide(); // Fermer le modal
-              // Le parent (AuthModals) s'occupe d'ouvrir le prompt pour les vendeurs si nécessaire
-              // PAS DE REDIRECTION VERS LE DASHBOARD
             }, 1500);
 
             return;
@@ -385,6 +378,7 @@ const LoginModal: React.FC<LoginModalProps> = ({
       setLoading(false);
     }
   };
+
   const handleSocialLogin = (provider: "google" | "facebook") => {
     console.log(`Connexion avec ${provider}`);
 
@@ -467,7 +461,7 @@ const LoginModal: React.FC<LoginModalProps> = ({
           style={{ maxWidth: "900px" }}
         >
           <div className="modal-content rounded-3 shadow-lg border-0 overflow-hidden">
-            {/* Close Button */}
+            {/* Close Button - UN SEUL BOUTON */}
             <button
               type="button"
               className="btn-close position-absolute"
@@ -481,6 +475,23 @@ const LoginModal: React.FC<LoginModalProps> = ({
                 backgroundColor: "rgba(255, 255, 255, 0.8)",
                 padding: "0.75rem",
                 borderRadius: "50%",
+                width: "40px",
+                height: "40px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                border: "none",
+                fontSize: "1.25rem",
+                lineHeight: 1,
+                opacity: 0.8,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.opacity = "1";
+                e.currentTarget.style.backgroundColor = "white";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.opacity = "0.8";
+                e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.8)";
               }}
             >
               <FontAwesomeIcon icon={faXmark} />
@@ -611,31 +622,6 @@ const LoginModal: React.FC<LoginModalProps> = ({
                     </div>
                   </div>
                 </div>
-
-                {/* Types d'utilisateurs */}
-                <div className="mt-auto pt-4">
-                  <h6 className="fw-semibold mb-2">Exemples de connexion</h6>
-                  <div
-                    className="bg-white rounded p-3"
-                    style={{ opacity: 0.9 }}
-                  >
-                    <ul className="list-unstyled mb-0 small text-dark">
-                      <li className="mb-1">
-                        <strong>Admin:</strong> superadmin@sonec.com
-                      </li>
-                      <li className="mb-1">
-                        <strong>Agent:</strong> jessica.nguessan@agent.com
-                      </li>
-                      <li className="mb-1">
-                        <strong>Vendeur:</strong> nina.diallo@sonecafrica.com
-                      </li>
-                      <li>
-                        <strong>Utilisateur:</strong>{" "}
-                        abdoulaye.coulibaly@user.com
-                      </li>
-                    </ul>
-                  </div>
-                </div>
               </div>
 
               {/* Colonne droite - Formulaire */}
@@ -700,34 +686,6 @@ const LoginModal: React.FC<LoginModalProps> = ({
 
                   {!loginSuccess && (
                     <form onSubmit={handleLogin}>
-                      {/* Connexion sociale */}
-                      <div className="mb-4">
-                        <div className="row g-2">
-                          <div className="col-6">
-                            <button
-                              type="button"
-                              className="btn btn-outline-secondary w-100 d-flex align-items-center justify-content-center gap-2 py-2"
-                              onClick={() => handleSocialLogin("google")}
-                              disabled={loading}
-                            >
-                              <FontAwesomeIcon icon={faGoogle} />
-                              <span>Google</span>
-                            </button>
-                          </div>
-                          <div className="col-6">
-                            <button
-                              type="button"
-                              className="btn btn-outline-secondary w-100 d-flex align-items-center justify-content-center gap-2 py-2"
-                              onClick={() => handleSocialLogin("facebook")}
-                              disabled={loading}
-                            >
-                              <FontAwesomeIcon icon={faFacebook} />
-                              <span>Facebook</span>
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-
                       {/* Séparateur */}
                       <div className="position-relative text-center mb-4">
                         <hr className="w-100" />
@@ -772,23 +730,7 @@ const LoginModal: React.FC<LoginModalProps> = ({
 
                       {/* Mot de passe */}
                       <div className="mb-4">
-                        <div className="d-flex justify-content-between align-items-center mb-2">
-                          <label className="form-label fw-semibold text-dark">
-                            Mot de passe <span className="text-danger">*</span>
-                          </label>
-                          <button
-                            type="button"
-                            className="btn btn-link p-0 text-decoration-none"
-                            onClick={handleForgotPassword}
-                            disabled={loading}
-                            style={{
-                              fontSize: "0.875rem",
-                              color: colors.oskar.green,
-                            }}
-                          >
-                            Mot de passe oublié ?
-                          </button>
-                        </div>
+                        
                         <div className="input-group">
                           <span className="input-group-text bg-white border-end-0">
                             <FontAwesomeIcon
@@ -930,6 +872,12 @@ const LoginModal: React.FC<LoginModalProps> = ({
           to {
             width: 0%;
           }
+        }
+        
+        /* S'assurer que le btn-close standard n'affiche pas son propre contenu */
+        .btn-close {
+          background-image: none !important;
+          opacity: 1 !important;
         }
       `}</style>
     </>

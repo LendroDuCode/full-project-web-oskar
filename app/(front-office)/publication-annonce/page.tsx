@@ -242,7 +242,6 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
 
             const uniqueChildren = Array.from(uniqueChildrenMap.values());
 
-            // ✅ CORRECTION: Utiliser le spread operator pour conserver toutes les propriétés
             return {
               ...category,
               enfants: uniqueChildren
@@ -280,7 +279,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     }
   }, [visible]);
 
-  // Charger les boutiques seulement si c'est un vendeur
+  // Charger les boutiques seulement si c'est un vendeur - UTILISER api CLIENT
   useEffect(() => {
     const fetchBoutiques = async () => {
       if (!isLoggedIn || adType !== "sale" || !isVendeur) {
@@ -289,31 +288,21 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       }
 
       try {
-        const token = localStorage.getItem("oskar_token");
-        if (!token) return;
+        console.log("🛍️ Chargement des boutiques avec api client...");
+        
+        // ✅ UTILISER api.get AU LIEU DE fetch DIRECT
+        const response = await api.get(API_ENDPOINTS.BOUTIQUES.LISTE_BOUTIQUES_CREE_PAR_VENDEUR);
+        console.log("🛍️ Réponse boutiques:", response);
 
-        const url = API_ENDPOINTS.BOUTIQUES.LISTE_BOUTIQUES_CREE_PAR_VENDEUR;
-        console.log("🛍️ Chargement des boutiques:", url);
-
-        const response = await fetch(url, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (!response.ok) {
-          throw new Error(`Erreur ${response.status}`);
-        }
-
-        const data = await response.json();
         let boutiquesData: Boutique[] = [];
-
-        if (Array.isArray(data)) {
-          boutiquesData = data;
-        } else if (data && Array.isArray(data.data)) {
-          boutiquesData = data.data;
-        } else if (data && data.data && Array.isArray(data.data.data)) {
-          boutiquesData = data.data.data;
-        } else if (data && data.success && Array.isArray(data.data)) {
-          boutiquesData = data.data;
+        if (Array.isArray(response)) {
+          boutiquesData = response;
+        } else if (response && Array.isArray(response.data)) {
+          boutiquesData = response.data;
+        } else if (response && response.data && Array.isArray(response.data.data)) {
+          boutiquesData = response.data.data;
+        } else if (response && response.success && Array.isArray(response.data)) {
+          boutiquesData = response.data;
         }
 
         const boutiquesActives = boutiquesData.filter(
@@ -474,65 +463,80 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     });
   };
 
+  // ✅ VERSION CORRIGÉE DE handleCreateBoutique
   const handleCreateBoutique = async (formData: FormData) => {
     setLoadingBoutique(true);
     setSubmitError(null);
 
     try {
-      const token = localStorage.getItem("oskar_token");
-      if (!token) {
-        throw new Error("Token d'authentification manquant");
+      console.log("🏪 Création de boutique avec données:");
+      
+      // Afficher le contenu du FormData pour déboguer
+      const formDataEntries: any = {};
+      for (const [key, value] of formData.entries()) {
+        if (value instanceof File) {
+          formDataEntries[key] = `File: ${value.name} (${value.size} bytes, type: ${value.type})`;
+        } else {
+          formDataEntries[key] = value;
+        }
       }
+      console.log("📦 FormData envoyé:", formDataEntries);
 
-      const response = await fetch(API_ENDPOINTS.BOUTIQUES.CREATE, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
+      // ✅ UTILISER api.post AVEC isFormData: true
+      const response = await api.post(API_ENDPOINTS.BOUTIQUES.CREATE, formData, { 
+        isFormData: true 
       });
+      
+      console.log("✅ Boutique créée avec succès:", response);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Erreur lors de la création");
+      // Récupérer l'UUID de la boutique créée - GESTION ROBUSTE
+      const newBoutiqueUuid = response?.boutique?.uuid || response?.uuid || response?.data?.uuid;
+      const newBoutiqueNom = response?.boutique?.nom || response?.nom || formData.get("nom") as string;
+
+      if (!newBoutiqueUuid) {
+        console.error("❌ Impossible de récupérer l'UUID de la boutique créée:", response);
+        throw new Error("Erreur lors de la création de la boutique : UUID non reçu");
       }
 
-      const data = await response.json();
-      console.log("✅ Boutique créée:", data);
-
-      const newBoutiqueUuid = data.boutique?.uuid || data.uuid;
-      const newBoutiqueNom = data.boutique?.nom || formData.get("nom") as string;
+      console.log("✅ Nouvelle boutique créée:", { uuid: newBoutiqueUuid, nom: newBoutiqueNom });
 
       setCreatedBoutiqueUuid(newBoutiqueUuid);
       setCreatedBoutiqueNom(newBoutiqueNom);
       
+      // Rafraîchir la liste des boutiques après création
       setTimeout(() => {
         const fetchUpdatedBoutiques = async () => {
-          const token = localStorage.getItem("oskar_token");
-          if (!token) return;
-
-          const response = await fetch(API_ENDPOINTS.BOUTIQUES.LISTE_BOUTIQUES_CREE_PAR_VENDEUR, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-
-          if (response.ok) {
-            const data = await response.json();
+          try {
+            console.log("🔄 Rafraîchissement de la liste des boutiques...");
+            const response = await api.get(API_ENDPOINTS.BOUTIQUES.LISTE_BOUTIQUES_CREE_PAR_VENDEUR);
+            
             let boutiquesData: Boutique[] = [];
-            if (Array.isArray(data)) {
-              boutiquesData = data;
-            } else if (data && Array.isArray(data.data)) {
-              boutiquesData = data.data;
+            if (Array.isArray(response)) {
+              boutiquesData = response;
+            } else if (response && Array.isArray(response.data)) {
+              boutiquesData = response.data;
+            } else if (response && response.data && Array.isArray(response.data.data)) {
+              boutiquesData = response.data.data;
             }
+            
+            console.log(`✅ ${boutiquesData.length} boutiques chargées après création`);
             setBoutiques(boutiquesData);
+          } catch (err) {
+            console.error("❌ Erreur rafraîchissement boutiques:", err);
           }
         };
         fetchUpdatedBoutiques();
-      }, 500);
+      }, 1000);
 
       setShowBoutiqueModal(false);
       setBoutiqueCreationSuccess(true);
 
+      // Mettre à jour les données de vente avec la nouvelle boutique
       if (pendingVenteData) {
+        console.log("🔄 Mise à jour des données de vente avec la nouvelle boutique:", {
+          uuid: newBoutiqueUuid,
+          nom: newBoutiqueNom
+        });
         setVenteData({
           ...pendingVenteData,
           boutiqueUuid: newBoutiqueUuid,
@@ -544,7 +548,37 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       setTimeout(() => setBoutiqueCreationSuccess(false), 3000);
     } catch (error: any) {
       console.error("❌ Erreur création boutique:", error);
-      setSubmitError(error.message);
+      
+      // Message d'erreur plus explicite
+      let errorMessage = "Erreur lors de la création de la boutique";
+      
+      // Gestion détaillée des erreurs
+      if (error.response?.status === 401) {
+        errorMessage = "Votre session a expiré. Veuillez vous reconnecter.";
+        onLoginRequired();
+      } else if (error.response?.status === 403) {
+        errorMessage = "Vous n'avez pas l'autorisation de créer une boutique.";
+      } else if (error.response?.status === 400) {
+        const data = error.response?.data;
+        if (data?.message) {
+          errorMessage = data.message;
+        } else if (data?.errors) {
+          // Si l'API retourne un objet d'erreurs
+          if (typeof data.errors === 'object') {
+            errorMessage = Object.values(data.errors).flat().join(", ");
+          } else {
+            errorMessage = data.errors;
+          }
+        } else if (data?.error) {
+          errorMessage = data.error;
+        } else {
+          errorMessage = "Données invalides. Vérifiez les informations fournies.";
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setSubmitError(errorMessage);
     } finally {
       setLoadingBoutique(false);
     }
@@ -558,8 +592,16 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     formData.append("localisation", donData.localisation.trim());
     formData.append("description", donData.description.trim());
     formData.append("lieu_retrait", donData.lieu_retrait.trim());
-    formData.append("categorie_uuid", donData.categorie_uuid);
-    formData.append("sous_categorie_uuid", donData.sous_categorie_uuid);
+    
+    // ✅ Utiliser final_categorie_uuid s'il existe, sinon categorie_uuid
+    const categorieAEnvoyer = donData.final_categorie_uuid || donData.categorie_uuid;
+    formData.append("categorie_uuid", categorieAEnvoyer);
+    
+    // Optionnel: si vous voulez garder la sous-catégorie pour référence
+    if (donData.sous_categorie_uuid) {
+      formData.append("sous_categorie_uuid", donData.sous_categorie_uuid);
+    }
+    
     formData.append("quantite", donData.quantite);
     formData.append("numero", donData.numero.trim());
     formData.append("nom_donataire", donData.nom_donataire.trim());
@@ -589,8 +631,15 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     formData.append("objetPropose", echangeData.objetPropose.trim());
     formData.append("objetDemande", echangeData.objetDemande.trim());
     formData.append("message", echangeData.message.trim());
-    formData.append("categorie_uuid", echangeData.categorie_uuid);
-    formData.append("sous_categorie_uuid", echangeData.sous_categorie_uuid);
+    
+    // ✅ Utiliser final_categorie_uuid s'il existe, sinon categorie_uuid
+    const categorieAEnvoyer = echangeData.final_categorie_uuid || echangeData.categorie_uuid;
+    formData.append("categorie_uuid", categorieAEnvoyer);
+    
+    if (echangeData.sous_categorie_uuid) {
+      formData.append("sous_categorie_uuid", echangeData.sous_categorie_uuid);
+    }
+    
     formData.append("quantite", echangeData.quantite);
     formData.append("type_destinataire", echangeData.type_destinataire);
 
@@ -633,8 +682,15 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     formData.append("libelle", venteData.libelle.trim());
     formData.append("type", venteData.type.trim());
     formData.append("disponible", String(venteData.disponible));
-    formData.append("categorie_uuid", venteData.categorie_uuid);
-    formData.append("sous_categorie_uuid", venteData.sous_categorie_uuid);
+    
+    // ✅ Utiliser final_categorie_uuid s'il existe, sinon categorie_uuid
+    const categorieAEnvoyer = venteData.final_categorie_uuid || venteData.categorie_uuid;
+    formData.append("categorie_uuid", categorieAEnvoyer);
+    
+    if (venteData.sous_categorie_uuid) {
+      formData.append("sous_categorie_uuid", venteData.sous_categorie_uuid);
+    }
+    
     formData.append("statut", venteData.statut);
     formData.append("etoile", venteData.etoile);
     formData.append("prix", venteData.prix.trim());
@@ -662,35 +718,10 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     try {
       console.log(`📤 Envoi ${type} vers:`, endpoint);
 
-      const token = localStorage.getItem("oskar_token");
-
-      if (!token) {
-        throw new Error("Session expirée. Veuillez vous reconnecter.");
-      }
-
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      });
-
-      console.log("📥 Statut réponse:", response.status);
-
-      if (!response.ok) {
-        let errorMessage = `Erreur ${response.status}`;
-        try {
-          const errorData = await response.json();
-          console.error("❌ Détails de l'erreur:", errorData);
-          errorMessage = errorData.message || errorData.error || errorMessage;
-        } catch (e) {
-          // Ignorer
-        }
-        throw new Error(errorMessage);
-      }
-
-      const result = await response.json();
+      // ✅ UTILISER api.post AU LIEU DE fetch
+      // Le api-client gère automatiquement l'authentification
+      const result = await api.post(endpoint, formData, { isFormData: true });
+      
       console.log(`✅ ${type} créé avec succès:`, result);
 
       resetForm();
@@ -723,6 +754,12 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         errorMessage = "Veuillez vérifier les informations du formulaire";
       } else if (errorMessage.includes("401")) {
         errorMessage = "Session expirée. Veuillez vous reconnecter";
+        // Déclencher une déconnexion
+        localStorage.removeItem("oskar_token");
+        localStorage.removeItem("temp_token");
+        localStorage.removeItem("tempToken");
+        localStorage.removeItem("token");
+        onLoginRequired();
       } else if (errorMessage.includes("vendeur")) {
         errorMessage = "Les vendeurs doivent vendre via une boutique";
       } else if (
@@ -994,7 +1031,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
             className="alert alert-info border-0 shadow-lg d-flex align-items-center"
             style={{
               borderRadius: "12px",
-              background: "linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)",
+              background: "linear-gradient(135deg, #20800c 0%, #20800c 100%)",
               color: "white",
               padding: "1rem 1.5rem",
             }}
@@ -1121,8 +1158,8 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     onImageUpload={handleImageUpload}
     onRemoveImage={removeImage}
     step={step}
-    categories={categories} // ✅ AJOUT OBLIGATOIRE
-    sous_categorie_uuid={donData.sous_categorie_uuid} // ✅ AJOUT OBLIGATOIRE
+    categories={categories}
+    sous_categorie_uuid={donData.sous_categorie_uuid}
   />
 )}
                 

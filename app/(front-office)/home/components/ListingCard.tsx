@@ -4,6 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import colors from "@/app/shared/constants/colors";
 import { buildImageUrl } from "@/app/shared/utils/image-utils";
+import { api } from "@/lib/api-client";
+import { API_ENDPOINTS } from "@/config/api-endpoints";
+import { useAuth } from "@/app/(front-office)/auth/AuthContext";
 
 export interface ListingItem {
   uuid: string;
@@ -20,6 +23,7 @@ export interface ListingItem {
   numero?: string;
   localisation?: string;
   createdAt?: string | null | undefined;
+  is_favoris?: boolean;
   seller?: {
     name: string;
     avatar: string;
@@ -30,15 +34,25 @@ interface ListingCardProps {
   listing: ListingItem;
   featured?: boolean;
   viewMode?: "grid" | "list";
+  onFavoriteToggle?: (uuid: string, isFavorite: boolean) => void;
 }
 
 const ListingCard: React.FC<ListingCardProps> = ({
   listing,
   featured = false,
   viewMode = "grid",
+  onFavoriteToggle,
 }) => {
-  const [isFavorite, setIsFavorite] = useState(false);
+  // ✅ VÉRIFICATION DE SÉCURITÉ - Si listing est undefined, ne pas rendre le composant
+  if (!listing) {
+    console.error("❌ ListingCard: listing est undefined");
+    return null;
+  }
+
+  const [isFavorite, setIsFavorite] = useState(listing.is_favoris || false);
   const [imageError, setImageError] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const { isLoggedIn, openLoginModal } = useAuth();
 
   console.log({ listing });
 
@@ -179,6 +193,75 @@ const ListingCard: React.FC<ListingCardProps> = ({
     return buildImageUrl(avatar);
   };
 
+  // ✅ FONCTION POUR GÉRER L'AJOUT/SUPPRESSION AUX FAVORIS
+  const handleFavoriteClick = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!isLoggedIn) {
+      openLoginModal();
+      return;
+    }
+
+    if (loading) return;
+
+    setLoading(true);
+
+    try {
+      if (isFavorite) {
+        // Supprimer des favoris
+        let endpoint = "";
+        switch (listing.type) {
+          case "don":
+            endpoint = API_ENDPOINTS.FAVORIS.REMOVE_DON(listing.uuid);
+            break;
+          case "echange":
+            endpoint = API_ENDPOINTS.FAVORIS.REMOVE_ECHANGE(listing.uuid);
+            break;
+          case "produit":
+            endpoint = API_ENDPOINTS.FAVORIS.REMOVE_PRODUIT(listing.uuid);
+            break;
+          default:
+            endpoint = API_ENDPOINTS.FAVORIS.REMOVE(listing.uuid);
+        }
+        await api.delete(endpoint);
+      } else {
+        // Ajouter aux favoris
+        const payload = {
+          itemUuid: listing.uuid,
+          type: listing.type,
+        };
+        await api.post(API_ENDPOINTS.FAVORIS.ADD, payload);
+      }
+
+      // Mettre à jour l'état local
+      setIsFavorite(!isFavorite);
+      
+      // Notifier le parent si nécessaire
+      if (onFavoriteToggle) {
+        onFavoriteToggle(listing.uuid, !isFavorite);
+      }
+
+      // Afficher une notification (optionnel)
+      const message = isFavorite 
+        ? "Retiré des favoris" 
+        : "Ajouté aux favoris";
+      
+      // Vous pouvez utiliser un toast ici si vous en avez un
+      console.log(`✅ ${message}`);
+      
+    } catch (err: any) {
+      console.error("❌ Erreur lors de la modification des favoris:", err);
+      
+      // Gérer les erreurs d'authentification
+      if (err.response?.status === 401) {
+        openLoginModal();
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (viewMode === "list") {
     return (
       <div
@@ -206,12 +289,26 @@ const ListingCard: React.FC<ListingCardProps> = ({
               </div>
               <button
                 className="position-absolute top-0 end-0 w-10 h-10 bg-white rounded-circle d-flex align-items-center justify-content-center shadow border-0 m-2 transition-colors"
-                style={{ width: "40px", height: "40px" }}
-                onClick={() => setIsFavorite(!isFavorite)}
+                style={{ 
+                  width: "40px", 
+                  height: "40px",
+                  opacity: loading ? 0.5 : 1,
+                  cursor: loading ? "not-allowed" : "pointer",
+                }}
+                onClick={handleFavoriteClick}
+                disabled={loading}
+                aria-label={isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"}
               >
-                <i
-                  className={`fa-${isFavorite ? "solid" : "regular"} fa-heart`}
-                />
+                {loading ? (
+                  <div className="spinner-border spinner-border-sm text-success" role="status">
+                    <span className="visually-hidden">Chargement...</span>
+                  </div>
+                ) : (
+                  <i
+                    className={`fa-${isFavorite ? "solid" : "regular"} fa-heart`}
+                    style={{ color: isFavorite ? "#dc3545" : "inherit" }}
+                  />
+                )}
               </button>
             </div>
           </div>
@@ -334,10 +431,26 @@ const ListingCard: React.FC<ListingCardProps> = ({
         {/* Bouton favori */}
         <button
           className="position-absolute top-0 end-0 w-10 h-10 bg-white rounded-circle d-flex align-items-center justify-content-center shadow border-0 m-2 transition-colors"
-          style={{ width: "40px", height: "40px" }}
-          onClick={() => setIsFavorite(!isFavorite)}
+          style={{ 
+            width: "40px", 
+            height: "40px",
+            opacity: loading ? 0.5 : 1,
+            cursor: loading ? "not-allowed" : "pointer",
+          }}
+          onClick={handleFavoriteClick}
+          disabled={loading}
+          aria-label={isFavorite ? "Retirer des favoris" : "Ajouter aux favoris"}
         >
-          <i className={`fa-${isFavorite ? "solid" : "regular"} fa-heart`} />
+          {loading ? (
+            <div className="spinner-border spinner-border-sm text-success" role="status">
+              <span className="visually-hidden">Chargement...</span>
+            </div>
+          ) : (
+            <i
+              className={`fa-${isFavorite ? "solid" : "regular"} fa-heart`}
+              style={{ color: isFavorite ? "#dc3545" : "inherit" }}
+            />
+          )}
         </button>
       </div>
 

@@ -64,6 +64,7 @@ export interface DonData {
   lieu_retrait: string; // Lieu de retrait
   image: File | null;
   categorie_uuid: string;
+    final_categorie_uuid?: string; // ✅ AJOUTER CETTE LIGNE
   sous_categorie_uuid: string;
   numero: string; // Numéro de téléphone
   quantite: string;
@@ -86,6 +87,7 @@ export interface EchangeData {
   categorie_uuid: string;
   image: File | null;
   quantite: string;
+    final_categorie_uuid?: string; // ✅ AJOUTER
   type_destinataire: DestinataireType; // Type de destinataire
   condition?: ProductCondition; // État de l'objet
   status?: "publie" | "brouillon"; // Statut de publication
@@ -99,6 +101,7 @@ export interface VenteData {
   type: string;
   disponible: boolean;
   categorie_uuid: string;
+    final_categorie_uuid?: string; // ✅ AJOUTE
   statut: string;
   etoile: string;
   image: File | null;

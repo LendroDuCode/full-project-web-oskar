@@ -14,6 +14,12 @@ import {
   faPlus,
   faStore,
   faTimes,
+  faGift,
+  faShoppingBag,
+  faBox,
+  faChartLine,
+  faUsers,
+  faRocket,
 } from "@fortawesome/free-solid-svg-icons";
 
 const AuthModals = () => {
@@ -37,6 +43,112 @@ const AuthModals = () => {
   const [promptVisible, setPromptVisible] = useState(false);
   const [verificationDone, setVerificationDone] = useState(false);
   const [hasActiveBoutique, setHasActiveBoutique] = useState(false);
+  const [showSuccessNotif, setShowSuccessNotif] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+
+  // Couleurs du thème vert
+  const colors = {
+    primary: "#16a34a", // Vert principal
+    primaryHover: "#15803d", // Vert plus foncé
+    primaryLight: "#dcfce7", // Vert très clair
+    primaryBg: "#f0fdf4", // Fond vert clair
+    gradientStart: "#16a34a",
+    gradientEnd: "#15803d",
+    success: "#16a34a",
+    successLight: "#dcfce7",
+    textDark: "#1e293b",
+    textMuted: "#64748b",
+    border: "#e2e8f0",
+    white: "#ffffff",
+    danger: "#dc2626",
+    dangerLight: "#fee2e2",
+  };
+
+  // Types pour les props de la notification
+  interface SuccessNotificationProps {
+    message: string;
+    onClose: () => void;
+  }
+
+  // Composant de notification de succès
+  const SuccessNotification = ({ message, onClose }: SuccessNotificationProps) => {
+    useEffect(() => {
+      const timer = setTimeout(() => {
+        onClose();
+      }, 3000);
+
+      return () => clearTimeout(timer);
+    }, [onClose]);
+
+    return (
+      <div
+        style={{
+          position: "fixed",
+          top: "2rem",
+          right: "2rem",
+          zIndex: 99999,
+          backgroundColor: colors.white,
+          borderRadius: "1rem",
+          boxShadow: "0 10px 30px rgba(0, 0, 0, 0.15)",
+          border: `2px solid ${colors.primary}`,
+          padding: "1rem 1.5rem",
+          display: "flex",
+          alignItems: "center",
+          gap: "1rem",
+          animation: "slideIn 0.3s ease-out",
+          maxWidth: "400px",
+        }}
+      >
+        <div
+          style={{
+            width: "2.5rem",
+            height: "2.5rem",
+            backgroundColor: colors.successLight,
+            borderRadius: "50%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <FontAwesomeIcon
+            icon={faCheckCircle}
+            style={{ color: colors.primary, fontSize: "1.5rem" }}
+          />
+        </div>
+        <div style={{ flex: 1 }}>
+          <p
+            style={{
+              margin: 0,
+              color: colors.textDark,
+              fontWeight: "600",
+              fontSize: "1rem",
+            }}
+          >
+            {message}
+          </p>
+        </div>
+        <button
+          onClick={onClose}
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: "0.25rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: colors.textMuted,
+            transition: "color 0.2s",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = colors.textDark)}
+          onMouseLeave={(e) => (e.currentTarget.style.color = colors.textMuted)}
+        >
+          <FontAwesomeIcon icon={faTimes} style={{ fontSize: "1rem" }} />
+        </button>
+      </div>
+    );
+  };
 
   // Gestion de l'affichage du modal d'inscription
   useEffect(() => {
@@ -354,7 +466,9 @@ const AuthModals = () => {
         setVerificationDone(true);
         setHasActiveBoutique(true);
 
-        showSuccessNotification("Boutique créée avec succès !");
+        // Afficher la notification de succès en vert
+        setSuccessMessage("Boutique créée avec succès !");
+        setShowSuccessNotif(true);
       }
     } catch (error: any) {
       console.error("❌ Erreur création boutique:", error);
@@ -363,10 +477,6 @@ const AuthModals = () => {
       );
       setLoadingBoutique(false);
     }
-  };
-
-  const showSuccessNotification = (message: string) => {
-    console.log("✅", message);
   };
 
   const handleStartBoutiqueCreation = () => {
@@ -417,8 +527,23 @@ const AuthModals = () => {
     vendeurData: vendeurData ? "présent" : "absent"
   });
 
+  // Liste des avantages
+  const benefits = [
+    { icon: faRocket, text: "Commencez à vendre immédiatement" },
+    { icon: faChartLine, text: "Accédez aux outils professionnels" },
+    { icon: faUsers, text: "Atteignez des milliers de clients" },
+    { icon: faShoppingBag, text: "Gérez vos premiers revenus" },
+  ];
+
   return (
     <>
+      {showSuccessNotif && (
+        <SuccessNotification
+          message={successMessage}
+          onClose={() => setShowSuccessNotif(false)}
+        />
+      )}
+
       <LoginModal
         visible={showLoginModal}
         onHide={closeModals}
@@ -452,6 +577,7 @@ const AuthModals = () => {
       {/* PROMPT DE CRÉATION DE BOUTIQUE - UNIQUEMENT SI PAS DE BOUTIQUE */}
       {shouldShowPrompt && (
         <div
+          className="modal-overlay"
           style={{
             position: "fixed",
             top: 0,
@@ -480,12 +606,14 @@ const AuthModals = () => {
           }}
         >
           <div
+            className="modal-content"
             style={{
-              backgroundColor: "white",
+              backgroundColor: colors.white,
               borderRadius: "1.5rem",
               boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.4)",
               width: "100%",
-              maxWidth: "500px",
+              maxWidth: "min(90%, 600px)",
+              maxHeight: "90vh",
               overflow: "hidden",
               position: "relative",
               transform: promptVisible
@@ -498,6 +626,7 @@ const AuthModals = () => {
           >
             <button
               onClick={handleSkipBoutiqueCreation}
+              className="btn-close-modal"
               style={{
                 position: "absolute",
                 top: "1rem",
@@ -505,7 +634,7 @@ const AuthModals = () => {
                 zIndex: 10,
                 width: "2.5rem",
                 height: "2.5rem",
-                backgroundColor: "#f8fafc",
+                backgroundColor: colors.white,
                 borderRadius: "50%",
                 display: "flex",
                 alignItems: "center",
@@ -520,15 +649,16 @@ const AuthModals = () => {
             >
               <FontAwesomeIcon
                 icon={faTimes}
-                style={{ color: "#64748b", fontSize: "1.25rem" }}
+                style={{ color: colors.textMuted, fontSize: "1.25rem" }}
               />
             </button>
 
             <div
+              className="modal-header"
               style={{
-                background: "linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)",
-                color: "white",
-                padding: "2.5rem 2rem",
+                background: `linear-gradient(135deg, ${colors.gradientStart} 0%, ${colors.gradientEnd} 100%)`,
+                color: colors.white,
+                padding: "clamp(1.5rem, 5vw, 2.5rem) clamp(1rem, 4vw, 2rem)",
                 textAlign: "center",
                 position: "relative",
                 overflow: "hidden",
@@ -536,30 +666,35 @@ const AuthModals = () => {
             >
               <div style={{ position: "relative", zIndex: 1 }}>
                 <div
+                  className="store-icon"
                   style={{
-                    width: "100px",
-                    height: "100px",
-                    backgroundColor: "white",
+                    width: "clamp(60px, 15vw, 100px)",
+                    height: "clamp(60px, 15vw, 100px)",
+                    backgroundColor: colors.white,
                     borderRadius: "50%",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    margin: "0 auto 1.5rem",
+                    margin: "0 auto clamp(1rem, 3vw, 1.5rem)",
                     boxShadow: "0 20px 40px rgba(0, 0, 0, 0.2)",
                     animation: "bounce 2s infinite",
                   }}
                 >
                   <FontAwesomeIcon
                     icon={faStore}
-                    style={{ fontSize: "3rem", color: "#0ea5e9" }}
+                    style={{ 
+                      fontSize: "clamp(1.5rem, 5vw, 3rem)", 
+                      color: colors.primary 
+                    }}
                   />
                 </div>
                 <h2
                   style={{
-                    fontSize: "2rem",
+                    fontSize: "clamp(1.5rem, 5vw, 2rem)",
                     fontWeight: "bold",
                     margin: 0,
                     marginBottom: "0.5rem",
+                    lineHeight: 1.2,
                   }}
                 >
                   Bienvenue dans l'aventure ! 🎉
@@ -567,8 +702,8 @@ const AuthModals = () => {
                 <p
                   style={{
                     opacity: 0.9,
-                    fontSize: "1.1rem",
-                    maxWidth: "400px",
+                    fontSize: "clamp(0.9rem, 3vw, 1.1rem)",
+                    maxWidth: "90%",
                     margin: "0 auto",
                     lineHeight: "1.5",
                   }}
@@ -578,28 +713,31 @@ const AuthModals = () => {
               </div>
             </div>
 
-            <div style={{ padding: "2.5rem" }}>
+            <div className="modal-body" style={{ padding: "clamp(1.5rem, 4vw, 2.5rem)" }}>
               <div
+                className="welcome-card"
                 style={{
-                  backgroundColor: "#f0f9ff",
+                  backgroundColor: colors.white,
                   borderRadius: "1rem",
-                  padding: "1.5rem",
-                  marginBottom: "2rem",
-                  border: "2px solid #bae6fd",
+                  padding: "clamp(1rem, 3vw, 1.5rem)",
+                  marginBottom: "clamp(1.5rem, 4vw, 2rem)",
+                  border: `2px solid ${colors.primaryLight}`,
                 }}
               >
                 <div
                   style={{
                     display: "flex",
-                    alignItems: "flex-start",
+                    flexDirection: window.innerWidth < 768 ? "column" : "row",
+                    alignItems: window.innerWidth < 768 ? "center" : "flex-start",
                     gap: "1rem",
+                    textAlign: window.innerWidth < 768 ? "center" : "left",
                   }}
                 >
                   <div
                     style={{
-                      width: "3rem",
-                      height: "3rem",
-                      backgroundColor: "#0ea5e9",
+                      width: "clamp(2.5rem, 8vw, 3rem)",
+                      height: "clamp(2.5rem, 8vw, 3rem)",
+                      backgroundColor: colors.primary,
                       borderRadius: "50%",
                       display: "flex",
                       alignItems: "center",
@@ -609,16 +747,16 @@ const AuthModals = () => {
                   >
                     <FontAwesomeIcon
                       icon={faCheckCircle}
-                      style={{ color: "white", fontSize: "1.5rem" }}
+                      style={{ color: colors.white, fontSize: "clamp(1rem, 3vw, 1.5rem)" }}
                     />
                   </div>
                   <div style={{ flex: 1 }}>
                     <h3
                       style={{
                         margin: 0,
-                        color: "#0369a1",
+                        color: colors.primaryHover,
                         fontWeight: "bold",
-                        fontSize: "1.25rem",
+                        fontSize: "clamp(1.1rem, 3.5vw, 1.25rem)",
                         marginBottom: "0.5rem",
                       }}
                     >
@@ -627,9 +765,9 @@ const AuthModals = () => {
                     <p
                       style={{
                         margin: 0,
-                        color: "#475569",
+                        color: colors.textMuted,
                         lineHeight: "1.6",
-                        fontSize: "0.95rem",
+                        fontSize: "clamp(0.85rem, 2.5vw, 0.95rem)",
                       }}
                     >
                       Votre compte vendeur est actif. Pour commencer à vendre,
@@ -641,13 +779,14 @@ const AuthModals = () => {
 
               {boutiqueError && (
                 <div
+                  className="error-message"
                   style={{
-                    backgroundColor: "#fef2f2",
+                    backgroundColor: colors.dangerLight,
                     borderRadius: "0.75rem",
                     padding: "1rem",
                     marginBottom: "1.5rem",
-                    border: "1px solid #fecaca",
-                    color: "#b91c1c",
+                    border: `1px solid ${colors.danger}`,
+                    color: colors.danger,
                     fontSize: "0.9rem",
                   }}
                 >
@@ -655,11 +794,11 @@ const AuthModals = () => {
                 </div>
               )}
 
-              <div style={{ marginBottom: "2rem" }}>
+              <div style={{ marginBottom: "clamp(1.5rem, 4vw, 2rem)" }}>
                 <h4
                   style={{
-                    color: "#1e293b",
-                    fontSize: "1rem",
+                    color: colors.textDark,
+                    fontSize: "clamp(0.95rem, 2.8vw, 1rem)",
                     fontWeight: "bold",
                     marginBottom: "1rem",
                     display: "flex",
@@ -667,18 +806,14 @@ const AuthModals = () => {
                     gap: "0.5rem",
                   }}
                 >
-                  <FontAwesomeIcon icon={faArrowRight} color="#0ea5e9" />
+                  <FontAwesomeIcon icon={faArrowRight} color={colors.primary} />
                   Pourquoi créer votre boutique maintenant ?
                 </h4>
-                <div style={{ display: "grid", gap: "0.75rem" }}>
-                  {[
-                    "Commencez à vendre immédiatement",
-                    "Accédez aux outils professionnels",
-                    "Atteignez des milliers de clients",
-                    "Gérez vos premiers revenus",
-                  ].map((benefit, index) => (
+                <div className="benefits-grid" style={{ display: "grid", gap: "0.75rem" }}>
+                  {benefits.map((benefit, index) => (
                     <div
                       key={index}
+                      className="benefit-item"
                       style={{
                         display: "flex",
                         alignItems: "center",
@@ -686,13 +821,22 @@ const AuthModals = () => {
                         padding: "0.75rem",
                         backgroundColor: "#f8fafc",
                         borderRadius: "0.75rem",
+                        transition: "transform 0.2s, box-shadow 0.2s",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = "translateX(5px)";
+                        e.currentTarget.style.boxShadow = "0 2px 8px rgba(22, 163, 74, 0.1)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = "translateX(0)";
+                        e.currentTarget.style.boxShadow = "none";
                       }}
                     >
                       <div
                         style={{
                           width: "1.5rem",
                           height: "1.5rem",
-                          backgroundColor: "#0ea5e9",
+                          backgroundColor: colors.primary,
                           borderRadius: "50%",
                           display: "flex",
                           alignItems: "center",
@@ -701,12 +845,12 @@ const AuthModals = () => {
                         }}
                       >
                         <FontAwesomeIcon
-                          icon={faPlus}
-                          style={{ color: "white", fontSize: "0.75rem" }}
+                          icon={benefit.icon}
+                          style={{ color: colors.white, fontSize: "0.75rem" }}
                         />
                       </div>
-                      <span style={{ color: "#475569", fontSize: "0.9rem" }}>
-                        {benefit}
+                      <span style={{ color: colors.textMuted, fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)" }}>
+                        {benefit.text}
                       </span>
                     </div>
                   ))}
@@ -723,13 +867,14 @@ const AuthModals = () => {
                 <button
                   onClick={handleStartBoutiqueCreation}
                   disabled={loadingBoutique}
+                  className="btn-create"
                   style={{
-                    backgroundColor: "#0ea5e9",
-                    color: "white",
+                    backgroundColor: colors.primary,
+                    color: colors.white,
                     border: "none",
                     borderRadius: "0.75rem",
-                    padding: "1.25rem",
-                    fontSize: "1.1rem",
+                    padding: "clamp(1rem, 3vw, 1.25rem)",
+                    fontSize: "clamp(1rem, 3vw, 1.1rem)",
                     fontWeight: "bold",
                     cursor: loadingBoutique ? "not-allowed" : "pointer",
                     transition: "all 0.3s",
@@ -737,7 +882,7 @@ const AuthModals = () => {
                     alignItems: "center",
                     justifyContent: "center",
                     gap: "0.75rem",
-                    boxShadow: "0 10px 20px rgba(14, 165, 233, 0.3)",
+                    boxShadow: `0 10px 20px ${colors.primary}40`,
                     opacity: loadingBoutique ? 0.6 : 1,
                   }}
                 >
@@ -748,13 +893,14 @@ const AuthModals = () => {
                 <button
                   onClick={handleSkipBoutiqueCreation}
                   disabled={loadingBoutique}
+                  className="btn-skip"
                   style={{
                     backgroundColor: "transparent",
-                    color: "#64748b",
-                    border: "2px solid #e2e8f0",
+                    color: colors.textMuted,
+                    border: `2px solid ${colors.border}`,
                     borderRadius: "0.75rem",
-                    padding: "1rem",
-                    fontSize: "1rem",
+                    padding: "clamp(0.875rem, 2.5vw, 1rem)",
+                    fontSize: "clamp(0.95rem, 2.8vw, 1rem)",
                     fontWeight: 600,
                     cursor: loadingBoutique ? "not-allowed" : "pointer",
                     transition: "all 0.3s",
@@ -766,14 +912,15 @@ const AuthModals = () => {
               </div>
 
               <div
+                className="note"
                 style={{
                   marginTop: "1.5rem",
                   padding: "1rem",
                   backgroundColor: "#f8fafc",
                   borderRadius: "0.75rem",
-                  fontSize: "0.85rem",
-                  color: "#64748b",
-                  borderLeft: "4px solid #0ea5e9",
+                  fontSize: "clamp(0.8rem, 2.2vw, 0.85rem)",
+                  color: colors.textMuted,
+                  borderLeft: `4px solid ${colors.primary}`,
                 }}
               >
                 <p style={{ margin: 0, lineHeight: "1.5" }}>
@@ -804,6 +951,104 @@ const AuthModals = () => {
           }
           50% {
             transform: translateY(-10px);
+          }
+        }
+
+        @keyframes slideIn {
+          from {
+            transform: translateX(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+
+        @media (max-width: 768px) {
+          .modal-content {
+            max-width: 95%;
+            max-height: 95vh;
+          }
+
+          .modal-header {
+            padding: 1.5rem 1rem;
+          }
+
+          .modal-body {
+            padding: 1.5rem;
+          }
+
+          .benefits-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .btn-create, .btn-skip {
+            padding: 0.875rem;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .modal-overlay {
+            padding: 0.5rem;
+          }
+
+          .modal-content {
+            border-radius: 1rem;
+          }
+
+          .modal-header {
+            padding: 1.25rem 0.875rem;
+          }
+
+          .modal-body {
+            padding: 1.25rem;
+          }
+
+          .welcome-card {
+            padding: 1rem;
+          }
+
+          .benefit-item {
+            padding: 0.625rem;
+          }
+
+          .note {
+            padding: 0.875rem;
+          }
+        }
+
+        @media (max-width: 360px) {
+          .modal-header h2 {
+            font-size: 1.3rem;
+          }
+
+          .modal-header p {
+            font-size: 0.85rem;
+          }
+
+          .btn-create, .btn-skip {
+            padding: 0.75rem;
+            font-size: 0.9rem;
+          }
+        }
+
+        @media (hover: hover) {
+          .btn-create:hover {
+            background-color: ${colors.primaryHover} !important;
+            transform: translateY(-2px);
+            box-shadow: 0 15px 30px ${colors.primary}60 !important;
+          }
+
+          .btn-skip:hover {
+            background-color: ${colors.primaryBg} !important;
+            border-color: ${colors.primary} !important;
+            color: ${colors.primary} !important;
+          }
+
+          .btn-close-modal:hover {
+            background-color: #f1f5f9 !important;
+            transform: rotate(90deg);
           }
         }
       `}</style>
