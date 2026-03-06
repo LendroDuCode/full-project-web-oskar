@@ -281,17 +281,14 @@ const TypeBoutiqueBadge = ({
   typeBoutique: TypeBoutique;
 }) => {
   const handleViewTypeImage = () => {
-    if (typeBoutique.image) {
-      const imageUrl = buildImageUrl(typeBoutique.image);
-      window.open(imageUrl, "_blank");
-    }
+    
   };
 
   return (
     <div className="d-flex align-items-center gap-2">
       <BoutiqueImage
-        src={typeBoutique.image ?? null}
-        alt={typeBoutique.libelle}
+        src=""
+        alt=""
         type="type"
         onView={handleViewTypeImage}
       />
@@ -305,7 +302,6 @@ const TypeBoutiqueBadge = ({
           fontSize: "0.75rem",
         }}
       >
-        <span>{typeBoutique.libelle}</span>
       </span>
     </div>
   );
@@ -1477,13 +1473,7 @@ export default function BoutiquesPage() {
                       `(${selectedBoutiques.length} sélectionnée(s))`}
                   </span>
                 </div>
-                <div className="mt-2">
-                  <small className="text-info">
-                    <FontAwesomeIcon icon={faInfoCircle} className="me-1" />
-                    Données chargées depuis l'API :{" "}
-                    {API_ENDPOINTS.BOUTIQUES.ALL}
-                  </small>
-                </div>
+                
               </div>
 
               <div className="d-flex flex-wrap gap-2">
@@ -1496,25 +1486,7 @@ export default function BoutiquesPage() {
                   Rafraîchir
                 </button>
 
-                <button
-                //  onClick={createCSVExport}
-                  className="btn btn-outline-primary d-flex align-items-center gap-2"
-                  disabled={boutiques.length === 0 || loading}
-                >
-                  <FontAwesomeIcon icon={faDownload} />
-                  Exporter CSV
-                </button>
-
-                <button
-                  onClick={() => {
-                    setInfoMessage("Fonctionnalité en développement");
-                    setTimeout(() => setInfoMessage(null), 3000);
-                  }}
-                  className="btn btn-success d-flex align-items-center gap-2"
-                >
-                  <FontAwesomeIcon icon={faPlus} />
-                  Nouvelle Boutique
-                </button>
+               
               </div>
             </div>
 
@@ -1809,15 +1781,7 @@ export default function BoutiquesPage() {
                       {selectedBoutiques.length} sélectionnée(s)
                     </small>
                   )}
-                  <button
-                    onClick={resetFilters}
-                    className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-2"
-                    disabled={loading}
-                    title="Réinitialiser les filtres"
-                  >
-                    <FontAwesomeIcon icon={faTimes} />
-                    <span className="d-none d-md-inline">Reset</span>
-                  </button>
+                
                 </div>
               </div>
             </div>

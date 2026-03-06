@@ -1,3 +1,4 @@
+// app/(back-office)/dashboard-utilisateur/annonces/components/FilterBar.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -6,7 +7,6 @@ import {
   faSearch,
   faFilter,
   faRefresh,
-  faChartSimple,
   faFilterCircleXmark,
   faListCheck,
 } from "@fortawesome/free-solid-svg-icons";
@@ -17,7 +17,6 @@ interface FilterBarProps {
   onTypeChange?: (type: string) => void;
   onSearchChange?: (query: string) => void;
   onRefresh?: () => void;
-  onShowStats?: () => void;
   onClearFilters?: () => void;
   className?: string;
   selectedType?: string;
@@ -32,7 +31,6 @@ export default function FilterBar({
   onTypeChange,
   onSearchChange,
   onRefresh,
-  onShowStats,
   onClearFilters,
   className = "",
   selectedType = "tous",
@@ -44,17 +42,11 @@ export default function FilterBar({
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(true);
 
+  // ✅ Statuts simplifiés (supprimé: disponible, valide, refuse)
   const statusOptions = [
     { value: "tous", label: "Tous", color: colors.oskar.grey },
     { value: "en-attente", label: "En attente", color: colors.status.pending },
     { value: "publie", label: "Publié", color: colors.status.published },
-    {
-      value: "disponible",
-      label: "Disponible",
-      color: colors.status.available,
-    },
-    { value: "valide", label: "Validé", color: colors.status.validated },
-    { value: "refuse", label: "Refusé", color: colors.oskar.secondary },
     { value: "bloque", label: "Bloqué", color: colors.status.blocked },
   ];
 
@@ -224,7 +216,7 @@ export default function FilterBar({
                             : colors.oskar.lightGrey,
                         color:
                           selectedType === option.value
-                            ? colors.oskar.lightGrey
+                            ? "white"
                             : colors.oskar.grey,
                         border: `1px solid ${
                           selectedType === option.value
@@ -264,7 +256,7 @@ export default function FilterBar({
                             : colors.oskar.lightGrey,
                         color:
                           selectedStatus === option.value
-                            ? colors.oskar.lightGrey
+                            ? "white"
                             : colors.oskar.grey,
                         border: `1px solid ${
                           selectedStatus === option.value
@@ -307,7 +299,7 @@ export default function FilterBar({
                     type="text"
                     value={searchQuery}
                     onChange={handleSearch}
-                    placeholder="Rechercher par titre, description, vendeur..."
+                    placeholder="Rechercher par titre, description, catégorie..."
                     className="form-control border rounded-end-2"
                     style={{
                       color: colors.oskar.black,

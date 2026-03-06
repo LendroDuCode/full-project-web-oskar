@@ -1095,15 +1095,6 @@ export default function CategoriesPage() {
                   <FontAwesomeIcon icon={faRefresh} spin={loading} />
                   Rafraîchir
                 </button>
-
-                <button
-                  onClick={handleExport}
-                  className="btn btn-outline-primary d-flex align-items-center gap-2"
-                  disabled={categories.length === 0 || loading}
-                >
-                  <FontAwesomeIcon icon={faDownload} />
-                  Exporter PDF
-                </button>
               </div>
             </div>
 
@@ -1353,15 +1344,7 @@ export default function CategoriesPage() {
                       {selectedCategories.length} sélectionnée(s)
                     </small>
                   )}
-                  <button
-                    onClick={resetFilters}
-                    className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-2"
-                    disabled={loading}
-                    title="Réinitialiser les filtres"
-                  >
-                    <FontAwesomeIcon icon={faTimes} />
-                    <span className="d-none d-md-inline">Reset</span>
-                  </button>
+                 
                 </div>
               </div>
             </div>

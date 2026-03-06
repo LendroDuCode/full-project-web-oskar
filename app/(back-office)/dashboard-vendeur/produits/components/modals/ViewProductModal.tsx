@@ -440,13 +440,7 @@ const ViewProductModal: React.FC<ViewProductModalProps> = ({
                   </div>
                 </div>
 
-                {/* Identifiant */}
-                <div className="mt-4 pt-3 border-top">
-                  <p className="text-muted small mb-0">
-                    <FontAwesomeIcon icon={faInfoCircle} className="me-1" />
-                    ID du produit: {product.uuid}
-                  </p>
-                </div>
+           
               </div>
             </div>
 

@@ -128,7 +128,7 @@ export default function SidebarUtilisateur({
           label: "Tous mes favoris",
           href: "/dashboard-utilisateur/favoris",
           icon: "fa-heart text-danger",
-          badge: { count: 8, color: "bg-danger" },
+         // badge: { count: 8, color: "bg-danger" },
         },
       ],
     },
@@ -140,12 +140,6 @@ export default function SidebarUtilisateur({
       label: "Mon Profil",
       icon: "fa-user",
       href: "/dashboard-utilisateur/profile",
-    },
-    {
-      id: "settings",
-      label: "Paramètres",
-      icon: "fa-gear",
-      href: "/dashboard-utilisateur/parametres",
     },
     {
       id: "help",
@@ -479,60 +473,7 @@ export default function SidebarUtilisateur({
         </div>
       </div>
 
-      {/* User Info & Footer */}
-      <div className="border-top border-secondary p-3">
-        {/* Info utilisateur */}
-        {!isCollapsed && (
-          <div className="d-flex align-items-center gap-3 mb-3 p-2">
-            <div
-              className="rounded-circle overflow-hidden position-relative"
-              style={{
-                width: "44px",
-                height: "44px",
-                border: "2px solid #16a34a",
-              }}
-            >
-              <img
-                src={userAvatar}
-                alt={userName}
-                width={40}
-                height={40}
-                className="rounded-circle w-100 h-100 object-fit-cover"
-              />
-            </div>
-            <div className="flex-grow-1" style={{ minWidth: 0 }}>
-              <div className="fw-semibold small text-truncate">{userName}</div>
-              <div className="text-secondary extra-small text-truncate">
-                {userEmail}
-              </div>
-            </div>
-          </div>
-        )}
 
-        {/* Déconnexion */}
-        <Link
-          href="/logout"
-          className="text-decoration-none d-flex align-items-center gap-3 px-3 py-2 rounded"
-          style={{
-            color: "#f87171",
-            fontSize: "0.9rem",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = "#374151";
-            e.currentTarget.style.color = "#fca5a5";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "transparent";
-            e.currentTarget.style.color = "#f87171";
-          }}
-        >
-          <i
-            className="fa-solid fa-right-from-bracket"
-            style={{ width: "20px", textAlign: "center" }}
-          ></i>
-          {!isCollapsed && <span>Se déconnecter</span>}
-        </Link>
-      </div>
 
       <style jsx>{`
         .w-280 {

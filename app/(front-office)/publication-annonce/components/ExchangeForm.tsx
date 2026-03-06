@@ -6,11 +6,9 @@ import {
   faExchangeAlt,
   faInfoCircle,
   faBox,
-  faHandHoldingHeart,
+  faTag,
   faImage,
   faCamera,
-  faPhone,
-  faTag,
   faCheckCircle,
   faChevronDown,
   faTimes,
@@ -33,65 +31,39 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
   const [sousCategories, setSousCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [phoneError, setPhoneError] = useState<string | null>(null);
 
   const setEchangeData = (newData: any) => onChange(newData);
 
-  // ✅ Fonction pour formater le numéro de téléphone avec +225
-  const formatPhoneNumber = (value: string): string => {
-    // Garder seulement le préfixe +225 et les chiffres
-    let cleaned = value.replace(/[^\d+]/g, '');
+  // ✅ Fonction pour formater le prix avec séparateur de milliers
+  const formatPrix = (value: string): string => {
+    // Supprimer tous les caractères non numériques
+    const numbers = value.replace(/\D/g, '');
     
-    // Si ça commence par +225, on le garde, sinon on l'ajoute
-    if (!cleaned.startsWith('+225')) {
-      cleaned = '+225' + cleaned.replace(/^0+/, '');
+    // Formater avec des espaces tous les 3 chiffres
+    if (numbers) {
+      return numbers.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
     }
-    
-    // Extraire les chiffres après +225
-    let numbers = cleaned.replace('+225', '').replace(/\s/g, '');
-    
-    // Limiter à 10 chiffres
-    numbers = numbers.slice(0, 10);
-    
-    // Formater avec des espaces tous les 2 chiffres
-    let formatted = '+225';
-    if (numbers.length > 0) {
-      // Format: +225 07 09 18 18 64
-      const parts = [];
-      for (let i = 0; i < numbers.length; i += 2) {
-        parts.push(numbers.substr(i, 2));
-      }
-      formatted += ' ' + parts.join(' ');
-    }
-    
-    return formatted;
+    return '';
   };
 
-  // ✅ Fonction pour valider le numéro de téléphone
-  const validatePhoneNumber = (phone: string): boolean => {
-    // Enlever le préfixe +225 et les espaces
-    const numbers = phone.replace(/^\+225\s*/, '').replace(/\s/g, '');
-    // Vérifier qu'il reste exactement 10 chiffres
-    return /^\d{10}$/.test(numbers);
+  // ✅ Fonction pour extraire la valeur numérique (sans espaces)
+  const extractNumericValue = (formattedValue: string): string => {
+    return formattedValue.replace(/\s/g, '');
   };
 
-  // ✅ Gestionnaire de changement pour le téléphone
-  const handlePhoneChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatPhoneNumber(e.target.value);
+  // ✅ Gestionnaire de changement pour le prix
+  const handlePrixChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPrix(e.target.value);
     
-    // Mettre à jour les données
+    // Mettre à jour l'affichage avec le format
+    e.target.value = formatted;
+    
+    // Stocker la valeur sans espaces dans les données
+    const numericValue = extractNumericValue(formatted);
     setEchangeData({
       ...echangeData,
-      numero: formatted,
+      prix: numericValue,
     });
-    
-    // Valider et afficher une erreur si nécessaire
-    if (formatted !== '+225 ') {
-      const isValid = validatePhoneNumber(formatted);
-      setPhoneError(isValid ? null : "Le numéro doit contenir 10 chiffres (ex: 07 09 18 18 64)");
-    } else {
-      setPhoneError(null);
-    }
   };
 
   // Charger les catégories
@@ -104,53 +76,40 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
         console.log("📦 Réponse catégories brute:", response);
 
         if (Array.isArray(response)) {
-          // ÉTAPE 1: Filtrer uniquement les catégories actives et non supprimées
+          // Filtrer les catégories actives
           const activeCategories = response.filter(
             (cat: Category) => !cat.is_deleted && cat.deleted_at === null
           );
 
-          console.log("📊 Catégories actives:", activeCategories.length);
-
-          // ÉTAPE 2: Identifier les catégories principales (sans parent ou path vide/null)
+          // Identifier les catégories principales
           const mainCategories = activeCategories.filter(
             (cat: Category) => !cat.path || cat.path === null || cat.path === ""
           );
-          
-          console.log("📊 Catégories principales:", mainCategories.map(c => ({ 
-            libelle: c.libelle, 
-            uuid: c.uuid,
-            enfants: c.enfants?.length || 0 
-          })));
-          
-          // ÉTAPE 3: Éliminer les doublons basés sur le libellé
+
+          // Éliminer les doublons
           const uniqueCategoriesMap = new Map<string, Category>();
-          
           mainCategories.forEach((category: Category) => {
             const existing = uniqueCategoriesMap.get(category.libelle);
-            
             if (!existing) {
               uniqueCategoriesMap.set(category.libelle, category);
             } else {
               const existingId = existing.id || 0;
               const currentId = category.id || 0;
-              
-              // Garder la catégorie avec l'ID le plus élevé (la plus récente)
               if (currentId > existingId) {
                 uniqueCategoriesMap.set(category.libelle, category);
               }
             }
           });
-          
+
           const uniqueMainCategories = Array.from(uniqueCategoriesMap.values());
-          
-          // ÉTAPE 4: Pour chaque catégorie principale, traiter les enfants
+
+          // Traiter les enfants
           const processedCategories: Category[] = uniqueMainCategories.map((category: Category) => {
             const enfants = category.enfants || [];
-            
             const activeEnfants = enfants.filter(
               (enfant: Category) => !enfant.is_deleted && enfant.deleted_at === null
             );
-            
+
             const uniqueChildrenMap = new Map<string, Category>();
             activeEnfants.forEach((enfant: Category) => {
               if (!uniqueChildrenMap.has(enfant.libelle)) {
@@ -162,23 +121,22 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                 }
               }
             });
-            
+
             const uniqueChildren = Array.from(uniqueChildrenMap.values());
-            
-            // Conserver toutes les propriétés originales de la catégorie
+
             return {
               ...category,
               enfants: uniqueChildren
             };
           });
-          
-          // ÉTAPE 5: Trier par libellé pour une navigation cohérente
+
+          // Trier par libellé
           const sortedCategories = processedCategories.sort(
             (a: Category, b: Category) => a.libelle.localeCompare(b.libelle)
           );
-          
+
           setCategories(sortedCategories);
-          
+
           // Si une catégorie est déjà sélectionnée, charger ses sous-catégories
           if (echangeData.categorie_uuid) {
             const selectedCat = sortedCategories.find(c => c.uuid === echangeData.categorie_uuid);
@@ -186,8 +144,6 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
               setSousCategories(selectedCat.enfants);
             }
           }
-        } else {
-          throw new Error("Format invalide");
         }
       } catch (err: any) {
         console.error("Erreur catégories:", err);
@@ -200,17 +156,16 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
     fetchCategories();
   }, [echangeData.categorie_uuid]);
 
-  // ✅ CORRECTION: Gérer le changement de catégorie principale
+  // Gérer le changement de catégorie principale
   const handleCategorieChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const categorieUuid = e.target.value;
     const selectedCategory = categories.find(c => c.uuid === categorieUuid);
-    
-    // Mettre à jour la catégorie principale avec final_categorie_uuid
+
     setEchangeData({
       ...echangeData,
-      categorie_uuid: categorieUuid,      // Garder pour l'UI
-      sous_categorie_uuid: "",             // Réinitialiser la sous-catégorie
-      final_categorie_uuid: categorieUuid  // Par défaut, c'est la catégorie principale
+      categorie_uuid: categorieUuid,
+      sous_categorie_uuid: "",
+      final_categorie_uuid: categorieUuid
     });
 
     // Charger les sous-catégories
@@ -221,15 +176,13 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
     }
   };
 
-  // ✅ CORRECTION: Gérer le changement de sous-catégorie - C'EST CETTE UUID QUI DOIT PARTIR EN BASE
+  // Gérer le changement de sous-catégorie
   const handleSousCategorieChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const sousCategorieUuid = e.target.value;
-    
-    // Mettre à jour les données : la sous-catégorie devient la catégorie finale
+
     setEchangeData({
       ...echangeData,
       sous_categorie_uuid: sousCategorieUuid,
-      // Si sous-catégorie sélectionnée, utiliser son UUID, sinon garder la catégorie principale
       final_categorie_uuid: sousCategorieUuid || echangeData.categorie_uuid
     });
   };
@@ -242,15 +195,12 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
           <div className="col-12">
             <div className="d-flex align-items-center bg-primary bg-opacity-10 p-4 rounded-4 border border-primary border-opacity-25">
               <div className="rounded-circle bg-primary p-3 me-4 shadow-sm">
-                <FontAwesomeIcon
-                  icon={faExchangeAlt}
-                  className="text-white fs-3"
-                />
+                <FontAwesomeIcon icon={faExchangeAlt} className="text-white fs-3" />
               </div>
               <div>
                 <h2 className="fw-bold text-dark mb-2 display-6">Détails de l'échange</h2>
                 <p className="text-secondary mb-0 fs-5">
-                  Décrivez ce que vous proposez et recherchez
+                  Décrivez ce que vous recherchez
                 </p>
               </div>
             </div>
@@ -277,22 +227,16 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
             <div className="card border shadow-lg rounded-4 mb-4 hover-shadow transition-all">
               <div className="card-header bg-white border-bottom py-4 px-4 rounded-top-4">
                 <h4 className="fw-bold mb-0 text-dark d-flex align-items-center">
-                  <FontAwesomeIcon
-                    icon={faInfoCircle}
-                    className="text-primary me-3 fs-3"
-                  />
-                  Objets de l'échange
+                  <FontAwesomeIcon icon={faInfoCircle} className="text-primary me-3 fs-3" />
+                  Informations de l'échange
                 </h4>
               </div>
-              
+
               <div className="card-body p-4">
-                {/* Titre */}
+                {/* Titre de l'échange - Obligatoire */}
                 <div className="mb-4" style={{ minHeight: "110px" }}>
                   <label className="form-label fw-bold fs-5 mb-3 d-flex align-items-center">
-                    <FontAwesomeIcon
-                      icon={faTag}
-                      className="me-2 text-primary"
-                    />
+                    <FontAwesomeIcon icon={faTag} className="me-2 text-primary" />
                     Titre de l'échange <span className="text-danger ms-1">*</span>
                   </label>
                   <div className="position-relative">
@@ -301,7 +245,7 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                       className="form-control form-control-lg border border-secondary rounded-4 py-3 px-4"
                       style={{ fontSize: "1.1rem" }}
                       placeholder="Ex: iPhone 12 contre Samsung S21"
-                      value={echangeData.nomElementEchange}
+                      value={echangeData.nomElementEchange || ""}
                       onChange={(e) =>
                         setEchangeData({
                           ...echangeData,
@@ -313,109 +257,9 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                   </div>
                 </div>
 
-                {/* Type d'échange */}
-                <div className="mb-4" style={{ minHeight: "140px" }}>
-                  <label className="form-label fw-bold fs-5 mb-3 d-block">
-                    Type d'échange <span className="text-danger">*</span>
-                  </label>
-                  <div className="d-flex gap-3">
-                    <div className="form-check form-check-card flex-grow-1">
-                      <input
-                        type="radio"
-                        className="form-check-input d-none"
-                        name="typeEchange"
-                        id="typeProduit"
-                        checked={echangeData.typeEchange === "produit"}
-                        onChange={() =>
-                          setEchangeData({
-                            ...echangeData,
-                            typeEchange: "produit",
-                          })
-                        }
-                      />
-                      <label
-                        className={`form-check-label border rounded-4 p-4 w-100 text-center cursor-pointer transition-all ${
-                          echangeData.typeEchange === "produit" 
-                            ? 'border-primary bg-primary bg-opacity-10' 
-                            : 'border-secondary bg-white'
-                        }`}
-                        htmlFor="typeProduit"
-                        style={{ 
-                          boxShadow: echangeData.typeEchange === "produit" ? '0 0 0 2px #0d6efd20' : 'none'
-                        }}
-                      >
-                        <FontAwesomeIcon
-                          icon={faBox}
-                          className={`fs-1 d-block mb-2 ${
-                            echangeData.typeEchange === "produit" ? 'text-primary' : 'text-secondary'
-                          }`}
-                        />
-                        <span className={`fw-semibold ${
-                          echangeData.typeEchange === "produit" ? 'text-primary' : 'text-dark'
-                        }`}>Produit</span>
-                      </label>
-                    </div>
-                    <div className="form-check form-check-card flex-grow-1">
-                      <input
-                        type="radio"
-                        className="form-check-input d-none"
-                        name="typeEchange"
-                        id="typeService"
-                        checked={echangeData.typeEchange === "service"}
-                        onChange={() =>
-                          setEchangeData({
-                            ...echangeData,
-                            typeEchange: "service",
-                          })
-                        }
-                      />
-                      <label
-                        className={`form-check-label border rounded-4 p-4 w-100 text-center cursor-pointer transition-all ${
-                          echangeData.typeEchange === "service" 
-                            ? 'border-primary bg-primary bg-opacity-10' 
-                            : 'border-secondary bg-white'
-                        }`}
-                        htmlFor="typeService"
-                        style={{ 
-                          boxShadow: echangeData.typeEchange === "service" ? '0 0 0 2px #0d6efd20' : 'none'
-                        }}
-                      >
-                        <FontAwesomeIcon
-                          icon={faHandHoldingHeart}
-                          className={`fs-1 d-block mb-2 ${
-                            echangeData.typeEchange === "service" ? 'text-primary' : 'text-secondary'
-                          }`}
-                        />
-                        <span className={`fw-semibold ${
-                          echangeData.typeEchange === "service" ? 'text-primary' : 'text-dark'
-                        }`}>Service</span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Objets proposé et recherché */}
+                {/* Objet recherché - Obligatoire */}
                 <div className="row g-4 mb-4">
-                  <div className="col-md-6" style={{ minHeight: "100px" }}>
-                    <label className="form-label fw-bold fs-5 mb-3">
-                      Objet proposé <span className="text-danger">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      className="form-control form-control-lg border border-secondary rounded-4 py-3 px-4"
-                      style={{ fontSize: "1.1rem" }}
-                      placeholder="Ex: iPhone 12 Pro"
-                      value={echangeData.objetPropose}
-                      onChange={(e) =>
-                        setEchangeData({
-                          ...echangeData,
-                          objetPropose: e.target.value,
-                        })
-                      }
-                      required
-                    />
-                  </div>
-                  <div className="col-md-6" style={{ minHeight: "100px" }}>
+                  <div className="col-md-12" style={{ minHeight: "100px" }}>
                     <label className="form-label fw-bold fs-5 mb-3">
                       Objet recherché <span className="text-danger">*</span>
                     </label>
@@ -424,7 +268,7 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                       className="form-control form-control-lg border border-secondary rounded-4 py-3 px-4"
                       style={{ fontSize: "1.1rem" }}
                       placeholder="Ex: Samsung Galaxy S21"
-                      value={echangeData.objetDemande}
+                      value={echangeData.objetDemande || ""}
                       onChange={(e) =>
                         setEchangeData({
                           ...echangeData,
@@ -436,44 +280,39 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                   </div>
                 </div>
 
-                {/* Contact et Quantité - avec gestion améliorée du téléphone */}
+                {/* Prix estimé - Obligatoire avec formatage */}
                 <div className="row g-4 mb-4">
-                  <div className="col-md-6" style={{ minHeight: "100px" }}>
-                    <label className="form-label fw-bold fs-5 mb-3 d-flex align-items-center">
-                      <FontAwesomeIcon
-                        icon={faPhone}
-                        className="me-2 text-primary"
-                      />
-                      Numéro de contact <span className="text-danger">*</span>
+                  <div className="col-md-12" style={{ minHeight: "100px" }}>
+                    <label className="form-label fw-bold fs-5 mb-3">
+                      Prix estimé (FCFA) <span className="text-danger">*</span>
                     </label>
                     <input
-                      type="tel"
-                      className={`form-control form-control-lg border ${phoneError ? 'border-danger' : 'border-secondary'} rounded-4 py-3 px-4`}
+                      type="text"
+                      className="form-control form-control-lg border border-secondary rounded-4 py-3 px-4"
                       style={{ fontSize: "1.1rem" }}
-                      placeholder="+225 07 09 18 18 64"
-                      value={echangeData.numero}
-                      onChange={handlePhoneChange}
+                      placeholder="Ex: 100 000"
+                      value={echangeData.prix ? formatPrix(echangeData.prix) : ""}
+                      onChange={handlePrixChange}
+                      inputMode="numeric"
                       required
                     />
-                    {phoneError && (
-                      <div className="text-danger mt-2 small">
-                        <FontAwesomeIcon icon={faInfoCircle} className="me-1" />
-                        {phoneError}
-                      </div>
-                    )}
                     <small className="text-muted mt-1 d-block">
-                      Format: +225 suivi de 10 chiffres
+                      Les espaces sont ajoutés automatiquement pour les milliers
                     </small>
                   </div>
-                  <div className="col-md-6" style={{ minHeight: "100px" }}>
+                </div>
+
+                {/* Quantité - Optionnelle */}
+                <div className="row g-4 mb-4">
+                  <div className="col-md-12" style={{ minHeight: "100px" }}>
                     <label className="form-label fw-bold fs-5 mb-3">
-                      Quantité <span className="text-danger">*</span>
+                      Quantité <span className="text-muted">(optionnelle, défaut: 1)</span>
                     </label>
                     <input
                       type="number"
                       className="form-control form-control-lg border border-secondary rounded-4 py-3 px-4"
                       style={{ fontSize: "1.1rem" }}
-                      value={echangeData.quantite}
+                      value={echangeData.quantite || 1}
                       onChange={(e) =>
                         setEchangeData({
                           ...echangeData,
@@ -481,42 +320,21 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                         })
                       }
                       min="1"
-                      required
                     />
                   </div>
                 </div>
 
-                {/* Prix estimé */}
-                <div className="mb-4" style={{ minHeight: "100px" }}>
-                  <label className="form-label fw-bold fs-5 mb-3">
-                    Prix estimé (FCFA)
-                  </label>
-                  <input
-                    type="number"
-                    className="form-control form-control-lg border border-secondary rounded-4 py-3 px-4"
-                    style={{ fontSize: "1.1rem" }}
-                    placeholder="Ex: 100000"
-                    value={echangeData.prix}
-                    onChange={(e) =>
-                      setEchangeData({
-                        ...echangeData,
-                        prix: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-
-                {/* Message */}
+                {/* Message - Optionnel */}
                 <div className="mb-4" style={{ minHeight: "120px" }}>
                   <label className="form-label fw-bold fs-5 mb-3">
-                    Message
+                    Message <span className="text-muted">(optionnel)</span>
                   </label>
                   <textarea
                     className="form-control form-control-lg border border-secondary rounded-4 py-3 px-4"
                     style={{ fontSize: "1.1rem", minHeight: "100px" }}
                     rows={3}
-                    placeholder="Souhaitez-vous procéder à un échange ?"
-                    value={echangeData.message}
+                    placeholder="Souhaitez-vous ajouter un message ?"
+                    value={echangeData.message || ""}
                     onChange={(e) =>
                       setEchangeData({
                         ...echangeData,
@@ -532,18 +350,15 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
           {/* Colonne latérale - Photo et Catégorie */}
           <div className="col-lg-4">
             <div className="sticky-top" style={{ top: "20px" }}>
-              {/* Photo */}
+              {/* Photo - Obligatoire */}
               <div className="card border shadow-lg rounded-4 mb-4 hover-shadow transition-all">
                 <div className="card-header bg-white border-bottom py-4 px-4 rounded-top-4">
                   <h4 className="fw-bold mb-0 text-dark d-flex align-items-center">
-                    <FontAwesomeIcon
-                      icon={faCamera}
-                      className="text-primary me-3 fs-3"
-                    />
-                    Photo
+                    <FontAwesomeIcon icon={faCamera} className="text-primary me-3 fs-3" />
+                    Photo <span className="text-danger ms-1">*</span>
                   </h4>
                 </div>
-                
+
                 <div className="card-body p-4" style={{ minHeight: "350px" }}>
                   {imagePreview ? (
                     <div className="position-relative mb-4">
@@ -570,21 +385,26 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                       </button>
                     </div>
                   ) : (
-                    <div 
-                      className="text-center border border-dashed border-secondary rounded-4 p-5 mb-4 bg-light bg-opacity-25"
+                    <div
+                      className="text-center border border-dashed rounded-4 p-5 mb-4 bg-light bg-opacity-25"
                       onClick={() => document.getElementById('fileInputEchange')?.click()}
-                      style={{ cursor: 'pointer', minHeight: "250px", display: "flex", flexDirection: "column", justifyContent: "center" }}
+                      style={{ 
+                        cursor: 'pointer', 
+                        minHeight: "250px", 
+                        display: "flex", 
+                        flexDirection: "column", 
+                        justifyContent: "center",
+                        borderColor: "#0d6efd"
+                      }}
                     >
-                      <FontAwesomeIcon
-                        icon={faImage}
-                        className="text-secondary fs-1 mb-3"
-                      />
+                      <FontAwesomeIcon icon={faImage} className="fs-1 mb-3 text-primary" />
                       <p className="text-secondary fs-6 mb-0">
                         Cliquez pour ajouter une photo
                       </p>
+                      <p className="text-danger small mt-2">* Champ obligatoire</p>
                     </div>
                   )}
-                  
+
                   <div className="d-grid mt-3">
                     <label className="btn btn-outline-primary btn-lg rounded-4 py-3 border fw-bold">
                       <FontAwesomeIcon icon={faCamera} className="me-2" />
@@ -601,18 +421,15 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                 </div>
               </div>
 
-              {/* Catégorie principale */}
+              {/* Catégorie principale - Obligatoire */}
               <div className="card border shadow-lg rounded-4 mb-4 hover-shadow transition-all">
                 <div className="card-header bg-white border-bottom py-4 px-4 rounded-top-4">
                   <h4 className="fw-bold mb-0 text-dark d-flex align-items-center">
-                    <FontAwesomeIcon
-                      icon={faTag}
-                      className="text-primary me-3 fs-3"
-                    />
-                    Catégorie
+                    <FontAwesomeIcon icon={faTag} className="text-primary me-3 fs-3" />
+                    Catégorie <span className="text-danger ms-1">*</span>
                   </h4>
                 </div>
-                
+
                 <div className="card-body p-4" style={{ minHeight: "200px" }}>
                   {loading ? (
                     <div className="text-center py-4">
@@ -635,7 +452,7 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                         <div className="position-relative">
                           <select
                             className="form-select form-select-lg border border-secondary rounded-4 py-3 px-4 bg-white"
-                            style={{ 
+                            style={{
                               fontSize: "1rem",
                               WebkitAppearance: "none",
                               MozAppearance: "none",
@@ -643,7 +460,7 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                               backgroundImage: "none",
                               paddingRight: "3rem"
                             }}
-                            value={echangeData.categorie_uuid}
+                            value={echangeData.categorie_uuid || ""}
                             onChange={handleCategorieChange}
                             required
                           >
@@ -654,19 +471,12 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                               </option>
                             ))}
                           </select>
-                          <FontAwesomeIcon 
-                            icon={faChevronDown} 
-                            className="position-absolute end-0 top-50 translate-middle-y me-4 text-secondary"
-                            style={{ 
-                              pointerEvents: "none", 
-                              fontSize: "1rem",
-                              zIndex: 2
-                            }}
-                          />
+                          <div className="position-absolute end-0 top-0 h-100 d-flex align-items-center pe-4" style={{ pointerEvents: "none", zIndex: 2 }}>
+                            <FontAwesomeIcon icon={faChevronDown} className="text-secondary" style={{ fontSize: "1rem" }} />
+                          </div>
                         </div>
                       </div>
 
-                      {/* ✅ Sous-catégorie - C'est SON UUID qui sera envoyé */}
                       {sousCategories.length > 0 && (
                         <div className="mb-3" style={{ minHeight: "100px" }}>
                           <label className="form-label fw-bold fs-6 mb-3">
@@ -675,7 +485,7 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                           <div className="position-relative">
                             <select
                               className="form-select form-select-lg border border-secondary rounded-4 py-3 px-4 bg-white"
-                              style={{ 
+                              style={{
                                 fontSize: "1rem",
                                 WebkitAppearance: "none",
                                 MozAppearance: "none",
@@ -693,15 +503,9 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                                 </option>
                               ))}
                             </select>
-                            <FontAwesomeIcon 
-                              icon={faChevronDown} 
-                              className="position-absolute end-0 top-50 translate-middle-y me-4 text-secondary"
-                              style={{ 
-                                pointerEvents: "none", 
-                                fontSize: "1rem",
-                                zIndex: 2
-                              }}
-                            />
+                            <div className="position-absolute end-0 top-0 h-100 d-flex align-items-center pe-4" style={{ pointerEvents: "none", zIndex: 2 }}>
+                              <FontAwesomeIcon icon={faChevronDown} className="text-secondary" style={{ fontSize: "1rem" }} />
+                            </div>
                           </div>
                           <div className="mt-2 p-2 bg-info bg-opacity-10 rounded-3">
                             <small className="text-info">
@@ -732,16 +536,24 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
       sc => sc.uuid === echangeData.sous_categorie_uuid
     );
 
+    // ✅ Fonction pour formater l'affichage du prix dans le récapitulatif
+    const formatPrixDisplay = (prix: string): string => {
+      if (!prix) return "Non renseigné";
+      const numbers = prix.replace(/\D/g, '');
+      if (numbers) {
+        const formatted = numbers.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+        return `${formatted} FCFA`;
+      }
+      return "Non renseigné";
+    };
+
     return (
       <div className="container-fluid p-4">
         <div className="row mb-5">
           <div className="col-12">
             <div className="text-center">
               <div className="rounded-circle bg-success bg-opacity-10 p-4 d-inline-flex align-items-center justify-content-center mb-4">
-                <FontAwesomeIcon
-                  icon={faCheckCircle}
-                  className="text-success fs-1"
-                />
+                <FontAwesomeIcon icon={faCheckCircle} className="text-success fs-1" />
               </div>
               <h2 className="fw-bold text-dark mb-3 display-5">Récapitulatif de l'échange</h2>
               <p className="text-secondary fs-5">
@@ -755,7 +567,6 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
           <div className="col-lg-8">
             <div className="card border shadow-lg rounded-4 hover-shadow transition-all">
               <div className="card-body p-5">
-                {/* En-tête avec badge */}
                 <div className="d-flex justify-content-between align-items-start mb-5 pb-4 border-bottom">
                   <div>
                     <h4 className="fw-bold text-dark mb-2">Détails de l'échange</h4>
@@ -763,11 +574,10 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                   </div>
                   <div className="badge bg-primary bg-opacity-10 text-primary fs-6 p-3 rounded-pill border border-primary">
                     <FontAwesomeIcon icon={faExchangeAlt} className="me-2" />
-                    {echangeData.typeEchange === "produit" ? "Échange de produit" : "Échange de service"}
+                    Échange
                   </div>
                 </div>
 
-                {/* Informations principales */}
                 <div className="row g-4">
                   <div className="col-md-6">
                     <div className="p-4 bg-light rounded-4 border">
@@ -794,14 +604,6 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                   </div>
                   <div className="col-md-6">
                     <div className="p-4 bg-light rounded-4 border">
-                      <p className="text-secondary mb-2 small">Vous proposez</p>
-                      <p className="fw-bold text-dark mb-0 fs-5">
-                        {echangeData.objetPropose || "Non renseigné"}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="col-md-6">
-                    <div className="p-4 bg-light rounded-4 border">
                       <p className="text-secondary mb-2 small">Vous recherchez</p>
                       <p className="fw-bold text-dark mb-0 fs-5">
                         {echangeData.objetDemande || "Non renseigné"}
@@ -810,33 +612,24 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                   </div>
                   <div className="col-md-6">
                     <div className="p-4 bg-light rounded-4 border">
-                      <p className="text-secondary mb-2 small">Quantité</p>
+                      <p className="text-secondary mb-2 small">Prix estimé</p>
                       <p className="fw-bold text-dark mb-0 fs-5">
-                        {echangeData.quantite}
+                        {formatPrixDisplay(echangeData.prix)}
                       </p>
                     </div>
                   </div>
-                  <div className="col-md-6">
-                    <div className="p-4 bg-light rounded-4 border">
-                      <p className="text-secondary mb-2 small">Contact</p>
-                      <p className="fw-bold text-dark mb-0 fs-5">
-                        {echangeData.numero || "Non renseigné"}
-                      </p>
-                    </div>
-                  </div>
-                  {echangeData.prix && (
+                  {echangeData.quantite && parseInt(echangeData.quantite) > 1 && (
                     <div className="col-md-6">
                       <div className="p-4 bg-light rounded-4 border">
-                        <p className="text-secondary mb-2 small">Prix estimé</p>
+                        <p className="text-secondary mb-2 small">Quantité</p>
                         <p className="fw-bold text-dark mb-0 fs-5">
-                          {parseInt(echangeData.prix).toLocaleString()} FCFA
+                          {echangeData.quantite}
                         </p>
                       </div>
                     </div>
                   )}
                 </div>
 
-                {/* Message */}
                 {echangeData.message && (
                   <div className="mt-5">
                     <p className="text-secondary mb-3 fw-bold">Message</p>
@@ -858,7 +651,7 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                   <FontAwesomeIcon icon={faImage} className="me-2 text-primary" />
                   Photo de l'objet
                 </h5>
-                
+
                 {imagePreview ? (
                   <div className="text-center">
                     <img
@@ -877,10 +670,7 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                   </div>
                 ) : (
                   <div className="text-center border border-dashed border-secondary rounded-4 p-5">
-                    <FontAwesomeIcon
-                      icon={faImage}
-                      className="text-secondary fs-1 mb-3"
-                    />
+                    <FontAwesomeIcon icon={faImage} className="text-secondary fs-1 mb-3" />
                     <p className="text-secondary mb-0">Aucune photo</p>
                   </div>
                 )}

@@ -48,29 +48,24 @@ export default function SidebarModPanel({
       id: "dashboard",
       label: "Tableau de Bord",
       icon: "fa-chart-line",
-      badge: null,
       href: "/dashboard-agent",
     },
     {
       id: "ads",
       label: "Annonces",
       icon: "fa-rectangle-ad",
-      badge: { count: 54, color: "bg-warning" },
       href: "/dashboard-agent/annonces",
     },
     {
       id: "certification",
       label: "Certifications",
       icon: "fa-certificate",
-      badge: { count: 23, color: "bg-danger" },
       href: "/dashboard-agent/certifications",
     },
-
     {
       id: "shops",
       label: "Boutiques",
       icon: "fa-store",
-      badge: null,
       href: "/dashboard-agent/boutiques",
     },
     /*
@@ -78,26 +73,21 @@ export default function SidebarModPanel({
       id: "messages",
       label: "Messages",
       icon: "fa-message",
-      badge: { count: 12, color: "bg-primary" },
       href: "/dashboard-agent/messages",
     },
     */
-
     /*
     {
       id: "reports",
       label: "Signalements",
       icon: "fa-flag",
-      badge: null,
       href: "/dashboard-agent/signalements",
     },
     */
-
     {
       id: "support",
       label: "Support",
       icon: "fa-headset",
-      badge: { count: 8, color: "bg-info" },
       href: "/dashboard-agent/support",
     },
   ];
@@ -157,14 +147,6 @@ export default function SidebarModPanel({
           href: "/dashboard-agent/categories/liste",
           icon: "fa-list text-info",
         },
-        // AJOUT DE LA SOUS-CATÉGORIE FAVORIS
-        /*
-        {
-          label: "Favoris par catégorie",
-          href: "/dashboard-agent/categories/sous-categories",
-          icon: "fa-layer-group text-info",
-        },
-        */
       ],
     },
     {
@@ -203,7 +185,6 @@ export default function SidebarModPanel({
       ],
     },
     */
-
     {
       id: "roles",
       label: "Gestion des Rôles",
@@ -394,25 +375,7 @@ export default function SidebarModPanel({
                   style={{ width: "20px", textAlign: "center" }}
                 ></i>
                 {!isCollapsed && (
-                  <>
-                    <span className="flex-grow-1">{item.label}</span>
-                    {item.badge && (
-                      <span
-                        className={`badge ${item.badge.color} rounded-pill ${isNavActive(item.id) ? "bg-white text-dark" : ""}`}
-                        style={{ fontSize: "0.7rem", padding: "0.2rem 0.4rem" }}
-                      >
-                        {item.badge.count}
-                      </span>
-                    )}
-                  </>
-                )}
-                {isCollapsed && item.badge && (
-                  <span
-                    className={`position-absolute top-0 start-100 translate-middle badge ${item.badge.color} rounded-pill`}
-                    style={{ fontSize: "0.55rem", padding: "0.15rem 0.3rem" }}
-                  >
-                    {item.badge.count > 9 ? "9+" : item.badge.count}
-                  </span>
+                  <span className="flex-grow-1">{item.label}</span>
                 )}
               </Link>
             ))}
@@ -553,60 +516,62 @@ export default function SidebarModPanel({
         </div>
       </div>
 
-      {/* User Info & Footer */}
-      <div className="border-top border-secondary p-3">
-        {/* Info utilisateur */}
-        {!isCollapsed && (
-          <div className="d-flex align-items-center gap-3 mb-3 p-2">
-            <div
-              className="rounded-circle overflow-hidden position-relative"
+      {/* Déconnexion en bas (version étendue) */}
+      {!isCollapsed && (
+        <div className="p-3 border-top border-secondary">
+          {settingsItems.slice(-1).map((item) => (
+            <Link
+              key={item.id}
+              href={item.href}
+              className="text-decoration-none d-flex align-items-center gap-3 px-3 py-2 rounded"
               style={{
-                width: "44px",
-                height: "44px",
-                border: "2px solid #16a34a",
+                color: "#d1d5db",
+                fontSize: "0.9rem",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = "#374151";
+                e.currentTarget.style.color = "white";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "transparent";
+                e.currentTarget.style.color = "#d1d5db";
               }}
             >
-              <img
-                src={userAvatar}
-                alt={userName}
-                width={40}
-                height={40}
-                className="rounded-circle w-100 h-100 object-fit-cover"
-              />
-            </div>
-            <div className="flex-grow-1" style={{ minWidth: 0 }}>
-              <div className="fw-semibold small text-truncate">{userName}</div>
-              <div className="text-secondary extra-small text-truncate">
-                {userEmail}
-              </div>
-            </div>
-          </div>
-        )}
+              <i
+                className={`fa-solid ${item.icon} fa-fw`}
+                style={{ width: "20px", textAlign: "center" }}
+              ></i>
+              <span>{item.label}</span>
+            </Link>
+          ))}
+        </div>
+      )}
 
-        {/* Déconnexion */}
-        <Link
-          href="/logout"
-          className="text-decoration-none d-flex align-items-center gap-3 px-3 py-2 rounded"
-          style={{
-            color: "#f87171",
-            fontSize: "0.9rem",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = "#374151";
-            e.currentTarget.style.color = "#fca5a5";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "transparent";
-            e.currentTarget.style.color = "#f87171";
-          }}
-        >
-          <i
-            className="fa-solid fa-right-from-bracket"
-            style={{ width: "20px", textAlign: "center" }}
-          ></i>
-          {!isCollapsed && <span>Se déconnecter</span>}
-        </Link>
-      </div>
+      {/* Déconnexion en mode réduit */}
+      {isCollapsed && (
+        <div className="p-3 border-top border-secondary d-flex justify-content-center">
+          {settingsItems.slice(-1).map((item) => (
+            <Link
+              key={item.id}
+              href={item.href}
+              className="text-decoration-none d-flex align-items-center justify-content-center p-2 rounded"
+              style={{
+                color: "#d1d5db",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = "#374151";
+                e.currentTarget.style.color = "white";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = "transparent";
+                e.currentTarget.style.color = "#d1d5db";
+              }}
+            >
+              <i className={`fa-solid ${item.icon}`} title={item.label}></i>
+            </Link>
+          ))}
+        </div>
+      )}
 
       <style jsx>{`
         .w-280 {

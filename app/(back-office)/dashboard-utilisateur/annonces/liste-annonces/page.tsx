@@ -1,8 +1,6 @@
-// app/(back-office)/dashboard-utilisateur/annonces/liste-annonces/page.tsx
-
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import colors from "@/app/shared/constants/colors";
@@ -21,8 +19,8 @@ interface AnnonceData {
   date: string;
   price?: number | string | null;
   quantity?: number;
-  estPublie?: boolean;
-  estBloque?: boolean;
+  estPublie?: boolean; // Rendre optionnel pour correspondre à AnnonceItem
+  estBloque?: boolean; // Rendre optionnel pour correspondre à AnnonceItem
   category?: string;
   originalData?: any;
 }
@@ -46,77 +44,137 @@ export default function AnnoncesPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [fullDetails, setFullDetails] = useState<any>(null);
 
-  // Fonction pour transformer les données selon le type
-  const transformAnnonceData = (item: any, type: string): AnnonceData => {
-    switch (type) {
-      case "produit":
-        return {
-          uuid: item.uuid,
-          title: item.libelle || item.nom || "Produit sans nom",
-          description: item.description,
-          image: item.image || `https://via.placeholder.com/64?text=P`,
-          type: "produit" as const,
-          status:
-            item.statut?.toLowerCase() ||
-            (item.estPublie ? "publie" : "en-attente"),
-          date: item.createdAt || item.updatedAt || new Date().toISOString(),
-          price: item.prix,
-          quantity: item.quantite,
-          estPublie: item.estPublie || false,
-          estBloque: item.estBloque || item.est_bloque || false,
-          category: item.categorie?.libelle || item.categorie,
-          originalData: item,
-        };
-
-      case "don":
-        return {
-          uuid: item.uuid,
-          title: item.nom || item.titre || "Don sans nom",
-          description: item.description,
-          image: item.image || `https://via.placeholder.com/64?text=D`,
-          type: "don" as const,
-          status: item.statut?.toLowerCase() || "en-attente",
-          date: item.date_debut || new Date().toISOString(),
-          price: item.prix,
-          quantity: item.quantite,
-          estPublie: item.estPublie || false,
-          estBloque: item.est_bloque || false,
-          category: item.categorie,
-          originalData: item,
-        };
-
-      case "echange":
-        return {
-          uuid: item.uuid,
-          title: item.nomElementEchange || item.titre || "Échange sans nom",
-          description: item.description || item.message,
-          image: item.image || `https://via.placeholder.com/64?text=E`,
-          type: "echange" as const,
-          status: item.statut?.toLowerCase() || "en-attente",
-          date:
-            item.dateProposition || item.createdAt || new Date().toISOString(),
-          price: item.prix,
-          quantity: item.quantite,
-          estPublie: item.estPublie || false,
-          estBloque: item.estBloque || false,
-          category: item.categorie,
-          originalData: item,
-        };
-
-      default:
-        return {
-          uuid: item.uuid || Math.random().toString(),
-          title: "Annonce sans nom",
-          image: `https://via.placeholder.com/64?text=?`,
-          type: "produit" as const,
-          status: "inconnu",
-          date: new Date().toISOString(),
-          originalData: item,
-        };
-    }
+  // ✅ Fonction pour extraire les items (gère tous les formats)
+  const extractItems = (response: any): any[] => {
+    if (!response) return [];
+    
+    // Si c'est déjà un tableau
+    if (Array.isArray(response)) return response;
+    
+    // Format: { status: "success", data: { produits: [...] } }
+    if (response.data?.produits && Array.isArray(response.data.produits)) 
+      return response.data.produits;
+    
+    // Format: { data: { dons: [...] } }
+    if (response.data?.dons && Array.isArray(response.data.dons)) 
+      return response.data.dons;
+    
+    // Format: { data: { echanges: [...] } }
+    if (response.data?.echanges && Array.isArray(response.data.echanges)) 
+      return response.data.echanges;
+    
+    // Format: { data: [...] }
+    if (response.data && Array.isArray(response.data)) 
+      return response.data;
+    
+    // Format: { produits: [...] }
+    if (response.produits && Array.isArray(response.produits)) 
+      return response.produits;
+    
+    // Format: { dons: [...] }
+    if (response.dons && Array.isArray(response.dons)) 
+      return response.dons;
+    
+    // Format: { echanges: [...] }
+    if (response.echanges && Array.isArray(response.echanges)) 
+      return response.echanges;
+    
+    return [];
   };
 
-  // Charger les détails complets d'une annonce
+  // ✅ Fonction de transformation adaptée à toutes les structures
+  const transformAnnonceData = (item: any, type: string): AnnonceData => {
+    // Extraire l'UUID
+    const uuid = item.uuid || item.id?.toString() || "";
+
+    // Extraire le titre selon le type
+    let title = "";
+    switch (type) {
+      case "produit":
+        title = item.libelle || item.nom || item.titre || "Produit sans nom";
+        break;
+      case "don":
+        title = item.nom || item.titre || "Don sans nom";
+        break;
+      case "echange":
+        title = item.nomElementEchange || item.titre || "Échange sans nom";
+        break;
+      default:
+        title = item.titre || item.nom || item.libelle || "Annonce sans nom";
+    }
+
+    // Extraire la description
+    const description = item.description || item.message || "";
+
+    // Extraire l'image
+    const image = item.image || item.image_key || item.avatar || "";
+
+    // Extraire le prix
+    let price = null;
+    if (item.prix) price = item.prix;
+    else if (item.price) price = item.price;
+
+    // Extraire la quantité
+    let quantity = 1;
+    if (item.quantite) quantity = Number(item.quantite);
+    else if (item.quantity) quantity = Number(item.quantity);
+
+    // Déterminer le statut de publication et blocage
+    const estPublie = 
+      item.estPublie === true || 
+      item.publie === true || 
+      item.published === true || 
+      false;
+
+    const estBloque = 
+      item.est_bloque === true || 
+      item.estBloque === true || 
+      item.bloque === true || 
+      item.blocked === true || 
+      false;
+
+    // Déterminer le statut général
+    let status = "en-attente";
+    if (estBloque) status = "bloque";
+    else if (estPublie) status = "publie";
+    else if (item.statut) status = item.statut.toLowerCase();
+
+    // Extraire la date
+    const date = 
+      item.dateProposition || 
+      item.date_debut || 
+      item.createdAt || 
+      item.created_at || 
+      item.updatedAt || 
+      item.updated_at || 
+      new Date().toISOString();
+
+    // Extraire la catégorie
+    let category = "Non catégorisé";
+    if (item.categorie) {
+      if (typeof item.categorie === "string") category = item.categorie;
+      else if (item.categorie.libelle) category = item.categorie.libelle;
+      else if (item.categorie.nom) category = item.categorie.nom;
+    }
+
+    return {
+      uuid,
+      title: String(title),
+      description: String(description),
+      image: String(image),
+      type: type as any,
+      status,
+      date: String(date),
+      price,
+      quantity,
+      estPublie,
+      estBloque,
+      category,
+      originalData: item,
+    };
+  };
+
+  // ✅ Charger les détails complets d'une annonce
   const fetchFullDetails = useCallback(async (annonce: AnnonceData) => {
     setDetailLoading(true);
     try {
@@ -138,14 +196,13 @@ export default function AnnoncesPage() {
       setFullDetails(response.data || response);
     } catch (err: any) {
       console.error("Erreur lors du chargement des détails:", err);
-      // Utiliser les données de base si l'API échoue
       setFullDetails(annonce.originalData);
     } finally {
       setDetailLoading(false);
     }
   }, []);
 
-  // Gérer l'ouverture de la modal de détails
+  // ✅ Gérer l'ouverture de la modal de détails
   const handleView = useCallback(
     async (uuid: string, type: string) => {
       const annonce = annonces.find((a) => a.uuid === uuid && a.type === type);
@@ -158,168 +215,152 @@ export default function AnnoncesPage() {
     [annonces, fetchFullDetails],
   );
 
-  // Fermer la modal
+  // ✅ Fermer la modal
   const handleCloseModal = useCallback(() => {
     setShowViewModal(false);
     setSelectedAnnonce(null);
     setFullDetails(null);
   }, []);
 
-  // Charger les données selon le type et le statut
+  // ✅ Charger les données selon le type et le statut
   const fetchData = useCallback(async (type: string, status: string) => {
     try {
       setLoading(true);
       setError(null);
+      setIsFetchingBlocked(status === "bloque");
 
-      let data: any[] = [];
+      let allItems: AnnonceData[] = [];
 
-      // Si on veut les annonces bloquées
-      if (status === "bloque") {
-        setIsFetchingBlocked(true);
-
-        switch (type) {
-          case "tous":
-            // Charger tous les types bloqués
-            const [
-              produitsBloquesResponse,
-              donsBloquesResponse,
-              echangesBloquesResponse,
-            ] = await Promise.all([
-              api.get(API_ENDPOINTS.PRODUCTS.USER_BLOCKED),
-              api.get(API_ENDPOINTS.DONS.USER_BLOCKED),
-              api.get(API_ENDPOINTS.ECHANGES.USER_BLOCKED),
-            ]);
-
-            // Extraire les données selon la structure de la réponse
-            const produitsBloques =
-              produitsBloquesResponse.data?.produits || produitsBloquesResponse;
-            const donsBloques = donsBloquesResponse.data || donsBloquesResponse;
-            const echangesBloques =
-              echangesBloquesResponse.data || echangesBloquesResponse;
-
-            data = [
-              ...(Array.isArray(produitsBloques) ? produitsBloques : []).map(
-                (item) => transformAnnonceData(item, "produit"),
-              ),
-              ...(Array.isArray(donsBloques) ? donsBloques : []).map((item) =>
-                transformAnnonceData(item, "don"),
-              ),
-              ...(Array.isArray(echangesBloques) ? echangesBloques : []).map(
-                (item) => transformAnnonceData(item, "echange"),
-              ),
-            ];
-            break;
-
-          case "produit":
-            const produitsResponse = await api.get(
-              API_ENDPOINTS.PRODUCTS.USER_BLOCKED,
-            );
-            const produitsData =
-              produitsResponse.data?.produits || produitsResponse;
-            data = (Array.isArray(produitsData) ? produitsData : []).map(
-              (item) => transformAnnonceData(item, "produit"),
-            );
-            break;
-
-          case "don":
-            const donsResponse = await api.get(API_ENDPOINTS.DONS.USER_BLOCKED);
-            const donsData = donsResponse.data || donsResponse;
-            data = (Array.isArray(donsData) ? donsData : []).map((item) =>
-              transformAnnonceData(item, "don"),
-            );
-            break;
-
-          case "echange":
-            const echangesResponse = await api.get(
-              API_ENDPOINTS.ECHANGES.USER_BLOCKED,
-            );
-            const echangesData = echangesResponse.data || echangesResponse;
-            data = (Array.isArray(echangesData) ? echangesData : []).map(
-              (item) => transformAnnonceData(item, "echange"),
-            );
-            break;
+      // Charger selon le type et le statut
+      if (type === "tous") {
+        // Déterminer les endpoints à utiliser selon le statut
+        let produitsEndpoint, donsEndpoint, echangesEndpoint;
+        
+        if (status === "publie") {
+          produitsEndpoint = API_ENDPOINTS.PRODUCTS.LISTE_PRODUITS_PUBLIES_UTILISATEUR;
+          donsEndpoint = API_ENDPOINTS.DONS.LISTE_DONS_PUBLIE_UTILISATEUR;
+          echangesEndpoint = API_ENDPOINTS.ECHANGES.LISTE_ECHANGES_PUBLIE_UTILISATEUR;
+        } else if (status === "bloque") {
+          produitsEndpoint = API_ENDPOINTS.PRODUCTS.USER_BLOCKED;
+          donsEndpoint = API_ENDPOINTS.DONS.USER_BLOCKED;
+          echangesEndpoint = API_ENDPOINTS.ECHANGES.USER_BLOCKED;
+        } else {
+          // "tous" ou "en-attente" - utiliser les endpoints génériques
+          produitsEndpoint = API_ENDPOINTS.PRODUCTS.LISTE_PRODUITS_UTILISATEUR;
+          donsEndpoint = API_ENDPOINTS.DONS.USER_DONS;
+          echangesEndpoint = API_ENDPOINTS.ECHANGES.USER_ECHANGES;
         }
-        setIsFetchingBlocked(false);
+
+        const promises = [
+          api.get(produitsEndpoint).catch(err => {
+            console.warn("Erreur chargement produits:", err);
+            return null;
+          }),
+          api.get(donsEndpoint).catch(err => {
+            console.warn("Erreur chargement dons:", err);
+            return null;
+          }),
+          api.get(echangesEndpoint).catch(err => {
+            console.warn("Erreur chargement échanges:", err);
+            return null;
+          }),
+        ];
+
+        const [produitsRes, donsRes, echangesRes] = await Promise.all(promises);
+
+        // Log pour déboguer
+        console.log("📦 Réponse produits:", produitsRes);
+        console.log("📦 Réponse dons:", donsRes);
+        console.log("📦 Réponse échanges:", echangesRes);
+
+        if (produitsRes) {
+          const produitsItems = extractItems(produitsRes);
+          console.log(`📊 Produits extraits: ${produitsItems.length}`);
+          allItems.push(...produitsItems.map((item: any) => transformAnnonceData(item, "produit")));
+        }
+
+        if (donsRes) {
+          const donsItems = extractItems(donsRes);
+          console.log(`📊 Dons extraits: ${donsItems.length}`);
+          allItems.push(...donsItems.map((item: any) => transformAnnonceData(item, "don")));
+        }
+
+        if (echangesRes) {
+          const echangesItems = extractItems(echangesRes);
+          console.log(`📊 Échanges extraits: ${echangesItems.length}`);
+          allItems.push(...echangesItems.map((item: any) => transformAnnonceData(item, "echange")));
+        }
+
+        console.log(`📊 Total items: ${allItems.length}`);
+
+        // Si on est en "en-attente", filtrer côté client
+        if (status === "en-attente") {
+          allItems = allItems.filter(item => 
+            !item.estPublie && !item.estBloque
+          );
+        }
       } else {
-        // Charger les annonces publiées ou selon le statut
-        switch (type) {
-          case "tous":
-            const [produitsResponse, donsResponse, echangesResponse] =
-              await Promise.all([
-                api.get(API_ENDPOINTS.PRODUCTS.PUBLISHED),
-                api.get(API_ENDPOINTS.DONS.PUBLISHED),
-                api.get(API_ENDPOINTS.ECHANGES.PUBLISHED),
-              ]);
+        // Type spécifique
+        let endpoint;
+        
+        if (status === "publie") {
+          if (type === "produit") endpoint = API_ENDPOINTS.PRODUCTS.LISTE_PRODUITS_PUBLIES_UTILISATEUR;
+          else if (type === "don") endpoint = API_ENDPOINTS.DONS.LISTE_DONS_PUBLIE_UTILISATEUR;
+          else if (type === "echange") endpoint = API_ENDPOINTS.ECHANGES.LISTE_ECHANGES_PUBLIE_UTILISATEUR;
+        } else if (status === "bloque") {
+          if (type === "produit") endpoint = API_ENDPOINTS.PRODUCTS.USER_BLOCKED;
+          else if (type === "don") endpoint = API_ENDPOINTS.DONS.USER_BLOCKED;
+          else if (type === "echange") endpoint = API_ENDPOINTS.ECHANGES.USER_BLOCKED;
+        } else {
+          // "tous" ou "en-attente"
+          if (type === "produit") endpoint = API_ENDPOINTS.PRODUCTS.LISTE_PRODUITS_UTILISATEUR;
+          else if (type === "don") endpoint = API_ENDPOINTS.DONS.USER_DONS;
+          else if (type === "echange") endpoint = API_ENDPOINTS.ECHANGES.USER_ECHANGES;
+        }
 
-            data = [
-              ...(Array.isArray(produitsResponse) ? produitsResponse : []).map(
-                (item) => transformAnnonceData(item, "produit"),
-              ),
-              ...(Array.isArray(donsResponse) ? donsResponse : []).map((item) =>
-                transformAnnonceData(item, "don"),
-              ),
-              ...(Array.isArray(echangesResponse) ? echangesResponse : []).map(
-                (item) => transformAnnonceData(item, "echange"),
-              ),
-            ];
-            break;
+        if (!endpoint) {
+          throw new Error(`Endpoint non trouvé pour type: ${type}, statut: ${status}`);
+        }
 
-          case "produit":
-            const produits = await api.get(API_ENDPOINTS.PRODUCTS.PUBLISHED);
-            data = (Array.isArray(produits) ? produits : []).map((item) =>
-              transformAnnonceData(item, "produit"),
+        console.log(`🌐 Appel API ${type} (${status}):`, endpoint);
+        const response = await api.get(endpoint).catch(err => {
+          console.warn(`Erreur chargement ${type}:`, err);
+          return null;
+        });
+        
+        if (response) {
+          console.log(`📦 Réponse ${type}:`, response);
+          const items = extractItems(response);
+          console.log(`📊 Items extraits ${type}: ${items.length}`);
+          allItems = items.map((item: any) => transformAnnonceData(item, type));
+
+          // Si on est en "en-attente", filtrer côté client
+          if (status === "en-attente") {
+            allItems = allItems.filter(item => 
+              !item.estPublie && !item.estBloque
             );
-            break;
-
-          case "don":
-            const dons = await api.get(API_ENDPOINTS.DONS.PUBLISHED);
-            data = (Array.isArray(dons) ? dons : []).map((item) =>
-              transformAnnonceData(item, "don"),
-            );
-            break;
-
-          case "echange":
-            const echanges = await api.get(API_ENDPOINTS.ECHANGES.PUBLISHED);
-            data = (Array.isArray(echanges) ? echanges : []).map((item) =>
-              transformAnnonceData(item, "echange"),
-            );
-            break;
+          }
         }
       }
 
-      // Filtrer par statut supplémentaire si nécessaire
-      if (status !== "tous" && status !== "bloque") {
-        data = data.filter((item) => {
-          let itemStatus = item.status;
-          if (item.estBloque) itemStatus = "bloque";
-          if (item.estPublie && !item.estBloque) itemStatus = "publie";
-
-          // Normaliser les statuts
-          if (itemStatus === "en_attente") itemStatus = "en-attente";
-
-          return itemStatus === status;
-        });
-      }
-
-      setAnnonces(data);
+      console.log("📊 Total final:", allItems.length);
+      setAnnonces(allItems);
     } catch (err: any) {
-      console.error("Erreur lors du chargement des données:", err);
-      setError(
-        err.message ||
-          "Une erreur est survenue lors du chargement des annonces",
-      );
+      console.error("❌ Erreur lors du chargement des données:", err);
+      setError(err.message || "Une erreur est survenue");
       setAnnonces([]);
     } finally {
       setLoading(false);
+      setIsFetchingBlocked(false);
     }
   }, []);
 
-  // Effet pour charger les données quand les filtres changent
+  // ✅ Effet pour charger les données quand les filtres changent
   useEffect(() => {
     fetchData(selectedType, selectedStatus);
   }, [selectedType, selectedStatus, fetchData]);
 
-  // Filtrer par recherche
+  // ✅ Filtrer par recherche
   useEffect(() => {
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
@@ -340,12 +381,11 @@ export default function AnnoncesPage() {
     }
   }, [annonces, searchQuery]);
 
-  // Actions
+  // ✅ Actions
   const handleValidate = useCallback(
     async (uuid: string, type: string) => {
       try {
         console.log("Validation:", uuid, type);
-        // Implémentez la logique de validation ici
         await fetchData(selectedType, selectedStatus);
       } catch (err) {
         console.error("Erreur lors de la validation:", err);
@@ -359,7 +399,6 @@ export default function AnnoncesPage() {
     async (uuid: string, type: string) => {
       try {
         console.log("Rejet:", uuid, type);
-        // Implémentez la logique de rejet ici
         await fetchData(selectedType, selectedStatus);
       } catch (err) {
         console.error("Erreur lors du rejet:", err);
@@ -372,12 +411,7 @@ export default function AnnoncesPage() {
   const handlePublish = useCallback(
     async (uuid: string, type: string, publish: boolean) => {
       try {
-        console.log(
-          `${publish ? "Publication" : "Dépublication"}:`,
-          uuid,
-          type,
-        );
-        // Implémentez la logique de publication/dépublication ici
+        console.log(`${publish ? "Publication" : "Dépublication"}:`, uuid, type);
         await fetchData(selectedType, selectedStatus);
       } catch (err) {
         console.error("Erreur lors de l'opération:", err);
@@ -391,7 +425,6 @@ export default function AnnoncesPage() {
     async (uuid: string, type: string, block: boolean) => {
       try {
         console.log(`${block ? "Blocage" : "Déblocage"}:`, uuid, type);
-        // Implémentez la logique de blocage/déblocage ici
         await fetchData(selectedType, selectedStatus);
       } catch (err) {
         console.error("Erreur lors de l'opération:", err);
@@ -405,7 +438,6 @@ export default function AnnoncesPage() {
     async (uuid: string, type: string) => {
       try {
         console.log("Suppression:", uuid, type);
-        // Implémentez la logique de suppression ici
         await fetchData(selectedType, selectedStatus);
       } catch (err) {
         console.error("Erreur lors de la suppression:", err);
@@ -418,24 +450,36 @@ export default function AnnoncesPage() {
   const handleBulkAction = useCallback(
     async (action: string, items: AnnonceData[]) => {
       try {
-        // Pour l'exemple, on simule l'action
         console.log(`Action en masse "${action}" sur ${items.length} items`);
-
-        // Ici, vous implémenteriez la vraie logique d'action en masse
-        // Par exemple, pour chaque item :
-        // await api.post(endpoint, { uuid: item.uuid, action });
-
-        // Rafraîchir les données après l'action
-        await fetchData(selectedType, selectedStatus);
-
-        // Réinitialiser la sélection
+        
+        // Exécuter l'action sur chaque élément
+        for (const item of items) {
+          switch (action) {
+            case "publish":
+              await handlePublish(item.uuid, item.type, true);
+              break;
+            case "unpublish":
+              await handlePublish(item.uuid, item.type, false);
+              break;
+            case "block":
+              await handleBlock(item.uuid, item.type, true);
+              break;
+            case "unblock":
+              await handleBlock(item.uuid, item.type, false);
+              break;
+            case "delete":
+              await handleDelete(item.uuid, item.type);
+              break;
+          }
+        }
+        
         setSelectedItems(new Set());
       } catch (err) {
         console.error("Erreur lors de l'action en masse:", err);
         alert("Erreur lors de l'opération en masse");
       }
     },
-    [selectedType, selectedStatus, fetchData],
+    [handlePublish, handleBlock, handleDelete],
   );
 
   const handleClearFilters = useCallback(() => {
@@ -487,7 +531,6 @@ export default function AnnoncesPage() {
               {selectedType !== "tous" && ` • Type: ${selectedType}`}
               {selectedStatus !== "tous" && ` • Statut: ${selectedStatus}`}
               {searchQuery && ` • Recherche: "${searchQuery}"`}
-              {selectedStatus === "bloque" && " • (Annonces bloquées)"}
             </p>
           </div>
 

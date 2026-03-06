@@ -1756,10 +1756,7 @@ export default function BoutiqueApercu() {
                   </p>
 
                   <div className="d-flex flex-wrap gap-3">
-                    <div className="d-flex align-items-center gap-2">
-                      <FontAwesomeIcon icon={faStoreAlt} />
-                      <span>{boutique.type_boutique.libelle}</span>
-                    </div>
+                    
                     <div className="d-flex align-items-center gap-2">
                       <FontAwesomeIcon icon={faCalendar} />
                       <span>Créée le {formatDate(boutique.created_at)}</span>
@@ -1771,23 +1768,7 @@ export default function BoutiqueApercu() {
                   </div>
                 </div>
 
-                {/* Actions */}
-                <div className="d-flex gap-2">
-                  <button
-                    onClick={handleEditBoutique}
-                    className="btn btn-outline-light d-flex align-items-center gap-2"
-                  >
-                    <FontAwesomeIcon icon={faEdit} />
-                    <span className="d-none d-md-inline">Modifier</span>
-                  </button>
-                  <button
-                    onClick={() => handleCreateProduct()}
-                    className="btn btn-success d-flex align-items-center gap-2"
-                  >
-                    <FontAwesomeIcon icon={faPlus} />
-                    <span className="d-none d-md-inline">Ajouter produit</span>
-                  </button>
-                </div>
+               
               </div>
             </div>
           </div>
@@ -2158,12 +2139,7 @@ export default function BoutiqueApercu() {
               </div>
               <div className="card-body">
                 <ul className="list-group list-group-flush">
-                  <li className="list-group-item d-flex justify-content-between align-items-center border-0 px-0 py-2">
-                    <span className="text-muted">Type de boutique:</span>
-                    <span className="fw-semibold">
-                      {boutique.type_boutique.libelle}
-                    </span>
-                  </li>
+                 
                   <li className="list-group-item d-flex justify-content-between align-items-center border-0 px-0 py-2">
                     <span className="text-muted">Statut:</span>
                     <BoutiqueStatusBadge statut={boutique.statut} />
@@ -2176,75 +2152,8 @@ export default function BoutiqueApercu() {
                     <span className="text-muted">Modifiée le:</span>
                     <span>{formatDate(boutique.updated_at)}</span>
                   </li>
-                  <li className="list-group-item d-flex justify-content-between align-items-center border-0 px-0 py-2">
-                    <span className="text-muted">Vendeur:</span>
-                    <code>{boutique.vendeurUuid || "N/A"}</code>
-                  </li>
+                
                 </ul>
-              </div>
-            </div>
-
-            {/* Type de boutique */}
-            <div className="card border-0 shadow-sm">
-              <div className="card-header bg-white border-0 py-3">
-                <h4 className="h6 mb-0 fw-bold">
-                  <FontAwesomeIcon icon={faTags} className="me-2" />
-                  Type de boutique
-                </h4>
-              </div>
-              <div className="card-body">
-                <div className="d-flex align-items-start gap-3">
-                  {typeImageUrl ? (
-                    <img
-                      src={typeImageUrl}
-                      alt={boutique.type_boutique.libelle}
-                      className="rounded"
-                      style={{
-                        width: "80px",
-                        height: "80px",
-                        objectFit: "cover",
-                      }}
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src =
-                          `https://via.placeholder.com/80/cccccc/ffffff?text=${boutique.type_boutique.libelle.charAt(0)}`;
-                      }}
-                    />
-                  ) : (
-                    <div
-                      className="rounded d-flex align-items-center justify-content-center bg-secondary bg-opacity-10"
-                      style={{
-                        width: "80px",
-                        height: "80px",
-                      }}
-                    >
-                      <FontAwesomeIcon
-                        icon={faTags}
-                        className="text-muted"
-                        style={{ fontSize: "2rem" }}
-                      />
-                    </div>
-                  )}
-                  <div>
-                    <h5 className="fw-bold mb-1">
-                      {boutique.type_boutique.libelle}
-                    </h5>
-                    <p className="small text-muted mb-2">
-                      {boutique.type_boutique.code || "N/A"}
-                    </p>
-                    <div className="d-flex flex-wrap gap-2">
-                      {boutique.type_boutique.peut_vendre_produits && (
-                        <span className="badge bg-success bg-opacity-10 text-success">
-                          Vente produits
-                        </span>
-                      )}
-                      {boutique.type_boutique.peut_vendre_biens && (
-                        <span className="badge bg-primary bg-opacity-10 text-primary">
-                          Vente biens
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
 
@@ -2306,30 +2215,7 @@ export default function BoutiqueApercu() {
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="d-flex justify-content-between align-items-center mb-4">
-          <button
-            onClick={() => router.push("/dashboard/boutiques")}
-            className="btn btn-outline-secondary"
-          >
-            <FontAwesomeIcon icon={faStore} className="me-2" />
-            Retour aux boutiques
-          </button>
-
-          <div className="d-flex gap-2">
-            <button onClick={handleEditBoutique} className="btn btn-primary">
-              <FontAwesomeIcon icon={faEdit} className="me-2" />
-              Modifier la boutique
-            </button>
-            <button
-              onClick={() => handleCreateProduct()}
-              className="btn btn-success"
-            >
-              <FontAwesomeIcon icon={faPlus} className="me-2" />
-              Ajouter un produit
-            </button>
-          </div>
-        </div>
+        
       </div>
 
       <style jsx>{`

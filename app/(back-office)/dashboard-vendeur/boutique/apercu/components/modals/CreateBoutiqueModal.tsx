@@ -10,11 +10,7 @@ import {
   faImage,
   faStore,
   faFileAlt,
-  faClipboardCheck,
   faInfoCircle,
-  faShoppingBag,
-  faBox,
-  faTag,
   faExclamationTriangle,
   faUpload,
   faTrash,
@@ -50,15 +46,11 @@ const CreateBoutiqueModal = ({
 }: CreateBoutiqueModalProps) => {
   const [formData, setFormData] = useState({
     nom: "",
-    type_boutique_uuid: "",
     description: "",
     logo: null as File | null,
     banniere: null as File | null,
-    politique_retour: "",
-    conditions_utilisation: "",
   });
 
-  const [typesBoutique, setTypesBoutique] = useState<TypeBoutique[]>([]);
   const [loadingTypes, setLoadingTypes] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [bannierePreview, setBannierePreview] = useState<string | null>(null);
@@ -114,87 +106,6 @@ const CreateBoutiqueModal = ({
     }
   };
 
-  const fetchTypesBoutique = async () => {
-    try {
-      setLoadingTypes(true);
-      setErrors({ ...errors, types: "" });
-      setApiError(null);
-
-      console.log("📦 Chargement des types de boutique...");
-      const response = await api.get(API_ENDPOINTS.TYPES_BOUTIQUE.LIST);
-
-      console.log("📦 Réponse types boutique:", response);
-
-      let typesData: TypeBoutique[] = [];
-
-      if (Array.isArray(response)) {
-        typesData = response;
-      } else if (
-        response &&
-        typeof response === "object" &&
-        "data" in response
-      ) {
-        const data = response.data;
-        if (Array.isArray(data)) {
-          typesData = data;
-        } else if (data && typeof data === "object") {
-          const arrayKey = Object.keys(data).find((key) =>
-            Array.isArray(data[key]),
-          );
-          if (arrayKey && data[arrayKey]) {
-            typesData = data[arrayKey];
-          }
-        }
-      } else if (response && typeof response === "object") {
-        const arrayKey = Object.keys(response).find((key) =>
-          Array.isArray(response[key]),
-        );
-        if (arrayKey && response[arrayKey]) {
-          typesData = response[arrayKey];
-        }
-      }
-
-      typesData = typesData.filter(
-        (item) =>
-          item &&
-          typeof item === "object" &&
-          "uuid" in item &&
-          "libelle" in item &&
-          "code" in item,
-      );
-
-      if (typesData.length === 0) {
-        console.warn("⚠️ Aucun type de boutique trouvé ou format invalide");
-        setTypesBoutique([]);
-        setErrors({
-          types: "Aucun type de boutique disponible pour le moment",
-        });
-      } else {
-        console.log(`✅ ${typesData.length} type(s) de boutique chargé(s)`);
-        setTypesBoutique(typesData);
-      }
-    } catch (error: any) {
-      console.error("❌ Erreur chargement types boutique:", error);
-      setErrors({
-        types:
-          error.response?.data?.message ||
-          error.message ||
-          "Erreur lors du chargement des types de boutique",
-      });
-      setTypesBoutique([]);
-    } finally {
-      setLoadingTypes(false);
-    }
-  };
-
-  useEffect(() => {
-    if (show) {
-      fetchTypesBoutique();
-      setErrors({});
-      setApiError(null);
-    }
-  }, [show]);
-
   // Nettoyer les previews à la fermeture
   useEffect(() => {
     return () => {
@@ -218,26 +129,9 @@ const CreateBoutiqueModal = ({
       newErrors.nom = "Le nom ne doit pas dépasser 100 caractères";
     }
 
-    if (!formData.type_boutique_uuid) {
-      newErrors.type = "Veuillez sélectionner un type de boutique";
-    }
-
     if (formData.description && formData.description.length > 500) {
       newErrors.description =
         "La description ne doit pas dépasser 500 caractères";
-    }
-
-    if (formData.politique_retour && formData.politique_retour.length > 1000) {
-      newErrors.politique_retour =
-        "La politique de retour ne doit pas dépasser 1000 caractères";
-    }
-
-    if (
-      formData.conditions_utilisation &&
-      formData.conditions_utilisation.length > 1000
-    ) {
-      newErrors.conditions_utilisation =
-        "Les conditions d'utilisation ne doivent pas dépasser 1000 caractères";
     }
 
     setErrors(newErrors);
@@ -254,23 +148,14 @@ const CreateBoutiqueModal = ({
     }
 
     try {
-      // Créer FormData comme dans le modal de produit
+      // Créer FormData
       const submitData = new FormData();
       submitData.append("nom", formData.nom.trim());
-      submitData.append("type_boutique_uuid", formData.type_boutique_uuid);
 
       if (formData.description?.trim()) {
         submitData.append("description", formData.description.trim());
       }
-      if (formData.politique_retour?.trim()) {
-        submitData.append("politique_retour", formData.politique_retour.trim());
-      }
-      if (formData.conditions_utilisation?.trim()) {
-        submitData.append(
-          "conditions_utilisation",
-          formData.conditions_utilisation.trim(),
-        );
-      }
+      
       if (formData.logo) {
         submitData.append("logo", formData.logo);
       }
@@ -308,12 +193,9 @@ const CreateBoutiqueModal = ({
 
     setFormData({
       nom: "",
-      type_boutique_uuid: "",
       description: "",
       logo: null,
       banniere: null,
-      politique_retour: "",
-      conditions_utilisation: "",
     });
     setLogoPreview(null);
     setBannierePreview(null);
@@ -353,18 +235,12 @@ const CreateBoutiqueModal = ({
     setApiError(null);
   };
 
-  const getTypeIcon = (type: TypeBoutique) => {
-    if (type.code.includes("electronique")) return faShoppingBag;
-    if (type.code.includes("test")) return faBox;
-    return faTag;
-  };
-
   if (!show) return null;
 
   return (
     <div
       className="modal fade show d-block"
-      style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1060 }} // Augmenté de 1050 à 1060
+      style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1060 }}
       tabIndex={-1}
       onClick={(e) => {
         if (e.target === e.currentTarget) handleClose();
@@ -441,7 +317,7 @@ const CreateBoutiqueModal = ({
               </h6>
 
               <div className="row g-3">
-                <div className="col-md-6">
+                <div className="col-12">
                   <label className="form-label fw-semibold">
                     Nom de la boutique <span className="text-danger">*</span>
                   </label>
@@ -470,73 +346,6 @@ const CreateBoutiqueModal = ({
                   <small className="text-muted">
                     Le nom qui apparaîtra publiquement (3-100 caractères)
                   </small>
-                </div>
-
-                <div className="col-md-6">
-                  <label className="form-label fw-semibold">
-                    Type de boutique <span className="text-danger">*</span>
-                  </label>
-                  <div className="input-group">
-                    <span className="input-group-text bg-light border-end-0">
-                      <FontAwesomeIcon icon={faTag} className="text-muted" />
-                    </span>
-                    <select
-                      className={`form-select border-start-0 ${errors.type ? "is-invalid" : ""}`}
-                      value={formData.type_boutique_uuid}
-                      onChange={(e) => {
-                        setFormData({
-                          ...formData,
-                          type_boutique_uuid: e.target.value,
-                        });
-                        if (errors.type) setErrors({ ...errors, type: "" });
-                        setApiError(null);
-                      }}
-                      required
-                      disabled={loading || loadingTypes}
-                    >
-                      <option value="">Sélectionner un type...</option>
-                      {loadingTypes ? (
-                        <option value="" disabled>
-                          Chargement des types...
-                        </option>
-                      ) : typesBoutique.length > 0 ? (
-                        typesBoutique.map((type) => (
-                          <option key={type.uuid} value={type.uuid}>
-                            {type.libelle}
-                            {type.description && ` - ${type.description}`}
-                          </option>
-                        ))
-                      ) : (
-                        <option value="" disabled>
-                          Aucun type disponible
-                        </option>
-                      )}
-                    </select>
-                  </div>
-                  {loadingTypes && (
-                    <div className="mt-2">
-                      <div className="d-flex align-items-center gap-2">
-                        <FontAwesomeIcon
-                          icon={faSpinner}
-                          spin
-                          className="text-success"
-                        />
-                        <small className="text-success">
-                          Chargement des types de boutique...
-                        </small>
-                      </div>
-                    </div>
-                  )}
-                  {errors.types && (
-                    <div className="alert alert-warning mt-2 py-2">
-                      <small>{errors.types}</small>
-                    </div>
-                  )}
-                  {errors.type && (
-                    <div className="invalid-feedback d-block">
-                      {errors.type}
-                    </div>
-                  )}
                 </div>
 
                 <div className="col-12">
@@ -781,99 +590,6 @@ const CreateBoutiqueModal = ({
                 </div>
               </div>
             </div>
-
-            <div className="p-4">
-              <h6 className="fw-bold mb-3 text-success d-flex align-items-center gap-2">
-                <FontAwesomeIcon icon={faClipboardCheck} />
-                Conditions et politiques
-              </h6>
-
-              <div className="row g-3">
-                <div className="col-12">
-                  <label className="form-label fw-semibold">
-                    Politique de retour
-                  </label>
-                  <textarea
-                    className={`form-control ${errors.politique_retour ? "is-invalid" : ""}`}
-                    rows={3}
-                    placeholder="Décrivez votre politique de retour et d'échange..."
-                    value={formData.politique_retour}
-                    onChange={(e) => {
-                      setFormData({
-                        ...formData,
-                        politique_retour: e.target.value,
-                      });
-                      if (errors.politique_retour)
-                        setErrors({ ...errors, politique_retour: "" });
-                      setApiError(null);
-                    }}
-                    disabled={loading}
-                    maxLength={1000}
-                  />
-                  <div className="d-flex justify-content-between mt-1">
-                    <small className="text-muted">
-                      Informez vos clients sur les retours et échanges
-                    </small>
-                    <small
-                      className={
-                        formData.politique_retour.length > 900
-                          ? "text-warning"
-                          : "text-muted"
-                      }
-                    >
-                      {formData.politique_retour.length}/1000 caractères
-                    </small>
-                  </div>
-                  {errors.politique_retour && (
-                    <div className="invalid-feedback d-block">
-                      {errors.politique_retour}
-                    </div>
-                  )}
-                </div>
-
-                <div className="col-12">
-                  <label className="form-label fw-semibold">
-                    Conditions d'utilisation
-                  </label>
-                  <textarea
-                    className={`form-control ${errors.conditions_utilisation ? "is-invalid" : ""}`}
-                    rows={3}
-                    placeholder="Décrivez les conditions générales d'utilisation..."
-                    value={formData.conditions_utilisation}
-                    onChange={(e) => {
-                      setFormData({
-                        ...formData,
-                        conditions_utilisation: e.target.value,
-                      });
-                      if (errors.conditions_utilisation)
-                        setErrors({ ...errors, conditions_utilisation: "" });
-                      setApiError(null);
-                    }}
-                    disabled={loading}
-                    maxLength={1000}
-                  />
-                  <div className="d-flex justify-content-between mt-1">
-                    <small className="text-muted">
-                      Définissez les règles d'utilisation de votre boutique
-                    </small>
-                    <small
-                      className={
-                        formData.conditions_utilisation.length > 900
-                          ? "text-warning"
-                          : "text-muted"
-                      }
-                    >
-                      {formData.conditions_utilisation.length}/1000 caractères
-                    </small>
-                  </div>
-                  {errors.conditions_utilisation && (
-                    <div className="invalid-feedback d-block">
-                      {errors.conditions_utilisation}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
           </form>
 
           <div className="modal-footer border-0 bg-light rounded-bottom-3">
@@ -890,7 +606,7 @@ const CreateBoutiqueModal = ({
               type="submit"
               className="btn btn-lg btn-success d-flex align-items-center gap-2"
               onClick={handleSubmit}
-              disabled={loading || loadingTypes || typesBoutique.length === 0}
+              disabled={loading}
               style={{
                 background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
                 border: "none",

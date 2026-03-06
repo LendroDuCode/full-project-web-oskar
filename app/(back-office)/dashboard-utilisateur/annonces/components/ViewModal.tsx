@@ -240,11 +240,7 @@ export default function ViewModal({
             faInfoCircle,
             "Informations produit",
             <>
-              {renderInfoItem(
-                "Référence",
-                fullDetails.reference || fullDetails.uuid,
-                faBarcode,
-              )}
+            
               {renderInfoItem("Marque", fullDetails.marque)}
               {renderInfoItem("Modèle", fullDetails.modele)}
               {renderInfoItem("Condition", fullDetails.condition)}
@@ -425,26 +421,7 @@ export default function ViewModal({
                 "Statut de la proposition",
                 fullDetails.statutPropose,
               )}
-              <div className="mt-3 pt-3 border-top">
-                <div className="text-muted small mb-2">Progression</div>
-                <div
-                  className="progress"
-                  style={{
-                    height: "6px",
-                    backgroundColor: colors.oskar.lightGrey,
-                  }}
-                >
-                  <div
-                    className="progress-bar"
-                    style={{
-                      width: fullDetails.progression
-                        ? `${fullDetails.progression}%`
-                        : "50%",
-                      backgroundColor: colors.oskar.blueHover,
-                    }}
-                  />
-                </div>
-              </div>
+         
             </>,
           )}
         </div>
@@ -636,11 +613,7 @@ export default function ViewModal({
                           </span>
                         )}
                       </div>
-                      <p className="text-muted small mb-0">
-                        {annonce.seller?.type || "Utilisateur standard"}
-                        {annonce.category &&
-                          ` • Catégorie: ${annonce.category}`}
-                      </p>
+                     
                     </div>
                   </div>
                 </div>
@@ -841,98 +814,7 @@ export default function ViewModal({
           )}
         </div>
 
-        {/* Actions */}
-        <div className="border-top pt-4">
-          <div className="d-flex justify-content-between align-items-center">
-            <div>
-              <h6
-                className="fw-semibold mb-2"
-                style={{ color: colors.oskar.black }}
-              >
-                Actions disponibles
-              </h6>
-              <p className="text-muted small mb-0">
-                Identifiant unique:{" "}
-                <code className="bg-light px-2 py-1 rounded">
-                  {annonce.uuid}
-                </code>
-              </p>
-            </div>
-            <div className="d-flex gap-2">
-              <button
-                type="button"
-                className="btn d-flex align-items-center gap-2"
-                onClick={() => {
-                  navigator.clipboard.writeText(annonce.uuid);
-                  alert("UUID copié dans le presse-papier");
-                }}
-                style={{
-                  backgroundColor: colors.oskar.lightGrey,
-                  color: colors.oskar.grey,
-                  border: "none",
-                  padding: "0.5rem 1rem",
-                  borderRadius: "8px",
-                }}
-              >
-                <FontAwesomeIcon icon={faClipboardCheck} />
-                Copier UUID
-              </button>
-              <button
-                type="button"
-                className="btn d-flex align-items-center gap-2"
-                onClick={() => {
-                  const data = JSON.stringify(
-                    annonce.originalData || annonce,
-                    null,
-                    2,
-                  );
-                  const blob = new Blob([data], { type: "application/json" });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = `${annonce.type}_${annonce.uuid}.json`;
-                  a.click();
-                }}
-                style={{
-                  backgroundColor: colors.oskar.blueHover,
-                  color: colors.oskar.lightGray,
-                  border: "none",
-                  padding: "0.5rem 1rem",
-                  borderRadius: "8px",
-                }}
-              >
-                <FontAwesomeIcon icon={faDownload} />
-                Exporter JSON
-              </button>
-              <button
-                type="button"
-                className="btn d-flex align-items-center gap-2"
-                onClick={() => {
-                  if (navigator.share) {
-                    navigator.share({
-                      title: annonce.title,
-                      text: annonce.description,
-                      url: window.location.href,
-                    });
-                  } else {
-                    navigator.clipboard.writeText(window.location.href);
-                    alert("Lien copié dans le presse-papier");
-                  }
-                }}
-                style={{
-                  backgroundColor: typeConfig.color,
-                  color: "white",
-                  border: "none",
-                  padding: "0.5rem 1rem",
-                  borderRadius: "8px",
-                }}
-              >
-                <FontAwesomeIcon icon={faShareAlt} />
-                Partager
-              </button>
-            </div>
-          </div>
-        </div>
+    
       </>
     );
   };
@@ -1055,28 +937,7 @@ export default function ViewModal({
                   >
                     Fermer
                   </button>
-                  <button
-                    type="button"
-                    className="btn px-4 py-2"
-                    onClick={() => {
-                      if (annonce) {
-                        window.open(
-                          `/dashboard/annonces/${annonce.type}/${annonce.uuid}/edit`,
-                          "_blank",
-                        );
-                      }
-                    }}
-                    style={{
-                      backgroundColor: colors.oskar.blueHover,
-                      color: colors.oskar.lightGray,
-                      border: "none",
-                      borderRadius: "10px",
-                      fontWeight: "500",
-                    }}
-                  >
-                    <FontAwesomeIcon icon={faImage} className="me-2" />
-                    Éditer l'annonce
-                  </button>
+                 
                 </div>
               </div>
             </div>

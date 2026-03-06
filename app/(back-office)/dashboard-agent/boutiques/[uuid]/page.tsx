@@ -1200,10 +1200,6 @@ const BoutiqueDetail: React.FC = () => {
                     <h1 className="display-6 fw-bold mb-2">{boutique!.nom}</h1>
                     <div className="d-flex flex-wrap gap-3">
                       <span className="text-muted d-flex align-items-center">
-                        <FaTags className="me-2 text-primary" />
-                        {boutique!.type_boutique.libelle}
-                      </span>
-                      <span className="text-muted d-flex align-items-center">
                         <FaBoxOpen className="me-2 text-success" />
                         {
                           boutique!.produits.filter((p) => !p.is_deleted).length
@@ -1221,47 +1217,7 @@ const BoutiqueDetail: React.FC = () => {
                   </div>
                 </div>
               </Col>
-              <Col xs="auto">
-                <ButtonToolbar className="gap-2">
-                  <OverlayTrigger
-                    placement="bottom"
-                    overlay={<Tooltip>Actualiser</Tooltip>}
-                  >
-                    <Button
-                      variant="outline-secondary"
-                      onClick={handleRefresh}
-                      disabled={refreshLoading}
-                      className="rounded-3"
-                    >
-                      <FaSync className={refreshLoading ? "fa-spin" : ""} />
-                    </Button>
-                  </OverlayTrigger>
-                  <Button
-                    variant="outline-primary"
-                    className="d-flex align-items-center rounded-3"
-                    onClick={() =>
-                      router.push(
-                        `/dashboard-agent/boutiques/edit/${boutique!.uuid}`,
-                      )
-                    }
-                  >
-                    <FaPencilAlt className="me-2" />
-                    Modifier
-                  </Button>
-                  <Button
-                    variant="primary"
-                    className="d-flex align-items-center rounded-3"
-                    onClick={() =>
-                      router.push(
-                        `/dashboard-agent/produits/create?boutique=${boutique!.uuid}`,
-                      )
-                    }
-                  >
-                    <FaPlusCircle className="me-2" />
-                    Nouveau produit
-                  </Button>
-                </ButtonToolbar>
-              </Col>
+             
             </Row>
           </div>
 
@@ -1600,18 +1556,7 @@ const BoutiqueDetail: React.FC = () => {
                           </Button>
                         </ButtonGroup>
                       )}
-                      <Button
-                        variant="primary"
-                        className="d-flex align-items-center rounded-3 px-4"
-                        onClick={() =>
-                          router.push(
-                            `/dashboard-agent/produits/create?boutique=${boutique!.uuid}`,
-                          )
-                        }
-                      >
-                        <FaPlusCircle className="me-2" />
-                        Nouveau produit
-                      </Button>
+                    
                     </Col>
                   </Row>
                 </Card.Header>
@@ -2139,47 +2084,7 @@ const BoutiqueDetail: React.FC = () => {
 
             {/* Sidebar */}
             <Col lg={4}>
-              {/* Type de boutique */}
-              <Card className="border-0 shadow-sm rounded-4 mb-4">
-                <Card.Header className="bg-white border-0 rounded-top-4 p-4">
-                  <h5 className="mb-0 d-flex align-items-center">
-                    <FaTags className="text-primary me-3" />
-                    Type de boutique
-                  </h5>
-                </Card.Header>
-                <Card.Body className="p-4 text-center">
-                  <div
-                    className="rounded-4 overflow-hidden mx-auto mb-4 shadow-sm"
-                    style={{ width: "120px", height: "120px" }}
-                  >
-                    {typeImageUrl ? (
-                      <img
-                        src={typeImageUrl}
-                        alt={boutique!.type_boutique.libelle}
-                        className="w-100 h-100 object-fit-cover"
-                        onError={(e) =>
-                          handleImageError(
-                            `type-${boutique!.type_boutique.uuid}`,
-                            e,
-                          )
-                        }
-                      />
-                    ) : (
-                      <div className="w-100 h-100 d-flex align-items-center justify-content-center bg-light">
-                        <FaTags className="text-muted fs-1" />
-                      </div>
-                    )}
-                  </div>
-                  <h4 className="mb-2">{boutique!.type_boutique.libelle}</h4>
-                  <Badge bg="info" className="px-4 py-2 rounded-pill">
-                    {boutique!.type_boutique.code}
-                  </Badge>
-                  <div className="mt-4 text-muted d-flex align-items-center justify-content-center">
-                    <FaCheckCircle className="me-2 text-success" />
-                    Boutique active et vérifiée
-                  </div>
-                </Card.Body>
-              </Card>
+             
 
               {/* Actions rapides */}
               <Card className="border-0 shadow-sm rounded-4 mb-4">

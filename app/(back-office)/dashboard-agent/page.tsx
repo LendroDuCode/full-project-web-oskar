@@ -956,17 +956,7 @@ const AgentDashboard = () => {
             )}
           </p>
         </div>
-        <div className="d-flex gap-3">
-          <button className="btn btn-outline-gray-600 d-flex align-items-center">
-            <Calendar className="me-2" size={16} />
-            <span className="d-none d-sm-inline">Cette semaine</span>
-            <ChevronRight className="ms-2" size={16} />
-          </button>
-          <button className="btn btn-primary d-flex align-items-center">
-            <Download className="me-2" size={16} />
-            <span className="d-none d-sm-inline">Exporter rapport</span>
-          </button>
-        </div>
+        
       </div>
 
       {/* Alertes */}

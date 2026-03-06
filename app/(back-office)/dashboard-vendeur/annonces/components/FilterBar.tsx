@@ -45,16 +45,11 @@ export default function FilterBar({
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(true);
 
-  // Options spécifiques pour vendeur
+  // ✅ Options de statut (supprimé "Disponible")
   const statusOptions = [
     { value: "tous", label: "Tous", color: colors.oskar.grey },
     { value: "en-attente", label: "En attente", color: colors.status.pending },
     { value: "publie", label: "Publié", color: colors.status.published },
-    {
-      value: "disponible",
-      label: "Disponible",
-      color: colors.status.available,
-    },
     { value: "bloque", label: "Bloqué", color: colors.status.blocked },
   ];
 

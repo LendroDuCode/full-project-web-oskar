@@ -1,6 +1,7 @@
+// app/(front-office)/components/ListingCard.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import colors from "@/app/shared/constants/colors";
 import { buildImageUrl } from "@/app/shared/utils/image-utils";
@@ -16,6 +17,7 @@ export interface ListingItem {
   libelle?: string;
   description?: string | null;
   prix?: number | string | null;
+  prixFormate?: string;
   image: string;
   date?: string | null | undefined;
   disponible?: boolean;
@@ -27,6 +29,8 @@ export interface ListingItem {
   seller?: {
     name: string;
     avatar: string;
+    prenoms?: string;
+    nom?: string;
   };
 }
 
@@ -51,10 +55,53 @@ const ListingCard: React.FC<ListingCardProps> = ({
 
   const [isFavorite, setIsFavorite] = useState(listing.is_favoris || false);
   const [imageError, setImageError] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
   const [loading, setLoading] = useState(false);
   const { isLoggedIn, openLoginModal } = useAuth();
 
-  console.log({ listing });
+  // Vérifier au chargement si l'annonce est dans les favoris
+  useEffect(() => {
+    setIsFavorite(listing.is_favoris || false);
+  }, [listing.is_favoris]);
+
+  // ✅ FONCTION POUR OBTENIR LES INITIALES DU VENDEUR
+  const getSellerInitials = (): string => {
+    if (!listing.seller) return "AN"; // AN pour "Annonceur"
+    
+    const name = listing.seller.name || "";
+    const prenoms = listing.seller.prenoms || "";
+    const nom = listing.seller.nom || "";
+    
+    // Essayer de récupérer depuis prenoms et nom
+    if (prenoms && nom) {
+      return `${prenoms.charAt(0)}${nom.charAt(0)}`.toUpperCase();
+    }
+    
+    // Sinon, utiliser le nom complet
+    const nameParts = name.split(' ');
+    if (nameParts.length >= 2) {
+      return `${nameParts[0].charAt(0)}${nameParts[nameParts.length - 1].charAt(0)}`.toUpperCase();
+    } else if (nameParts.length === 1) {
+      return nameParts[0].charAt(0).toUpperCase();
+    }
+    
+    return "AN";
+  };
+
+  // ✅ FONCTION POUR OBTENIR LA COULEUR DE FOND DE L'AVATAR
+  const getAvatarColor = (): string => {
+    // Couleurs par type d'annonce
+    switch (listing.type) {
+      case "don":
+        return "#9333ea"; // Violet pour les dons
+      case "echange":
+        return "#2563eb"; // Bleu pour les échanges
+      case "produit":
+        return "#16a34a"; // Vert pour les produits
+      default:
+        return colors.oskar.green;
+    }
+  };
 
   const getTypeConfig = (type: string) => {
     switch (type) {
@@ -62,24 +109,24 @@ const ListingCard: React.FC<ListingCardProps> = ({
         return {
           label: "vente",
           color: colors.oskar.green,
-          bgColor: "#16a34a",
-          btnColor: "#f97316",
+          bgColor: "#16a34a", // Vert
+          btnColor: "#f97316", // Orange pour le bouton
           icon: "fa-tag",
         };
       case "don":
         return {
           label: "don",
           color: "#9333ea",
-          bgColor: "#9333ea",
-          btnColor: "#9333ea",
+          bgColor: "#9333ea", // Violet
+          btnColor: "#9333ea", // Violet
           icon: "fa-gift",
         };
       case "echange":
         return {
           label: "échange",
           color: "#2563eb",
-          bgColor: "#2563eb",
-          btnColor: "#2563eb",
+          bgColor: "#2563eb", // Bleu
+          btnColor: "#2563eb", // Bleu
           icon: "fa-exchange-alt",
         };
       default:
@@ -121,15 +168,31 @@ const ListingCard: React.FC<ListingCardProps> = ({
     }
   };
 
-  const formatPrice = (price: number | string | null | undefined) => {
-    if (price === null || price === undefined) return "Gratuit";
-    if (price === 0) return "Gratuit";
-    if (listing.type === "don") return "Gratuit";
-    if (listing.type === "echange") return "Troc";
-
-    const priceNum = typeof price === "string" ? parseFloat(price) : price;
-    if (isNaN(priceNum)) return "Prix à discuter";
-    return `${priceNum.toLocaleString("fr-FR")} FCFA`;
+  // ✅ FONCTION DE FORMATAGE DE PRIX
+  const formatPrice = (price: number | string | null | undefined, type: string): string => {
+    if (listing.prixFormate) return listing.prixFormate;
+    
+    if (type === "don") return "Gratuit";
+    
+    if (type === "echange") {
+      if (price === null || price === undefined || price === "") {
+        return "Troc";
+      }
+      const priceNum = typeof price === "string" ? parseFloat(price) : price;
+      if (isNaN(priceNum) || priceNum === 0) return "Troc";
+      return `${priceNum.toLocaleString("fr-FR")} FCFA (ou troc)`;
+    }
+    
+    if (type === "produit") {
+      if (price === null || price === undefined || price === "") {
+        return "Prix non défini";
+      }
+      const priceNum = typeof price === "string" ? parseFloat(price) : price;
+      if (isNaN(priceNum) || priceNum === 0) return "Gratuit";
+      return `${priceNum.toLocaleString("fr-FR")} FCFA`;
+    }
+    
+    return "Prix non défini";
   };
 
   const formatDate = (dateString?: string | null) => {
@@ -156,41 +219,71 @@ const ListingCard: React.FC<ListingCardProps> = ({
 
   const getCardClasses = () => {
     if (featured) {
-      return "card h-100 border-0 rounded-4 overflow-hidden shadow-lg position-relative group cursor-pointer transition-all";
+      return "card border-0 rounded-4 overflow-hidden shadow-lg position-relative group cursor-pointer transition-all d-flex flex-column";
     }
-    return "card h-100 border-0 rounded-4 overflow-hidden shadow group cursor-pointer transition-all";
+    return "card border-0 rounded-4 overflow-hidden shadow group cursor-pointer transition-all d-flex flex-column";
   };
 
-  const getPriceClasses = () => {
+  const getPriceStyle = () => {
     switch (listing.type) {
       case "don":
-        return "text-purple-600 fw-bold fs-4 mb-2";
+        return { color: "#9333ea" }; // Violet
       case "echange":
-        return "text-primary fw-bold fs-4 mb-2";
+        return { color: "#2563eb" }; // Bleu
       default:
-        return "text-success fw-bold fs-4 mb-2";
+        return { color: colors.oskar.green }; // Vert
     }
   };
 
   const getButtonClasses = () => {
-    return "btn text-white px-4 py-2 rounded-3 fw-semibold border-0 transition-colors";
+    return "btn text-white px-3 py-1 rounded-3 fw-semibold border-0 transition-colors";
   };
 
   const getButtonStyle = () => {
     switch (listing.type) {
       case "don":
-        return { backgroundColor: "#9333ea" };
+        return { backgroundColor: "#9333ea" }; // Violet
       case "echange":
-        return { backgroundColor: "#2563eb" };
+        return { backgroundColor: "#2563eb" }; // Bleu
       default:
-        return { backgroundColor: colors.oskar.orange };
+        return { backgroundColor: colors.oskar.orange }; // Orange pour les produits
     }
   };
 
-  const getAvatarSrc = (avatar?: string) => {
-    if (!avatar) return "https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-1.jpg";
-    if (avatar.startsWith('http')) return avatar;
-    return buildImageUrl(avatar);
+  // ✅ FONCTION POUR AFFICHER L'AVATAR (IMAGE OU INITIALES)
+  const renderAvatar = () => {
+    const avatarColor = getAvatarColor();
+    const initials = getSellerInitials();
+    const sellerName = listing.seller?.name || "Annonceur";
+    const hasValidAvatar = listing.seller?.avatar && !avatarError;
+
+    if (hasValidAvatar) {
+      return (
+        <img
+          src={buildImageUrl(listing.seller!.avatar) || ""}
+          alt={sellerName}
+          className="rounded-circle object-fit-cover"
+          style={{ width: "24px", height: "24px", flexShrink: 0 }}
+          onError={() => setAvatarError(true)}
+        />
+      );
+    }
+
+    // Afficher les initiales dans un cercle coloré selon le type
+    return (
+      <div
+        className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
+        style={{
+          width: "24px",
+          height: "24px",
+          flexShrink: 0,
+          backgroundColor: avatarColor,
+          fontSize: "10px",
+        }}
+      >
+        {initials}
+      </div>
+    );
   };
 
   // ✅ FONCTION POUR GÉRER L'AJOUT/SUPPRESSION AUX FAVORIS
@@ -242,18 +335,11 @@ const ListingCard: React.FC<ListingCardProps> = ({
         onFavoriteToggle(listing.uuid, !isFavorite);
       }
 
-      // Afficher une notification (optionnel)
-      const message = isFavorite 
-        ? "Retiré des favoris" 
-        : "Ajouté aux favoris";
-      
-      // Vous pouvez utiliser un toast ici si vous en avez un
-      console.log(`✅ ${message}`);
+      console.log(`✅ ${isFavorite ? "Retiré des" : "Ajouté aux"} favoris`);
       
     } catch (err: any) {
       console.error("❌ Erreur lors de la modification des favoris:", err);
       
-      // Gérer les erreurs d'authentification
       if (err.response?.status === 401) {
         openLoginModal();
       }
@@ -266,18 +352,16 @@ const ListingCard: React.FC<ListingCardProps> = ({
     return (
       <div
         className={`card border-0 rounded-4 overflow-hidden shadow mb-3 ${featured ? "border-2 border-warning" : ""}`}
+        style={{ height: "200px" }}
       >
-        <div className="row g-0">
-          <div className="col-md-3 position-relative">
-            <div
-              className="position-relative h-100"
-              style={{ minHeight: "200px" }}
-            >
+        <div className="row g-0 h-100">
+          <div className="col-md-3 position-relative h-100">
+            <div className="position-relative h-100">
               <img
-                src={buildImageUrl(listing.image)}
+                src={buildImageUrl(listing.image) || "https://storage.googleapis.com/uxpilot-auth.appspot.com/placeholder.jpg"}
                 alt={listing.titre || "Annonce"}
                 className="w-100 h-100 object-fit-cover transition-transform group-hover-scale"
-                style={{ height: "200px", objectFit: "cover" }}
+                style={{ objectFit: "cover" }}
                 onError={() => setImageError(true)}
               />
               <div
@@ -290,8 +374,8 @@ const ListingCard: React.FC<ListingCardProps> = ({
               <button
                 className="position-absolute top-0 end-0 w-10 h-10 bg-white rounded-circle d-flex align-items-center justify-content-center shadow border-0 m-2 transition-colors"
                 style={{ 
-                  width: "40px", 
-                  height: "40px",
+                  width: "32px", 
+                  height: "32px",
                   opacity: loading ? 0.5 : 1,
                   cursor: loading ? "not-allowed" : "pointer",
                 }}
@@ -306,27 +390,31 @@ const ListingCard: React.FC<ListingCardProps> = ({
                 ) : (
                   <i
                     className={`fa-${isFavorite ? "solid" : "regular"} fa-heart`}
-                    style={{ color: isFavorite ? "#dc3545" : "inherit" }}
+                    style={{ 
+                      color: isFavorite ? "#ec4899" : "#6b7280", // Rose si favori, gris sinon
+                      fontSize: "14px",
+                      transition: "color 0.2s ease"
+                    }}
                   />
                 )}
               </button>
             </div>
           </div>
-          <div className="col-md-9">
-            <div className="card-body h-100 d-flex flex-column p-4">
-              <div className="d-flex justify-content-between align-items-start mb-2">
+          <div className="col-md-9 h-100">
+            <div className="card-body h-100 d-flex flex-column p-3">
+              <div className="d-flex justify-content-between align-items-start mb-1">
                 <div className="flex-grow-1">
-                  <h5 className="card-title fw-bold text-dark mb-1">
+                  <h6 className="card-title fw-bold text-dark mb-0">
                     <Link
                       href={getDetailLink()}
                       className="text-decoration-none text-dark"
                     >
                       {listing.titre}
                     </Link>
-                  </h5>
-                  <div className="d-flex flex-wrap gap-2 mt-2">
+                  </h6>
+                  <div className="d-flex flex-wrap gap-2 mt-1">
                     {listing.statut && (
-                      <span className="badge bg-secondary">
+                      <span className="badge bg-secondary" style={{ fontSize: "10px" }}>
                         {listing.statut === "disponible"
                           ? "Disponible"
                           : listing.statut === "en_attente"
@@ -336,57 +424,49 @@ const ListingCard: React.FC<ListingCardProps> = ({
                               : listing.statut}
                       </span>
                     )}
-                    {listing.localisation && (
-                      <span className="badge bg-light text-dark">
-                        <i className="fa-solid fa-location-dot me-1 text-warning"></i>
-                        {listing.localisation}
-                      </span>
-                    )}
                   </div>
                 </div>
-                <div className="text-end ms-3">
-                  <div className={getPriceClasses()}>
-                    {formatPrice(listing.prix)}
+                <div className="text-end ms-2">
+                  <div className={`fw-bold fs-5 mb-2`} style={getPriceStyle()}>
+                    {formatPrice(listing.prix, listing.type)}
                   </div>
-                  {(listing.date || listing.createdAt) && (
-                    <div className="text-muted small mt-1">
-                      <i className="fa-regular fa-clock me-1"></i>
-                      {formatDate(listing.date || listing.createdAt)}
-                    </div>
-                  )}
                 </div>
               </div>
+              
+              <div className="d-flex align-items-center gap-2 mb-1">
+                {listing.localisation && (
+                  <span className="d-flex align-items-center text-muted small">
+                    <i className="fa-solid fa-location-dot me-1 text-warning" style={{ fontSize: "10px" }}></i>
+                    <span className="text-truncate" style={{ maxWidth: "150px" }}>
+                      {listing.localisation}
+                    </span>
+                  </span>
+                )}
+                {(listing.date || listing.createdAt) && (
+                  <span className="d-flex align-items-center text-muted small">
+                    <i className="fa-regular fa-clock me-1" style={{ fontSize: "10px" }}></i>
+                    {formatDate(listing.date || listing.createdAt)}
+                  </span>
+                )}
+              </div>
+
               {listing.description && (
-                <p className="card-text text-muted flex-grow-1 mb-3 small">
-                  {listing.description.length > 150
-                    ? `${listing.description.substring(0, 150)}...`
+                <p className="card-text text-muted small mb-2 flex-grow-1">
+                  {listing.description.length > 100
+                    ? `${listing.description.substring(0, 100)}...`
                     : listing.description}
                 </p>
               )}
-              <div className="d-flex justify-content-between align-items-end mt-auto">
-                <div className="d-flex align-items-center gap-3">
+
+              <div className="d-flex justify-content-between align-items-center mt-auto">
+                <div className="d-flex align-items-center gap-2">
                   {listing.seller && (
-                    <div className="d-flex align-items-center gap-2">
-                      <img
-                        src={getAvatarSrc(listing.seller.avatar)}
-                        alt={listing.seller.name}
-                        className="rounded-circle object-fit-cover"
-                        style={{ width: "32px", height: "32px" }}
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src =
-                            "https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-1.jpg";
-                        }}
-                      />
+                    <div className="d-flex align-items-center gap-1">
+                      {renderAvatar()}
                       <span className="small fw-medium text-dark">
                         {listing.seller.name}
                       </span>
                     </div>
-                  )}
-                  {listing.numero && (
-                    <span className="text-muted small">
-                      <i className="fa-solid fa-phone me-1"></i>
-                      {listing.numero}
-                    </span>
                   )}
                 </div>
                 <Link
@@ -404,15 +484,16 @@ const ListingCard: React.FC<ListingCardProps> = ({
     );
   }
 
+  // MODE GRID
   return (
-    <div className={getCardClasses()}>
+    <div className={getCardClasses()} style={{ height: "420px" }}>
       {/* Image */}
       <div
         className="position-relative overflow-hidden"
-        style={{ height: "224px" }}
+        style={{ height: "180px", flexShrink: 0 }}
       >
         <img
-          src={buildImageUrl(listing.image)}
+          src={buildImageUrl(listing.image) || "https://storage.googleapis.com/uxpilot-auth.appspot.com/placeholder.jpg"}
           alt={listing.titre || "Annonce"}
           className="w-100 h-100 object-fit-cover transition-transform group-hover-scale"
           style={{ transition: "transform 0.3s ease" }}
@@ -424,16 +505,16 @@ const ListingCard: React.FC<ListingCardProps> = ({
           className="position-absolute top-0 start-0 px-2 py-1 text-white small fw-bold rounded-3 d-flex align-items-center gap-1 m-2"
           style={{ backgroundColor: typeConfig.bgColor }}
         >
-          <i className={`fas ${typeConfig.icon}`}></i>
-          <span>{typeConfig.label}</span>
+          <i className={`fas ${typeConfig.icon}`} style={{ fontSize: "10px" }}></i>
+          <span style={{ fontSize: "10px" }}>{typeConfig.label}</span>
         </div>
 
-        {/* Bouton favori */}
+        {/* Bouton favori - ROSE quand actif */}
         <button
           className="position-absolute top-0 end-0 w-10 h-10 bg-white rounded-circle d-flex align-items-center justify-content-center shadow border-0 m-2 transition-colors"
           style={{ 
-            width: "40px", 
-            height: "40px",
+            width: "32px", 
+            height: "32px",
             opacity: loading ? 0.5 : 1,
             cursor: loading ? "not-allowed" : "pointer",
           }}
@@ -448,63 +529,101 @@ const ListingCard: React.FC<ListingCardProps> = ({
           ) : (
             <i
               className={`fa-${isFavorite ? "solid" : "regular"} fa-heart`}
-              style={{ color: isFavorite ? "#dc3545" : "inherit" }}
+              style={{ 
+                color: isFavorite ? "#ec4899" : "#6b7280", // Rose si favori, gris sinon
+                fontSize: "14px",
+                transition: "color 0.2s ease"
+              }}
             />
           )}
         </button>
       </div>
 
       {/* Contenu */}
-      <div className="card-body p-4">
-        <Link href={getDetailLink()} className="text-decoration-none">
-          <h5 className="card-title fw-bold text-dark mb-2 text-truncate">
-            {listing.titre}
-          </h5>
-        </Link>
+      <div className="card-body p-3 d-flex flex-column" style={{ height: "240px" }}>
+        {/* Titre */}
+        <div style={{ height: "42px", overflow: "hidden" }} className="mb-1">
+          <Link href={getDetailLink()} className="text-decoration-none">
+            <h6 className="card-title fw-bold text-dark mb-0" style={{ fontSize: "14px" }}>
+              {listing.titre || "Sans titre"}
+            </h6>
+          </Link>
+        </div>
 
-        <div className={getPriceClasses()}>{formatPrice(listing.prix)}</div>
+        {/* Prix */}
+        <div style={{ height: "28px" }} className="mb-1">
+          <div className="fw-bold" style={{ fontSize: "14px", ...getPriceStyle() }}>
+            {formatPrice(listing.prix, listing.type)}
+          </div>
+        </div>
 
-        {listing.description && (
-          <p className="card-text text-muted small mb-3 line-clamp-2">
-            {listing.description}
-          </p>
-        )}
+        {/* Description */}
+        <div style={{ height: "40px", overflow: "hidden" }} className="mb-2">
+          {listing.description ? (
+            <p className="card-text text-muted small" style={{ fontSize: "11px", lineHeight: "1.2" }}>
+              {listing.description.length > 70
+                ? `${listing.description.substring(0, 70)}...`
+                : listing.description}
+            </p>
+          ) : (
+            <p className="card-text text-muted small" style={{ fontSize: "11px" }}>Aucune description</p>
+          )}
+        </div>
 
-        <div className="d-flex justify-content-between align-items-center text-muted small mb-3">
-          {listing.localisation && (
+        {/* Localisation et date */}
+        <div className="d-flex justify-content-between align-items-center text-muted" style={{ height: "20px" }}>
+          {listing.localisation ? (
             <span className="d-flex align-items-center">
-              <i className="fa-solid fa-location-dot me-1 text-warning"></i>
-              {listing.localisation}
+              <i className="fa-solid fa-location-dot me-1 text-warning" style={{ fontSize: "10px" }}></i>
+              <span className="text-truncate" style={{ maxWidth: "100px", fontSize: "11px" }}>
+                {listing.localisation}
+              </span>
             </span>
+          ) : (
+            <span></span>
           )}
           {(listing.date || listing.createdAt) && (
             <span className="d-flex align-items-center">
-              <i className="fa-regular fa-clock me-1"></i>
-              {formatDate(listing.date || listing.createdAt)}
+              <i className="fa-regular fa-clock me-1" style={{ fontSize: "10px" }}></i>
+              <span style={{ fontSize: "11px" }}>{formatDate(listing.date || listing.createdAt)}</span>
             </span>
           )}
         </div>
 
-        <div className="d-flex justify-content-between align-items-center pt-3 border-top">
-          <div className="d-flex align-items-center">
-            <img
-              src={getAvatarSrc(listing.seller?.avatar)}
-              alt={listing.seller?.name || "Vendeur"}
-              className="rounded-circle object-fit-cover me-2"
-              style={{ width: "32px", height: "32px" }}
-              onError={(e) => {
-                (e.target as HTMLImageElement).src =
-                  "https://storage.googleapis.com/uxpilot-auth.appspot.com/avatars/avatar-1.jpg";
-              }}
-            />
-            <span className="small fw-medium text-dark">
-              {listing.seller?.name || "Annonceur"}
-            </span>
+        {/* Footer avec avatar et bouton */}
+        <div className="d-flex justify-content-between align-items-center pt-2 border-top mt-2" style={{ height: "50px" }}>
+          <div className="d-flex align-items-center" style={{ maxWidth: "110px" }}>
+            {listing.seller ? (
+              <>
+                {renderAvatar()}
+                <span className="small fw-medium text-dark text-truncate ms-1" style={{ fontSize: "11px" }}>
+                  {listing.seller.name}
+                </span>
+              </>
+            ) : (
+              <>
+                <div
+                  className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
+                  style={{
+                    width: "24px",
+                    height: "24px",
+                    flexShrink: 0,
+                    backgroundColor: getAvatarColor(),
+                    fontSize: "10px",
+                  }}
+                >
+                  AN
+                </div>
+                <span className="small fw-medium text-dark text-truncate ms-1" style={{ fontSize: "11px" }}>
+                  Annonceur
+                </span>
+              </>
+            )}
           </div>
           <Link
             href={getDetailLink()}
             className={getButtonClasses()}
-            style={getButtonStyle()}
+            style={{ ...getButtonStyle(), fontSize: "11px", padding: "4px 8px" }}
           >
             {getButtonText()}
           </Link>
@@ -539,13 +658,6 @@ const ListingCard: React.FC<ListingCardProps> = ({
           opacity: 0.9;
           transform: translateY(-2px);
           box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-        }
-
-        .line-clamp-2 {
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
         }
 
         .object-fit-cover {

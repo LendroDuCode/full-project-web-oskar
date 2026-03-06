@@ -528,6 +528,8 @@ export const API_ENDPOINTS = {
       "/produits/favoris/utilisateur",
     ),
     LIST_PRODUITS_FAVORIS_VENDEUR: withBaseUrl("/produits/favoris/vendeur"),
+    LISTE_PRODUITS_PUBLIES_VENDEUR: withBaseUrl("/produits/produits-vendeur-publies"),
+    LISTE_PRODUITS_PUBLIES_UTILISATEUR: withBaseUrl("/produits/produits-utilisateur-publies"),
   },
 
   // Catégories
@@ -539,14 +541,24 @@ export const API_ENDPOINTS = {
     CREATE: withBaseUrl("/categories/creer-categorie"),
     CREATE_SOUS_CATEGORIE: (uuid: string) =>
       withBaseUrl(`/categories/${uuid}/sous-categories`),
-    LISTE_SOUS_CATEGORIE: (uuid: string) =>
-      withBaseUrl(`/categories/${uuid}/liste-sous-categories`),
+    
     RECUPERER_SOUS_CATEGORIE_UUID: (uuid: string) =>
       withBaseUrl(`/categories/${uuid}/sous-categories/${uuid}`),
     RECUPERER_CATEGORIE_UUID_PAR_LISTE_SOUS_CATEGORIE: (parrentUuid: string) =>
       withBaseUrl(`/categories/${parrentUuid}/sous-categories`),
     UPDATE: (uuid: string) => withBaseUrl(`/categories/modifier/${uuid}`),
     DELETE: (uuid: string) => withBaseUrl(`/categories/${uuid}`),
+
+    LISTE_SOUS_CATEGORIE: (uuid: string) =>
+      withBaseUrl(`/categories/sous/${uuid}/liste-sous-categories`),
+    RECUPERER_LISTE_DON_UUID_SOUS_CATEGORIES: (uuid: string) =>
+      withBaseUrl(`/categories/${uuid}/sous/${uuid}`),
+    RECUPERER_LISTE_PRODUIT_UUID_SOUS_CATEGORIES: (uuid: string) =>
+      withBaseUrl(`/categories/${uuid}/sous/${uuid}/produits`),
+    RECUPERER_LISTE_ECHANGE_UUID_SOUS_CATEGORIES: (uuid: string) =>
+      withBaseUrl(`/categories/${uuid}/sous/${uuid}/echanges`),
+
+
     ALL_ELEMENTS: (uuid: string) =>
       withBaseUrl(`/categories/${uuid}/all-elements`),
     PRODUITS: (uuid: string) => withBaseUrl(`/categories/${uuid}/produits`),
@@ -554,6 +566,8 @@ export const API_ENDPOINTS = {
     ECHANGES: (uuid: string) => withBaseUrl(`/categories/${uuid}/echanges`),
     ANNONCES: (uuid: string) => withBaseUrl(`/categories/${uuid}/annonces`),
     ALL: (uuid: string) => withBaseUrl(`/categories/${uuid}/tous`),
+
+
     EXPORT_PDF: withBaseUrl("/categories/categorie-export-pdf"),
     WITH_ITEMS: withBaseUrl("/categories/with-items"),
     WITH_ITEMS_BY_UUID: (uuid: string) =>
@@ -595,6 +609,8 @@ export const API_ENDPOINTS = {
     EXPORT_PDF: withBaseUrl("/dons/don-export-pdf"),
     LIST_FAVORIS_DON_UTILISATEUR: withBaseUrl("/dons/favoris/utilisateur"),
     LIST_FAVORIS_DON_VENDEUR: withBaseUrl("/dons/favoris/vendeur"),
+    LISTE_DON_PUBLIE_VENDEUR: withBaseUrl("/dons/liste-don-publies-pour-vendeur"),
+    LISTE_DONS_PUBLIE_UTILISATEUR: withBaseUrl("/dons/liste-don-publies-pour-utilisateur"),
   },
 
   // Notes
@@ -661,6 +677,8 @@ export const API_ENDPOINTS = {
       "/echanges/liste-echange-favoris-utilisateur",
     ),
     LIST_ECHANGES_FAVORIS_VENDEUR: withBaseUrl("/echanges/favoris/vendeur"),
+    LISTE_ECHANGES_PUBLIE_VENDEUR: withBaseUrl("/echanges/liste-toutes-echanges-publiees-pour-vendeur"),
+    LISTE_ECHANGES_PUBLIE_UTILISATEUR: withBaseUrl("/echanges/liste-toutes-echanges-publiees-pour-utilisateur"),
   },
 
   // Commentaires

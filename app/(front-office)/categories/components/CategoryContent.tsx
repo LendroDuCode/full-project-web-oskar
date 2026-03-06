@@ -1,13 +1,14 @@
+// app/(front-office)/categories/components/CategoryContent.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import colors from "@/app/shared/constants/colors";
-import FiltersSidebar from "../../home/components/FiltersSidebar";
-import FilterStatsBar from "../../home/components/FilterStatsBar";
-import ListingsGrid from "../../home/components/ListingsGrid";
-import Pagination from "../../home/components/Pagination";
 import Link from "next/link";
 import { SearchProvider } from "../../home/contexts/SearchContext";
+import CategoryListGrid from "./CategoryListGrid";
+import CategoryFilterStatsBar from "./CategoryFilterStatsBar";
+import CategoryFiltersSidebar from "./CategoryFiltersSidebar";
+import Pagination from "../../home/components/Pagination";
 
 interface CategoryContentProps {
   category: {
@@ -24,19 +25,40 @@ interface CategoryContentProps {
     totalItems: number;
   };
   subCategories?: any[];
+  isSubCategory?: boolean;
 }
 
 function CategoryContentInner({
   category,
-  stats,
+  stats: initialStats,
   subCategories = [],
+  isSubCategory = false,
 }: CategoryContentProps) {
   const [filters, setFilters] = useState({});
   const [activeFilter, setActiveFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [sortOption, setSortOption] = useState<string>("recent");
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalItems, setTotalItems] = useState<number>(stats.totalItems || 0);
+  const [totalItems, setTotalItems] = useState<number>(initialStats.totalItems || 0);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
+
+  // Stats mises à jour par la grille
+  const [categoryStats, setCategoryStats] = useState({
+    dons: initialStats.totalDons,
+    echanges: initialStats.totalEchanges,
+    produits: initialStats.totalProduits,
+    total: initialStats.totalItems,
+  });
+
+  useEffect(() => {
+    // Mettre à jour les stats quand les props changent
+    setCategoryStats({
+      dons: initialStats.totalDons,
+      echanges: initialStats.totalEchanges,
+      produits: initialStats.totalProduits,
+      total: initialStats.totalItems,
+    });
+  }, [initialStats]);
 
   const handleFilterChange = (filterId: string) => {
     setActiveFilter(filterId);
@@ -51,8 +73,14 @@ function CategoryContentInner({
     setSortOption(sort);
   };
 
-  const handleDataLoaded = (itemsCount: number) => {
-    setTotalItems(itemsCount);
+  const handleSidebarFilterChange = (newFilters: any) => {
+    setFilters(newFilters);
+    setCurrentPage(1);
+  };
+
+  const handleDataLoaded = (stats: { total: number; dons: number; echanges: number; produits: number }) => {
+    setCategoryStats(stats);
+    setTotalItems(stats.total);
   };
 
   const getCategoryConfig = () => {
@@ -62,6 +90,10 @@ function CategoryContentInner({
       "Don & Échange": { color: "#9C27B0", icon: "fa-exchange-alt" },
       "Éducation & Culture": { color: "#2196F3", icon: "fa-graduation-cap" },
       "Services de proximité": { color: "#795548", icon: "fa-broom" },
+      "Maison & Jardin": { color: "#8B4513", icon: "fa-home" },
+      Véhicules: { color: "#607D8B", icon: "fa-car" },
+      "Emploi & Services": { color: "#FF5722", icon: "fa-briefcase" },
+      Téléphones: { color: "#4CAF50", icon: "fa-mobile-alt" },
       Autres: { color: colors.oskar.green, icon: "fa-tag" },
     };
     return (
@@ -87,25 +119,16 @@ function CategoryContentInner({
               <nav aria-label="breadcrumb">
                 <ol className="breadcrumb mb-2">
                   <li className="breadcrumb-item">
-                    <Link
-                      href="/"
-                      className="text-white text-decoration-none opacity-75"
-                    >
+                    <Link href="/" className="text-white text-decoration-none opacity-75">
                       Accueil
                     </Link>
                   </li>
                   <li className="breadcrumb-item">
-                    <Link
-                      href="/categories"
-                      className="text-white text-decoration-none opacity-75"
-                    >
+                    <Link href="/categories" className="text-white text-decoration-none opacity-75">
                       Catégories
                     </Link>
                   </li>
-                  <li
-                    className="breadcrumb-item active text-white"
-                    aria-current="page"
-                  >
+                  <li className="breadcrumb-item active text-white" aria-current="page">
                     {category.libelle}
                   </li>
                 </ol>
@@ -117,16 +140,6 @@ function CategoryContentInner({
                   {category.description ||
                     `Découvrez tous les articles de la catégorie ${category.libelle}`}
                 </p>
-                <div className="d-flex flex-wrap gap-2">
-                  <Link
-                    href={`/publication-annonce?categorie=${encodeURIComponent(category.libelle)}`}
-                    className="btn btn-light btn-sm px-3 py-2 fw-semibold"
-                    style={{ color: config.color }}
-                  >
-                    <i className={`fas ${config.icon} me-2`}></i>
-                    Publier une annonce
-                  </Link>
-                </div>
               </div>
             </div>
             <div className="col-lg-4 text-center d-none d-lg-block">
@@ -151,11 +164,8 @@ function CategoryContentInner({
           <div className="row g-3">
             <div className="col-6 col-md-3">
               <div className="text-center p-2">
-                <div
-                  className="fs-4 fw-bold"
-                  style={{ color: colors.oskar.green }}
-                >
-                  {stats.totalItems || 0}
+                <div className="fs-4 fw-bold" style={{ color: colors.oskar.green }}>
+                  {categoryStats.total}
                 </div>
                 <div className="text-muted small">Total annonces</div>
               </div>
@@ -163,7 +173,7 @@ function CategoryContentInner({
             <div className="col-6 col-md-3">
               <div className="text-center p-2">
                 <div className="fs-4 fw-bold" style={{ color: "#2196F3" }}>
-                  {stats.totalProduits || 0}
+                  {categoryStats.produits}
                 </div>
                 <div className="text-muted small">Ventes</div>
               </div>
@@ -171,7 +181,7 @@ function CategoryContentInner({
             <div className="col-6 col-md-3">
               <div className="text-center p-2">
                 <div className="fs-4 fw-bold" style={{ color: "#FF9800" }}>
-                  {stats.totalDons || 0}
+                  {categoryStats.dons}
                 </div>
                 <div className="text-muted small">Dons</div>
               </div>
@@ -179,7 +189,7 @@ function CategoryContentInner({
             <div className="col-6 col-md-3">
               <div className="text-center p-2">
                 <div className="fs-4 fw-bold" style={{ color: "#9C27B0" }}>
-                  {stats.totalEchanges || 0}
+                  {categoryStats.echanges}
                 </div>
                 <div className="text-muted small">Échanges</div>
               </div>
@@ -212,21 +222,26 @@ function CategoryContentInner({
       {/* Contenu principal */}
       <section className="py-4">
         <div className="container">
-          <div className="row">
-            {/* Sidebar des filtres - prend 3 colonnes sur desktop */}
+          <div className="row g-4">
+            {/* Sidebar des filtres - desktop */}
             <div className="col-lg-3 d-none d-lg-block">
-              <div className="sticky-top" style={{ top: "90px" }}>
-                <FiltersSidebar
-                  filters={filters}
-                  onFiltersChange={setFilters}
+              <div className="sticky-top" style={{ top: "90px", maxHeight: "calc(100vh - 120px)" }}>
+                <CategoryFiltersSidebar
+                  categoryUuid={category.uuid}
+                  onFilterChange={handleSidebarFilterChange}
+                  stats={{
+                    dons: categoryStats.dons,
+                    echanges: categoryStats.echanges,
+                    produits: categoryStats.produits,
+                  }}
                 />
               </div>
             </div>
 
-            {/* Contenu principal avec grille d'annonces - prend 9 colonnes sur desktop */}
+            {/* Contenu principal */}
             <div className="col-lg-9">
-              <div className="listings-container">
-                <FilterStatsBar
+              <div className="listings-container shadow-sm bg-white rounded-3 p-3">
+                <CategoryFilterStatsBar
                   totalItems={totalItems}
                   activeFilter={activeFilter}
                   onFilterChange={handleFilterChange}
@@ -234,20 +249,26 @@ function CategoryContentInner({
                   onViewModeChange={handleViewModeChange}
                   sortOption={sortOption}
                   onSortChange={handleSortChange}
+                  stats={{
+                    dons: categoryStats.dons,
+                    echanges: categoryStats.echanges,
+                    produits: categoryStats.produits,
+                  }}
                 />
 
-                <div className="mt-4">
-                  <ListingsGrid
-                    key={`${category.uuid}-${activeFilter}-${sortOption}`}
+                <div className="mt-3">
+                  <CategoryListGrid
+                    key={`${category.uuid}-${activeFilter}-${sortOption}-${JSON.stringify(filters)}`}
                     categoryUuid={category.uuid}
-                    filterType={activeFilter}
+                    isSubCategory={isSubCategory}
+                    filterType={activeFilter as any}
                     viewMode={viewMode}
                     sortOption={sortOption}
                     onDataLoaded={handleDataLoaded}
                   />
                 </div>
 
-                <div className="mt-4">
+                <div className="mt-3">
                   <Pagination
                     currentPage={currentPage}
                     totalPages={Math.ceil(totalItems / 12)}
@@ -260,33 +281,103 @@ function CategoryContentInner({
         </div>
       </section>
 
-      {/* Bouton de filtres mobile */}
+      {/* Bouton mobile */}
       <div className="d-lg-none fixed-bottom p-3">
         <button
-          className="btn btn-success w-100 d-flex align-items-center justify-content-center gap-2"
+          className="btn w-100 d-flex align-items-center justify-content-center gap-2"
           style={{
+            backgroundColor: colors.oskar.green,
+            color: "white",
             borderRadius: "50px",
-            padding: "12px 24px",
+            padding: "10px 20px",
             boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            border: "none",
+            fontSize: "0.9rem",
           }}
-          onClick={() => alert("Ouvrir les filtres mobile")}
+          onClick={() => setShowMobileFilters(true)}
         >
           <i className="fa-solid fa-sliders"></i>
-          Filtres & Tri
+          Filtres
         </button>
       </div>
+
+      {/* Modal mobile */}
+      {showMobileFilters && (
+        <div className="d-lg-none">
+          <div
+            className="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50"
+            style={{ zIndex: 1050 }}
+            onClick={() => setShowMobileFilters(false)}
+          />
+          <div
+            className="position-fixed bottom-0 start-0 w-100 bg-white"
+            style={{
+              zIndex: 1051,
+              maxHeight: "80vh",
+              overflowY: "auto",
+              borderTopLeftRadius: "16px",
+              borderTopRightRadius: "16px",
+            }}
+          >
+            <div className="p-3 border-bottom d-flex justify-content-between align-items-center">
+              <h6 className="fw-bold mb-0">Filtres</h6>
+              <button
+                className="btn btn-link p-0"
+                onClick={() => setShowMobileFilters(false)}
+              >
+                <i className="fa-solid fa-times" style={{ fontSize: "1.2rem", color: colors.oskar.grey }}></i>
+              </button>
+            </div>
+            <div className="p-3">
+              <CategoryFiltersSidebar
+                categoryUuid={category.uuid}
+                onFilterChange={(newFilters) => {
+                  handleSidebarFilterChange(newFilters);
+                  setShowMobileFilters(false);
+                }}
+                stats={{
+                  dons: categoryStats.dons,
+                  echanges: categoryStats.echanges,
+                  produits: categoryStats.produits,
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
         .listings-container {
           width: 100%;
+          box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075) !important;
         }
         .sticky-top {
           position: sticky;
           top: 90px;
+          max-height: calc(100vh - 120px);
+          overflow: hidden;
+        }
+        .sticky-top > * {
+          max-height: 100%;
+          overflow-y: auto;
+        }
+        .sticky-top > *::-webkit-scrollbar {
+          width: 4px;
+        }
+        .sticky-top > *::-webkit-scrollbar-track {
+          background: #f1f1f1;
+          border-radius: 4px;
+        }
+        .sticky-top > *::-webkit-scrollbar-thumb {
+          background: ${colors.oskar.orange}80;
+          border-radius: 4px;
+        }
+        .sticky-top > *::-webkit-scrollbar-thumb:hover {
+          background: ${colors.oskar.orange};
         }
         @media (max-width: 991.98px) {
           .listings-container {
-            padding-bottom: 80px;
+            padding-bottom: 70px;
           }
         }
       `}</style>
@@ -294,7 +385,6 @@ function CategoryContentInner({
   );
 }
 
-// ✅ WRAPPER avec SearchProvider
 export default function CategoryContent(props: CategoryContentProps) {
   return (
     <SearchProvider>

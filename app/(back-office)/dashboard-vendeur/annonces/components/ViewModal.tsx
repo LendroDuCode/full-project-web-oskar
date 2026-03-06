@@ -700,10 +700,7 @@ export default function ViewModal({
           <div className="card border-0 shadow-sm bg-light">
             <div className="card-body">
               <div className="d-flex flex-wrap gap-4 justify-content-center text-muted small">
-                <span>
-                  <FontAwesomeIcon icon={faCertificate} className="me-1" />
-                  UUID: {annonce.uuid}
-                </span>
+             
                 <span>
                   <FontAwesomeIcon icon={faCalendarAlt} className="me-1" />
                   Créé: {formatDate(annonce.createdAt)}
@@ -1142,10 +1139,7 @@ export default function ViewModal({
           <div className="card border-0 shadow-sm bg-light">
             <div className="card-body">
               <div className="d-flex flex-wrap gap-4 justify-content-center text-muted small">
-                <span>
-                  <FontAwesomeIcon icon={faCertificate} className="me-1" />
-                  UUID: {annonce.uuid}
-                </span>
+                
                 <span>
                   <FontAwesomeIcon icon={faCalendarAlt} className="me-1" />
                   Créé: {formatDate(annonce.createdAt)}
@@ -1267,11 +1261,7 @@ export default function ViewModal({
             <p className="text-muted">
               {annonce.description || "Aucune description disponible"}
             </p>
-            <div className="mt-4">
-              <small className="text-muted">
-                UUID: {annonce.uuid || "N/A"}
-              </small>
-            </div>
+            
           </div>
         );
       default:
@@ -1431,48 +1421,6 @@ export default function ViewModal({
                       </button>
                     </>
                   )}
-
-                {onPublish && (
-                  <button
-                    type="button"
-                    className={`btn ${annonce.estPublie ? "btn-warning" : "btn-primary"} d-flex align-items-center gap-2`}
-                    onClick={() =>
-                      handleAction(annonce.estPublie ? "unpublish" : "publish")
-                    }
-                    disabled={processingAction?.includes("publish")}
-                  >
-                    {processingAction?.includes("publish") ? (
-                      <span className="spinner-border spinner-border-sm" />
-                    ) : (
-                      <FontAwesomeIcon
-                        icon={
-                          annonce.estPublie ? faCalendarXmark : faCalendarCheck
-                        }
-                      />
-                    )}
-                    {annonce.estPublie ? "Dépublier" : "Publier"}
-                  </button>
-                )}
-
-                {onBlock && (
-                  <button
-                    type="button"
-                    className={`btn ${annonce.estBloque ? "btn-success" : "btn-secondary"} d-flex align-items-center gap-2`}
-                    onClick={() =>
-                      handleAction(annonce.estBloque ? "unblock" : "block")
-                    }
-                    disabled={processingAction?.includes("block")}
-                  >
-                    {processingAction?.includes("block") ? (
-                      <span className="spinner-border spinner-border-sm" />
-                    ) : (
-                      <FontAwesomeIcon
-                        icon={annonce.estBloque ? faUnlock : faLock}
-                      />
-                    )}
-                    {annonce.estBloque ? "Débloquer" : "Bloquer"}
-                  </button>
-                )}
               </div>
 
               <div className="d-flex gap-2">

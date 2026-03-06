@@ -1743,35 +1743,7 @@ export default function DonDetailPage() {
 
             {/* Localisation */}
             <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
-              <h2 className="h2 fw-bold mb-4">Localisation</h2>
-              <div className="mb-4">
-                <div className="d-flex gap-3 mb-4">
-                  <FontAwesomeIcon
-                    icon={faLocationDot}
-                    className="text-warning fs-4 mt-1"
-                  />
-                  <div>
-                    <p className="fw-semibold h5 mb-1">{don.localisation}</p>
-                    <p className="text-muted">
-                      Lieu de retrait : {don.lieu_retrait}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div
-                className="bg-light rounded-4 d-flex align-items-center justify-content-center"
-                style={{ height: "320px" }}
-              >
-                <div className="text-center">
-                  <FontAwesomeIcon
-                    icon={faMapLocationDot}
-                    className="fa-4x text-muted mb-4"
-                  />
-                  <p className="text-muted">
-                    Carte interactive montrant l'emplacement approximatif
-                  </p>
-                </div>
-              </div>
+      
               <div className="mt-4 bg-info bg-opacity-10 border border-info rounded-4 p-4">
                 <div className="d-flex gap-3">
                   <FontAwesomeIcon
@@ -2280,7 +2252,6 @@ export default function DonDetailPage() {
                           height: "60px",
                           objectFit: "cover",
                         }}
-                        onClick={handleVisitUtilisateur}
                       />
                     ) : (
                       <div
@@ -2290,7 +2261,6 @@ export default function DonDetailPage() {
                           height: "60px",
                           cursor: "pointer",
                         }}
-                        onClick={handleVisitUtilisateur}
                       >
                         <FontAwesomeIcon
                           icon={faUserCircle}

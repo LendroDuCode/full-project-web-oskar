@@ -497,7 +497,7 @@ function MessagesContent() {
     destinataireUuid: "",
     sujet: "",
     contenu: "",
-    type: "NOTIFICATION",
+    type: "NOTIFICATION", // ✅ Toujours NOTIFICATION
     expediteurNom: "",
     expediteurEmail: "",
     expediteurUuid: "",
@@ -733,7 +733,7 @@ function MessagesContent() {
   }, [messageToDelete, selectedMessage, showToast]);
 
   // ============================================
-  // ✅ GESTION DES PARAMÈTRES D'URL - DÉCLARÉ EN PREMIER
+  // ✅ GESTION DES PARAMÈTRES D'URL
   // ============================================
   const handleUrlParams = useCallback(() => {
     const destinataireUuid = searchParams.get("destinataireUuid");
@@ -778,7 +778,7 @@ function MessagesContent() {
         destinataireUuid: destinataireUuid || "",
         sujet: sujet || `Question concernant votre annonce`,
         contenu: "",
-        type: "QUESTION",
+        type: "NOTIFICATION", // ✅ Toujours NOTIFICATION
       }));
 
       setSelectedContact(contact);
@@ -792,7 +792,7 @@ function MessagesContent() {
   }, [searchParams, userProfile, router]);
 
   // ============================================
-  // ✅ CHARGEMENT DU PROFIL - SANS DÉPENDANCES CYCLIQUES
+  // ✅ CHARGEMENT DU PROFIL
   // ============================================
   const fetchUserProfile = useCallback(async () => {
     setLoading((prev) => ({ ...prev, profile: true }));
@@ -803,14 +803,19 @@ function MessagesContent() {
       if (response?.data) {
         const profile = response.data;
         setUserProfile(profile);
+        
+        const expediteurNom = `${profile.prenoms || ""} ${profile.nom || ""}`.trim() || "Utilisateur SONEC";
+        const expediteurEmail = profile.email || "";
+        const expediteurUuid = profile.uuid || "";
+        
         setNewMessage((prev) => ({
           ...prev,
-          expediteurEmail: profile.email || "",
-          expediteurNom:
-            `${profile.prenoms || ""} ${profile.nom || ""}`.trim() ||
-            "Utilisateur SONEC",
-          expediteurUuid: profile.uuid || "",
+          expediteurEmail,
+          expediteurNom,
+          expediteurUuid,
+          type: "NOTIFICATION", // ✅ Toujours NOTIFICATION
         }));
+        
         return profile;
       }
       return null;
@@ -823,7 +828,7 @@ function MessagesContent() {
   }, []);
 
   // ============================================
-  // ✅ CHARGEMENT DES MESSAGES REÇUS - AVEC PARAMÈTRES
+  // ✅ CHARGEMENT DES MESSAGES REÇUS
   // ============================================
   const fetchMessagesRecus = useCallback(
     async (profileEmail?: string, profileUuid?: string) => {
@@ -833,6 +838,8 @@ function MessagesContent() {
           API_ENDPOINTS.MESSAGERIE.RECEIVED,
         );
 
+        console.log("📥 Messages reçus - Réponse API:", response);
+
         if (!response || !Array.isArray(response) || response.length === 0) {
           setMessagesRecus([]);
           return;
@@ -840,29 +847,38 @@ function MessagesContent() {
 
         const transformedMessages = response
           .map((item: any) => {
+            // Si l'API retourne directement un objet message
             const messageData = item.message || item;
+            
+            // ✅ Vérifier que le message a bien un contenu valide
+            if (!messageData || !messageData.uuid) {
+              console.warn("⚠️ Message invalide ignoré:", messageData);
+              return null;
+            }
+
+            // ✅ Construire l'expéditeur avec les bonnes informations
+            const expediteurNom = messageData.expediteurNom || "Expéditeur inconnu";
+            const expediteurEmail = messageData.expediteurEmail || "";
+            
             return {
-              uuid: messageData.uuid || item.uuid || `msg-${Date.now()}`,
+              uuid: messageData.uuid,
               sujet: messageData.sujet || "Sans sujet",
               contenu: messageData.contenu || "",
-              expediteurNom: messageData.expediteurNom || "Expéditeur inconnu",
-              expediteurEmail:
-                messageData.expediteurEmail || "inconnu@exemple.com",
+              expediteurNom,
+              expediteurEmail,
               expediteurUuid: messageData.expediteurUuid,
-              destinataireEmail: messageData.destinataireEmail || profileEmail,
-              destinataireUuid: messageData.destinataireUuid || profileUuid,
-              type: (messageData.type || "notification").toUpperCase(),
+              destinataireEmail: messageData.destinataireEmail || profileEmail || "",
+              destinataireUuid: messageData.destinataireUuid || profileUuid || "",
+              type: (messageData.type || "NOTIFICATION").toUpperCase(),
               estEnvoye: false,
-              envoyeLe:
-                messageData.envoyeLe ||
-                item.dateReception ||
-                new Date().toISOString(),
-              estLu: item.estLu || messageData.estLu || false,
-              dateLecture: item.dateLecture || messageData.dateLecture,
+              envoyeLe: messageData.envoyeLe || item.dateReception || new Date().toISOString(),
+              estLu: item.estLu === true || messageData.estLu === true,
+              dateLecture: item.dateLecture || messageData.dateLecture || null,
             } as Message;
           })
           .filter((item): item is Message => item !== null);
 
+        console.log(`✅ ${transformedMessages.length} messages reçus transformés`);
         setMessagesRecus(transformedMessages);
 
         const unreadMessages = transformedMessages.filter((m) => !m.estLu);
@@ -884,7 +900,7 @@ function MessagesContent() {
   );
 
   // ============================================
-  // ✅ CHARGEMENT DES MESSAGES ENVOYÉS - AVEC PARAMÈTRES
+  // ✅ CHARGEMENT DES MESSAGES ENVOYÉS
   // ============================================
   const fetchMessagesEnvoyes = useCallback(
     async (
@@ -896,6 +912,8 @@ function MessagesContent() {
       try {
         const response = await api.get<any[]>(API_ENDPOINTS.MESSAGERIE.SENT);
 
+        console.log("📤 Messages envoyés - Réponse API:", response);
+
         if (!response || !Array.isArray(response) || response.length === 0) {
           setMessagesEnvoyes([]);
           return;
@@ -903,34 +921,32 @@ function MessagesContent() {
 
         const formattedMessages = response
           .map((msg: any) => {
-            if (!msg) return null;
+            if (!msg || !msg.uuid) {
+              console.warn("⚠️ Message envoyé invalide ignoré:", msg);
+              return null;
+            }
 
             const formattedMsg: Message = {
-              uuid: msg.uuid || `sent-${Date.now()}`,
+              uuid: msg.uuid,
               sujet: msg.sujet || "Sans sujet",
               contenu: msg.contenu || "",
-              expediteurNom:
-                msg.expediteurNom || profileNom || "Utilisateur SONEC",
+              expediteurNom: msg.expediteurNom || profileNom || "Utilisateur SONEC",
               expediteurEmail: msg.expediteurEmail || profileEmail || "",
+              expediteurUuid: msg.expediteurUuid || profileUuid || "",
               destinataireEmail: msg.destinataireEmail || "",
-              type: (msg.type || "notification").toUpperCase(),
+              destinataireUuid: msg.destinataireUuid || "",
+              type: (msg.type || "NOTIFICATION").toUpperCase(),
               estEnvoye: true,
               envoyeLe: msg.envoyeLe || new Date().toISOString(),
-              estLu: msg.estLu || false,
+              estLu: msg.estLu === true,
               dateLecture: msg.dateLecture || null,
             };
-
-            if (msg.expediteurUuid || profileUuid) {
-              formattedMsg.expediteurUuid = msg.expediteurUuid || profileUuid;
-            }
-            if (msg.destinataireUuid) {
-              formattedMsg.destinataireUuid = msg.destinataireUuid;
-            }
 
             return formattedMsg;
           })
           .filter((msg): msg is Message => msg !== null);
 
+        console.log(`✅ ${formattedMessages.length} messages envoyés transformés`);
         setMessagesEnvoyes(formattedMessages);
       } catch (err) {
         console.error("❌ Erreur chargement messages envoyés:", err);
@@ -942,7 +958,7 @@ function MessagesContent() {
   );
 
   // ============================================
-  // ✅ CONSTRUCTION DES CONTACTS (SIMPLIFIÉE)
+  // ✅ CONSTRUCTION DES CONTACTS
   // ============================================
   const buildContactsFromMessages = useCallback(() => {
     if (!userProfile) return;
@@ -955,26 +971,17 @@ function MessagesContent() {
 
       const contactsMap = new Map<string, ContactConversation>();
 
-      // Traiter les messages en une seule passe
-      const allMessages = [...messagesRecus, ...messagesEnvoyes];
-
-      for (const msg of allMessages) {
-        const email = msg.expediteurEmail || msg.destinataireEmail;
-        if (!email || email === userProfile.email) continue;
+      // Traiter les messages reçus
+      messagesRecus.forEach((msg) => {
+        const email = msg.expediteurEmail;
+        if (!email || email === userProfile.email) return;
 
         if (!contactsMap.has(email)) {
-          const isExpediteur = msg.expediteurEmail === email;
           const contact: ContactConversation = {
-            uuid: isExpediteur
-              ? msg.expediteurUuid || `contact-${Date.now()}-${email}`
-              : msg.destinataireUuid || `contact-${Date.now()}-${email}`,
+            uuid: msg.expediteurUuid || `contact-${Date.now()}-${email}`,
             email,
-            nom: isExpediteur ? msg.expediteurNom?.split(" ").pop() || "" : "",
-            prenoms: isExpediteur
-              ? msg.expediteurNom?.split(" ").slice(0, -1).join(" ") ||
-                msg.expediteurNom ||
-                "Contact"
-              : email.split("@")[0] || "Contact",
+            nom: msg.expediteurNom?.split(" ").pop() || "",
+            prenoms: msg.expediteurNom?.split(" ").slice(0, -1).join(" ") || msg.expediteurNom || "Contact",
             telephone: "",
             userType: detectUserTypeFromEmail(email),
             est_verifie: true,
@@ -982,24 +989,54 @@ function MessagesContent() {
             is_deleted: false,
             lastMessageDate: msg.envoyeLe,
             lastMessage: msg.contenu,
-            unreadCount: msg.estLu === false && msg.estEnvoye === false ? 1 : 0,
+            unreadCount: !msg.estLu ? 1 : 0,
             totalMessages: 1,
           };
           contactsMap.set(email, contact);
         } else {
           const contact = contactsMap.get(email)!;
           contact.totalMessages = (contact.totalMessages || 0) + 1;
-          if (msg.estLu === false && msg.estEnvoye === false) {
+          if (!msg.estLu) {
             contact.unreadCount = (contact.unreadCount || 0) + 1;
           }
-          if (
-            new Date(msg.envoyeLe) > new Date(contact.lastMessageDate || "")
-          ) {
+          if (new Date(msg.envoyeLe) > new Date(contact.lastMessageDate || "")) {
             contact.lastMessageDate = msg.envoyeLe;
             contact.lastMessage = msg.contenu;
           }
         }
-      }
+      });
+
+      // Traiter les messages envoyés
+      messagesEnvoyes.forEach((msg) => {
+        const email = msg.destinataireEmail;
+        if (!email || email === userProfile.email) return;
+
+        if (!contactsMap.has(email)) {
+          const contact: ContactConversation = {
+            uuid: msg.destinataireUuid || `contact-${Date.now()}-${email}`,
+            email,
+            nom: "",
+            prenoms: email.split("@")[0] || "Contact",
+            telephone: "",
+            userType: detectUserTypeFromEmail(email),
+            est_verifie: true,
+            est_bloque: false,
+            is_deleted: false,
+            lastMessageDate: msg.envoyeLe,
+            lastMessage: msg.contenu,
+            unreadCount: 0,
+            totalMessages: 1,
+          };
+          contactsMap.set(email, contact);
+        } else {
+          const contact = contactsMap.get(email)!;
+          contact.totalMessages = (contact.totalMessages || 0) + 1;
+          if (new Date(msg.envoyeLe) > new Date(contact.lastMessageDate || "")) {
+            contact.lastMessageDate = msg.envoyeLe;
+            contact.lastMessage = msg.contenu;
+          }
+        }
+      });
 
       const contactsArray = Array.from(contactsMap.values())
         .filter((c) => c.email !== userProfile.email)
@@ -1023,7 +1060,7 @@ function MessagesContent() {
   }, [userProfile, messagesRecus, messagesEnvoyes]);
 
   // ============================================
-  // ✅ CHARGEMENT INITIAL - UNE SEULE FOIS
+  // ✅ CHARGEMENT INITIAL
   // ============================================
   useEffect(() => {
     let isMounted = true;
@@ -1172,7 +1209,7 @@ function MessagesContent() {
   }, [contacts, searchTerm, selectedType, selectedStatus]);
 
   // ============================================
-  // ✅ ACTIONS
+  // ✅ ENVOI DE MESSAGE (CORRIGÉ)
   // ============================================
   const handleSendMessage = async () => {
     if (!newMessage.destinataireEmail.trim()) {
@@ -1198,42 +1235,57 @@ function MessagesContent() {
     setApiError(null);
 
     try {
+      // ✅ CORRECTION: Utiliser les informations de l'expéditeur depuis userProfile
       const messageData = {
         destinataireEmail: newMessage.destinataireEmail.trim(),
         destinataireUuid: newMessage.destinataireUuid,
+        expediteurEmail: userProfile?.email || "", // ✅ Important: utiliser l'email de l'utilisateur connecté
+        expediteurUuid: userProfile?.uuid || "",
+        expediteurNom: `${userProfile?.prenoms || ""} ${userProfile?.nom || ""}`.trim() || "Utilisateur SONEC",
         sujet: newMessage.sujet.trim(),
         contenu: newMessage.contenu.trim(),
-        type: newMessage.type.toLowerCase(),
+        type: "NOTIFICATION", // ✅ Toujours NOTIFICATION
       };
 
+      console.log("📤 Envoi de message avec données:", {
+        ...messageData,
+        contenu: messageData.contenu.substring(0, 50) + "...",
+      });
+
+      // ✅ Utiliser l'endpoint PUBLIC_SEND pour éviter les problèmes d'authentification
       const response = await api.post<any>(
-        API_ENDPOINTS.MESSAGERIE.SEND,
+        API_ENDPOINTS.MESSAGERIE.PUBLIC_SEND,
         messageData,
       );
 
+      console.log("✅ Message envoyé avec succès, réponse:", response);
+
+      // ✅ Créer le message pour l'affichage local
       const sentMessage: Message = {
         uuid: response.uuid || `temp-${Date.now()}`,
         sujet: messageData.sujet,
         contenu: messageData.contenu,
-        expediteurNom: newMessage.expediteurNom,
-        expediteurEmail: newMessage.expediteurEmail,
-        expediteurUuid: newMessage.expediteurUuid,
+        expediteurNom: messageData.expediteurNom,
+        expediteurEmail: messageData.expediteurEmail,
+        expediteurUuid: messageData.expediteurUuid,
         destinataireEmail: messageData.destinataireEmail,
-        destinataireUuid: newMessage.destinataireUuid,
-        type: newMessage.type.toUpperCase(),
+        destinataireUuid: messageData.destinataireUuid,
+        type: "NOTIFICATION",
         estEnvoye: true,
         envoyeLe: new Date().toISOString(),
         estLu: false,
         dateLecture: null,
       };
 
+      // ✅ Ajouter le message à la liste des messages envoyés
       setMessagesEnvoyes((prev) => [sentMessage, ...prev]);
 
-      // Trouver le destinataire dans les contacts pour obtenir son nom
+      // ✅ Trouver le destinataire dans les contacts pour obtenir son nom
       const destinataireContact = contacts.find(
         (c) => c.email === newMessage.destinataireEmail,
       );
 
+      // ✅ Notification de succès
       showToast(
         "success",
         "✅ Message envoyé avec succès !",
@@ -1259,9 +1311,10 @@ function MessagesContent() {
         },
       );
 
-      // Réinitialiser le message original
+      // ✅ Réinitialiser le message original
       setReplyToMessage(null);
 
+      // ✅ Réinitialiser le formulaire
       setNewMessage({
         destinataireEmail: "",
         destinataireUuid: "",
@@ -1309,14 +1362,14 @@ function MessagesContent() {
     // Stocker le message original
     setReplyToMessage(message);
 
-    // Mettre à jour le formulaire
+    // Mettre à jour le formulaire avec les champs protégés
     setNewMessage({
       ...newMessage,
       destinataireEmail: message.expediteurEmail,
       destinataireUuid: message.expediteurUuid || "",
       sujet: `RE: ${message.sujet}`,
       contenu: "",
-      type: message.type,
+      type: "NOTIFICATION", // ✅ Toujours NOTIFICATION
     });
 
     const contact = contacts.find((c) => c.email === message.expediteurEmail);
@@ -1328,8 +1381,11 @@ function MessagesContent() {
     setReplyToMessage(null);
     setNewMessage({
       ...newMessage,
+      destinataireEmail: "",
+      destinataireUuid: "",
       sujet: "",
       contenu: "",
+      type: "NOTIFICATION", // ✅ Toujours NOTIFICATION
     });
   };
 
@@ -1344,6 +1400,7 @@ function MessagesContent() {
       destinataireUuid: contact.uuid,
       sujet: `Message pour ${contact.prenoms} ${contact.nom}`.trim(),
       contenu: "",
+      type: "NOTIFICATION", // ✅ Toujours NOTIFICATION
     }));
   };
 
@@ -1826,17 +1883,6 @@ function MessagesContent() {
             </p>
           </div>
           <div className="d-flex gap-3">
-            <button
-              className="btn btn-outline-primary d-flex align-items-center gap-2"
-              onClick={() => {
-                setReplyToMessage(null);
-                setActiveTab("contacts");
-              }}
-              style={{ fontSize: "0.85rem" }}
-            >
-              <FontAwesomeIcon icon={faUserPen} />
-              Nouveau message
-            </button>
             <button
               className="btn btn-primary d-flex align-items-center gap-2"
               onClick={handleRefresh}
@@ -2573,7 +2619,7 @@ function MessagesContent() {
                           </label>
                           <input
                             type="email"
-                            className="form-control form-control-sm border-2 py-2"
+                            className="form-control form-control-sm border-2 py-2 bg-light" // ✅ Ajout de bg-light pour griser
                             placeholder="contact@exemple.com"
                             value={newMessage.destinataireEmail}
                             onChange={(e) =>
@@ -2584,7 +2630,7 @@ function MessagesContent() {
                             }
                             required
                             style={{ fontSize: "0.85rem" }}
-                            readOnly={!!replyToMessage}
+                            readOnly={!!replyToMessage || !!selectedContact} // ✅ ReadOnly si réponse ou contact sélectionné
                           />
                           <small
                             className="text-muted d-block mt-1"
@@ -2611,7 +2657,7 @@ function MessagesContent() {
                           </label>
                           <input
                             type="text"
-                            className="form-control form-control-sm border-2 py-2"
+                            className="form-control form-control-sm border-2 py-2 bg-light" // ✅ Ajout de bg-light pour griser
                             placeholder="Sujet du message"
                             value={newMessage.sujet}
                             onChange={(e) =>
@@ -2622,6 +2668,7 @@ function MessagesContent() {
                             }
                             required
                             style={{ fontSize: "0.85rem" }}
+                            readOnly={!!replyToMessage} // ✅ ReadOnly si réponse
                           />
                         </div>
 
@@ -2636,23 +2683,20 @@ function MessagesContent() {
                             />
                             Type de message
                           </label>
-                          <select
-                            className="form-select form-select-sm border-2 py-2"
-                            value={newMessage.type}
-                            onChange={(e) =>
-                              setNewMessage({
-                                ...newMessage,
-                                type: e.target.value,
-                              })
-                            }
-                            style={{ fontSize: "0.85rem" }}
+                          <input
+                            type="text"
+                            className="form-control form-control-sm border-2 py-2 bg-light" // ✅ Ajout de bg-light pour griser
+                            value="NOTIFICATION"
+                            readOnly // ✅ Toujours readOnly
+                            style={{ fontSize: "0.85rem", color: "#6c757d" }}
+                          />
+                          <small
+                            className="text-muted d-block mt-1"
+                            style={{ fontSize: "0.75rem" }}
                           >
-                            <option value="NOTIFICATION">Notification</option>
-                            <option value="ALERT">Alerte</option>
-                            <option value="INFO">Information</option>
-                            <option value="QUESTION">Question</option>
-                            <option value="SUPPORT">Support</option>
-                          </select>
+                            <FontAwesomeIcon icon={faInfoCircle} className="me-1" />
+                            Le type de message est fixé à NOTIFICATION
+                          </small>
                         </div>
 
                         <div className="mb-3">
@@ -3360,7 +3404,7 @@ function MessagesContent() {
                                             message.destinataireUuid || "",
                                           sujet: `RE: ${message.sujet}`,
                                           contenu: "",
-                                          type: message.type,
+                                          type: "NOTIFICATION",
                                           expediteurNom: userProfile
                                             ? `${userProfile.prenoms || ""} ${userProfile.nom || ""}`.trim()
                                             : "Utilisateur SONEC",
@@ -3614,7 +3658,7 @@ function MessagesContent() {
 }
 
 // ============================================
-// COMPOSANT MESSAGE ITAMÉLIORÉ
+// COMPOSANT MESSAGE AMÉLIORÉ
 // ============================================
 const MessageItem = ({
   message,

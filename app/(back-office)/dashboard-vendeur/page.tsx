@@ -1,4 +1,3 @@
-// app/(back-office)/dashboard-vendeur/page.tsx
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -42,6 +41,12 @@ import {
   faStore as FaStoreIcon,
   faBolt,
   faPercent,
+  faUser,
+  faEnvelope,
+  faPhone,
+  faMapMarkerAlt,
+  faCalendarAlt,
+  faImage,
 } from "@fortawesome/free-solid-svg-icons";
 
 import { api } from "@/lib/api-client";
@@ -69,6 +74,9 @@ interface Stats {
   revenusTotaux: number;
   revenusProduits: number;
   totalFavoris: number;
+  produitsFavoris: number;
+  donsFavoris: number;
+  echangesFavoris: number;
   avisMoyen: number;
   totalAvis: number;
   tauxConversion: number;
@@ -101,6 +109,8 @@ interface Produit {
   boutique?: {
     nom: string;
     uuid: string;
+    logo?: string;
+    logo_key?: string;
   } | null;
   categorie_uuid?: string;
   categorie?: {
@@ -111,7 +121,7 @@ interface Produit {
   estBloque: boolean;
   is_favoris?: boolean;
   adminUuid?: string | null;
-  createdAt?: string | null;
+  dateCreation?: string | null;
   updatedAt?: string | null;
   quantite: number;
   note_moyenne?: string | number;
@@ -145,9 +155,10 @@ interface Don {
   vendeur: string;
   utilisateur: string;
   agent: string;
-  createdAt?: string | null;
+  dateCreation?: string | null;
   updatedAt?: string | null;
   image_url?: string;
+  nombreFavoris?: number;
 }
 
 interface Echange {
@@ -171,9 +182,10 @@ interface Echange {
   dateAcceptation: string | null;
   dateRefus: string | null;
   categorie: string;
-  createdAt?: string | null;
+  dateCreation?: string | null;
   updatedAt?: string | null;
   image_url?: string;
+  nombreFavoris?: number;
 }
 
 interface Boutique {
@@ -197,12 +209,16 @@ interface Boutique {
   type_boutique: {
     libelle: string;
     code: string;
-  };
+  } | null;
   vendeurUuid?: string;
   agentUuid?: string | null;
   est_bloque: boolean;
   est_ferme: boolean;
   produits_count?: number;
+  adresse?: string;
+  ville?: string;
+  telephone?: string;
+  email?: string;
 }
 
 interface Vendeur {
@@ -211,6 +227,19 @@ interface Vendeur {
   prenoms: string;
   avatar: string;
   email?: string;
+  telephone?: string;
+  adresse?: string;
+  date_inscription?: string;
+}
+
+interface FavoriItem {
+  uuid: string;
+  itemUuid: string;
+  type: "produit" | "don" | "echange";
+  produit?: Produit;
+  don?: Don;
+  echange?: Echange;
+  createdAt: string;
 }
 
 interface ApiResponseProduits {
@@ -237,6 +266,11 @@ interface ApiResponseBoutiques {
   page?: number;
   limit?: number;
   totalPages?: number;
+}
+
+interface ApiResponseFavoris {
+  favoris: FavoriItem[];
+  total: number;
 }
 
 // ✅ FONCTION POUR OBTENIR L'URL DE L'IMAGE AVEC buildImageUrl
@@ -287,6 +321,46 @@ const getItemImage = (item: any, type: string, defaultText: string): string => {
   
   const size = 60;
   return getPlaceholderImage(size, defaultText, "ffffff", bgColor);
+};
+
+// ✅ FONCTION POUR EXTRAIRE LES DONNÉES DE LA RÉPONSE (gère tous les formats)
+const extractItems = <T,>(response: any): T[] => {
+  if (!response) return [];
+
+  // Si c'est déjà un tableau
+  if (Array.isArray(response)) return response;
+
+  // Format: { data: [...] }
+  if (response.data && Array.isArray(response.data)) return response.data;
+
+  // Format: { data: { produits: [...] } }
+  if (response.data?.produits && Array.isArray(response.data.produits))
+    return response.data.produits;
+
+  // Format: { data: { dons: [...] } }
+  if (response.data?.dons && Array.isArray(response.data.dons))
+    return response.data.dons;
+
+  // Format: { data: { echanges: [...] } }
+  if (response.data?.echanges && Array.isArray(response.data.echanges))
+    return response.data.echanges;
+
+  // Format: { produits: [...] }
+  if (response.produits && Array.isArray(response.produits))
+    return response.produits;
+
+  // Format: { dons: [...] }
+  if (response.dons && Array.isArray(response.dons)) return response.dons;
+
+  // Format: { echanges: [...] }
+  if (response.echanges && Array.isArray(response.echanges))
+    return response.echanges;
+
+  // Format: { favoris: [...] }
+  if (response.favoris && Array.isArray(response.favoris))
+    return response.favoris;
+
+  return [];
 };
 
 // Formatage
@@ -378,7 +452,7 @@ const LoadingSpinner = () => (
                 <FontAwesomeIcon icon={faStore} className="fs-2 text-success" />
               </div>
             </div>
-            <h3 className="fw-bold mb-3 gradient-text">
+            <h3 className="fw-bold mb-3 text-dark">
               Chargement de votre dashboard
             </h3>
             <p className="text-muted mb-0">Veuillez patienter...</p>
@@ -482,7 +556,7 @@ const StatCard = ({
               {title}
             </h6>
             <div className="d-flex align-items-baseline flex-wrap">
-              <h2 className={`fw-bold mb-0 ${fontSizeClass} text-truncate`} style={{ maxWidth: "calc(100% - 40px)" }}>
+              <h2 className={`fw-bold mb-0 ${fontSizeClass} text-dark text-truncate`} style={{ maxWidth: "calc(100% - 40px)" }}>
                 {value}
               </h2>
               {isNumericValue && (
@@ -522,6 +596,93 @@ const StatCard = ({
   );
 };
 
+// ✅ Composant de carte de boutique
+const BoutiqueCard = ({ boutique }: { boutique: Boutique }) => {
+  const [imageError, setImageError] = useState(false);
+  
+  const logoUrl = !imageError && boutique.logo_key 
+    ? getImageUrl(boutique.logo_key) 
+    : getPlaceholderImage(100, boutique.nom?.charAt(0) || "B", "ffffff", "0d6efd");
+
+  const getStatusBadge = () => {
+    if (boutique.est_bloque) {
+      return <span className="badge bg-danger">Bloquée</span>;
+    }
+    if (boutique.est_ferme) {
+      return <span className="badge bg-secondary">Fermée</span>;
+    }
+    if (boutique.statut === "actif") {
+      return <span className="badge bg-success">Active</span>;
+    }
+    if (boutique.statut === "en_attente") {
+      return <span className="badge bg-warning text-dark">En attente</span>;
+    }
+    return <span className="badge bg-secondary">Inactive</span>;
+  };
+
+  return (
+    <div className="col-md-6 col-lg-4 mb-4">
+      <div className="card h-100 border-0 shadow-sm hover-lift">
+        <div className="card-body">
+          <div className="d-flex align-items-center mb-3">
+            <div className="position-relative me-3">
+              <img
+                src={logoUrl}
+                alt={boutique.nom}
+                className="rounded-3"
+                style={{ width: "60px", height: "60px", objectFit: "cover" }}
+                onError={() => setImageError(true)}
+              />
+              <div className="position-absolute top-0 end-0 translate-middle">
+                {getStatusBadge()}
+              </div>
+            </div>
+            <div className="flex-grow-1">
+              <h6 className="fw-bold mb-1 text-dark">{boutique.nom}</h6>
+              <small className="text-muted d-block">
+                <FontAwesomeIcon icon={faTag} className="me-1" size="xs" />
+                {boutique.type_boutique?.libelle || "Boutique standard"}
+              </small>
+            </div>
+          </div>
+
+          <p className="small text-muted mb-2">
+            {boutique.description || "Aucune description"}
+          </p>
+
+          <div className="d-flex flex-wrap gap-2 mb-3">
+            <span className="badge bg-light text-dark border">
+              <FontAwesomeIcon icon={faShoppingBag} className="me-1" />
+              {boutique.produits_count || 0} produit(s)
+            </span>
+            <span className="badge bg-light text-dark border">
+              <FontAwesomeIcon icon={faCalendarAlt} className="me-1" />
+              {formatDate(boutique.created_at)}
+            </span>
+          </div>
+
+          <div className="d-flex justify-content-between align-items-center">
+            <Link
+              href={`/dashboard-vendeur/boutiques/${boutique.uuid}`}
+              className="btn btn-sm btn-outline-primary"
+            >
+              <FontAwesomeIcon icon={faEye} className="me-1" />
+              Voir
+            </Link>
+            <Link
+              href={`/dashboard-vendeur/boutiques/${boutique.uuid}/edit`}
+              className="btn btn-sm btn-outline-success"
+            >
+              <FontAwesomeIcon icon={faEdit} className="me-1" />
+              Modifier
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function VendeurDashboard() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -532,6 +693,7 @@ export default function VendeurDashboard() {
   const [produits, setProduits] = useState<Produit[]>([]);
   const [dons, setDons] = useState<Don[]>([]);
   const [echanges, setEchanges] = useState<Echange[]>([]);
+  const [favoris, setFavoris] = useState<FavoriItem[]>([]);
   const [vendeur, setVendeur] = useState<Vendeur | null>(null);
   const [activeSection, setActiveSection] = useState<
     "produits" | "dons" | "echanges" | "boutiques"
@@ -555,6 +717,102 @@ export default function VendeurDashboard() {
     }, 0);
   };
 
+  // ✅ Fonction pour charger les favoris
+  const fetchFavoris = useCallback(async () => {
+    try {
+      const response = await api.get<ApiResponseFavoris>(API_ENDPOINTS.FAVORIS.LIST);
+      let favorisData: FavoriItem[] = [];
+
+      if (response?.favoris && Array.isArray(response.favoris)) {
+        favorisData = response.favoris;
+      } else {
+        favorisData = extractItems<FavoriItem>(response);
+      }
+
+      setFavoris(favorisData);
+      return favorisData;
+    } catch (err) {
+      console.warn("Erreur chargement favoris:", err);
+      return [];
+    }
+  }, []);
+
+  // ✅ Fonction pour calculer les favoris par type
+  const calculerFavorisParType = (favorisData: FavoriItem[]) => {
+    return {
+      produits: favorisData.filter(f => f.type === "produit").length,
+      dons: favorisData.filter(f => f.type === "don").length,
+      echanges: favorisData.filter(f => f.type === "echange").length,
+      total: favorisData.length
+    };
+  };
+
+  // ✅ Fonction pour charger les produits publiés spécifiques
+  const fetchProduitsPublies = useCallback(async () => {
+    try {
+      const response = await api.get<any>(API_ENDPOINTS.PRODUCTS.LISTE_PRODUITS_PUBLIES_VENDEUR);
+      return extractItems<Produit>(response);
+    } catch (err) {
+      console.warn("Erreur chargement produits publiés:", err);
+      return [];
+    }
+  }, []);
+
+  // ✅ Fonction pour charger les produits bloqués
+  const fetchProduitsBloques = useCallback(async () => {
+    try {
+      const response = await api.get<any>(API_ENDPOINTS.PRODUCTS.BLOCKED);
+      return extractItems<Produit>(response);
+    } catch (err) {
+      console.warn("Erreur chargement produits bloqués:", err);
+      return [];
+    }
+  }, []);
+
+  // ✅ Fonction pour charger les dons publiés
+  const fetchDonsPublies = useCallback(async () => {
+    try {
+      const response = await api.get<any>(API_ENDPOINTS.DONS.LISTE_DON_PUBLIE_VENDEUR);
+      return Array.isArray(response) ? response : [];
+    } catch (err) {
+      console.warn("Erreur chargement dons publiés:", err);
+      return [];
+    }
+  }, []);
+
+  // ✅ Fonction pour charger les dons bloqués
+  const fetchDonsBloques = useCallback(async () => {
+    try {
+      const response = await api.get<any>(API_ENDPOINTS.DONS.VENDEUR_BLOCKED);
+      return extractItems<Don>(response);
+    } catch (err) {
+      console.warn("Erreur chargement dons bloqués:", err);
+      return [];
+    }
+  }, []);
+
+  // ✅ Fonction pour charger les échanges publiés
+  const fetchEchangesPublies = useCallback(async () => {
+    try {
+      const response = await api.get<any>(API_ENDPOINTS.ECHANGES.LISTE_ECHANGES_PUBLIE_VENDEUR);
+      return Array.isArray(response) ? response : [];
+    } catch (err) {
+      console.warn("Erreur chargement échanges publiés:", err);
+      return [];
+    }
+  }, []);
+
+  // ✅ Fonction pour charger les échanges bloqués
+  const fetchEchangesBloques = useCallback(async () => {
+    try {
+      const response = await api.get<any>(API_ENDPOINTS.ECHANGES.VENDEUR_BLOCKED);
+      return extractItems<Echange>(response);
+    } catch (err) {
+      console.warn("Erreur chargement échanges bloqués:", err);
+      return [];
+    }
+  }, []);
+
   // Charger toutes les données
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -562,127 +820,131 @@ export default function VendeurDashboard() {
       setError(null);
 
       // Charger les boutiques
+      let boutiquesData: Boutique[] = [];
       try {
         const boutiquesRes = await api.get<ApiResponseBoutiques>(
           API_ENDPOINTS.BOUTIQUES.LISTE_BOUTIQUES_CREE_PAR_VENDEUR,
         );
-        const boutiquesData = boutiquesRes?.data || [];
-        setBoutiques(Array.isArray(boutiquesData) ? boutiquesData : []);
+        boutiquesData = extractItems<Boutique>(boutiquesRes);
+        setBoutiques(boutiquesData);
       } catch (err) {
         console.warn("Erreur chargement boutiques:", err);
-        setBoutiques([]);
       }
 
-      // Charger les produits
+      // Charger tous les produits
       let produitsData: Produit[] = [];
       try {
         const produitsRes = await api.get<ApiResponseProduits>(
-          API_ENDPOINTS.PRODUCTS.VENDEUR_PRODUCTS ||
-            "/produits/liste-produits-cree-vendeur",
+          API_ENDPOINTS.PRODUCTS.VENDEUR_PRODUCTS,
         );
-
-        if (produitsRes) {
-          if (Array.isArray(produitsRes)) {
-            produitsData = produitsRes;
-          } else if (produitsRes.data) {
-            if (Array.isArray(produitsRes.data)) {
-              produitsData = produitsRes.data;
-            } else if (produitsRes.data) {
-              produitsData = [produitsRes.data];
-            }
-          }
-        }
-
+        produitsData = extractItems<Produit>(produitsRes);
+        
+        // Enrichir avec les données de boutique
         produitsData = produitsData.map((produit) => ({
           ...produit,
           boutique: produit.boutique || { nom: "Sans boutique", uuid: "" },
         }));
+        
         setProduits(produitsData);
 
+        // Récupérer le vendeur si disponible
         if (produitsRes && "vendeur" in produitsRes && produitsRes.vendeur) {
           setVendeur(produitsRes.vendeur);
         }
       } catch (err) {
         console.warn("Erreur chargement produits:", err);
-        setProduits([]);
       }
 
-      // Charger les dons
+      // Charger tous les dons
+      let donsData: Don[] = [];
       try {
         const donsRes = await api.get<ApiResponseDons>(
           API_ENDPOINTS.DONS.VENDEUR_DONS,
         );
-        const donsData = donsRes?.data || [];
-        setDons(Array.isArray(donsData) ? donsData : []);
+        donsData = extractItems<Don>(donsRes);
+        setDons(donsData);
       } catch (err) {
         console.warn("Erreur chargement dons:", err);
-        setDons([]);
       }
 
-      // Charger les échanges
+      // Charger tous les échanges
+      let echangesData: Echange[] = [];
       try {
         const echangesRes = await api.get<ApiResponseEchanges>(
           API_ENDPOINTS.ECHANGES.VENDEUR_ECHANGES,
         );
-        const echangesData = echangesRes?.data || [];
-        setEchanges(Array.isArray(echangesData) ? echangesData : []);
+        echangesData = extractItems<Echange>(echangesRes);
+        setEchanges(echangesData);
       } catch (err) {
         console.warn("Erreur chargement échanges:", err);
-        setEchanges([]);
       }
 
+      // Charger les favoris
+      const favorisData = await fetchFavoris();
+      
+      // Charger les données spécifiques pour les statistiques avancées
+      const [produitsPublies, produitsBloques, donsPublies, donsBloques, echangesPublies, echangesBloques] = await Promise.all([
+        fetchProduitsPublies(),
+        fetchProduitsBloques(),
+        fetchDonsPublies(),
+        fetchDonsBloques(),
+        fetchEchangesPublies(),
+        fetchEchangesBloques(),
+      ]);
+
+      // Calculer les favoris par type
+      const favorisParType = calculerFavorisParType(favorisData);
+
       // Calculer les statistiques
-      setTimeout(() => {
-        const revenusProduits = calculerRevenusProduits(produitsData);
+      const revenusProduits = calculerRevenusProduits(produitsData);
 
-        const statsData: Stats = {
-          totalBoutiques: boutiques.length,
-          boutiquesActives: boutiques.filter(
-            (b) => b.statut === "actif" && !b.est_bloque && !b.est_ferme,
-          ).length,
-          boutiquesEnReview: boutiques.filter((b) => b.statut === "en_attente")
-            .length,
-          boutiquesBloquees: boutiques.filter(
-            (b) => b.est_bloque || b.est_ferme,
-          ).length,
-          totalProduits: produitsData.length,
-          produitsPublies: produitsData.filter((p) => p.estPublie).length,
-          produitsNonPublies: produitsData.filter(
-            (p) => !p.estPublie && !p.estBloque,
-          ).length,
-          produitsBloques: produitsData.filter((p) => p.estBloque).length,
-          totalDons: dons.length,
-          donsPublies: dons.filter((d) => d.estPublie && !d.est_bloque).length,
-          donsBloques: dons.filter((d) => d.est_bloque).length,
-          donsEnAttente: dons.filter((d) => !d.estPublie && !d.est_bloque)
-            .length,
-          totalEchanges: echanges.length,
-          echangesPublies: echanges.filter((e) => e.estPublie).length,
-          echangesBloques: 0,
-          echangesEnAttente: echanges.filter((e) => !e.estPublie).length,
-          revenusTotaux: revenusProduits,
-          revenusProduits: revenusProduits,
-          totalFavoris: produitsData.reduce(
-            (sum, p) => sum + (p.nombreFavoris || 0),
-            0,
-          ),
-          avisMoyen: produitsData.reduce((sum, p) => {
-            const note = typeof p.note_moyenne === 'string' ? parseFloat(p.note_moyenne) : (p.note_moyenne || 0);
-            return sum + note;
-          }, 0) / (produitsData.length || 1),
-          totalAvis: produitsData.reduce(
-            (sum, p) => sum + (p.nombre_avis || 0),
-            0,
-          ),
-          tauxConversion: 2.8,
-          panierMoyen:
-            produitsData.length > 0
-              ? Math.round(revenusProduits / produitsData.length)
-              : 0,
-        };
+      const statsData: Stats = {
+        totalBoutiques: boutiquesData.length,
+        boutiquesActives: boutiquesData.filter(
+          (b) => b.statut === "actif" && !b.est_bloque && !b.est_ferme,
+        ).length,
+        boutiquesEnReview: boutiquesData.filter((b) => b.statut === "en_attente")
+          .length,
+        boutiquesBloquees: boutiquesData.filter(
+          (b) => b.est_bloque || b.est_ferme,
+        ).length,
+        totalProduits: produitsData.length,
+        produitsPublies: produitsPublies.length,
+        produitsNonPublies: produitsData.filter(
+          (p) => !p.estPublie && !p.estBloque,
+        ).length,
+        produitsBloques: produitsBloques.length,
+        totalDons: donsData.length,
+        donsPublies: donsPublies.length,
+        donsBloques: donsBloques.length,
+        donsEnAttente: donsData.filter((d) => !d.estPublie && !d.est_bloque)
+          .length,
+        totalEchanges: echangesData.length,
+        echangesPublies: echangesPublies.length,
+        echangesBloques: echangesBloques.length,
+        echangesEnAttente: echangesData.filter((e) => !e.estPublie).length,
+        revenusTotaux: revenusProduits,
+        revenusProduits: revenusProduits,
+        totalFavoris: favorisParType.total,
+        produitsFavoris: favorisParType.produits,
+        donsFavoris: favorisParType.dons,
+        echangesFavoris: favorisParType.echanges,
+        avisMoyen: produitsData.reduce((sum, p) => {
+          const note = typeof p.note_moyenne === 'string' ? parseFloat(p.note_moyenne) : (p.note_moyenne || 0);
+          return sum + note;
+        }, 0) / (produitsData.length || 1),
+        totalAvis: produitsData.reduce(
+          (sum, p) => sum + (p.nombre_avis || 0),
+          0,
+        ),
+        tauxConversion: 2.8,
+        panierMoyen:
+          produitsData.length > 0
+            ? Math.round(revenusProduits / produitsData.length)
+            : 0,
+      };
 
-        setStats(statsData);
-      }, 100);
+      setStats(statsData);
     } catch (err: any) {
       console.error("Erreur lors du chargement du dashboard:", err);
       setError(
@@ -693,7 +955,7 @@ export default function VendeurDashboard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchProduitsPublies, fetchProduitsBloques, fetchDonsPublies, fetchDonsBloques, fetchEchangesPublies, fetchEchangesBloques, fetchFavoris]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -706,31 +968,27 @@ export default function VendeurDashboard() {
     switch (activeSection) {
       case "produits":
         data = produits;
-        if (activeTab === "publies") {
-          data = data.filter((p) => p.estPublie);
-        } else if (activeTab === "bloques") {
-          data = data.filter((p) => p.estBloque);
-        }
         break;
       case "dons":
         data = dons;
-        if (activeTab === "publies") {
-          data = data.filter((d) => d.estPublie);
-        } else if (activeTab === "bloques") {
-          data = data.filter((d) => d.est_bloque);
-        }
         break;
       case "echanges":
         data = echanges;
-        if (activeTab === "publies") {
-          data = data.filter((e) => e.estPublie);
-        } else if (activeTab === "bloques") {
-          data = data.filter((e) => e.statut === "bloque");
-        }
         break;
       case "boutiques":
         data = boutiques;
         break;
+    }
+
+    // Filtrer par onglet (tous/publies/bloques)
+    if (activeSection !== "boutiques") {
+      if (activeTab === "publies") {
+        data = data.filter((item) => item.estPublie === true);
+      } else if (activeTab === "bloques") {
+        data = data.filter((item) => 
+          item.estBloque === true || item.est_bloque === true
+        );
+      }
     }
 
     // Appliquer le filtre de recherche
@@ -740,24 +998,28 @@ export default function VendeurDashboard() {
         if (activeSection === "boutiques") {
           return (
             item.nom?.toLowerCase().includes(searchLower) ||
-            item.description?.toLowerCase().includes(searchLower)
+            item.description?.toLowerCase().includes(searchLower) ||
+            item.type_boutique?.libelle?.toLowerCase().includes(searchLower)
           );
         } else if (activeSection === "produits") {
           return (
             item.libelle?.toLowerCase().includes(searchLower) ||
-            item.description?.toLowerCase().includes(searchLower)
+            item.description?.toLowerCase().includes(searchLower) ||
+            item.categorie?.libelle?.toLowerCase().includes(searchLower)
           );
         } else if (activeSection === "dons") {
           return (
             item.nom?.toLowerCase().includes(searchLower) ||
-            item.description?.toLowerCase().includes(searchLower)
+            item.description?.toLowerCase().includes(searchLower) ||
+            item.categorie?.toLowerCase().includes(searchLower)
           );
         } else if (activeSection === "echanges") {
           return (
             item.nomElementEchange?.toLowerCase().includes(searchLower) ||
             item.message?.toLowerCase().includes(searchLower) ||
             item.objetPropose?.toLowerCase().includes(searchLower) ||
-            item.objetDemande?.toLowerCase().includes(searchLower)
+            item.objetDemande?.toLowerCase().includes(searchLower) ||
+            item.categorie?.toLowerCase().includes(searchLower)
           );
         }
         return false;
@@ -783,7 +1045,7 @@ export default function VendeurDashboard() {
           estPublie: item.estPublie || false,
           estBloque: item.estBloque || false,
           categorie: item.categorie?.libelle || "Non catégorisé",
-          date: item.createdAt || item.updatedAt,
+          date: item.dateCreation || item.createdAt || item.updatedAt,
           boutique: item.boutique?.nom || "Sans boutique",
           note_moyenne: item.note_moyenne || 0,
           nombre_avis: item.nombre_avis || 0,
@@ -801,9 +1063,10 @@ export default function VendeurDashboard() {
           estPublie: item.estPublie || false,
           estBloque: item.est_bloque || false,
           categorie: item.categorie || "Non catégorisé",
-          date: item.date_debut || item.createdAt,
+          date: item.date_debut || item.dateCreation || item.createdAt,
           type_don: item.type_don || "objet",
           quantite: item.quantite || 1,
+          nombre_favoris: item.nombreFavoris || 0,
         };
       case "echanges":
         return {
@@ -816,9 +1079,10 @@ export default function VendeurDashboard() {
           estPublie: item.estPublie || false,
           estBloque: false,
           categorie: item.categorie || "Non catégorisé",
-          date: item.dateProposition || item.createdAt,
+          date: item.dateProposition || item.dateCreation || item.createdAt,
           objetPropose: item.objetPropose || "",
           objetDemande: item.objetDemande || "",
+          nombre_favoris: item.nombreFavoris || 0,
         };
       case "boutiques":
         return {
@@ -832,6 +1096,9 @@ export default function VendeurDashboard() {
           date: item.created_at,
           type_boutique: item.type_boutique?.libelle || "Standard",
           produits_count: item.produits_count || 0,
+          adresse: item.adresse || "Non spécifiée",
+          ville: item.ville || "Non spécifiée",
+          telephone: item.telephone || "Non spécifié",
         };
     }
   };
@@ -899,31 +1166,41 @@ export default function VendeurDashboard() {
                   </div>
                 )}
                 <div className="min-w-0">
-                  <h1 className="h4 h3-sm h2-md fw-bold text-white mb-1 text-truncate">
+                  <h1 className="h4 h3-sm h2-md fw-bold text-dark mb-1 text-truncate">
                     <FontAwesomeIcon icon={faTachometerAlt} className="me-2" />
                     Dashboard Vendeur
                   </h1>
-                  <p className="text-white mb-2 small small-md text-truncate" style={{ opacity: 0.9, maxWidth: "100%" }}>
+                  <p className="text-dark mb-2 small small-md text-truncate" style={{ opacity: 0.9, maxWidth: "100%" }}>
                     {vendeur
-                      ? `Bonjour ${vendeur.prenoms}, voici le résumé de votre activité`
+                      ? `Bonjour ${vendeur.prenoms} ${vendeur.nom}, voici le résumé de votre activité`
                       : "Vue d'ensemble de votre activité"}
                   </p>
-                  <div className="d-flex flex-wrap gap-1 gap-md-2 align-items-center">
-                    <span className="badge bg-white bg-opacity-20 text-white fw-semibold border-0 small">
+                  {vendeur?.email && (
+                    <p className="text-white-50 small mb-0">
+                      <FontAwesomeIcon icon={faEnvelope} className="me-1" />
+                      {vendeur.email}
+                    </p>
+                  )}
+                  <div className="d-flex flex-wrap gap-1 gap-md-2 align-items-center mt-2">
+                    <span className="badge bg-white bg-opacity-20 text-dark fw-semibold border-0 small">
                       <FontAwesomeIcon icon={faStore} className="me-1" />
                       {stats?.totalBoutiques || 0}
                     </span>
-                    <span className="badge bg-white bg-opacity-20 text-white fw-semibold border-0 small">
+                    <span className="badge bg-white bg-opacity-20 text-dark fw-semibold border-0 small">
                       <FontAwesomeIcon icon={faShoppingBag} className="me-1" />
                       {stats?.totalProduits || 0}
                     </span>
-                    <span className="badge bg-white bg-opacity-20 text-white fw-semibold border-0 small">
+                    <span className="badge bg-white bg-opacity-20 text-dark fw-semibold border-0 small">
                       <FontAwesomeIcon icon={faGift} className="me-1" />
                       {stats?.totalDons || 0}
                     </span>
-                    <span className="badge bg-white bg-opacity-20 text-white fw-semibold border-0 small">
+                    <span className="badge bg-white bg-opacity-20 text-dark fw-semibold border-0 small">
                       <FontAwesomeIcon icon={faExchangeAlt} className="me-1" />
                       {stats?.totalEchanges || 0}
+                    </span>
+                    <span className="badge bg-danger bg-opacity-20 text-dark fw-semibold border-0 small">
+                      <FontAwesomeIcon icon={faHeart} className="me-1" />
+                      {stats?.totalFavoris || 0}
                     </span>
                   </div>
                 </div>
@@ -1002,10 +1279,6 @@ export default function VendeurDashboard() {
               value={stats?.totalBoutiques || 0}
               icon={faStore}
               color="primary"
-              subtitle={`${stats?.boutiquesActives || 0} actives, ${stats?.boutiquesEnReview || 0} en revue`}
-              trend="up"
-              trendText="+12% ce mois"
-              delay={0}
             />
           </div>
 
@@ -1015,10 +1288,6 @@ export default function VendeurDashboard() {
               value={stats?.totalProduits || 0}
               icon={faShoppingBag}
               color="success"
-              subtitle={`${stats?.produitsPublies || 0} publiés, ${stats?.produitsBloques || 0} bloqués`}
-              trend="up"
-              trendText="+8% ce mois"
-              delay={1}
             />
           </div>
 
@@ -1028,10 +1297,6 @@ export default function VendeurDashboard() {
               value={stats?.totalDons || 0}
               icon={faGift}
               color="warning"
-              subtitle={`${stats?.donsPublies || 0} publiés, ${stats?.donsBloques || 0} bloqués`}
-              trend="up"
-              trendText="+5% ce mois"
-              delay={2}
             />
           </div>
 
@@ -1041,10 +1306,6 @@ export default function VendeurDashboard() {
               value={stats?.totalEchanges || 0}
               icon={faExchangeAlt}
               color="info"
-              subtitle={`${stats?.echangesPublies || 0} publiés, ${stats?.echangesBloques || 0} bloqués`}
-              trend="up"
-              trendText="+18% ce mois"
-              delay={3}
             />
           </div>
         </div>
@@ -1056,10 +1317,6 @@ export default function VendeurDashboard() {
               value={formatPrix(stats?.revenusTotaux || 0)}
               icon={faMoneyBillWave}
               color="success"
-              subtitle={`${stats?.totalProduits || 0} produits`}
-              trend="up"
-              trendText="Somme des produits"
-              delay={4}
             />
           </div>
 
@@ -1069,10 +1326,6 @@ export default function VendeurDashboard() {
               value={stats?.totalAvis || 0}
               icon={faStar}
               color="warning"
-              subtitle={`Note moyenne: ${(stats?.avisMoyen || 0).toFixed(1)}/5`}
-              trend="up"
-              trendText="+8%"
-              delay={5}
             />
           </div>
 
@@ -1082,10 +1335,7 @@ export default function VendeurDashboard() {
               value={stats?.totalFavoris || 0}
               icon={faHeart}
               color="danger"
-              subtitle="Ajoutés par les clients"
-              trend="up"
-              trendText="+22%"
-              delay={6}
+              subtitle={`${stats?.produitsFavoris || 0} produits, ${stats?.donsFavoris || 0} dons, ${stats?.echangesFavoris || 0} échanges`}
             />
           </div>
 
@@ -1095,10 +1345,6 @@ export default function VendeurDashboard() {
               value={formatPrix(stats?.panierMoyen || 0)}
               icon={faPercent}
               color="info"
-              subtitle="Moyenne des produits"
-              trend="up"
-              trendText="+2%"
-              delay={7}
             />
           </div>
         </div>
@@ -1201,6 +1447,7 @@ export default function VendeurDashboard() {
                 className={`btn btn-sm btn-lg-md d-flex align-items-center gap-1 gap-md-2 ${activeSection === "boutiques" ? "btn-primary" : "btn-outline-primary"}`}
                 onClick={() => {
                   setActiveSection("boutiques");
+                  setActiveTab("tous");
                   setSearchTerm("");
                 }}
               >
@@ -1254,7 +1501,7 @@ export default function VendeurDashboard() {
                     ? stats?.produitsBloques
                     : activeSection === "dons"
                       ? stats?.donsBloques
-                      : 0}
+                      : stats?.echangesBloques}
                   )
                 </button>
               </div>
@@ -1294,7 +1541,7 @@ export default function VendeurDashboard() {
                 <div className="d-flex flex-wrap gap-2 justify-content-end">
                   {activeSection === "produits" && (
                     <Link
-                      href="/dashboard/produits/create"
+                      href="/dashboard-vendeur/produits/nouveau"
                       className="btn btn-success btn-sm d-flex align-items-center gap-2"
                     >
                       <FontAwesomeIcon icon={faPlus} />
@@ -1304,7 +1551,7 @@ export default function VendeurDashboard() {
 
                   {activeSection === "dons" && (
                     <Link
-                      href="/dashboard/dons/create"
+                      href="/dashboard-vendeur/dons/nouveau"
                       className="btn btn-warning btn-sm d-flex align-items-center gap-2"
                     >
                       <FontAwesomeIcon icon={faPlus} />
@@ -1314,7 +1561,7 @@ export default function VendeurDashboard() {
 
                   {activeSection === "echanges" && (
                     <Link
-                      href="/dashboard/echanges/create"
+                      href="/dashboard-vendeur/echanges/nouveau"
                       className="btn btn-info btn-sm d-flex align-items-center gap-2"
                     >
                       <FontAwesomeIcon icon={faPlus} />
@@ -1324,7 +1571,7 @@ export default function VendeurDashboard() {
 
                   {activeSection === "boutiques" && (
                     <Link
-                      href="/dashboard/boutiques/create"
+                      href="/dashboard-vendeur/boutiques/nouveau"
                       className="btn btn-primary btn-sm d-flex align-items-center gap-2"
                     >
                       <FontAwesomeIcon icon={faPlus} />
@@ -1348,215 +1595,224 @@ export default function VendeurDashboard() {
           </div>
         </div>
 
-        {/* Tableau des données */}
-        <div className="card border-0 shadow-sm">
-          <div className="card-body p-0">
+        {/* Tableau des données ou grille des boutiques */}
+        {activeSection === "boutiques" ? (
+          <div className="row">
             {filteredData.length === 0 ? (
-              <div className="text-center py-5">
-                <div className="mb-4">
-                  {activeSection === "produits" && (
-                    <FontAwesomeIcon
-                      icon={faBoxOpen}
-                      className="text-muted fs-1"
-                    />
-                  )}
-                  {activeSection === "dons" && (
-                    <FontAwesomeIcon
-                      icon={faGift}
-                      className="text-muted fs-1"
-                    />
-                  )}
-                  {activeSection === "echanges" && (
-                    <FontAwesomeIcon
-                      icon={faExchangeAlt}
-                      className="text-muted fs-1"
-                    />
-                  )}
-                  {activeSection === "boutiques" && (
-                    <FontAwesomeIcon
-                      icon={faStore}
-                      className="text-muted fs-1"
-                    />
-                  )}
+              <div className="col-12">
+                <div className="text-center py-5">
+                  <FontAwesomeIcon icon={faStore} className="text-muted fs-1 mb-3" />
+                  <h4 className="fw-bold mb-3">Aucune boutique trouvée</h4>
+                  <p className="text-muted mb-4">
+                    {searchTerm
+                      ? "Aucune boutique ne correspond à votre recherche."
+                      : "Commencez par créer votre première boutique !"}
+                  </p>
+                  <Link
+                    href="/dashboard-vendeur/boutiques/nouveau"
+                    className="btn btn-primary btn-lg"
+                  >
+                    <FontAwesomeIcon icon={faPlus} className="me-2" />
+                    Créer une boutique
+                  </Link>
                 </div>
-                <h4 className="fw-bold mb-3">Aucun {activeSection} trouvé</h4>
-                <p className="text-muted mb-4">
-                  {searchTerm
-                    ? "Aucun résultat ne correspond à votre recherche."
-                    : activeSection === "produits"
-                      ? "Commencez par créer votre premier produit !"
-                      : activeSection === "dons"
-                        ? "Commencez par créer votre premier don !"
-                        : activeSection === "echanges"
-                          ? "Commencez par créer votre premier échange !"
-                          : "Commencez par créer votre première boutique !"}
-                </p>
-                <Link
-                  href={`/dashboard/${activeSection}/create`}
-                  className={`btn btn-${activeSection === "produits" ? "success" : activeSection === "dons" ? "warning" : activeSection === "echanges" ? "info" : "primary"} btn-lg`}
-                >
-                  <FontAwesomeIcon icon={faPlus} className="me-2" />
-                  Créer un{" "}
-                  {activeSection === "produits"
-                    ? "produit"
-                    : activeSection === "dons"
-                      ? "don"
-                      : activeSection === "echanges"
-                        ? "échange"
-                        : "boutique"}
-                </Link>
               </div>
             ) : (
-              <div className="table-responsive">
-                <table className="table table-hover align-middle mb-0">
-                  <thead className="table-light">
-                    <tr>
-                      <th style={{ width: "40px" }} className="ps-3">
-                        <div className="form-check">
-                          <input
-                            type="checkbox"
-                            className="form-check-input"
-                            checked={
-                              selectedItems.length === filteredData.length &&
-                              filteredData.length > 0
-                            }
-                            onChange={() => {
-                              if (
-                                selectedItems.length === filteredData.length
-                              ) {
-                                setSelectedItems([]);
-                              } else {
-                                setSelectedItems(
-                                  filteredData.map((item: any) => item.uuid),
-                                );
+              filteredData.map((item: any) => (
+                <BoutiqueCard key={item.uuid} boutique={item} />
+              ))
+            )}
+          </div>
+        ) : (
+          <div className="card border-0 shadow-sm">
+            <div className="card-body p-0">
+              {filteredData.length === 0 ? (
+                <div className="text-center py-5">
+                  <div className="mb-4">
+                    {activeSection === "produits" && (
+                      <FontAwesomeIcon
+                        icon={faBoxOpen}
+                        className="text-muted fs-1"
+                      />
+                    )}
+                    {activeSection === "dons" && (
+                      <FontAwesomeIcon
+                        icon={faGift}
+                        className="text-muted fs-1"
+                      />
+                    )}
+                    {activeSection === "echanges" && (
+                      <FontAwesomeIcon
+                        icon={faExchangeAlt}
+                        className="text-muted fs-1"
+                      />
+                    )}
+                  </div>
+                  <h4 className="fw-bold mb-3">Aucun {activeSection} trouvé</h4>
+                  <p className="text-muted mb-4">
+                    {searchTerm
+                      ? "Aucun résultat ne correspond à votre recherche."
+                      : activeSection === "produits"
+                        ? "Commencez par créer votre premier produit !"
+                        : activeSection === "dons"
+                          ? "Commencez par créer votre premier don !"
+                          : "Commencez par créer votre premier échange !"}
+                  </p>
+                  <Link
+                    href={`/dashboard-vendeur/${activeSection}/nouveau`}
+                    className={`btn btn-${activeSection === "produits" ? "success" : activeSection === "dons" ? "warning" : "info"} btn-lg`}
+                  >
+                    <FontAwesomeIcon icon={faPlus} className="me-2" />
+                    Créer un{" "}
+                    {activeSection === "produits"
+                      ? "produit"
+                      : activeSection === "dons"
+                        ? "don"
+                        : "échange"}
+                  </Link>
+                </div>
+              ) : (
+                <div className="table-responsive">
+                  <table className="table table-hover align-middle mb-0">
+                    <thead className="table-light">
+                      <tr>
+                        <th style={{ width: "40px" }} className="ps-3">
+                          <div className="form-check">
+                            <input
+                              type="checkbox"
+                              className="form-check-input"
+                              checked={
+                                selectedItems.length === filteredData.length &&
+                                filteredData.length > 0
                               }
-                            }}
-                          />
-                        </div>
-                      </th>
-                      <th style={{ width: "60px" }}>Image</th>
-                      <th>Nom</th>
-                      {activeSection !== "boutiques" && (
-                        <th style={{ width: "100px" }}>Prix/Valeur</th>
-                      )}
-                      <th style={{ width: "90px" }}>Statut</th>
-                      <th style={{ width: "100px" }}>Catégorie</th>
-                      <th style={{ width: "120px" }}>Date</th>
-                      <th style={{ width: "120px" }} className="text-end pe-3">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredData.slice(0, 10).map((item: any) => {
-                      const displayData = getDisplayData(item);
-                      return (
-                        <tr
-                          key={displayData.uuid}
-                          className={
-                            selectedItems.includes(displayData.uuid)
-                              ? "table-active"
-                              : ""
-                          }
-                        >
-                          <td className="ps-3">
-                            <div className="form-check">
-                              <input
-                                type="checkbox"
-                                className="form-check-input"
-                                checked={selectedItems.includes(
-                                  displayData.uuid,
-                                )}
-                                onChange={() => {
-                                  setSelectedItems((prev) =>
-                                    prev.includes(displayData.uuid)
-                                      ? prev.filter(
-                                          (id) => id !== displayData.uuid,
-                                        )
-                                      : [...prev, displayData.uuid],
+                              onChange={() => {
+                                if (
+                                  selectedItems.length === filteredData.length
+                                ) {
+                                  setSelectedItems([]);
+                                } else {
+                                  setSelectedItems(
+                                    filteredData.map((item: any) => item.uuid),
                                   );
-                                }}
-                              />
-                            </div>
-                          </td>
-                          <td>
-                            <div
-                              className="position-relative"
-                              style={{ width: "50px", height: "50px" }}
-                            >
-                              <img
-                                src={displayData.image}
-                                alt={displayData.libelle}
-                                className="rounded-3"
-                                style={{
-                                  width: "100%",
-                                  height: "100%",
-                                  objectFit: "cover",
-                                }}
-                                onError={(e) => {
-                                  const bgColor = 
-                                    activeSection === "produits" ? "28a745" :
-                                    activeSection === "dons" ? "8b5cf6" :
-                                    activeSection === "echanges" ? "f59e0b" :
-                                    activeSection === "boutiques" ? "0d6efd" : "6c757d";
-                                  (e.target as HTMLImageElement).src =
-                                    getPlaceholderImage(50, "I", "ffffff", bgColor);
-                                }}
-                              />
-                            </div>
-                          </td>
-                          <td>
-                            <div className="d-flex flex-column">
-                              <span className="fw-semibold small">
-                                {displayData.libelle}
-                              </span>
-                              <small
-                                className="text-muted text-truncate"
-                                style={{ maxWidth: "180px" }}
+                                }
+                              }}
+                            />
+                          </div>
+                        </th>
+                        <th style={{ width: "60px" }}>Image</th>
+                        <th>Nom</th>
+                        <th style={{ width: "100px" }}>Prix/Valeur</th>
+                        <th style={{ width: "90px" }}>Statut</th>
+                        <th style={{ width: "100px" }}>Catégorie</th>
+                        <th style={{ width: "80px" }}>
+                          <FontAwesomeIcon icon={faHeart} className="text-danger" />
+                        </th>
+                        <th style={{ width: "120px" }}>Date</th>
+                        <th style={{ width: "120px" }} className="text-end pe-3">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredData.slice(0, 10).map((item: any) => {
+                        const displayData = getDisplayData(item);
+                        return (
+                          <tr
+                            key={displayData.uuid}
+                            className={
+                              selectedItems.includes(displayData.uuid)
+                                ? "table-active"
+                                : ""
+                            }
+                          >
+                            <td className="ps-3">
+                              <div className="form-check">
+                                <input
+                                  type="checkbox"
+                                  className="form-check-input"
+                                  checked={selectedItems.includes(
+                                    displayData.uuid,
+                                  )}
+                                  onChange={() => {
+                                    setSelectedItems((prev) =>
+                                      prev.includes(displayData.uuid)
+                                        ? prev.filter(
+                                            (id) => id !== displayData.uuid,
+                                          )
+                                        : [...prev, displayData.uuid],
+                                    );
+                                  }}
+                                />
+                              </div>
+                            </td>
+                            <td>
+                              <div
+                                className="position-relative"
+                                style={{ width: "50px", height: "50px" }}
                               >
-                                {displayData.description?.substring(0, 40) ||
-                                  "Pas de description"}
-                              </small>
-                              {activeSection === "produits" && (
-                                <small className="text-muted">
-                                  <FontAwesomeIcon
-                                    icon={faStore}
-                                    className="me-1"
-                                  />
-                                  {displayData.boutique}
+                                <img
+                                  src={displayData.image}
+                                  alt={displayData.libelle}
+                                  className="rounded-3"
+                                  style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "cover",
+                                  }}
+                                  onError={(e) => {
+                                    const bgColor = 
+                                      activeSection === "produits" ? "28a745" :
+                                      activeSection === "dons" ? "8b5cf6" :
+                                      activeSection === "echanges" ? "f59e0b" :
+                                      "6c757d";
+                                    (e.target as HTMLImageElement).src =
+                                      getPlaceholderImage(50, "I", "ffffff", bgColor);
+                                  }}
+                                />
+                              </div>
+                            </td>
+                            <td>
+                              <div className="d-flex flex-column">
+                                <span className="fw-semibold small text-dark">
+                                  {displayData.libelle}
+                                </span>
+                                <small
+                                  className="text-muted text-truncate"
+                                  style={{ maxWidth: "180px" }}
+                                >
+                                  {displayData.description?.substring(0, 40) ||
+                                    "Pas de description"}
                                 </small>
-                              )}
-                              {activeSection === "dons" && (
-                                <small className="text-muted">
-                                  <FontAwesomeIcon
-                                    icon={faTag}
-                                    className="me-1"
-                                  />
-                                  {displayData.type_don}
-                                </small>
-                              )}
-                              {activeSection === "echanges" && (
-                                <small className="text-muted">
-                                  <FontAwesomeIcon
-                                    icon={faExchangeAlt}
-                                    className="me-1"
-                                  />
-                                  {displayData.objetPropose} →{" "}
-                                  {displayData.objetDemande}
-                                </small>
-                              )}
-                              {activeSection === "boutiques" && (
-                                <small className="text-muted">
-                                  <FontAwesomeIcon
-                                    icon={faTag}
-                                    className="me-1"
-                                  />
-                                  {displayData.type_boutique}
-                                </small>
-                              )}
-                            </div>
-                          </td>
-                          {activeSection !== "boutiques" && (
+                                {activeSection === "produits" && (
+                                  <small className="text-muted">
+                                    <FontAwesomeIcon
+                                      icon={faStore}
+                                      className="me-1"
+                                    />
+                                    {displayData.boutique}
+                                  </small>
+                                )}
+                                {activeSection === "dons" && (
+                                  <small className="text-muted">
+                                    <FontAwesomeIcon
+                                      icon={faTag}
+                                      className="me-1"
+                                    />
+                                    {displayData.type_don}
+                                  </small>
+                                )}
+                                {activeSection === "echanges" && (
+                                  <small className="text-muted">
+                                    <FontAwesomeIcon
+                                      icon={faExchangeAlt}
+                                      className="me-1"
+                                    />
+                                    {displayData.objetPropose} →{" "}
+                                    {displayData.objetDemande}
+                                  </small>
+                                )}
+                              </div>
+                            </td>
                             <td>
                               <span className="fw-bold text-success small">
                                 {formatPrix(displayData.prix)}
@@ -1569,336 +1825,159 @@ export default function VendeurDashboard() {
                                 </div>
                               )}
                             </td>
-                          )}
-                          <td>
-                            {activeSection === "boutiques" ? (
-                              <>
-                                {displayData.estBloque ||
-                                displayData.estFerme ? (
-                                  <span className="badge bg-danger bg-opacity-10 text-danger border border-danger small">
-                                    <FontAwesomeIcon
-                                      icon={faBan}
-                                      className="me-1"
-                                    />
-                                    {displayData.estBloque
-                                      ? "Bloquée"
-                                      : "Fermée"}
-                                  </span>
-                                ) : displayData.statut === "actif" ? (
-                                  <span className="badge bg-success bg-opacity-10 text-success border border-success small">
-                                    <FontAwesomeIcon
-                                      icon={faCheckCircle}
-                                      className="me-1"
-                                    />
-                                    Active
-                                  </span>
-                                ) : displayData.statut === "en_attente" ? (
-                                  <span className="badge bg-warning bg-opacity-10 text-warning border border-warning small">
-                                    <FontAwesomeIcon
-                                      icon={faClock}
-                                      className="me-1"
-                                    />
-                                    En attente
-                                  </span>
-                                ) : (
-                                  <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary small">
-                                    <FontAwesomeIcon
-                                      icon={faQuestion}
-                                      className="me-1"
-                                    />
-                                    Inactif
-                                  </span>
-                                )}
-                              </>
-                            ) : displayData.estBloque ? (
-                              <span className="badge bg-danger bg-opacity-10 text-danger border border-danger small">
-                                <FontAwesomeIcon
-                                  icon={faBan}
-                                  className="me-1"
-                                />
-                                Bloqué
-                              </span>
-                            ) : displayData.estPublie ? (
-                              <span className="badge bg-success bg-opacity-10 text-success border border-success small">
-                                <FontAwesomeIcon
-                                  icon={faCheckCircle}
-                                  className="me-1"
-                                />
-                                Publié
-                              </span>
-                            ) : (
-                              <span className="badge bg-warning bg-opacity-10 text-warning border border-warning small">
-                                <FontAwesomeIcon
-                                  icon={faClock}
-                                  className="me-1"
-                                />
-                                Non publié
-                              </span>
-                            )}
-                            {activeSection === "produits" &&
-                              !displayData.estBloque &&
-                              displayData.note_moyenne > 0 && (
-                                <div className="mt-1">
-                                  <small className="text-warning">
-                                    <FontAwesomeIcon
-                                      icon={faStar}
-                                      className="me-1"
-                                    />
-                                    {parseFloat(
-                                      displayData.note_moyenne.toString(),
-                                    ).toFixed(1)}
-                                  </small>
-                                </div>
+                            <td>
+                              {displayData.estBloque ? (
+                                <span className="badge bg-danger bg-opacity-10 text-danger border border-danger small">
+                                  <FontAwesomeIcon
+                                    icon={faBan}
+                                    className="me-1"
+                                  />
+                                  Bloqué
+                                </span>
+                              ) : displayData.estPublie ? (
+                                <span className="badge bg-success bg-opacity-10 text-success border border-success small">
+                                  <FontAwesomeIcon
+                                    icon={faCheckCircle}
+                                    className="me-1"
+                                  />
+                                  Publié
+                                </span>
+                              ) : (
+                                <span className="badge bg-warning bg-opacity-10 text-warning border border-warning small">
+                                  <FontAwesomeIcon
+                                    icon={faClock}
+                                    className="me-1"
+                                  />
+                                  Non publié
+                                </span>
                               )}
-                          </td>
-                          <td>
-                            <span className="badge bg-info bg-opacity-10 text-info border border-info small">
-                              {displayData.categorie}
-                            </span>
-                          </td>
-                          <td>
-                            <small className="text-muted">
-                              {formatDate(displayData.date)}
-                            </small>
-                          </td>
-                          <td className="text-end pe-3">
-                            <div
-                              className="btn-group btn-group-sm"
-                              role="group"
-                            >
-                              <button
-                                className="btn btn-outline-primary"
-                                title="Voir"
-                                onClick={() =>
-                                  router.push(
-                                    `/dashboard/${activeSection}/${displayData.uuid}`,
-                                  )
-                                }
+                              {activeSection === "produits" &&
+                                !displayData.estBloque &&
+                                displayData.note_moyenne > 0 && (
+                                  <div className="mt-1">
+                                    <small className="text-warning">
+                                      <FontAwesomeIcon
+                                        icon={faStar}
+                                        className="me-1"
+                                      />
+                                      {parseFloat(
+                                        displayData.note_moyenne.toString(),
+                                      ).toFixed(1)}
+                                    </small>
+                                  </div>
+                                )}
+                            </td>
+                            <td>
+                              <span className="badge bg-info bg-opacity-10 text-info border border-info small">
+                                {displayData.categorie}
+                              </span>
+                            </td>
+                            <td className="text-center">
+                              <span className="badge bg-danger bg-opacity-10 text-danger border-0">
+                                <FontAwesomeIcon icon={faHeart} className="me-1" />
+                                {displayData.nombre_favoris || 0}
+                              </span>
+                            </td>
+                            <td>
+                              <small className="text-muted">
+                                {formatDate(displayData.date)}
+                              </small>
+                            </td>
+                            <td className="text-end pe-3">
+                              <div
+                                className="btn-group btn-group-sm"
+                                role="group"
                               >
-                                <FontAwesomeIcon icon={faEye} />
-                              </button>
-                              <button
-                                className="btn btn-outline-success"
-                                title="Modifier"
-                                onClick={() =>
-                                  router.push(
-                                    `/dashboard/${activeSection}/${displayData.uuid}/edit`,
-                                  )
-                                }
-                              >
-                                <FontAwesomeIcon icon={faEdit} />
-                              </button>
-                              <button
-                                className="btn btn-outline-danger"
-                                title="Supprimer"
-                                onClick={() => {
-                                  if (
-                                    window.confirm(
-                                      "Êtes-vous sûr de vouloir supprimer cet élément ?",
+                                <button
+                                  className="btn btn-outline-primary"
+                                  title="Voir"
+                                  onClick={() =>
+                                    router.push(
+                                      `/dashboard-vendeur/${activeSection}/${displayData.uuid}`,
                                     )
-                                  ) {
-                                    // Logique de suppression
                                   }
-                                }}
-                              >
-                                <FontAwesomeIcon icon={faTrash} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                                >
+                                  <FontAwesomeIcon icon={faEye} />
+                                </button>
+                                <button
+                                  className="btn btn-outline-success"
+                                  title="Modifier"
+                                  onClick={() =>
+                                    router.push(
+                                      `/dashboard-vendeur/${activeSection}/${displayData.uuid}/edit`,
+                                    )
+                                  }
+                                >
+                                  <FontAwesomeIcon icon={faEdit} />
+                                </button>
+                                <button
+                                  className="btn btn-outline-danger"
+                                  title="Supprimer"
+                                  onClick={() => {
+                                    if (
+                                      window.confirm(
+                                        "Êtes-vous sûr de vouloir supprimer cet élément ?",
+                                      )
+                                    ) {
+                                      // Logique de suppression
+                                    }
+                                  }}
+                                >
+                                  <FontAwesomeIcon icon={faTrash} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Pagination */}
+            {filteredData.length > 10 && (
+              <div className="card-footer bg-white border-0 py-2 py-md-3">
+                <div className="d-flex justify-content-between align-items-center">
+                  <div>
+                    <p className="mb-0 text-muted small">
+                      Affichage de <strong>1</strong> à{" "}
+                      <strong>{Math.min(10, filteredData.length)}</strong> sur{" "}
+                      <strong>{filteredData.length}</strong> éléments
+                    </p>
+                  </div>
+                  <nav>
+                    <ul className="pagination pagination-sm mb-0">
+                      <li className="page-item">
+                        <button className="page-link" aria-label="Précédent">
+                          <FontAwesomeIcon icon={faChevronLeft} />
+                        </button>
+                      </li>
+                      <li className="page-item active">
+                        <button className="page-link">1</button>
+                      </li>
+                      <li className="page-item">
+                        <button className="page-link">2</button>
+                      </li>
+                      <li className="page-item">
+                        <button className="page-link">3</button>
+                      </li>
+                      <li className="page-item">
+                        <button className="page-link" aria-label="Suivant">
+                          <FontAwesomeIcon icon={faChevronRight} />
+                        </button>
+                      </li>
+                    </ul>
+                  </nav>
+                </div>
               </div>
             )}
           </div>
-
-          {/* Pagination */}
-          {filteredData.length > 10 && (
-            <div className="card-footer bg-white border-0 py-2 py-md-3">
-              <div className="d-flex justify-content-between align-items-center">
-                <div>
-                  <p className="mb-0 text-muted small">
-                    Affichage de <strong>1</strong> à{" "}
-                    <strong>{Math.min(10, filteredData.length)}</strong> sur{" "}
-                    <strong>{filteredData.length}</strong> éléments
-                  </p>
-                </div>
-                <nav>
-                  <ul className="pagination pagination-sm mb-0">
-                    <li className="page-item">
-                      <button className="page-link" aria-label="Précédent">
-                        <FontAwesomeIcon icon={faChevronLeft} />
-                      </button>
-                    </li>
-                    <li className="page-item active">
-                      <button className="page-link">1</button>
-                    </li>
-                    <li className="page-item">
-                      <button className="page-link">2</button>
-                    </li>
-                    <li className="page-item">
-                      <button className="page-link">3</button>
-                    </li>
-                    <li className="page-item">
-                      <button className="page-link" aria-label="Suivant">
-                        <FontAwesomeIcon icon={faChevronRight} />
-                      </button>
-                    </li>
-                  </ul>
-                </nav>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Section informations */}
-        <div className="row g-3 g-md-4 mt-4">
-          <div className="col-md-6">
-            <div className="card border-0 shadow-sm h-100">
-              <div className="card-body p-3 p-md-4">
-                <h5 className="card-title fw-bold mb-3 h6">
-                  <FontAwesomeIcon
-                    icon={faInfoCircle}
-                    className="me-2 text-info"
-                  />
-                  Résumé de vos activités
-                </h5>
-                <div className="list-group list-group-flush">
-                  <div className="list-group-item border-0 px-0 py-2">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <span className="small">Boutiques créées</span>
-                      <span className="fw-bold">{stats?.totalBoutiques || 0}</span>
-                    </div>
-                  </div>
-                  <div className="list-group-item border-0 px-0 py-2">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <span className="small">Produits créés</span>
-                      <span className="fw-bold">{stats?.totalProduits || 0}</span>
-                    </div>
-                  </div>
-                  <div className="list-group-item border-0 px-0 py-2">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <span className="small">Dons créés</span>
-                      <span className="fw-bold">{stats?.totalDons || 0}</span>
-                    </div>
-                  </div>
-                  <div className="list-group-item border-0 px-0 py-2">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <span className="small">Échanges créés</span>
-                      <span className="fw-bold">{stats?.totalEchanges || 0}</span>
-                    </div>
-                  </div>
-                  <div className="list-group-item border-0 px-0 py-2">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <span className="small">Valeur totale du stock</span>
-                      <span className="fw-bold text-success small">
-                        {formatPrix(stats?.revenusTotaux || 0)}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="list-group-item border-0 px-0 py-2">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <span className="small">Contenu bloqué</span>
-                      <span className="fw-bold text-danger">
-                        {(stats?.produitsBloques || 0) +
-                          (stats?.donsBloques || 0) +
-                          (stats?.echangesBloques || 0)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="col-md-6">
-            <div className="card border-0 shadow-sm h-100">
-              <div className="card-body p-3 p-md-4">
-                <h5 className="card-title fw-bold mb-3 h6">
-                  <FontAwesomeIcon
-                    icon={faBolt}
-                    className="me-2 text-warning"
-                  />
-                  Actions rapides
-                </h5>
-                <div className="d-grid gap-2">
-                  {activeSection === "produits" && (
-                    <>
-                      <Link
-                        href="/dashboard/produits/create"
-                        className="btn btn-success btn-sm"
-                      >
-                        <FontAwesomeIcon icon={faPlus} className="me-2" />
-                        Ajouter un produit
-                      </Link>
-                      <button className="btn btn-outline-success btn-sm">
-                        <FontAwesomeIcon icon={faDownload} className="me-2" />
-                        Exporter mes produits
-                      </button>
-                    </>
-                  )}
-                  {activeSection === "dons" && (
-                    <>
-                      <Link
-                        href="/dashboard/dons/create"
-                        className="btn btn-warning btn-sm"
-                      >
-                        <FontAwesomeIcon icon={faPlus} className="me-2" />
-                        Créer un don
-                      </Link>
-                      <button className="btn btn-outline-warning btn-sm">
-                        <FontAwesomeIcon icon={faDownload} className="me-2" />
-                        Exporter mes dons
-                      </button>
-                    </>
-                  )}
-                  {activeSection === "echanges" && (
-                    <>
-                      <Link
-                        href="/dashboard/echanges/create"
-                        className="btn btn-info btn-sm"
-                      >
-                        <FontAwesomeIcon icon={faPlus} className="me-2" />
-                        Proposer un échange
-                      </Link>
-                      <button className="btn btn-outline-info btn-sm">
-                        <FontAwesomeIcon icon={faDownload} className="me-2" />
-                        Exporter mes échanges
-                      </button>
-                    </>
-                  )}
-                  {activeSection === "boutiques" && (
-                    <>
-                      <Link
-                        href="/dashboard/boutiques/create"
-                        className="btn btn-primary btn-sm"
-                      >
-                        <FontAwesomeIcon icon={faPlus} className="me-2" />
-                        Créer une boutique
-                      </Link>
-                      <button className="btn btn-outline-primary btn-sm">
-                        <FontAwesomeIcon icon={faDownload} className="me-2" />
-                        Gérer mes boutiques
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
 
       <style jsx global>{`
-        .gradient-text {
-          background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-        }
-
         .hero-gradient {
           background: linear-gradient(
             135deg,

@@ -1,4 +1,4 @@
-// components/DataTable.tsx
+// app/(back-office)/dashboard-utilisateur/annonces/components/DataTable.tsx
 "use client";
 
 import { useState, useMemo } from "react";
@@ -21,14 +21,9 @@ import {
   faArrowRightArrowLeft,
   faSpinner,
   faExclamationTriangle,
-  faStore,
-  faUser,
-  faCheckSquare,
-  faSquare,
   faChevronDown,
   faChevronUp,
   faListCheck,
-  faEllipsisVertical,
 } from "@fortawesome/free-solid-svg-icons";
 import colors from "@/app/shared/constants/colors";
 import {
@@ -174,15 +169,8 @@ export default function DataTable({
       color = colors.status.published;
       icon = faGlobe;
     } else if (status === "en-attente" || status === "en_attente") {
+      status = "en-attente";
       color = colors.status.pending;
-    } else if (status === "valide") {
-      color = colors.status.validated;
-      icon = faCheck;
-    } else if (status === "refuse") {
-      color = colors.oskar.red;
-      icon = faXmark;
-    } else if (status === "disponible") {
-      color = colors.status.available;
     }
 
     return {
@@ -360,7 +348,7 @@ export default function DataTable({
             onClick={onRefresh}
             style={{
               backgroundColor: colors.oskar.blueHover,
-              color: colors.oskar.lightGrey,
+              color: "white",
               border: "none",
               padding: "0.375rem 0.75rem",
               borderRadius: "6px",
@@ -419,7 +407,7 @@ export default function DataTable({
                 onClick={() => handleBulkAction("publish")}
                 style={{
                   backgroundColor: colors.status.published,
-                  color: colors.oskar.lightGray,
+                  color: "white",
                   border: "none",
                   padding: "0.25rem 0.5rem",
                   borderRadius: "4px",
@@ -436,7 +424,7 @@ export default function DataTable({
                 onClick={() => handleBulkAction("unpublish")}
                 style={{
                   backgroundColor: colors.oskar.warning,
-                  color: colors.oskar.lightGray,
+                  color: "white",
                   border: "none",
                   padding: "0.25rem 0.5rem",
                   borderRadius: "4px",
@@ -453,7 +441,7 @@ export default function DataTable({
                 onClick={() => handleBulkAction("block")}
                 style={{
                   backgroundColor: colors.status.blocked,
-                  color: colors.oskar.lightGray,
+                  color: "white",
                   border: "none",
                   padding: "0.25rem 0.5rem",
                   borderRadius: "4px",
@@ -470,7 +458,7 @@ export default function DataTable({
                 onClick={() => handleBulkAction("delete")}
                 style={{
                   backgroundColor: colors.oskar.red,
-                  color: colors.oskar.lightGrey,
+                  color: "white",
                   border: "none",
                   padding: "0.25rem 0.5rem",
                   borderRadius: "4px",
@@ -608,17 +596,13 @@ export default function DataTable({
                           </p>
                         )}
 
-                        {isExpanded && item.originalData && (
+                        {isExpanded && (
                           <div
                             className="mt-2 p-2 border rounded"
                             style={{ fontSize: "0.75rem" }}
                           >
                             <div className="row">
                               <div className="col-12">
-                                <span className="text-muted">UUID:</span>{" "}
-                                <span className="fw-medium">{item.uuid}</span>
-                              </div>
-                              <div className="col-12 mt-1">
                                 <span className="text-muted">Catégorie:</span>{" "}
                                 <span className="fw-medium">
                                   {item.category || "Non définie"}

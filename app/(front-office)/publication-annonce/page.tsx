@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, ChangeEvent, useEffect } from "react";
+import { useState, ChangeEvent, useEffect, useCallback, useRef } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faStore,
@@ -50,7 +50,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  
+
   // État pour les catégories
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
@@ -66,6 +66,9 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
 
   // État pour le modal d'inscription vendeur
   const [showVendeurRegisterModal, setShowVendeurRegisterModal] = useState(false);
+
+  // Référence pour suivre si la boutique a été présélectionnée
+  const boutiquePreselectedRef = useRef(false);
 
   const [donData, setDonData] = useState<DonData>({
     description: "",
@@ -124,15 +127,46 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     null,
   );
 
+  // COULEURS POUR CHAQUE TYPE D'ANNONCE
+  const colorsByType = {
+    don: {
+      primary: "#8b5cf6", // Violet
+      light: "#ede9fe",   // Violet très clair
+      gradient: "linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)",
+      iconBg: "#f5f3ff",
+      border: "#8b5cf6",
+      text: "text-violet-600",
+      bg: "bg-violet-50",
+    },
+    exchange: {
+      primary: "#007aff", // Bleu
+      light: "#e6f2ff",
+      gradient: "linear-gradient(135deg, #007aff 0%, #5856d6 100%)",
+      iconBg: "#e6f2ff",
+      border: "#007aff",
+      text: "text-blue-600",
+      bg: "bg-blue-50",
+    },
+    sale: {
+      primary: "#34c759", // Vert
+      light: "#e6f7ec",
+      gradient: "linear-gradient(135deg, #34c759 0%, #30b0c7 100%)",
+      iconBg: "#e6f7ec",
+      border: "#34c759",
+      text: "text-green-600",
+      bg: "bg-green-50",
+    },
+  };
+
   const adTypeOptions: AdTypeOption[] = [
     {
       id: "don",
       title: "Faire un Don",
       description: "Offrez gratuitement à votre communauté",
       icon: faHandHoldingHeart,
-      color: "warning",
-      gradient: "linear-gradient(135deg, #ff9500 0%, #ff5e3a 100%)",
-      iconBg: "#fff4e6",
+      color: "violet",
+      gradient: colorsByType.don.gradient,
+      iconBg: colorsByType.don.iconBg,
     },
     {
       id: "exchange",
@@ -140,8 +174,8 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       description: "Trouvez ce dont vous avez besoin",
       icon: faArrowsRotate,
       color: "primary",
-      gradient: "linear-gradient(135deg, #007aff 0%, #5856d6 100%)",
-      iconBg: "#e6f2ff",
+      gradient: colorsByType.exchange.gradient,
+      iconBg: colorsByType.exchange.iconBg,
     },
     {
       id: "sale",
@@ -149,8 +183,8 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       description: "Gagnez de l'argent localement",
       icon: faSaleTag,
       color: "success",
-      gradient: "linear-gradient(135deg, #34c759 0%, #30b0c7 100%)",
-      iconBg: "#e6f7ec",
+      gradient: colorsByType.sale.gradient,
+      iconBg: colorsByType.sale.iconBg,
     },
   ];
 
@@ -279,7 +313,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     }
   }, [visible]);
 
-  // Charger les boutiques seulement si c'est un vendeur - UTILISER api CLIENT
+  // ✅ CHARGER LES BOUTIQUES - VERSION QUI FONCTIONNE
   useEffect(() => {
     const fetchBoutiques = async () => {
       if (!isLoggedIn || adType !== "sale" || !isVendeur) {
@@ -289,8 +323,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
 
       try {
         console.log("🛍️ Chargement des boutiques avec api client...");
-        
-        // ✅ UTILISER api.get AU LIEU DE fetch DIRECT
+
         const response = await api.get(API_ENDPOINTS.BOUTIQUES.LISTE_BOUTIQUES_CREE_PAR_VENDEUR);
         console.log("🛍️ Réponse boutiques:", response);
 
@@ -320,10 +353,18 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
           setCreatedBoutiqueUuid(null);
           setCreatedBoutiqueNom(null);
         }
-        else if (boutiquesActives.length > 0 && !venteData.boutiqueUuid) {
+        else if (boutiquesActives.length > 0 && !venteData.boutiqueUuid && !boutiquePreselectedRef.current) {
           const premiereBoutique = boutiquesActives[0];
-          handleBoutiqueChange(premiereBoutique.uuid, premiereBoutique.nom);
           console.log(`✅ Boutique présélectionnée: ${premiereBoutique.nom}`);
+          
+          // Mettre à jour l'état de manière synchrone
+          setVenteData(prev => ({
+            ...prev,
+            boutiqueUuid: premiereBoutique.uuid,
+            boutiqueNom: premiereBoutique.nom,
+          }));
+          
+          boutiquePreselectedRef.current = true;
         }
       } catch (err) {
         console.error("❌ Erreur chargement boutiques:", err);
@@ -334,7 +375,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     if (visible && isLoggedIn && adType === "sale" && isVendeur) {
       fetchBoutiques();
     }
-  }, [visible, isLoggedIn, adType, isVendeur, venteData.boutiqueUuid, createdBoutiqueUuid, createdBoutiqueNom]);
+  }, [visible, isLoggedIn, adType, isVendeur, createdBoutiqueUuid, createdBoutiqueNom]);
 
   // Mettre à jour selectedBoutique quand boutiqueUuid change
   useEffect(() => {
@@ -346,11 +387,12 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     }
   }, [venteData.boutiqueUuid, boutiques]);
 
-  // Réinitialiser quand le type d'annonce change
+  // Réinitialiser la référence quand le type d'annonce change
   useEffect(() => {
     if (adType !== "sale") {
       setShowBoutiqueModal(false);
       setPendingVenteData(null);
+      boutiquePreselectedRef.current = false;
     }
   }, [adType]);
 
@@ -449,6 +491,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     setSubmitError(null);
     setShowBoutiqueModal(false);
     setPendingVenteData(null);
+    boutiquePreselectedRef.current = false;
   };
 
   const handleBoutiqueChange = (
@@ -463,15 +506,13 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     });
   };
 
-  // ✅ VERSION CORRIGÉE DE handleCreateBoutique
   const handleCreateBoutique = async (formData: FormData) => {
     setLoadingBoutique(true);
     setSubmitError(null);
 
     try {
       console.log("🏪 Création de boutique avec données:");
-      
-      // Afficher le contenu du FormData pour déboguer
+
       const formDataEntries: any = {};
       for (const [key, value] of formData.entries()) {
         if (value instanceof File) {
@@ -482,14 +523,12 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       }
       console.log("📦 FormData envoyé:", formDataEntries);
 
-      // ✅ UTILISER api.post AVEC isFormData: true
-      const response = await api.post(API_ENDPOINTS.BOUTIQUES.CREATE, formData, { 
-        isFormData: true 
+      const response = await api.post(API_ENDPOINTS.BOUTIQUES.CREATE, formData, {
+        isFormData: true
       });
-      
+
       console.log("✅ Boutique créée avec succès:", response);
 
-      // Récupérer l'UUID de la boutique créée - GESTION ROBUSTE
       const newBoutiqueUuid = response?.boutique?.uuid || response?.uuid || response?.data?.uuid;
       const newBoutiqueNom = response?.boutique?.nom || response?.nom || formData.get("nom") as string;
 
@@ -502,14 +541,13 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
 
       setCreatedBoutiqueUuid(newBoutiqueUuid);
       setCreatedBoutiqueNom(newBoutiqueNom);
-      
-      // Rafraîchir la liste des boutiques après création
+
       setTimeout(() => {
         const fetchUpdatedBoutiques = async () => {
           try {
             console.log("🔄 Rafraîchissement de la liste des boutiques...");
             const response = await api.get(API_ENDPOINTS.BOUTIQUES.LISTE_BOUTIQUES_CREE_PAR_VENDEUR);
-            
+
             let boutiquesData: Boutique[] = [];
             if (Array.isArray(response)) {
               boutiquesData = response;
@@ -518,7 +556,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
             } else if (response && response.data && Array.isArray(response.data.data)) {
               boutiquesData = response.data.data;
             }
-            
+
             console.log(`✅ ${boutiquesData.length} boutiques chargées après création`);
             setBoutiques(boutiquesData);
           } catch (err) {
@@ -531,7 +569,6 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       setShowBoutiqueModal(false);
       setBoutiqueCreationSuccess(true);
 
-      // Mettre à jour les données de vente avec la nouvelle boutique
       if (pendingVenteData) {
         console.log("🔄 Mise à jour des données de vente avec la nouvelle boutique:", {
           uuid: newBoutiqueUuid,
@@ -548,11 +585,9 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       setTimeout(() => setBoutiqueCreationSuccess(false), 3000);
     } catch (error: any) {
       console.error("❌ Erreur création boutique:", error);
-      
-      // Message d'erreur plus explicite
+
       let errorMessage = "Erreur lors de la création de la boutique";
-      
-      // Gestion détaillée des erreurs
+
       if (error.response?.status === 401) {
         errorMessage = "Votre session a expiré. Veuillez vous reconnecter.";
         onLoginRequired();
@@ -563,7 +598,6 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         if (data?.message) {
           errorMessage = data.message;
         } else if (data?.errors) {
-          // Si l'API retourne un objet d'erreurs
           if (typeof data.errors === 'object') {
             errorMessage = Object.values(data.errors).flat().join(", ");
           } else {
@@ -577,7 +611,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
+
       setSubmitError(errorMessage);
     } finally {
       setLoadingBoutique(false);
@@ -585,26 +619,38 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
   };
 
   const submitDon = async (): Promise<void> => {
+    if (!donData.titre?.trim()) {
+      setSubmitError("Le titre du don est obligatoire");
+      return;
+    }
+
+    if (!donData.lieu_retrait?.trim()) {
+      setSubmitError("Le lieu de retrait est obligatoire");
+      return;
+    }
+
+    const categorieAEnvoyer = donData.sous_categorie_uuid || donData.categorie_uuid;
+    if (!categorieAEnvoyer) {
+      setSubmitError("Veuillez sélectionner une catégorie");
+      return;
+    }
+
+    if (!donData.image) {
+      setSubmitError("Veuillez ajouter une photo");
+      return;
+    }
+
     const formData = new FormData();
 
-    formData.append("type_don", donData.type_don.trim());
     formData.append("nom", donData.titre.trim());
-    formData.append("localisation", donData.localisation.trim());
-    formData.append("description", donData.description.trim());
     formData.append("lieu_retrait", donData.lieu_retrait.trim());
-    
-    // ✅ Utiliser final_categorie_uuid s'il existe, sinon categorie_uuid
-    const categorieAEnvoyer = donData.final_categorie_uuid || donData.categorie_uuid;
     formData.append("categorie_uuid", categorieAEnvoyer);
-    
-    // Optionnel: si vous voulez garder la sous-catégorie pour référence
-    if (donData.sous_categorie_uuid) {
-      formData.append("sous_categorie_uuid", donData.sous_categorie_uuid);
-    }
-    
-    formData.append("quantite", donData.quantite);
-    formData.append("numero", donData.numero.trim());
-    formData.append("nom_donataire", donData.nom_donataire.trim());
+    formData.append("type_don", "don");
+    formData.append("localisation", donData.lieu_retrait.trim());
+    formData.append("numero", donData.numero?.trim() || "");
+    formData.append("nom_donataire", donData.nom_donataire?.trim() || "");
+    formData.append("quantite", donData.quantite?.toString() || "1");
+    formData.append("description", donData.description?.trim() || "");
 
     if (donData.condition) {
       formData.append("condition", donData.condition);
@@ -622,38 +668,55 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
   };
 
   const submitEchange = async (): Promise<void> => {
+    if (!echangeData.nomElementEchange?.trim()) {
+      setSubmitError("Le titre de l'échange est obligatoire");
+      return;
+    }
+
+    if (!echangeData.objetDemande?.trim()) {
+      setSubmitError("L'objet recherché est obligatoire");
+      return;
+    }
+
+    if (!echangeData.prix?.trim()) {
+      setSubmitError("Le prix estimé est obligatoire");
+      return;
+    }
+
+    const categorieAEnvoyer = echangeData.final_categorie_uuid || echangeData.categorie_uuid;
+    if (!categorieAEnvoyer) {
+      setSubmitError("Veuillez sélectionner une catégorie");
+      return;
+    }
+
+    if (!echangeData.image) {
+      setSubmitError("Veuillez ajouter une photo");
+      return;
+    }
+
     const formData = new FormData();
 
     formData.append("nomElementEchange", echangeData.nomElementEchange.trim());
-    formData.append("numero", echangeData.numero.trim());
-    formData.append("nom_initiateur", echangeData.nom_initiateur);
-    formData.append("typeEchange", echangeData.typeEchange);
-    formData.append("objetPropose", echangeData.objetPropose.trim());
     formData.append("objetDemande", echangeData.objetDemande.trim());
-    formData.append("message", echangeData.message.trim());
-    
-    // ✅ Utiliser final_categorie_uuid s'il existe, sinon categorie_uuid
-    const categorieAEnvoyer = echangeData.final_categorie_uuid || echangeData.categorie_uuid;
+    formData.append("prix", echangeData.prix.trim());
     formData.append("categorie_uuid", categorieAEnvoyer);
-    
+    formData.append("image", echangeData.image);
+    formData.append("objetPropose", echangeData.objetDemande.trim() || "Objet à échanger");
+    formData.append("quantite", echangeData.quantite?.toString() || "1");
+    formData.append("message", echangeData.message?.trim() || "");
+    formData.append("nom_initiateur", "vendeur");
+    formData.append("type_destinataire", "autre");
+    formData.append("typeEchange", "produit");
+    formData.append("numero", echangeData.numero?.trim() || "+2250000000000");
+
     if (echangeData.sous_categorie_uuid) {
       formData.append("sous_categorie_uuid", echangeData.sous_categorie_uuid);
-    }
-    
-    formData.append("quantite", echangeData.quantite);
-    formData.append("type_destinataire", echangeData.type_destinataire);
-
-    if (echangeData.prix) {
-      formData.append("prix", echangeData.prix);
-    }
-
-    if (echangeData.image) {
-      formData.append("image", echangeData.image);
     }
 
     await sendFormData(formData, API_ENDPOINTS.ECHANGES.CREATE, "échange");
   };
 
+  // ✅ VERSION VENTE - INCHANGÉE (FONCTIONNE)
   const submitVente = async (): Promise<void> => {
     console.log("🚀 Début submitVente");
     console.log("📊 État venteData:", venteData);
@@ -682,15 +745,14 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     formData.append("libelle", venteData.libelle.trim());
     formData.append("type", venteData.type.trim());
     formData.append("disponible", String(venteData.disponible));
-    
-    // ✅ Utiliser final_categorie_uuid s'il existe, sinon categorie_uuid
+
     const categorieAEnvoyer = venteData.final_categorie_uuid || venteData.categorie_uuid;
     formData.append("categorie_uuid", categorieAEnvoyer);
-    
+
     if (venteData.sous_categorie_uuid) {
       formData.append("sous_categorie_uuid", venteData.sous_categorie_uuid);
     }
-    
+
     formData.append("statut", venteData.statut);
     formData.append("etoile", venteData.etoile);
     formData.append("prix", venteData.prix.trim());
@@ -718,10 +780,8 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     try {
       console.log(`📤 Envoi ${type} vers:`, endpoint);
 
-      // ✅ UTILISER api.post AU LIEU DE fetch
-      // Le api-client gère automatiquement l'authentification
       const result = await api.post(endpoint, formData, { isFormData: true });
-      
+
       console.log(`✅ ${type} créé avec succès:`, result);
 
       resetForm();
@@ -754,7 +814,6 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         errorMessage = "Veuillez vérifier les informations du formulaire";
       } else if (errorMessage.includes("401")) {
         errorMessage = "Session expirée. Veuillez vous reconnecter";
-        // Déclencher une déconnexion
         localStorage.removeItem("oskar_token");
         localStorage.removeItem("temp_token");
         localStorage.removeItem("tempToken");
@@ -784,22 +843,14 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       return;
     }
 
+    // Petite pause pour s'assurer que l'état est bien à jour
+    await new Promise(resolve => setTimeout(resolve, 50));
+
     if (adType === "sale" && isVendeur && !venteData.boutiqueUuid) {
       setSubmitError(
         "Veuillez sélectionner une boutique pour vendre ce produit",
       );
       return;
-    }
-
-    if (adType === "don") {
-      if (!donData.type_don?.trim()) {
-        setSubmitError("Le champ 'Type de don' est obligatoire");
-        return;
-      }
-      if (!donData.localisation?.trim()) {
-        setSubmitError("Le champ 'Localisation' est obligatoire");
-        return;
-      }
     }
 
     try {
@@ -878,6 +929,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     setSelectedBoutique(null);
     setShowBoutiqueModal(false);
     setPendingVenteData(null);
+    boutiquePreselectedRef.current = false;
   };
 
   const renderStep1 = () => (
@@ -892,78 +944,96 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         <p className="text-muted fs-5">Choisissez le type d'annonce</p>
       </div>
       <div className="row g-4">
-        {adTypeOptions.map((option) => (
-          <div key={option.id} className="col-md-4">
-            <div
-              className={`card h-100 border-0 shadow-lg-hover cursor-pointer ${
-                adType === option.id ? "border-3 border-" + option.color : ""
-              }`}
-              onClick={() => selectAdType(option.id)}
-              style={{
-                minHeight: "280px",
-                borderRadius: "20px",
-                background: adType === option.id ? option.gradient : "white",
-              }}
-            >
-              <div className="card-body d-flex flex-column align-items-center justify-content-center text-center p-4">
-                <div
-                  className="rounded-circle p-4 mb-4"
-                  style={{
-                    background: adType === option.id ? "white" : option.iconBg,
-                    transform: adType === option.id ? "scale(1.1)" : "scale(1)",
-                  }}
-                >
-                  <FontAwesomeIcon
-                    icon={option.icon}
-                    className={`fs-1 ${
-                      adType === option.id
-                        ? "text-" + option.color
-                        : "text-" + option.color
-                    }`}
-                  />
-                </div>
-                <h4
-                  className={`fw-bold mb-3 ${
-                    adType === option.id ? "text-white" : "text-dark"
-                  }`}
-                >
-                  {option.title}
-                </h4>
-                <p
-                  className={`mb-4 ${
-                    adType === option.id
-                      ? "text-white text-opacity-90"
-                      : "text-muted"
-                  }`}
-                >
-                  {option.description}
-                </p>
-                <div
-                  className={`rounded-circle border-2 d-flex align-items-center justify-content-center ${
-                    adType === option.id ? "border-white" : "border-light"
-                  }`}
-                  style={{ width: "28px", height: "28px" }}
-                >
-                  {adType === option.id && (
+        {adTypeOptions.map((option) => {
+          const isSelected = adType === option.id;
+          const typeColors = colorsByType[option.id as keyof typeof colorsByType];
+
+          return (
+            <div key={option.id} className="col-md-4">
+              <div
+                className={`card h-100 border-0 shadow-lg-hover cursor-pointer transition-all`}
+                onClick={() => selectAdType(option.id)}
+                style={{
+                  minHeight: "280px",
+                  borderRadius: "20px",
+                  background: isSelected ? typeColors.gradient : "white",
+                  border: isSelected ? 'none' : `2px solid ${typeColors.light}`,
+                  transform: isSelected ? 'scale(1.02)' : 'scale(1)',
+                  transition: 'all 0.3s ease',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isSelected) {
+                    e.currentTarget.style.transform = 'scale(1.02)';
+                    e.currentTarget.style.boxShadow = `0 10px 25px -5px ${typeColors.primary}40`;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isSelected) {
+                    e.currentTarget.style.transform = 'scale(1)';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }
+                }}
+              >
+                <div className="card-body d-flex flex-column align-items-center justify-content-center text-center p-4">
+                  <div
+                    className="rounded-circle p-4 mb-4 transition-all"
+                    style={{
+                      background: isSelected ? "white" : typeColors.light,
+                      transform: isSelected ? "scale(1.1)" : "scale(1)",
+                    }}
+                  >
                     <FontAwesomeIcon
-                      icon={faCheckCircle}
-                      className="text-white"
+                      icon={option.icon}
+                      className="fs-1"
+                      style={{
+                        color: isSelected ? typeColors.primary : typeColors.primary,
+                      }}
                     />
+                  </div>
+                  <h4
+                    className="fw-bold mb-3"
+                    style={{
+                      color: isSelected ? "white" : colors.oskar.black,
+                    }}
+                  >
+                    {option.title}
+                  </h4>
+                  <p
+                    className="mb-4"
+                    style={{
+                      color: isSelected ? "rgba(255,255,255,0.9)" : colors.oskar.black,
+                    }}
+                  >
+                    {option.description}
+                  </p>
+                  {isSelected && (
+                    <div className="rounded-circle bg-white d-flex align-items-center justify-content-center"
+                      style={{ width: "28px", height: "28px" }}
+                    >
+                      <FontAwesomeIcon
+                        icon={faCheckCircle}
+                        style={{ color: typeColors.primary }}
+                      />
+                    </div>
                   )}
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 
   if (!visible) return null;
 
+  const getHeaderBackground = () => {
+    if (!adType) return "white";
+    return colorsByType[adType].light;
+  };
+
   return (
     <>
-      {/* Notification de succès */}
       {successMessage && (
         <div
           className="position-fixed top-0 start-50 translate-middle-x mt-4"
@@ -1063,13 +1133,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
             <div
               className="modal-header border-bottom-0 pb-0 position-relative"
               style={{
-                background: adType
-                  ? adType === "don"
-                    ? "linear-gradient(135deg, #fff4e6 0%, #ffffff 100%)"
-                    : adType === "exchange"
-                      ? "linear-gradient(135deg, #e6f2ff 0%, #ffffff 100%)"
-                      : "linear-gradient(135deg, #e6f7ec 0%, #ffffff 100%)"
-                  : "white",
+                background: getHeaderBackground(),
               }}
             >
               <div className="w-100">
@@ -1148,21 +1212,21 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
             >
               <form onSubmit={handleSubmit}>
                 {step === 1 && renderStep1()}
-                
-{adType === "don" && (
-  <DonForm
-    donData={donData}
-    conditions={conditions}
-    imagePreview={imagePreview}
-    onChange={setDonData}
-    onImageUpload={handleImageUpload}
-    onRemoveImage={removeImage}
-    step={step}
-    categories={categories}
-    sous_categorie_uuid={donData.sous_categorie_uuid}
-  />
-)}
-                
+
+                {adType === "don" && (
+                  <DonForm
+                    donData={donData}
+                    conditions={conditions}
+                    imagePreview={imagePreview}
+                    onChange={setDonData}
+                    onImageUpload={handleImageUpload}
+                    onRemoveImage={removeImage}
+                    step={step}
+                    categories={categories}
+                    sous_categorie_uuid={donData.sous_categorie_uuid}
+                  />
+                )}
+
                 {adType === "exchange" && (
                   <EchangeForm
                     echangeData={echangeData}
@@ -1216,11 +1280,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
                       className="btn btn-primary px-4 py-3 rounded-pill fw-semibold shadow-sm"
                       style={{
                         background: adType
-                          ? adType === "don"
-                            ? "linear-gradient(135deg, #ff9500 0%, #ff5e3a 100%)"
-                            : adType === "exchange"
-                              ? "linear-gradient(135deg, #007aff 0%, #5856d6 100%)"
-                              : "linear-gradient(135deg, #34c759 0%, #30b0c7 100%)"
+                          ? colorsByType[adType].gradient
                           : colors.oskar.green,
                         border: "none",
                       }}
@@ -1245,8 +1305,9 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
                         className="btn btn-success px-4 py-3 rounded-pill fw-semibold shadow-sm"
                         disabled={loading || !isLoggedIn}
                         style={{
-                          background:
-                            "linear-gradient(135deg, #34c759 0%, #30b0c7 100%)",
+                          background: adType
+                            ? colorsByType[adType].gradient
+                            : "linear-gradient(135deg, #34c759 0%, #30b0c7 100%)",
                           border: "none",
                         }}
                       >
@@ -1401,6 +1462,9 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         }
         .border-dashed {
           border-style: dashed !important;
+        }
+        .transition-all {
+          transition: all 0.3s ease;
         }
       `}</style>
     </>

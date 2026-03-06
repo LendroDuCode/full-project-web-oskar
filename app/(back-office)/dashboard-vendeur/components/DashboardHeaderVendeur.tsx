@@ -888,14 +888,7 @@ export default function DashboardHeaderVendeur({
                           aria-hidden="true"
                         ></i>
                         <span>Messages</span>
-                        <span className="ms-auto">
-                          <span
-                            className="badge bg-primary rounded-pill"
-                            aria-label="Nouveaux messages"
-                          >
-                            3
-                          </span>
-                        </span>
+                        
                       </button>
 
                       {/* Favoris */}

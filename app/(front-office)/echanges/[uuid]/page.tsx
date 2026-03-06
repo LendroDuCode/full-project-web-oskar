@@ -438,7 +438,7 @@ const formatDate = (dateString: string | null | undefined): string => {
 };
 
 // ============================================
-// FONCTION DE FORMATAGE DE PRIX
+// FONCTION DE FORMATAGE DE PRIX - CORRIGÉE
 // ============================================
 const formatPrice = (price: number | null): string => {
   if (price === null || price === undefined || isNaN(price)) {
@@ -447,8 +447,10 @@ const formatPrice = (price: number | null): string => {
   if (price === 0) {
     return "Gratuit";
   }
+  // 🔥 CORRECTION: Supprimer les décimales et ajouter les séparateurs de milliers
+  const priceInt = Math.floor(price);
   return (
-    price.toLocaleString("fr-FR", {
+    priceInt.toLocaleString("fr-FR", {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }) + " FCFA"
@@ -887,7 +889,7 @@ export default function EchangeDetailPage() {
     };
   };
 
-  // ✅ FONCTION TRANSFORM COMMENTAIRE AMÉLIORÉE
+  // ? FONCTION TRANSFORM COMMENTAIRE AMÉLIORÉE
   const transformCommentaireData = (
     apiCommentaire: CommentaireAPI,
   ): Commentaire => {
@@ -971,7 +973,7 @@ export default function EchangeDetailPage() {
     }
   }, [uuid]);
 
-  // ✅ FONCTION FETCH COMMENTAIRES AMÉLIORÉE
+  // ? FONCTION FETCH COMMENTAIRES AMÉLIORÉE
   const fetchCommentaires = useCallback(
     async (echangeUuid: string) => {
       if (!echangeUuid || commentairesFetched) return;
@@ -979,7 +981,7 @@ export default function EchangeDetailPage() {
       try {
         setLoadingComments(true);
         console.log(
-          "📥 Chargement des commentaires pour l'échange:",
+          "📢 Chargement des commentaires pour l'échange:",
           echangeUuid,
         );
 
@@ -999,7 +1001,7 @@ export default function EchangeDetailPage() {
             (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
           );
 
-          console.log(`📝 ${commentairesData.length} commentaires chargés`);
+          console.log(`📊 ${commentairesData.length} commentaires chargés`);
           setCommentaires(commentairesData);
 
           // Mettre à jour les stats
@@ -1230,7 +1232,7 @@ export default function EchangeDetailPage() {
     setToast({ show: true, type, message });
   };
 
-  // ✅ Vérification d'authentification pour toutes les actions
+  // ? Vérification d'authentification pour toutes les actions
   const requireAuth = (action: () => void) => {
     if (!isLoggedIn) {
       openLoginModal();
@@ -1239,42 +1241,54 @@ export default function EchangeDetailPage() {
     action();
   };
 
+  // 🔥 FONCTION WHATSAPP CORRIGÉE - PLUS JAMAIS GRISÉE
   const handleContactWhatsApp = () => {
-    if (!createur) return;
+    requireAuth(() => {
+      if (!createur) return;
 
-    let phoneNumber = createur.telephone || createur.whatsapp_url || "";
+      // Essayer d'obtenir le numéro de téléphone depuis différentes sources
+      let phoneNumber = createur.telephone || createur.whatsapp_url || "";
 
-    phoneNumber = phoneNumber.replace(/\D/g, "");
+      // Nettoyer le numéro (garder seulement les chiffres)
+      phoneNumber = phoneNumber.replace(/\D/g, "");
 
-    if (phoneNumber.startsWith("225")) {
-      phoneNumber = phoneNumber.substring(3);
-    }
+      // Si pas de numéro, utiliser un format par défaut
+      if (!phoneNumber) {
+        showToast("info", "Le créateur n'a pas de numéro WhatsApp renseigné");
+        return;
+      }
 
-    if (phoneNumber && !phoneNumber.startsWith("+")) {
-      phoneNumber = `+225${phoneNumber}`;
-    }
+      // S'assurer que le numéro est au format international
+      if (phoneNumber.startsWith("225")) {
+        phoneNumber = `+${phoneNumber}`;
+      } else if (!phoneNumber.startsWith("+")) {
+        phoneNumber = `+225${phoneNumber}`;
+      }
 
-    const message = `Bonjour ${createur.prenoms}, je suis intéressé(e) par votre échange "${echange?.nomElementEchange}" sur OSKAR. Pourrions-nous discuter ?`;
-    const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+      const message = `Bonjour ${createur.prenoms}, je suis intéressé(e) par votre échange "${echange?.nomElementEchange}" sur OSKAR. Pourrions-nous discuter ?`;
+      const whatsappUrl = `https://wa.me/${phoneNumber.replace(/\+/g, '')}?text=${encodeURIComponent(message)}`;
 
-    window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+      window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+    });
   };
 
   const handleContactFacebook = () => {
-    if (!createur) return;
+    requireAuth(() => {
+      if (!createur) return;
 
-    if (createur.facebook_url) {
-      window.open(createur.facebook_url, "_blank", "noopener,noreferrer");
-    } else {
-      const searchQuery = encodeURIComponent(
-        `${createur.prenoms} ${createur.nom} OSKAR`,
-      );
-      window.open(
-        `https://www.facebook.com/search/top?q=${searchQuery}`,
-        "_blank",
-        "noopener,noreferrer",
-      );
-    }
+      if (createur.facebook_url) {
+        window.open(createur.facebook_url, "_blank", "noopener,noreferrer");
+      } else {
+        const searchQuery = encodeURIComponent(
+          `${createur.prenoms} ${createur.nom} OSKAR`,
+        );
+        window.open(
+          `https://www.facebook.com/search/top?q=${searchQuery}`,
+          "_blank",
+          "noopener,noreferrer",
+        );
+      }
+    });
   };
 
   const handleCopyContactInfo = () => {
@@ -1337,17 +1351,17 @@ export default function EchangeDetailPage() {
     });
   };
 
-  // ✅ FONCTION POUR LES FAVORIS - AVEC AUTH
+  // ? FONCTION POUR LES FAVORIS - AVEC AUTH
   const handleAddToFavorites = () => {
     requireAuth(async () => {
       if (!echange) return;
 
       try {
-        console.log(`🔄 ${favori ? "Retrait" : "Ajout"} aux favoris...`);
+        console.log(`📢 ${favori ? "Retrait" : "Ajout"} aux favoris...`);
 
         if (favori) {
           const endpoint = API_ENDPOINTS.FAVORIS.REMOVE_ECHANGE(echange.uuid);
-          console.log(`📤 Appel API: DELETE ${endpoint}`);
+          console.log(`📡 Appel API: DELETE ${endpoint}`);
 
           await api.delete(endpoint);
 
@@ -1358,7 +1372,7 @@ export default function EchangeDetailPage() {
             itemUuid: echange.uuid,
             type: "echange",
           };
-          console.log(`📤 Appel API: POST ${API_ENDPOINTS.FAVORIS.ADD}`, payload);
+          console.log(`📡 Appel API: POST ${API_ENDPOINTS.FAVORIS.ADD}`, payload);
 
           const response = await api.post(API_ENDPOINTS.FAVORIS.ADD, payload);
           console.log("✅ Réponse favoris:", response);
@@ -1863,37 +1877,8 @@ export default function EchangeDetailPage() {
 
             {/* Localisation */}
             <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
-              <h2 className="h2 fw-bold mb-4">Localisation</h2>
-              <div className="mb-4">
-                <div className="d-flex gap-3 mb-4">
-                  <FontAwesomeIcon
-                    icon={faLocationDot}
-                    className="text-warning fs-4 mt-1"
-                  />
-                  <div>
-                    <p className="fw-semibold h5 mb-1">
-                      {echange.localisation}
-                    </p>
-                    <p className="text-muted">
-                      Lieu de rencontre : {echange.lieu_rencontre}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div
-                className="bg-light rounded-4 d-flex align-items-center justify-content-center"
-                style={{ height: "320px" }}
-              >
-                <div className="text-center">
-                  <FontAwesomeIcon
-                    icon={faMapLocationDot}
-                    className="fa-4x text-muted mb-4"
-                  />
-                  <p className="text-muted">
-                    Carte interactive montrant l'emplacement approximatif
-                  </p>
-                </div>
-              </div>
+              
+              
               <div className="mt-4 bg-info bg-opacity-10 border border-info rounded-4 p-4">
                 <div className="d-flex gap-3">
                   <FontAwesomeIcon
@@ -2074,7 +2059,7 @@ export default function EchangeDetailPage() {
                     </div>
                   )}
 
-                  {/* ✅ LISTE DES COMMENTAIRES AMÉLIORÉE */}
+                  {/* ? LISTE DES COMMENTAIRES AMÉLIORÉE */}
                   {commentaires.length > 0 ? (
                     <div className="space-y-6">
                       {visibleComments.map((comment) => (
@@ -2344,9 +2329,9 @@ export default function EchangeDetailPage() {
                     : "Non disponible"}
                 </button>
                 <button
-                  onClick={() => requireAuth(handleContactWhatsApp)}
+                  onClick={handleContactWhatsApp}
                   className="btn btn-success btn-lg fw-bold py-4"
-                  disabled={!createur?.telephone && !createur?.whatsapp_url}
+                  // 🔥 PLUS JAMAIS GRISÉ - Supprimé la condition disabled
                 >
                   <FontAwesomeIcon icon={faWhatsapp} className="me-2" />
                   WhatsApp
@@ -2403,7 +2388,6 @@ export default function EchangeDetailPage() {
                           height: "60px",
                           objectFit: "cover",
                         }}
-                        onClick={handleVisitUtilisateur}
                       />
                     ) : (
                       <div
@@ -2413,7 +2397,6 @@ export default function EchangeDetailPage() {
                           height: "60px",
                           cursor: "pointer",
                         }}
-                        onClick={handleVisitUtilisateur}
                       >
                         <FontAwesomeIcon
                           icon={faUserCircle}
@@ -2630,7 +2613,7 @@ export default function EchangeDetailPage() {
                 </li>
               </ul>
               <button className="btn btn-link text-warning text-decoration-none p-0 mt-3 text-start">
-                Lire le guide de sécurité complet →
+                Lire le guide de sécurité complet ?
               </button>
             </div>
           </div>

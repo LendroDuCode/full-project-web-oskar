@@ -103,12 +103,116 @@ export default function DashboardHeader({
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [avatarError, setAvatarError] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   const router = useRouter();
   const userMenuRef = useRef<HTMLDivElement>(null);
   const userMenuButtonRef = useRef<HTMLButtonElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
+  const mountedRef = useRef(true);
+  const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ✅ FONCTION CORRIGÉE: Vérifier si le token est valide sans redirection
+  const isTokenValid = useCallback((): boolean => {
+    try {
+      const token = api.getToken();
+      if (!token) return false;
+
+      // Vérifier si le token est expiré en décodant le payload
+      const base64Url = token.split('.')[1];
+      if (!base64Url) return false;
+
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+
+      const payload = JSON.parse(jsonPayload);
+      const expiry = payload.exp;
+
+      if (!expiry) return true; // Pas de date d'expiration
+
+      const now = Math.floor(Date.now() / 1000);
+      return now < expiry;
+    } catch (error) {
+      console.error("❌ Erreur lors de la vérification du token:", error);
+      return false;
+    }
+  }, []);
+
+  // ✅ FONCTION CORRIGÉE: Redirection sécurisée avec protection
+  const safeRedirect = useCallback((path: string) => {
+    if (isRedirecting || !mountedRef.current) return;
+    
+    setIsRedirecting(true);
+    
+    // Nettoyer tout timeout existant
+    if (redirectTimeoutRef.current) {
+      clearTimeout(redirectTimeoutRef.current);
+    }
+    
+    redirectTimeoutRef.current = setTimeout(() => {
+      if (mountedRef.current) {
+        router.push(path);
+      }
+    }, 100);
+  }, [router, isRedirecting]);
+
+  // ✅ FONCTION CORRIGÉE: Nettoyage et redirection
+  const handleTokenExpired = useCallback(() => {
+    console.log("🚨 Token expiré - Déconnexion admin");
+
+    // 1. Nettoyer tous les stockages
+    localStorage.removeItem("oskar_user");
+    localStorage.removeItem("oskar_token");
+    localStorage.removeItem("temp_token");
+    localStorage.removeItem("tempToken");
+    localStorage.removeItem("token");
+    localStorage.removeItem("oskar_role");
+    localStorage.removeItem("oskar_user_type");
+
+    // 2. Nettoyer les cookies
+    document.cookie.split(";").forEach((c) => {
+      document.cookie = c
+        .replace(/^ +/, "")
+        .replace(/=.*/, "=; expires=" + new Date().toUTCString() + "; path=/");
+    });
+
+    // 3. Déclencher l'événement de déconnexion
+    const logoutEvent = new CustomEvent("oskar-logout", {
+      detail: { timestamp: Date.now(), reason: "token_expired", userType: "admin" },
+    });
+    window.dispatchEvent(logoutEvent);
+
+    // 4. Redirection sécurisée
+    safeRedirect("/");
+  }, [safeRedirect]);
+
+  // ✅ Vérifier le token UNE SEULE fois au montage
+  useEffect(() => {
+    mountedRef.current = true;
+    
+    const token = api.getToken();
+    
+    if (!token) {
+      console.log("⏰ Pas de token admin trouvé");
+      safeRedirect("/");
+      return;
+    }
+
+    if (!isTokenValid()) {
+      console.log("⏰ Token admin invalide au chargement");
+      handleTokenExpired();
+    }
+
+    return () => {
+      mountedRef.current = false;
+      if (redirectTimeoutRef.current) {
+        clearTimeout(redirectTimeoutRef.current);
+      }
+    };
+  }, [isTokenValid, handleTokenExpired, safeRedirect]);
 
   // Détection de la taille d'écran
   useEffect(() => {
@@ -134,8 +238,10 @@ export default function DashboardHeader({
 
   // Écouter l'événement de déconnexion
   useEffect(() => {
-    const handleLogoutEvent = () => {
-      console.log("🔄 DashboardHeader - Logout event detected");
+    const handleLogoutEvent = (event: CustomEvent) => {
+      console.log("🔄 DashboardHeader Admin - Logout event detected", event.detail);
+
+      if (!mountedRef.current) return;
 
       // Nettoyer l'état
       setProfile(null);
@@ -144,16 +250,21 @@ export default function DashboardHeader({
       setShowNotifications(false);
       setForceUpdate((prev) => prev + 1);
 
-      // Rediriger vers la page d'accueil
-      router.push("/");
+      // Si c'est une expiration de token, ne pas rediriger à nouveau
+      if (event.detail?.reason === "token_expired") {
+        console.log("⏰ Expiration de token déjà gérée");
+      } else {
+        // Rediriger vers la page d'accueil
+        safeRedirect("/");
+      }
     };
 
-    window.addEventListener("oskar-logout", handleLogoutEvent);
+    window.addEventListener("oskar-logout", handleLogoutEvent as EventListener);
 
     return () => {
-      window.removeEventListener("oskar-logout", handleLogoutEvent);
+      window.removeEventListener("oskar-logout", handleLogoutEvent as EventListener);
     };
-  }, [router]);
+  }, [safeRedirect]);
 
   // Fermeture du menu au clic externe
   useEffect(() => {
@@ -221,14 +332,24 @@ export default function DashboardHeader({
 
   // Récupérer le profil de l'administrateur
   const fetchProfile = useCallback(async () => {
+    if (!mountedRef.current || isRedirecting) return;
+
     try {
       setLoading(true);
       setError(null);
       setAvatarError(false);
 
+      const token = api.getToken();
+      if (!token) {
+        console.log("⏰ Token manquant pour fetchProfile admin");
+        return;
+      }
+
       const response = await api.get(API_ENDPOINTS.AUTH.ADMIN.PROFILE);
 
-      console.log("Profil reçu:", response.data);
+      if (!mountedRef.current) return;
+
+      console.log("Profil admin reçu:", response.data);
 
       if (response.data?.data) {
         setProfile(response.data.data);
@@ -236,14 +357,26 @@ export default function DashboardHeader({
         setProfile(response.data);
       }
     } catch (err: any) {
-      console.error("Erreur lors de la récupération du profil:", err);
+      if (!mountedRef.current) return;
+
+      console.error("Erreur lors de la récupération du profil admin:", err);
+      
+      // Vérifier si c'est une erreur 401 (token expiré)
+      if (err?.status === 401 || err?.response?.status === 401 || err?.message?.includes("401")) {
+        console.log("🚨 Erreur 401 détectée dans fetchProfile admin");
+        handleTokenExpired();
+        return;
+      }
+
       setError(
         err.response?.data?.message || "Impossible de charger le profil",
       );
     } finally {
-      setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
-  }, []);
+  }, [handleTokenExpired, isRedirecting]);
 
   useEffect(() => {
     fetchProfile();
@@ -356,14 +489,22 @@ export default function DashboardHeader({
     setShowNotifications(!showNotifications);
   };
 
-  const handleMessagesClick = () => {
-    console.log("Opening messages...");
-    setMessageCount(0);
-    router.push("/dashboard-admin/messages");
-    setIsMobileMenuOpen(false);
+  const handleMessagesClick = async () => {
+    try {
+      console.log("Opening messages...");
+      setMessageCount(0);
+      if (!isRedirecting) {
+        router.push("/dashboard-admin/messages");
+      }
+      setIsMobileMenuOpen(false);
+    } catch (error) {
+      console.error("Erreur lors de la navigation vers les messages:", error);
+    }
   };
 
   const handleLogout = async () => {
+    if (isLoggingOut || isRedirecting) return;
+
     try {
       setIsLoggingOut(true);
 
@@ -373,35 +514,33 @@ export default function DashboardHeader({
       // Nettoyer le localStorage
       localStorage.removeItem("oskar_user");
       localStorage.removeItem("oskar_token");
+      localStorage.removeItem("temp_token");
+      localStorage.removeItem("tempToken");
+      localStorage.removeItem("token");
       localStorage.removeItem("oskar_role");
+      localStorage.removeItem("oskar_user_type");
 
       // Déclencher l'événement de déconnexion
       const logoutEvent = new CustomEvent("oskar-logout", {
-        detail: { timestamp: Date.now() },
+        detail: { timestamp: Date.now(), reason: "manual_logout", userType: "admin" },
       });
       window.dispatchEvent(logoutEvent);
 
-      // Rediriger vers la page d'accueil
-      setTimeout(() => {
-        router.push("/");
-      }, 100);
+      // Redirection sécurisée
+      safeRedirect("/");
     } catch (error) {
       console.error("Erreur lors de la déconnexion:", error);
 
       // Nettoyer quand même le localStorage en cas d'erreur
       localStorage.removeItem("oskar_user");
       localStorage.removeItem("oskar_token");
+      localStorage.removeItem("temp_token");
+      localStorage.removeItem("tempToken");
+      localStorage.removeItem("token");
       localStorage.removeItem("oskar_role");
+      localStorage.removeItem("oskar_user_type");
 
-      // Déclencher l'événement de déconnexion
-      const logoutEvent = new CustomEvent("oskar-logout", {
-        detail: { timestamp: Date.now() },
-      });
-      window.dispatchEvent(logoutEvent);
-
-      setTimeout(() => {
-        router.push("/");
-      }, 100);
+      safeRedirect("/");
     } finally {
       setIsLoggingOut(false);
     }
@@ -411,39 +550,39 @@ export default function DashboardHeader({
     setShowUserMenu(false);
     setIsMobileMenuOpen(false);
     setShowNotifications(false);
-    router.push("/");
+    if (!isRedirecting) {
+      router.push("/");
+    }
   };
 
   const handleMessagesMenuClick = () => {
     setShowUserMenu(false);
     setIsMobileMenuOpen(false);
     setShowNotifications(false);
-    router.push("/dashboard-admin/messages");
+    if (!isRedirecting) {
+      router.push("/dashboard-admin/messages");
+    }
   };
 
   const handleProfileClick = () => {
     setShowUserMenu(false);
     setIsMobileMenuOpen(false);
     setShowNotifications(false);
-    router.push("/dashboard-admin/profile");
+    if (!isRedirecting) {
+      router.push("/dashboard-admin/profile");
+    }
   };
 
   const handleSettingsClick = () => {
     setShowUserMenu(false);
     setIsMobileMenuOpen(false);
     setShowNotifications(false);
-    router.push("/dashboard-admin/parametres-systeme");
+    if (!isRedirecting) {
+      router.push("/dashboard-admin/parametres-systeme");
+    }
   };
 
   // Utilitaires
-  const getDefaultAvatar = useCallback(
-    (nom: string) => {
-      const initials = nom ? nom.charAt(0).toUpperCase() : "A";
-      return `https://ui-avatars.com/api/?name=${initials}&background=16a34a&color=fff&size=${isSmallMobile ? 32 : 40}`;
-    },
-    [isSmallMobile],
-  );
-
   const getFullName = useCallback(() => {
     if (!profile) return "Administrateur";
     return profile.nom_complet || profile.nom || "Administrateur";
@@ -460,21 +599,18 @@ export default function DashboardHeader({
     return profile.nom || "Administrateur";
   }, [profile]);
 
-  // ✅ AJOUT : Fonction getRoleDisplay manquante
   const getRoleDisplay = useCallback(() => {
     if (!profile) return "Admin";
     return profile.isSuperAdmin ? "Super Admin" : profile.role || "Admin";
   }, [profile]);
 
-  // ✅ FONCTION CORRIGÉE - Retourne toujours une string
   const getAvatarUrl = useCallback((): string => {
     if (avatarError || !profile?.avatar) {
       return getDefaultAvatar(profile?.nom || profile?.prenoms || "U");
     }
     const url = buildImageUrl(profile.avatar);
-    // Si buildImageUrl retourne null, utiliser le fallback
     return url || getDefaultAvatar(profile?.nom || profile?.prenoms || "U");
-  }, [profile, avatarError, getDefaultAvatar]);
+  }, [profile, avatarError]);
 
   // Gestion des touches clavier
   const handleKeyDown = useCallback(
@@ -487,17 +623,15 @@ export default function DashboardHeader({
     [],
   );
 
-  // ✅ Gestionnaire d'erreur d'image
   const handleImageError = useCallback(
     (e: React.SyntheticEvent<HTMLImageElement>) => {
       console.log("🖼️ Erreur de chargement d'image, fallback aux initiales");
       setAvatarError(true);
-      // Forcer le re-rendu avec le fallback
       e.currentTarget.src = getDefaultAvatar(
         profile?.nom || profile?.prenoms || "U",
       );
     },
-    [profile, getDefaultAvatar],
+    [profile],
   );
 
   const toggleMobileMenu = () => {
@@ -509,8 +643,7 @@ export default function DashboardHeader({
 
   // Exemple de notification de test (à retirer en production)
   useEffect(() => {
-    if (profile) {
-      // Ajouter une notification de bienvenue
+    if (profile && mountedRef.current) {
       addNotification(
         "success",
         "✅ Bienvenue",
@@ -519,7 +652,7 @@ export default function DashboardHeader({
     }
   }, [profile, addNotification]);
 
-  // ✅ DEBUG - Afficher l'URL
+  // DEBUG - Afficher l'URL
   useEffect(() => {
     if (profile) {
       console.log("🔍 Avatar URL:", getAvatarUrl());
@@ -565,6 +698,7 @@ export default function DashboardHeader({
                   justifyContent: "center",
                   padding: 0,
                 }}
+                disabled={isRedirecting}
               >
                 <i
                   className={`fa-solid ${isMobileMenuOpen ? "fa-times" : "fa-bars"}`}
@@ -688,7 +822,7 @@ export default function DashboardHeader({
                 onMouseLeave={(e) => {
                   e.currentTarget.style.backgroundColor = "";
                 }}
-                disabled={loading}
+                disabled={loading || isRedirecting}
               >
                 <i
                   className="fa-solid fa-question-circle"
@@ -725,7 +859,7 @@ export default function DashboardHeader({
                   e.currentTarget.style.backgroundColor = "#16a34a";
                   e.currentTarget.style.borderColor = "#16a34a";
                 }}
-                disabled={loading}
+                disabled={loading || isRedirecting}
               >
                 <i className="fa-solid fa-plus" aria-hidden="true"></i>
                 {!isMobile && <span className="ms-2">Publier une annonce</span>}
@@ -752,7 +886,7 @@ export default function DashboardHeader({
                   alignItems: "center",
                   justifyContent: "center",
                 }}
-                disabled={loading}
+                disabled={loading || isRedirecting}
               >
                 <i
                   className="fa-regular fa-envelope text-muted"
@@ -790,7 +924,7 @@ export default function DashboardHeader({
                     justifyContent: "center",
                     backgroundColor: showNotifications ? "#e9ecef" : "",
                   }}
-                  disabled={loading}
+                  disabled={loading || isRedirecting}
                 >
                   <i
                     className="fa-regular fa-bell text-muted"
@@ -810,27 +944,6 @@ export default function DashboardHeader({
                   )}
                 </button>
               )}
-
-              {/* Bouton exporter - Uniquement sur desktop */}
-              {showExportButton && isDesktop && (
-                <button
-                  onClick={handleExport}
-                  onKeyDown={(e) => handleKeyDown(e, handleExport)}
-                  className="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1 px-2 py-2"
-                  aria-label="Exporter les données"
-                  title="Exporter"
-                  style={{
-                    fontSize: "0.8rem",
-                    whiteSpace: "nowrap",
-                    borderRadius: "6px",
-                    height: "36px",
-                  }}
-                  disabled={loading}
-                >
-                  <i className="fa-solid fa-download" aria-hidden="true"></i>
-                  <span className="d-none d-xl-inline">Exporter</span>
-                </button>
-              )}
             </div>
 
             {/* Menu utilisateur avec avatar */}
@@ -846,7 +959,7 @@ export default function DashboardHeader({
                 aria-label="Menu utilisateur"
                 aria-haspopup="true"
                 style={{ whiteSpace: "nowrap" }}
-                disabled={loading}
+                disabled={loading || isRedirecting}
                 id="admin-menu-button"
               >
                 <div className="d-flex align-items-center gap-1 gap-sm-2">
@@ -1031,6 +1144,7 @@ export default function DashboardHeader({
                         className="btn btn-link text-dark text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
                         role="menuitem"
                         style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}
+                        disabled={isRedirecting}
                       >
                         <i
                           className="fa-solid fa-home text-muted"
@@ -1048,6 +1162,7 @@ export default function DashboardHeader({
                         className="btn btn-link text-dark text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light position-relative"
                         role="menuitem"
                         style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}
+                        disabled={isRedirecting}
                       >
                         <i
                           className="fa-regular fa-envelope text-muted"
@@ -1056,10 +1171,7 @@ export default function DashboardHeader({
                         ></i>
                         <span>Messages</span>
                         {messageCount > 0 && (
-                          <span
-                            className="position-absolute end-0 me-3 badge bg-primary rounded-pill"
-                            style={{ fontSize: "0.7rem" }}
-                          >
+                          <span className="badge bg-primary ms-auto">
                             {messageCount}
                           </span>
                         )}
@@ -1071,6 +1183,7 @@ export default function DashboardHeader({
                         className="btn btn-link text-dark text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
                         role="menuitem"
                         style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}
+                        disabled={isRedirecting}
                       >
                         <i
                           className="fa-solid fa-user text-muted"
@@ -1080,27 +1193,12 @@ export default function DashboardHeader({
                         <span>Mon profil</span>
                       </button>
 
-                      <button
-                        onClick={handleSettingsClick}
-                        onKeyDown={(e) => handleKeyDown(e, handleSettingsClick)}
-                        className="btn btn-link text-dark text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
-                        role="menuitem"
-                        style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}
-                      >
-                        <i
-                          className="fa-solid fa-cog text-muted"
-                          style={{ width: "20px" }}
-                          aria-hidden="true"
-                        ></i>
-                        <span>Paramètres</span>
-                      </button>
-
                       <div className="border-top my-2" role="separator"></div>
 
                       <button
                         onClick={handleLogout}
                         onKeyDown={(e) => handleKeyDown(e, handleLogout)}
-                        disabled={isLoggingOut}
+                        disabled={isLoggingOut || isRedirecting}
                         className="btn btn-link text-danger text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
                         role="menuitem"
                         style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}
@@ -1187,7 +1285,7 @@ export default function DashboardHeader({
                       if (!notif.read) {
                         markNotificationAsRead(notif.id);
                       }
-                      if (notif.messageId) {
+                      if (notif.messageId && !isRedirecting) {
                         router.push("/dashboard-admin/messages");
                         setShowNotifications(false);
                       }
@@ -1390,6 +1488,7 @@ export default function DashboardHeader({
                 onClick={() => setIsMobileMenuOpen(false)}
                 aria-label="Fermer le menu"
                 type="button"
+                disabled={isRedirecting}
               >
                 <i
                   className="fa-solid fa-times"
@@ -1441,6 +1540,7 @@ export default function DashboardHeader({
                   onClick={handleHomeClick}
                   className="btn btn-light text-start d-flex align-items-center gap-3 py-3 px-3 w-100"
                   style={{ borderRadius: "8px" }}
+                  disabled={isRedirecting}
                 >
                   <i
                     className="fa-solid fa-home text-success"
@@ -1453,6 +1553,7 @@ export default function DashboardHeader({
                   onClick={handleMessagesMenuClick}
                   className="btn btn-light text-start d-flex align-items-center gap-3 py-3 px-3 w-100 position-relative"
                   style={{ borderRadius: "8px" }}
+                  disabled={isRedirecting}
                 >
                   <i
                     className="fa-regular fa-envelope text-success"
@@ -1460,7 +1561,7 @@ export default function DashboardHeader({
                   ></i>
                   <span>Messages</span>
                   {messageCount > 0 && (
-                    <span className="badge bg-primary rounded-pill ms-auto">
+                    <span className="badge bg-primary ms-auto">
                       {messageCount}
                     </span>
                   )}
@@ -1470,6 +1571,7 @@ export default function DashboardHeader({
                   onClick={handleProfileClick}
                   className="btn btn-light text-start d-flex align-items-center gap-3 py-3 px-3 w-100"
                   style={{ borderRadius: "8px" }}
+                  disabled={isRedirecting}
                 >
                   <i
                     className="fa-solid fa-user text-success"
@@ -1482,6 +1584,7 @@ export default function DashboardHeader({
                   onClick={handleSettingsClick}
                   className="btn btn-light text-start d-flex align-items-center gap-3 py-3 px-3 w-100"
                   style={{ borderRadius: "8px" }}
+                  disabled={isRedirecting}
                 >
                   <i
                     className="fa-solid fa-cog text-success"
@@ -1496,6 +1599,7 @@ export default function DashboardHeader({
                   onClick={handleNotificationClick}
                   className="btn btn-light text-start d-flex align-items-center gap-3 py-3 px-3 w-100"
                   style={{ borderRadius: "8px" }}
+                  disabled={isRedirecting}
                 >
                   <i
                     className="fa-regular fa-bell text-success"
@@ -1514,6 +1618,7 @@ export default function DashboardHeader({
                     onClick={handleExport}
                     className="btn btn-light text-start d-flex align-items-center gap-3 py-3 px-3 w-100"
                     style={{ borderRadius: "8px" }}
+                    disabled={isRedirecting}
                   >
                     <i
                       className="fa-solid fa-download text-success"
@@ -1527,6 +1632,7 @@ export default function DashboardHeader({
                   onClick={handleHelpClick}
                   className="btn btn-light text-start d-flex align-items-center gap-3 py-3 px-3 w-100"
                   style={{ borderRadius: "8px" }}
+                  disabled={isRedirecting}
                 >
                   <i
                     className="fa-solid fa-question-circle text-success"
@@ -1541,6 +1647,7 @@ export default function DashboardHeader({
                   onClick={handlePublish}
                   className="btn btn-success text-start d-flex align-items-center gap-3 py-3 px-3 w-100"
                   style={{ borderRadius: "8px" }}
+                  disabled={isRedirecting}
                 >
                   <i className="fa-solid fa-plus"></i>
                   <span>Publier une annonce</span>
@@ -1548,7 +1655,7 @@ export default function DashboardHeader({
 
                 <button
                   onClick={handleLogout}
-                  disabled={isLoggingOut}
+                  disabled={isLoggingOut || isRedirecting}
                   className="btn btn-outline-danger text-start d-flex align-items-center gap-3 py-3 px-3 w-100 mt-2"
                   style={{ borderRadius: "8px" }}
                 >

@@ -634,14 +634,7 @@ export default function DonDetailPage() {
             </div>
           </div>
           <div className="d-flex gap-2">
-            <button
-              className="btn btn-outline-primary btn-lg"
-              onClick={handlePrint}
-              disabled={actionLoading}
-            >
-              <FontAwesomeIcon icon={faPrint} className="me-2" />
-              Imprimer
-            </button>
+           
             <button
               className="btn btn-outline-success btn-lg"
               onClick={handleShare}
@@ -1055,12 +1048,7 @@ export default function DonDetailPage() {
                 </div>
               </div>
 
-              <div className="d-grid gap-2">
-                <button className="btn btn-outline-danger btn-lg">
-                  <FontAwesomeIcon icon={faHeart} className="me-2" />
-                  Ajouter aux favoris
-                </button>
-              </div>
+            
             </div>
           </div>
 
@@ -1319,26 +1307,7 @@ export default function DonDetailPage() {
         </div>
       </div>
 
-      {/* Section UUID et métadonnées */}
-      <div className="mt-4">
-        <div className="card border-0 bg-dark text-white">
-          <div className="card-body p-3">
-            <div className="d-flex justify-content-between align-items-center">
-              <div className="small">
-                <span className="text-muted">UUID:</span> {don.uuid}
-              </div>
-              <div className="small">
-                <span className="text-muted">Créé le:</span>{" "}
-                {formatDate(don.createdAt)}
-              </div>
-              <div className="small">
-                <span className="text-muted">Dernière mise à jour:</span>{" "}
-                {formatDate(don.updatedAt)}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+
 
       {/* Styles supplémentaires */}
       <style jsx>{`

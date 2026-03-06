@@ -585,87 +585,10 @@ export default function BoutiquePremium() {
                   Informations
                 </h5>
               </div>
-              <div className="card-body">
-                <ul className="list-group list-group-flush">
-                  <li className="list-group-item d-flex justify-content-between align-items-center border-0 px-0 py-3">
-                    <span className="text-muted">Type de boutique:</span>
-                    <span className="fw-semibold text-success">
-                      {boutique.type_boutique.libelle}
-                    </span>
-                  </li>
-                  <li className="list-group-item d-flex justify-content-between align-items-center border-0 px-0 py-3">
-                    <span className="text-muted">Code:</span>
-                    <code className="text-success">
-                      {boutique.type_boutique.code}
-                    </code>
-                  </li>
-                  <li className="list-group-item d-flex justify-content-between align-items-center border-0 px-0 py-3">
-                    <span className="text-muted">Slug:</span>
-                    <span className="fw-semibold text-success">
-                      {boutique.slug}
-                    </span>
-                  </li>
-                  <li className="list-group-item d-flex justify-content-between align-items-center border-0 px-0 py-3">
-                    <span className="text-muted">Créée le:</span>
-                    <span className="text-success">
-                      {formatDate(boutique.created_at)}
-                    </span>
-                  </li>
-                </ul>
-              </div>
+            
             </div>
 
-            {/* Type Boutique Card */}
-            <div className="card border-0 shadow-lg rounded-3 eco-card hover-lift">
-              <div className="card-header bg-white border-0 py-3">
-                <h5 className="mb-0 fw-bold">
-                  <FontAwesomeIcon
-                    icon={faTags}
-                    className="text-success me-2"
-                  />
-                  Type de boutique
-                </h5>
-              </div>
-              <div className="card-body">
-                <div className="d-flex align-items-start gap-3 mb-3">
-                  <img
-                    src={buildImageUrl(boutique.type_boutique.image)} // ✅ UTILISATION DE buildImageUrl
-                    alt={boutique.type_boutique.libelle}
-                    className="rounded eco-img hover-rotate-slow"
-                    style={{
-                      width: "60px",
-                      height: "60px",
-                      objectFit: "cover",
-                    }}
-                    onError={(e) => {
-                      e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(boutique.type_boutique.libelle)}&background=10b981&color=fff&size=60`;
-                    }}
-                  />
-                  <div>
-                    <h6 className="fw-bold mb-1">
-                      {boutique.type_boutique.libelle}
-                    </h6>
-                    <p className="small text-muted mb-2">
-                      {boutique.type_boutique.code}
-                    </p>
-                  </div>
-                </div>
-                <div className="d-flex flex-wrap gap-2">
-                  {boutique.type_boutique.peut_vendre_produits && (
-                    <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 hover-scale">
-                      <FontAwesomeIcon icon={faShoppingBag} className="me-1" />
-                      Vente produits
-                    </span>
-                  )}
-                  {boutique.type_boutique.peut_vendre_biens && (
-                    <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 hover-scale">
-                      <FontAwesomeIcon icon={faDiamond} className="me-1" />
-                      Vente biens
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
+            
 
             {/* Features */}
             <div className="card border-0 shadow-lg rounded-3 mt-4 eco-card hover-lift">
@@ -916,22 +839,7 @@ export default function BoutiquePremium() {
                                         <FontAwesomeIcon icon={faEye} />
                                         <span className="ms-1">Voir</span>
                                       </button>
-                                      <button
-                                        className="btn btn-success btn-sm hover-scale"
-                                        onClick={() =>
-                                          alert(
-                                            `Ajouter au panier: ${produit.libelle}`,
-                                          )
-                                        }
-                                        disabled={
-                                          !produit.disponible ||
-                                          produit.quantite === 0
-                                        }
-                                      >
-                                        <FontAwesomeIcon
-                                          icon={faShoppingCart}
-                                        />
-                                      </button>
+                                    
                                     </div>
                                   </div>
                                 </div>

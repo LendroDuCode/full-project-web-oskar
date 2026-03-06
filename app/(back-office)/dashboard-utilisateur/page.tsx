@@ -56,6 +56,7 @@ import {
 import { api } from "@/lib/api-client";
 import Link from "next/link";
 import { buildImageUrl } from "@/app/shared/utils/image-utils";
+import { API_ENDPOINTS } from "@/config/api-endpoints";
 
 // Interfaces basées sur les réponses API
 interface Utilisateur {
@@ -186,31 +187,6 @@ interface ApiResponseFavoris {
   total: number;
 }
 
-interface ApiResponseProduitsBloques {
-  status: string;
-  message: string;
-  data: {
-    produits: ProduitUtilisateur[];
-    pagination: {
-      total: number;
-      page: number;
-      limit: number;
-      totalPages: number;
-    };
-    utilisateur: Utilisateur;
-  };
-}
-
-interface ApiResponseDonsBloques {
-  status: string;
-  data: Don[];
-}
-
-interface ApiResponseEchangesBloques {
-  status: string;
-  data: Echange[];
-}
-
 interface StatsData {
   produits: {
     total: number;
@@ -224,11 +200,13 @@ interface StatsData {
   dons: {
     total: number;
     publies: number;
+    nonPublies: number;
     bloques: number;
   };
   echanges: {
     total: number;
     publies: number;
+    nonPublies: number;
     bloques: number;
     valeurTotale: number;
   };
@@ -255,7 +233,7 @@ const getPlaceholderImage = (
 
 // Formatage
 const formatPrix = (prix: string | number | null) => {
-  if (prix === null) return "Gratuit";
+  if (prix === null || prix === "0" || prix === "") return "Gratuit";
   const montant = typeof prix === "string" ? parseFloat(prix) : prix;
   return new Intl.NumberFormat("fr-FR", {
     style: "currency",
@@ -264,7 +242,7 @@ const formatPrix = (prix: string | number | null) => {
   }).format(montant || 0);
 };
 
-// ✅ Fonction pour formater les grands nombres avec adaptation de la taille
+// ✅ Fonction pour formater les grands nombres
 const formatLargeNumber = (num: number): { value: string; size: string } => {
   const absNum = Math.abs(num);
   
@@ -314,6 +292,11 @@ const formatDate = (dateString: string | null) => {
   }
 };
 
+// ✅ Fonction pour obtenir les initiales d'un nom
+const getInitials = (prenoms: string, nom: string): string => {
+  return `${prenoms?.charAt(0) || ''}${nom?.charAt(0) || ''}`.toUpperCase();
+};
+
 // Composant de chargement
 const LoadingSpinner = () => (
   <div className="container-fluid py-5">
@@ -333,9 +316,7 @@ const LoadingSpinner = () => (
                 <FontAwesomeIcon icon={faBox} className="fs-2 text-primary" />
               </div>
             </div>
-            <h3 className="fw-bold mb-3 gradient-text">
-              Chargement de vos données
-            </h3>
+            <h3 className="fw-bold mb-3 text-dark">Chargement de vos données</h3>
             <p className="text-muted mb-0">Veuillez patienter...</p>
           </div>
         </div>
@@ -344,7 +325,7 @@ const LoadingSpinner = () => (
   </div>
 );
 
-// Composant de carte de stat avec gestion adaptative de la taille
+// Composant de carte de stat
 const StatCard = ({
   title,
   value,
@@ -373,7 +354,7 @@ const StatCard = ({
     }
   };
 
-  // Déterminer la taille de la police en fonction de la longueur du nombre
+  // Déterminer la taille de la police
   const getFontSizeClass = (val: string | number): string => {
     const str = val.toString();
     const length = str.length;
@@ -403,7 +384,7 @@ const StatCard = ({
               {title}
             </h6>
             <div className="d-flex align-items-baseline flex-wrap">
-              <h2 className={`fw-bold mb-0 ${fontSizeClass} text-truncate`} style={{ maxWidth: "calc(100% - 40px)" }}>
+              <h2 className={`fw-bold mb-0 ${fontSizeClass} text-dark text-truncate`} style={{ maxWidth: "calc(100% - 40px)" }}>
                 {value}
               </h2>
               {isNumericValue && (
@@ -482,11 +463,13 @@ export default function ListeProduitsCreeUtilisateur() {
     dons: {
       total: 0,
       publies: 0,
+      nonPublies: 0,
       bloques: 0,
     },
     echanges: {
       total: 0,
       publies: 0,
+      nonPublies: 0,
       bloques: 0,
       valeurTotale: 0,
     },
@@ -498,22 +481,94 @@ export default function ListeProduitsCreeUtilisateur() {
     },
   });
 
-  const getImageSrc = (imagePath: string | null | undefined, fallbackText: string = "I"): string => {
-    if (!imagePath) {
-      return getPlaceholderImage(60, fallbackText);
-    }
-    
-    // Vérifier si l'image a déjà une erreur
-    if (imageErrors[imagePath]) {
-      return getPlaceholderImage(60, fallbackText);
-    }
-    
-    return buildImageUrl(imagePath);
-  };
+  // ✅ Fonction pour charger les favoris
+  const fetchFavoris = useCallback(async () => {
+    try {
+      console.log("📡 Chargement des favoris...");
+      const response = await api.get<any>(API_ENDPOINTS.FAVORIS.LIST);
+      console.log("✅ Favoris reçus:", response);
+      
+      // Extraire les données selon la structure de l'API
+      let favorisData: FavoriItem[] = [];
 
-  const handleImageError = (imagePath: string) => {
-    setImageErrors(prev => ({ ...prev, [imagePath]: true }));
-  };
+      if (response?.favoris && Array.isArray(response.favoris)) {
+        favorisData = response.favoris;
+      } else if (response?.data && Array.isArray(response.data)) {
+        favorisData = response.data;
+      } else if (Array.isArray(response)) {
+        favorisData = response;
+      }
+
+      setFavoris(favorisData);
+    } catch (err: any) {
+      console.error("❌ Erreur lors du chargement des favoris:", err);
+      setFavoris([]);
+    }
+  }, []);
+
+  // ✅ Fonction pour calculer les statistiques
+  const calculateStats = useCallback(() => {
+    // Produits
+    const produitsPublies = produits.filter((p) => p.estPublie === true).length;
+    const produitsNonPublies = produits.filter((p) => p.estPublie === false).length;
+    const produitsDisponibles = produits.filter((p) => p.statut === "disponible").length;
+    
+    const valeurTotaleProduits = produits.reduce((sum, produit) => {
+      const prix = produit.prix ? parseFloat(produit.prix) : 0;
+      return sum + prix;
+    }, 0);
+
+    // Dons
+    const donsPublies = dons.filter((d) => d.estPublie === true).length;
+    const donsNonPublies = dons.filter((d) => d.estPublie === false).length;
+
+    // Échanges
+    const echangesPublies = echanges.filter((e) => e.estPublie === true).length;
+    const echangesNonPublies = echanges.filter((e) => e.estPublie === false).length;
+    
+    const valeurTotaleEchanges = echanges.reduce((sum, echange) => {
+      const prix = parseFloat(echange.prix) || 0;
+      return sum + prix;
+    }, 0);
+
+    // Favoris
+    const favorisProduits = favoris.filter((f) => f.type === "produit").length;
+    const favorisDons = favoris.filter((f) => f.type === "don").length;
+    const favorisEchanges = favoris.filter((f) => f.type === "echange").length;
+
+    const newStats = {
+      produits: {
+        total: produits.length + produitsBloques.length,
+        publies: produitsPublies,
+        nonPublies: produitsNonPublies,
+        bloques: produitsBloques.length,
+        disponibles: produitsDisponibles,
+        valeurTotale: valeurTotaleProduits,
+        prixMoyen: produits.length > 0 ? valeurTotaleProduits / produits.length : 0,
+      },
+      dons: {
+        total: dons.length + donsBloques.length,
+        publies: donsPublies,
+        nonPublies: donsNonPublies,
+        bloques: donsBloques.length,
+      },
+      echanges: {
+        total: echanges.length + echangesBloques.length,
+        publies: echangesPublies,
+        nonPublies: echangesNonPublies,
+        bloques: echangesBloques.length,
+        valeurTotale: valeurTotaleEchanges,
+      },
+      favoris: {
+        total: favoris.length,
+        produits: favorisProduits,
+        dons: favorisDons,
+        echanges: favorisEchanges,
+      },
+    };
+
+    setStats(newStats);
+  }, [produits, produitsBloques, dons, donsBloques, echanges, echangesBloques, favoris]);
 
   // Charger toutes les données
   const fetchDashboardData = useCallback(async () => {
@@ -528,7 +583,7 @@ export default function ListeProduitsCreeUtilisateur() {
       );
 
       // Charger les produits bloqués
-      const produitsBloquesResponse = await api.get<ApiResponseProduitsBloques>(
+      const produitsBloquesResponse = await api.get<any>(
         "/produits/produits-utilisateur-bloques",
       );
 
@@ -538,7 +593,7 @@ export default function ListeProduitsCreeUtilisateur() {
       );
 
       // Charger les dons bloqués
-      const donsBloquesResponse = await api.get<ApiResponseDonsBloques>(
+      const donsBloquesResponse = await api.get<any>(
         "/dons/liste-dons-bloques-utilisateur",
       );
 
@@ -548,12 +603,9 @@ export default function ListeProduitsCreeUtilisateur() {
       );
 
       // Charger les échanges bloqués
-      const echangesBloquesResponse = await api.get<ApiResponseEchangesBloques>(
+      const echangesBloquesResponse = await api.get<any>(
         "/echanges/liste-echange-bloquees-utilisateur",
       );
-
-      // Charger les favoris
-      const favorisResponse = await api.get<ApiResponseFavoris>("/favoris");
 
       // Traiter les réponses
       if (produitsResponse?.data) {
@@ -561,7 +613,7 @@ export default function ListeProduitsCreeUtilisateur() {
         setUtilisateur(produitsResponse.data.utilisateur);
       }
 
-      if (produitsBloquesResponse?.data) {
+      if (produitsBloquesResponse?.data?.produits) {
         setProduitsBloques(produitsBloquesResponse.data.produits);
       }
 
@@ -591,12 +643,9 @@ export default function ListeProduitsCreeUtilisateur() {
         );
       }
 
-      if (favorisResponse?.favoris) {
-        setFavoris(favorisResponse.favoris);
-      }
+      // Charger les favoris
+      await fetchFavoris();
 
-      // Calculer les statistiques
-      calculateStats();
     } catch (err: any) {
       console.error("❌ Erreur lors du chargement des données:", err);
       setError(
@@ -607,71 +656,12 @@ export default function ListeProduitsCreeUtilisateur() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchFavoris]);
 
-  // Calculer les statistiques
-  const calculateStats = useCallback(() => {
-    // Produits
-    const produitsPublies = produits.filter((p) => p.estPublie).length;
-    const produitsNonPublies = produits.length - produitsPublies;
-    const valeurTotaleProduits = produits.reduce((sum, produit) => {
-      const prix = produit.prix ? parseFloat(produit.prix) : 0;
-      return sum + prix;
-    }, 0);
-
-    // Dons
-    const donsPublies = dons.filter((d) => d.estPublie).length;
-
-    // Échanges
-    const echangesPublies = echanges.filter((e) => e.estPublie).length;
-    const valeurTotaleEchanges = echanges.reduce((sum, echange) => {
-      const prix = parseFloat(echange.prix) || 0;
-      return sum + prix;
-    }, 0);
-
-    // Favoris
-    const favorisProduits = favoris.filter((f) => f.type === "produit").length;
-    const favorisDons = favoris.filter((f) => f.type === "don").length;
-    const favorisEchanges = favoris.filter((f) => f.type === "echange").length;
-
-    setStats({
-      produits: {
-        total: produits.length + produitsBloques.length,
-        publies: produitsPublies,
-        nonPublies: produitsNonPublies,
-        bloques: produitsBloques.length,
-        disponibles: produits.filter((p) => p.statut === "disponible").length,
-        valeurTotale: valeurTotaleProduits,
-        prixMoyen:
-          produits.length > 0 ? valeurTotaleProduits / produits.length : 0,
-      },
-      dons: {
-        total: dons.length + donsBloques.length,
-        publies: donsPublies,
-        bloques: donsBloques.length,
-      },
-      echanges: {
-        total: echanges.length + echangesBloques.length,
-        publies: echangesPublies,
-        bloques: echangesBloques.length,
-        valeurTotale: valeurTotaleEchanges,
-      },
-      favoris: {
-        total: favoris.length,
-        produits: favorisProduits,
-        dons: favorisDons,
-        echanges: favorisEchanges,
-      },
-    });
-  }, [
-    produits,
-    produitsBloques,
-    dons,
-    donsBloques,
-    echanges,
-    echangesBloques,
-    favoris,
-  ]);
+  // ✅ Calculer les statistiques après chaque mise à jour des données
+  useEffect(() => {
+    calculateStats();
+  }, [produits, produitsBloques, dons, donsBloques, echanges, echangesBloques, favoris, calculateStats]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -683,13 +673,31 @@ export default function ListeProduitsCreeUtilisateur() {
 
     switch (activeSection) {
       case "produits":
-        data = activeTab === "bloques" ? produitsBloques : produits;
+        if (activeTab === "publies") {
+          data = produits.filter(p => p.estPublie === true);
+        } else if (activeTab === "bloques") {
+          data = produitsBloques;
+        } else {
+          data = produits;
+        }
         break;
       case "dons":
-        data = activeTab === "bloques" ? donsBloques : dons;
+        if (activeTab === "publies") {
+          data = dons.filter(d => d.estPublie === true);
+        } else if (activeTab === "bloques") {
+          data = donsBloques;
+        } else {
+          data = dons;
+        }
         break;
       case "echanges":
-        data = activeTab === "bloques" ? echangesBloques : echanges;
+        if (activeTab === "publies") {
+          data = echanges.filter(e => e.estPublie === true);
+        } else if (activeTab === "bloques") {
+          data = echangesBloques;
+        } else {
+          data = echanges;
+        }
         break;
       case "favoris":
         data = favoris;
@@ -730,70 +738,92 @@ export default function ListeProduitsCreeUtilisateur() {
   const filteredData = getFilteredData();
 
   // Fonction pour obtenir les données d'affichage pour chaque élément
-  const getDisplayData = (item: any) => {
-    if (activeSection === "favoris") {
-      const favItem = item as FavoriItem;
-      switch (favItem.type) {
-        case "produit":
-          return {
-            uuid: favItem.uuid,
-            libelle: favItem.produit?.libelle || "Produit",
-            description: favItem.produit?.description || "Pas de description",
-            image: favItem.produit?.image,
-            prix: favItem.produit?.prix || null,
-            statut: favItem.produit?.statut || "inconnu",
-            estPublie: favItem.produit?.estPublie || false,
-            categorie: favItem.produit?.categorie?.libelle || "Non catégorisé",
-            date: favItem.createdAt,
-            type: "produit",
-            imageKey: `favoris-produit-${favItem.uuid}`,
-          };
-        case "don":
-          return {
-            uuid: favItem.uuid,
-            libelle: favItem.don?.nom || "Don",
-            description: favItem.don?.description || "Pas de description",
-            image: favItem.don?.image,
-            prix: favItem.don?.prix || null,
-            statut: favItem.don?.statut || "inconnu",
-            estPublie: favItem.don?.estPublie || false,
-            categorie: favItem.don?.categorie || "Non catégorisé",
-            date: favItem.createdAt,
-            type: "don",
-            imageKey: `favoris-don-${favItem.uuid}`,
-          };
-        case "echange":
-          return {
-            uuid: favItem.uuid,
-            libelle: favItem.echange?.nomElementEchange || "Échange",
-            description: favItem.echange?.message || "Pas de description",
-            image: favItem.echange?.image,
-            prix: favItem.echange?.prix || "0",
-            statut: favItem.echange?.statut || "inconnu",
-            estPublie: favItem.echange?.estPublie || false,
-            categorie: favItem.echange?.categorie || "Non catégorisé",
-            date: favItem.createdAt,
-            type: "echange",
-            imageKey: `favoris-echange-${favItem.uuid}`,
-          };
-      }
-    } else {
-      return {
-        uuid: item.uuid,
-        libelle: item.libelle || item.nom || item.nomElementEchange,
-        description: item.description || item.message || "Pas de description",
-        image: item.image,
-        prix: item.prix,
-        statut: item.statut,
-        estPublie: item.estPublie,
-        categorie:
-          item.categorie?.libelle || item.categorie || "Non catégorisé",
-        date: item.createdAt || item.updatedAt,
-        type: activeSection,
-        imageKey: `${activeSection}-${item.uuid}`,
-      };
+// Remplacer la fonction getDisplayData par celle-ci
+
+const getDisplayData = (item: any) => {
+  if (activeSection === "favoris") {
+    const favItem = item as FavoriItem;
+    switch (favItem.type) {
+      case "produit":
+        return {
+          uuid: favItem.uuid,
+          libelle: favItem.produit?.libelle || "Produit",
+          description: favItem.produit?.description || "Pas de description",
+          image: favItem.produit?.image,
+          prix: favItem.produit?.prix || null,
+          statut: favItem.produit?.statut || "inconnu",
+          estPublie: favItem.produit?.estPublie || false,
+          categorie: favItem.produit?.categorie?.libelle || "Non catégorisé", // ✅ Extraire le libellé
+          date: favItem.createdAt,
+          type: "produit",
+          imageKey: `favoris-produit-${favItem.uuid}`,
+        };
+      case "don":
+        return {
+          uuid: favItem.uuid,
+          libelle: favItem.don?.nom || "Don",
+          description: favItem.don?.description || "Pas de description",
+          image: favItem.don?.image,
+          prix: favItem.don?.prix || null,
+          statut: favItem.don?.statut || "inconnu",
+          estPublie: favItem.don?.estPublie || false,
+          categorie: typeof favItem.don?.categorie === 'string' 
+            ? favItem.don.categorie 
+            : favItem.don?.categorie || "Non catégorisé", // ✅ Gérer si c'est un objet ou une chaîne
+          date: favItem.createdAt,
+          type: "don",
+          imageKey: `favoris-don-${favItem.uuid}`,
+        };
+      case "echange":
+        return {
+          uuid: favItem.uuid,
+          libelle: favItem.echange?.nomElementEchange || "Échange",
+          description: favItem.echange?.message || "Pas de description",
+          image: favItem.echange?.image,
+          prix: favItem.echange?.prix || "0",
+          statut: favItem.echange?.statut || "inconnu",
+          estPublie: favItem.echange?.estPublie || false,
+          categorie: typeof favItem.echange?.categorie === 'string'
+            ? favItem.echange.categorie
+            : favItem.echange?.categorie || "Non catégorisé", // ✅ Gérer si c'est un objet ou une chaîne
+          date: favItem.createdAt,
+          type: "echange",
+          imageKey: `favoris-echange-${favItem.uuid}`,
+        };
+      default:
+        return {
+          uuid: favItem.uuid,
+          libelle: "Élément",
+          description: "Pas de description",
+          image: null,
+          prix: null,
+          statut: "inconnu",
+          estPublie: false,
+          categorie: "Non catégorisé",
+          date: favItem.createdAt,
+          type: favItem.type,
+          imageKey: `favoris-${favItem.uuid}`,
+        };
     }
-  };
+  } else {
+    return {
+      uuid: item.uuid,
+      libelle: item.libelle || item.nom || item.nomElementEchange || "Sans nom",
+      description: item.description || item.message || "Pas de description",
+      image: item.image,
+      prix: item.prix,
+      statut: item.statut,
+      estPublie: item.estPublie,
+      categorie:
+        typeof item.categorie === 'string' 
+          ? item.categorie 
+          : item.categorie?.libelle || "Non catégorisé", // ✅ Gérer si c'est un objet
+      date: item.createdAt || item.updatedAt || item.dateProposition,
+      type: activeSection,
+      imageKey: `${activeSection}-${item.uuid}`,
+    };
+  }
+};
 
   if (loading) return <LoadingSpinner />;
 
@@ -817,17 +847,32 @@ export default function ListeProduitsCreeUtilisateur() {
               <div className="d-flex align-items-center">
                 {utilisateur && (
                   <div className="position-relative me-2 me-md-3">
-                    <img
-                      src={getImageSrc(utilisateur.avatar, `${utilisateur.prenoms?.charAt(0)}${utilisateur.nom?.charAt(0)}`)}
-                      alt={`${utilisateur.prenoms} ${utilisateur.nom}`}
-                      className="rounded-circle border border-3 border-white shadow"
-                      style={{
-                        width: "clamp(50px, 8vw, 80px)",
-                        height: "clamp(50px, 8vw, 80px)",
-                        objectFit: "cover",
-                      }}
-                      onError={() => utilisateur.avatar && handleImageError(utilisateur.avatar)}
-                    />
+                    {/* ✅ Afficher l'avatar ou les initiales */}
+                    {utilisateur.avatar && !imageErrors[utilisateur.avatar] ? (
+                      <img
+                        src={buildImageUrl(utilisateur.avatar) || ''}
+                        alt={`${utilisateur.prenoms} ${utilisateur.nom}`}
+                        className="rounded-circle border border-3 border-white shadow"
+                        style={{
+                          width: "clamp(50px, 8vw, 80px)",
+                          height: "clamp(50px, 8vw, 80px)",
+                          objectFit: "cover",
+                        }}
+                        onError={() => utilisateur.avatar && setImageErrors(prev => ({ ...prev, [utilisateur.avatar!]: true }))}
+                      />
+                    ) : (
+                      <div
+                        className="rounded-circle border border-3 border-white shadow bg-primary d-flex align-items-center justify-content-center"
+                        style={{
+                          width: "clamp(50px, 8vw, 80px)",
+                          height: "clamp(50px, 8vw, 80px)",
+                        }}
+                      >
+                        <span className="text-white fw-bold fs-4">
+                          {getInitials(utilisateur.prenoms, utilisateur.nom)}
+                        </span>
+                      </div>
+                    )}
                     <span
                       className="position-absolute bottom-0 end-0 bg-success rounded-circle border border-2 border-white d-flex align-items-center justify-content-center"
                       style={{ width: "clamp(12px, 2vw, 20px)", height: "clamp(12px, 2vw, 20px)" }}
@@ -841,27 +886,31 @@ export default function ListeProduitsCreeUtilisateur() {
                   </div>
                 )}
                 <div className="min-w-0">
-                  <h1 className="h4 h3-sm h2-md fw-bold text-white mb-1 text-truncate">
+                  <h1 className="h4 h3-sm h2-md fw-bold text-dark mb-1 text-truncate">
                     <FontAwesomeIcon icon={faChartLine} className="me-2" />
                     Tableau de bord
                   </h1>
-                  <p className="text-white mb-2 small small-md text-truncate" style={{ opacity: 0.9, maxWidth: "100%" }}>
+                  <p className="text-dark mb-2 small small-md text-truncate" style={{ opacity: 0.9, maxWidth: "100%" }}>
                     {utilisateur
                       ? `Bonjour ${utilisateur.prenoms}, voici le résumé de vos activités`
                       : "Vue d'ensemble de vos activités"}
                   </p>
                   <div className="d-flex flex-wrap gap-1 gap-md-2 align-items-center">
-                    <span className="badge bg-white bg-opacity-20 text-white fw-semibold border-0 small">
+                    <span className="badge bg-white bg-opacity-20 text-dark fw-semibold border-0 small">
                       <FontAwesomeIcon icon={faBox} className="me-1" />
                       {stats.produits.total}
                     </span>
-                    <span className="badge bg-white bg-opacity-20 text-white fw-semibold border-0 small">
+                    <span className="badge bg-white bg-opacity-20 text-dark fw-semibold border-0 small">
                       <FontAwesomeIcon icon={faGift} className="me-1" />
                       {stats.dons.total}
                     </span>
-                    <span className="badge bg-white bg-opacity-20 text-white fw-semibold border-0 small">
+                    <span className="badge bg-white bg-opacity-20 text-dark fw-semibold border-0 small">
                       <FontAwesomeIcon icon={faExchangeAlt} className="me-1" />
                       {stats.echanges.total}
+                    </span>
+                    <span className="badge bg-danger bg-opacity-20 text-dark fw-semibold border-0 small">
+                      <FontAwesomeIcon icon={faHeart} className="me-1" />
+                      {stats.favoris.total}
                     </span>
                   </div>
                 </div>
@@ -885,54 +934,43 @@ export default function ListeProduitsCreeUtilisateur() {
 
         {/* Cartes de statistiques */}
         <div className="row g-3 g-md-4 mb-4">
-          {/* Produits */}
+          {/* Produits Totaux */}
           <div className="col-xl-3 col-lg-4 col-md-6">
             <StatCard
               title="Produits Totaux"
               value={stats.produits.total}
               icon={faBoxes}
-              color="primary"
-              subtitle={`${stats.produits.publies} publiés, ${stats.produits.bloques} bloqués`}
-              trend="up"
-              trendText="+12% ce mois"
+              color="primary"           
             />
           </div>
 
+          {/* Valeur Produits */}
           <div className="col-xl-3 col-lg-4 col-md-6">
             <StatCard
               title="Valeur Produits"
               value={formatPrix(stats.produits.valeurTotale)}
               icon={faMoneyBillWave}
               color="success"
-              subtitle={`Moyenne: ${formatPrix(stats.produits.prixMoyen)}`}
-              trend="up"
-              trendText="+8%"
             />
           </div>
 
-          {/* Dons */}
+          {/* Dons Totaux */}
           <div className="col-xl-3 col-lg-4 col-md-6">
             <StatCard
               title="Dons Totaux"
               value={stats.dons.total}
               icon={faGift}
               color="info"
-              subtitle={`${stats.dons.publies} publiés, ${stats.dons.bloques} bloqués`}
-              trend="up"
-              trendText="+5% ce mois"
             />
           </div>
 
-          {/* Échanges */}
+          {/* Échanges Totaux */}
           <div className="col-xl-3 col-lg-4 col-md-6">
             <StatCard
               title="Échanges Totaux"
               value={stats.echanges.total}
               icon={faExchangeAlt}
               color="warning"
-              subtitle={`Valeur: ${formatPrix(stats.echanges.valeurTotale)}`}
-              trend="up"
-              trendText="+18% ce mois"
             />
           </div>
 
@@ -943,39 +981,30 @@ export default function ListeProduitsCreeUtilisateur() {
               value={stats.favoris.total}
               icon={faHeart}
               color="danger"
-              subtitle={`${stats.favoris.produits} produits, ${stats.favoris.dons} dons, ${stats.favoris.echanges} échanges`}
-              trend="up"
-              trendText="+25%"
             />
           </div>
 
-          {/* Produits disponibles */}
+          {/* Produits Disponibles */}
           <div className="col-xl-3 col-lg-4 col-md-6">
             <StatCard
               title="Produits Disponibles"
               value={stats.produits.disponibles}
               icon={faCheckCircle}
               color="success"
-              subtitle={`Sur ${stats.produits.total} produits`}
-              trend="up"
-              trendText={`Taux: ${((stats.produits.disponibles / stats.produits.total) * 100 || 0).toFixed(0)}%`}
             />
           </div>
 
-          {/* Produits non publiés */}
+          {/* Produits Non Publiés */}
           <div className="col-xl-3 col-lg-4 col-md-6">
             <StatCard
               title="Produits Non Publiés"
               value={stats.produits.nonPublies}
               icon={faClock}
               color="secondary"
-              subtitle="En attente de publication"
-              trend="neutral"
-              trendText="À publier"
             />
           </div>
 
-          {/* Produits bloqués */}
+          {/* Total Bloqués */}
           <div className="col-xl-3 col-lg-4 col-md-6">
             <StatCard
               title="Total Bloqués"
@@ -986,9 +1015,6 @@ export default function ListeProduitsCreeUtilisateur() {
               }
               icon={faBan}
               color="danger"
-              subtitle="Contenu restreint"
-              trend="down"
-              trendText="-3%"
             />
           </div>
         </div>
@@ -1046,6 +1072,7 @@ export default function ListeProduitsCreeUtilisateur() {
                 className={`btn btn-sm btn-lg-md d-flex align-items-center gap-1 gap-md-2 ${activeSection === "favoris" ? "btn-danger" : "btn-outline-danger"}`}
                 onClick={() => {
                   setActiveSection("favoris");
+                  setActiveTab("tous");
                   setSearchTerm("");
                 }}
               >
@@ -1259,7 +1286,7 @@ export default function ListeProduitsCreeUtilisateur() {
                     />
                   )}
                 </div>
-                <h4 className="fw-bold mb-3">
+                <h4 className="fw-bold mb-3 text-dark">
                   Aucun {activeSection === "favoris" ? "favori" : activeSection}{" "}
                   trouvé
                 </h4>
@@ -1367,17 +1394,32 @@ export default function ListeProduitsCreeUtilisateur() {
                               className="position-relative"
                               style={{ width: "50px", height: "50px" }}
                             >
-                              <img
-                                src={getImageSrc(displayData.image, displayData.libelle?.charAt(0) || "I")}
-                                alt={displayData.libelle}
-                                className="rounded-3"
-                                style={{
-                                  width: "100%",
-                                  height: "100%",
-                                  objectFit: "cover",
-                                }}
-                                onError={() => displayData.image && handleImageError(displayData.image)}
-                              />
+                              {displayData.image && !imageErrors[displayData.image] ? (
+                                <img
+                                  src={buildImageUrl(displayData.image) || ''}
+                                  alt={displayData.libelle}
+                                  className="rounded-3"
+                                  style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "cover",
+                                  }}
+                                  onError={() => displayData.image && setImageErrors(prev => ({ ...prev, [displayData.image!]: true }))}
+                                />
+                              ) : (
+                                <div
+                                  className="rounded-3 bg-light d-flex align-items-center justify-content-center"
+                                  style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    backgroundColor: '#f8f9fa'
+                                  }}
+                                >
+                                  <span className="fw-bold text-muted">
+                                    {displayData.libelle?.charAt(0) || '?'}
+                                  </span>
+                                </div>
+                              )}
                               {activeSection === "favoris" && (
                                 <div className="position-absolute top-0 end-0 translate-middle">
                                   <FontAwesomeIcon
@@ -1390,7 +1432,7 @@ export default function ListeProduitsCreeUtilisateur() {
                           </td>
                           <td>
                             <div className="d-flex flex-column">
-                              <span className="fw-semibold small">
+                              <span className="fw-semibold small text-dark">
                                 {displayData.libelle}
                               </span>
                               <small
@@ -1536,142 +1578,9 @@ export default function ListeProduitsCreeUtilisateur() {
             </div>
           )}
         </div>
-
-        {/* Section informations */}
-        <div className="row g-3 g-md-4 mt-4">
-          <div className="col-md-6">
-            <div className="card border-0 shadow-sm h-100">
-              <div className="card-body p-3 p-md-4">
-                <h5 className="card-title fw-bold mb-3 h6">
-                  <FontAwesomeIcon
-                    icon={faInfoCircle}
-                    className="me-2 text-info"
-                  />
-                  Résumé de vos activités
-                </h5>
-                <div className="list-group list-group-flush">
-                  <div className="list-group-item border-0 px-0 py-2">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <span className="small">Produits créés</span>
-                      <span className="fw-bold">{stats.produits.total}</span>
-                    </div>
-                  </div>
-                  <div className="list-group-item border-0 px-0 py-2">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <span className="small">Dons créés</span>
-                      <span className="fw-bold">{stats.dons.total}</span>
-                    </div>
-                  </div>
-                  <div className="list-group-item border-0 px-0 py-2">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <span className="small">Échanges créés</span>
-                      <span className="fw-bold">{stats.echanges.total}</span>
-                    </div>
-                  </div>
-                  <div className="list-group-item border-0 px-0 py-2">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <span className="small">Favoris</span>
-                      <span className="fw-bold">{stats.favoris.total}</span>
-                    </div>
-                  </div>
-                  <div className="list-group-item border-0 px-0 py-2">
-                    <div className="d-flex justify-content-between align-items-center">
-                      <span className="small">Contenu bloqué</span>
-                      <span className="fw-bold text-danger">
-                        {stats.produits.bloques +
-                          stats.dons.bloques +
-                          stats.echanges.bloques}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="col-md-6">
-            <div className="card border-0 shadow-sm h-100">
-              <div className="card-body p-3 p-md-4">
-                <h5 className="card-title fw-bold mb-3 h6">
-                  <FontAwesomeIcon
-                    icon={faBolt}
-                    className="me-2 text-warning"
-                  />
-                  Actions rapides
-                </h5>
-                <div className="d-grid gap-2">
-                  {activeSection === "produits" && (
-                    <>
-                      <Link
-                        href="/dashboard-utilisateur/mes-produits/nouveau"
-                        className="btn btn-primary btn-sm"
-                      >
-                        <FontAwesomeIcon icon={faPlus} className="me-2" />
-                        Ajouter un produit
-                      </Link>
-                      <button className="btn btn-outline-primary btn-sm">
-                        <FontAwesomeIcon icon={faDownload} className="me-2" />
-                        Exporter mes produits
-                      </button>
-                    </>
-                  )}
-                  {activeSection === "dons" && (
-                    <>
-                      <Link
-                        href="/dashboard-utilisateur/mes-dons/nouveau"
-                        className="btn btn-success btn-sm"
-                      >
-                        <FontAwesomeIcon icon={faPlus} className="me-2" />
-                        Créer un don
-                      </Link>
-                      <button className="btn btn-outline-success btn-sm">
-                        <FontAwesomeIcon icon={faDownload} className="me-2" />
-                        Exporter mes dons
-                      </button>
-                    </>
-                  )}
-                  {activeSection === "echanges" && (
-                    <>
-                      <Link
-                        href="/dashboard-utilisateur/mes-echanges/nouveau"
-                        className="btn btn-warning btn-sm"
-                      >
-                        <FontAwesomeIcon icon={faPlus} className="me-2" />
-                        Proposer un échange
-                      </Link>
-                      <button className="btn btn-outline-warning btn-sm">
-                        <FontAwesomeIcon icon={faDownload} className="me-2" />
-                        Exporter mes échanges
-                      </button>
-                    </>
-                  )}
-                  {activeSection === "favoris" && (
-                    <>
-                      <Link href="/produits" className="btn btn-primary btn-sm">
-                        <FontAwesomeIcon icon={faBox} className="me-2" />
-                        Explorer les produits
-                      </Link>
-                      <Link href="/dons" className="btn btn-success btn-sm">
-                        <FontAwesomeIcon icon={faGift} className="me-2" />
-                        Explorer les dons
-                      </Link>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       <style jsx global>{`
-        .gradient-text {
-          background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-        }
-
         .hero-gradient {
           background: linear-gradient(
             135deg,
@@ -1759,19 +1668,6 @@ export default function ListeProduitsCreeUtilisateur() {
 
         .progress-bar {
           border-radius: 10px;
-        }
-
-        .list-group-item {
-          border-left: none;
-          border-right: none;
-        }
-
-        .list-group-item:first-child {
-          border-top: none;
-        }
-
-        .list-group-item:last-child {
-          border-bottom: none;
         }
 
         /* Classes de tailles personnalisées */

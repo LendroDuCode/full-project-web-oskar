@@ -1125,7 +1125,7 @@ const Header: FC = () => {
                   }}
                 >
                   <i className="fa-solid fa-envelope"></i>
-                  {unreadMessagesCount > 0 && (
+                  {/* {unreadMessagesCount > 0 && (
                     <span
                       className="position-absolute top-0 start-100 translate-middle badge rounded-pill"
                       style={{
@@ -1144,7 +1144,7 @@ const Header: FC = () => {
                     >
                       {unreadMessagesCount > 9 ? "9+" : unreadMessagesCount}
                     </span>
-                  )}
+                  )} */}
                 </button>
               </Link>
 
@@ -1425,7 +1425,7 @@ const Header: FC = () => {
                             style={{ width: "18px", fontSize: "1rem" }}
                           ></i>
                           <span className="flex-grow-1">Messages</span>
-                          {unreadMessagesCount > 0 && (
+                          {/* {unreadMessagesCount > 0 && (
                             <span
                               className="badge bg-danger ms-auto flex-shrink-0"
                               style={{
@@ -1438,7 +1438,7 @@ const Header: FC = () => {
                                 ? "9+"
                                 : unreadMessagesCount}
                             </span>
-                          )}
+                          )} */}
                         </Link>
 
                         <div className="dropdown-divider my-2"></div>
@@ -1717,7 +1717,7 @@ const Header: FC = () => {
                       style={{ width: "18px" }}
                     ></i>
                     <span>Messages</span>
-                    {unreadMessagesCount > 0 && (
+                    {/* {unreadMessagesCount > 0 && (
                       <span
                         className="position-absolute end-3 badge bg-danger"
                         style={{
@@ -1727,7 +1727,7 @@ const Header: FC = () => {
                       >
                         {unreadMessagesCount}
                       </span>
-                    )}
+                    )} */}
                   </Link>
 
                   <button

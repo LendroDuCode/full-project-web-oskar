@@ -90,12 +90,116 @@ export default function DashboardHeader({
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   const userMenuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const mountedRef = useRef(true);
+  const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Ajout du contexte d'authentification
   const { isLoggedIn, openLoginModal } = useAuth();
+
+  // ✅ FONCTION CORRIGÉE: Vérifier si le token est valide sans redirection
+  const checkTokenValidity = useCallback((): boolean => {
+    try {
+      const token = localStorage.getItem("oskar_token");
+      if (!token) return false;
+
+      // Vérifier si le token est expiré en décodant le payload
+      const base64Url = token.split('.')[1];
+      if (!base64Url) return false;
+
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+
+      const payload = JSON.parse(jsonPayload);
+      const expiry = payload.exp;
+
+      if (!expiry) return true; // Pas de date d'expiration
+
+      const now = Math.floor(Date.now() / 1000);
+      return now < expiry;
+    } catch (error) {
+      console.error("❌ Erreur lors de la vérification du token:", error);
+      return false;
+    }
+  }, []);
+
+  // ✅ FONCTION CORRIGÉE: Redirection sécurisée avec protection
+  const safeRedirect = useCallback((path: string) => {
+    if (isRedirecting || !mountedRef.current) return;
+    
+    setIsRedirecting(true);
+    
+    // Nettoyer tout timeout existant
+    if (redirectTimeoutRef.current) {
+      clearTimeout(redirectTimeoutRef.current);
+    }
+    
+    redirectTimeoutRef.current = setTimeout(() => {
+      if (mountedRef.current) {
+        router.push(path);
+      }
+    }, 100);
+  }, [router, isRedirecting]);
+
+  // ✅ FONCTION CORRIGÉE: Nettoyage et redirection
+  const handleTokenExpired = useCallback(() => {
+    console.log("🚨 Token expiré - Déconnexion");
+
+    // 1. Nettoyer tous les stockages
+    localStorage.removeItem("oskar_user");
+    localStorage.removeItem("oskar_token");
+    localStorage.removeItem("temp_token");
+    localStorage.removeItem("tempToken");
+    localStorage.removeItem("token");
+    localStorage.removeItem("oskar_role");
+    localStorage.removeItem("oskar_user_type");
+
+    // 2. Nettoyer les cookies
+    document.cookie.split(";").forEach((c) => {
+      document.cookie = c
+        .replace(/^ +/, "")
+        .replace(/=.*/, "=; expires=" + new Date().toUTCString() + "; path=/");
+    });
+
+    // 3. Déclencher l'événement de déconnexion
+    const logoutEvent = new CustomEvent("oskar-logout", {
+      detail: { timestamp: Date.now(), reason: "token_expired", userType: "agent" },
+    });
+    window.dispatchEvent(logoutEvent);
+
+    // 4. Redirection sécurisée
+    safeRedirect("/");
+  }, [safeRedirect]);
+
+  // ✅ Vérifier le token UNE SEULE fois au montage
+  useEffect(() => {
+    mountedRef.current = true;
+    
+    const token = localStorage.getItem("oskar_token");
+    
+    if (!token) {
+      console.log("⏰ Pas de token trouvé");
+      safeRedirect("/");
+      return;
+    }
+
+    if (!checkTokenValidity()) {
+      console.log("⏰ Token invalide au chargement");
+      handleTokenExpired();
+    }
+
+    return () => {
+      mountedRef.current = false;
+      if (redirectTimeoutRef.current) {
+        clearTimeout(redirectTimeoutRef.current);
+      }
+    };
+  }, [checkTokenValidity, handleTokenExpired, safeRedirect]);
 
   // Fermer le menu utilisateur en cliquant à l'extérieur
   useEffect(() => {
@@ -114,63 +218,90 @@ export default function DashboardHeader({
     };
   }, []);
 
+  // Écouter l'événement de déconnexion
+  useEffect(() => {
+    const handleLogoutEvent = (event: CustomEvent) => {
+      console.log("🔄 DashboardHeader Agent - Logout event detected", event.detail);
+      
+      if (!mountedRef.current) return;
+
+      // Nettoyer l'état
+      setProfile(null);
+      setShowUserMenu(false);
+      setError(null);
+
+      // Rediriger vers la page d'accueil si ce n'est pas déjà fait
+      if (event.detail?.reason !== "token_expired" && !isRedirecting) {
+        safeRedirect("/");
+      }
+    };
+
+    window.addEventListener("oskar-logout", handleLogoutEvent as EventListener);
+
+    return () => {
+      window.removeEventListener("oskar-logout", handleLogoutEvent as EventListener);
+    };
+  }, [safeRedirect, isRedirecting]);
+
   // Récupérer le profil de l'agent
   useEffect(() => {
     const fetchProfile = async () => {
+      if (!mountedRef.current || isRedirecting) return;
+
       try {
         setLoading(true);
         setError(null);
         setAvatarError(false);
 
-        // Vérifier si le token existe
         const token = localStorage.getItem("oskar_token");
         if (!token) {
-          throw new Error("Token d'authentification manquant");
+          console.log("⏰ Token manquant pour fetchProfile");
+          return;
         }
 
-        // Appeler l'API agent
         const response = await api.get(API_ENDPOINTS.AGENTS.PROFIL);
 
-        // Vérifier le format de réponse
+        if (!mountedRef.current) return;
+
         if (response.data?.type === "success" && response.data.data) {
           setProfile(response.data.data);
         } else if (response.data?.data) {
-          // Format alternatif si pas de type/message
           setProfile(response.data.data);
         } else {
           setProfile(response.data || null);
         }
       } catch (err: any) {
+        if (!mountedRef.current) return;
+
         console.error("Erreur lors de la récupération du profil agent:", err);
 
-        // Gestion des erreurs spécifiques
+        // Vérifier si c'est une erreur 401 (token expiré)
+        if (err?.status === 401 || err?.response?.status === 401 || err?.message?.includes("401")) {
+          console.log("🚨 Erreur 401 détectée dans fetchProfile");
+          handleTokenExpired();
+          return;
+        }
+
         if (err.response?.status === 403) {
           setError(
             "Accès interdit - Vous n'êtes pas autorisé à accéder à cette ressource",
           );
-          // Déconnexion automatique après 3 secondes
-          setTimeout(() => {
-            handleLogout();
-          }, 3000);
-        } else if (err.response?.status === 401) {
-          setError("Session expirée - Redirection vers la connexion...");
-          setTimeout(() => {
-            router.push("/connexion");
-          }, 2000);
         } else {
           setError(
             err.response?.data?.message ||
               err.message ||
-              "Impossible de charger le profil agent",
+              "Impossible de charger le profil",
           );
         }
       } finally {
-        setLoading(false);
+        if (mountedRef.current) {
+          setLoading(false);
+        }
       }
     };
 
     fetchProfile();
-  }, [router]);
+  }, [handleTokenExpired, isRedirecting]);
 
   // Gestion des événements
   const handleExport = () => {
@@ -203,40 +334,88 @@ export default function DashboardHeader({
     setNotificationCount(0);
   };
 
-  const handleLogout = () => {
-    setIsLoggingOut(true);
-    localStorage.removeItem("oskar_user");
-    localStorage.removeItem("oskar_token");
+  const handleLogout = async () => {
+    if (isLoggingOut || isRedirecting) return;
 
-    setTimeout(() => {
-      router.push("/");
-    }, 1000);
+    try {
+      setIsLoggingOut(true);
+
+      // Appeler l'API de déconnexion si elle existe
+      try {
+     //   await api.post(API_ENDPOINTS.AUTH.LOGOUT);
+      } catch (error) {
+        console.log("API de déconnexion non disponible");
+      }
+
+      // Nettoyer le localStorage
+      localStorage.removeItem("oskar_user");
+      localStorage.removeItem("oskar_token");
+      localStorage.removeItem("temp_token");
+      localStorage.removeItem("tempToken");
+      localStorage.removeItem("token");
+      localStorage.removeItem("oskar_role");
+      localStorage.removeItem("oskar_user_type");
+
+      // Déclencher l'événement de déconnexion
+      const logoutEvent = new CustomEvent("oskar-logout", {
+        detail: { timestamp: Date.now(), reason: "manual_logout", userType: "agent" },
+      });
+      window.dispatchEvent(logoutEvent);
+
+      // Redirection sécurisée
+      safeRedirect("/");
+    } catch (error) {
+      console.error("Erreur lors de la déconnexion:", error);
+      
+      // Nettoyer quand même
+      localStorage.removeItem("oskar_user");
+      localStorage.removeItem("oskar_token");
+      localStorage.removeItem("temp_token");
+      localStorage.removeItem("tempToken");
+      localStorage.removeItem("token");
+      localStorage.removeItem("oskar_role");
+      localStorage.removeItem("oskar_user_type");
+
+      safeRedirect("/");
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   // Gestion des clics sur les menus
   const handleHomeClick = () => {
     setShowUserMenu(false);
-    router.push("/");
+    if (!isRedirecting) {
+      router.push("/");
+    }
   };
 
   const handleProfileClick = () => {
     setShowUserMenu(false);
-    router.push("/dashboard-agent/profile");
+    if (!isRedirecting) {
+      router.push("/dashboard-agent/profile");
+    }
   };
 
   const handleSettingsClick = () => {
     setShowUserMenu(false);
-    router.push("/dashboard-agent/parametres");
+    if (!isRedirecting) {
+      router.push("/dashboard-agent/parametres");
+    }
   };
 
   const handleMessagesClick = () => {
     setShowUserMenu(false);
-    router.push("/dashboard-agent/messages");
+    if (!isRedirecting) {
+      router.push("/dashboard-agent/messages");
+    }
   };
 
   const handleAnnoncesClick = () => {
     setShowUserMenu(false);
-    router.push("/dashboard-agent/annonces");
+    if (!isRedirecting) {
+      router.push("/dashboard-agent/annonces");
+    }
   };
 
   // Utilitaires
@@ -251,7 +430,6 @@ export default function DashboardHeader({
     return `${profile.prenoms} ${profile.nom}`;
   }, [profile]);
 
-  // ✅ Fonction getAvatarUrl améliorée avec buildImageUrl
   const getAvatarUrl = useCallback(() => {
     if (!profile) return getDefaultAvatar("", "");
 
@@ -259,13 +437,11 @@ export default function DashboardHeader({
       return getDefaultAvatar(profile.nom, profile.prenoms);
     }
 
-    // Essayer d'abord avec avatar_key si disponible
     if ((profile as any).avatar_key) {
       const url = buildImageUrl((profile as any).avatar_key);
       if (url) return url;
     }
 
-    // Sinon avec avatar
     if (profile.avatar) {
       const url = buildImageUrl(profile.avatar);
       if (url) return url;
@@ -289,12 +465,10 @@ export default function DashboardHeader({
     });
   }, []);
 
-  // ✅ Gestionnaire d'erreur d'image amélioré
   const handleImageError = useCallback(
     (e: React.SyntheticEvent<HTMLImageElement>) => {
       const target = e.target as HTMLImageElement;
 
-      // Si l'URL contient localhost, essayer de la corriger
       if (target.src.includes("localhost")) {
         const productionUrl =
           process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
@@ -306,7 +480,6 @@ export default function DashboardHeader({
         return;
       }
 
-      // Si l'URL contient des espaces, essayer de les nettoyer
       if (target.src.includes("%20")) {
         target.src = target.src.replace(/%20/g, "");
         return;
@@ -318,7 +491,6 @@ export default function DashboardHeader({
     [profile, getDefaultAvatar],
   );
 
-  // Gestion des touches clavier pour l'accessibilité
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent, handler: () => void) => {
       if (e.key === "Enter" || e.key === " ") {
@@ -475,7 +647,7 @@ export default function DashboardHeader({
                   e.currentTarget.style.borderColor = "#0dcaf0";
                   e.currentTarget.style.transform = "translateY(0)";
                 }}
-                disabled={loading}
+                disabled={loading || isRedirecting}
               >
                 <i
                   className="fa-solid fa-question-circle"
@@ -513,16 +685,16 @@ export default function DashboardHeader({
                   e.currentTarget.style.borderColor = "#16a34a";
                   e.currentTarget.style.transform = "translateY(0)";
                 }}
-                disabled={loading || !profile}
+                disabled={loading || !profile || isRedirecting}
               >
                 <i className="fa-solid fa-plus" aria-hidden="true"></i>
-                <span>Publier</span>
+                <span>Publier une annonce</span>
               </button>
             )}
 
             {/* Groupe d'icônes d'action */}
             <div className="d-flex align-items-center gap-1 border-start ps-2 ms-1">
-              {/* Messages (remplace Panier) */}
+              {/* Messages */}
               <button
                 onClick={handleMessagesClick}
                 onKeyDown={(e) => handleKeyDown(e, handleMessagesClick)}
@@ -530,7 +702,7 @@ export default function DashboardHeader({
                 aria-label="Messages"
                 title="Messages"
                 style={{ borderRadius: "8px" }}
-                disabled={loading}
+                disabled={loading || isRedirecting}
               >
                 <i
                   className="fa-solid fa-envelope text-muted"
@@ -558,7 +730,7 @@ export default function DashboardHeader({
                   aria-label="Notifications"
                   title="Notifications"
                   style={{ borderRadius: "8px" }}
-                  disabled={loading}
+                  disabled={loading || isRedirecting}
                 >
                   <i
                     className="fa-regular fa-bell text-muted"
@@ -581,26 +753,6 @@ export default function DashboardHeader({
                   )}
                 </button>
               )}
-
-              {/* Bouton exporter (discret) */}
-              {showExportButton && (
-                <button
-                  onClick={handleExport}
-                  onKeyDown={(e) => handleKeyDown(e, handleExport)}
-                  className="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1 px-2 py-2"
-                  aria-label="Exporter les données"
-                  title="Exporter"
-                  style={{
-                    fontSize: "0.875rem",
-                    whiteSpace: "nowrap",
-                    borderRadius: "8px",
-                  }}
-                  disabled={loading || !profile}
-                >
-                  <i className="fa-solid fa-download" aria-hidden="true"></i>
-                  <span className="d-none d-md-inline">Exporter</span>
-                </button>
-              )}
             </div>
 
             {/* Menu utilisateur avec avatar */}
@@ -615,7 +767,7 @@ export default function DashboardHeader({
                 aria-label="Menu utilisateur"
                 aria-controls="user-dropdown-menu"
                 style={{ whiteSpace: "nowrap" }}
-                disabled={loading}
+                disabled={loading || isRedirecting}
                 id="user-menu-button"
               >
                 <div className="d-flex align-items-center gap-2">
@@ -741,12 +893,12 @@ export default function DashboardHeader({
                   )}
 
                   <div className="py-2">
-                    {/* Accueil - EN PREMIÈRE POSITION */}
+                    {/* Accueil */}
                     <button
                       onClick={handleHomeClick}
                       onKeyDown={(e) => handleKeyDown(e, handleHomeClick)}
                       className="btn btn-link text-dark text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
-                      disabled={!profile}
+                      disabled={!profile || isRedirecting}
                       role="menuitem"
                       style={{ borderBottom: "1px solid #f0f0f0" }}
                     >
@@ -762,7 +914,7 @@ export default function DashboardHeader({
                       onClick={handleProfileClick}
                       onKeyDown={(e) => handleKeyDown(e, handleProfileClick)}
                       className="btn btn-link text-dark text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
-                      disabled={!profile}
+                      disabled={!profile || isRedirecting}
                       role="menuitem"
                     >
                       <i
@@ -777,7 +929,7 @@ export default function DashboardHeader({
                       onClick={handleAnnoncesClick}
                       onKeyDown={(e) => handleKeyDown(e, handleAnnoncesClick)}
                       className="btn btn-link text-dark text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
-                      disabled={!profile}
+                      disabled={!profile || isRedirecting}
                       role="menuitem"
                     >
                       <i
@@ -792,7 +944,7 @@ export default function DashboardHeader({
                       onClick={handleMessagesClick}
                       onKeyDown={(e) => handleKeyDown(e, handleMessagesClick)}
                       className="btn btn-link text-dark text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
-                      disabled={!profile}
+                      disabled={!profile || isRedirecting}
                       role="menuitem"
                     >
                       <i
@@ -800,29 +952,6 @@ export default function DashboardHeader({
                         aria-hidden="true"
                       ></i>
                       <span>Messages</span>
-                      <span className="ms-auto">
-                        <span
-                          className="badge bg-primary rounded-pill"
-                          aria-label="Nouveaux messages"
-                        >
-                          2
-                        </span>
-                      </span>
-                    </button>
-
-                    {/* Paramètres */}
-                    <button
-                      onClick={handleSettingsClick}
-                      onKeyDown={(e) => handleKeyDown(e, handleSettingsClick)}
-                      className="btn btn-link text-dark text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
-                      disabled={!profile}
-                      role="menuitem"
-                    >
-                      <i
-                        className="fa-solid fa-cog text-muted"
-                        aria-hidden="true"
-                      ></i>
-                      <span>Paramètres</span>
                     </button>
 
                     <div className="border-top my-2" role="separator"></div>
@@ -831,7 +960,7 @@ export default function DashboardHeader({
                     <button
                       onClick={handleLogout}
                       onKeyDown={(e) => handleKeyDown(e, handleLogout)}
-                      disabled={isLoggingOut}
+                      disabled={isLoggingOut || isRedirecting}
                       className="btn btn-link text-danger text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
                       role="menuitem"
                     >

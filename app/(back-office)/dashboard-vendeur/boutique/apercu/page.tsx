@@ -1109,26 +1109,7 @@ export default function ListeBoutiquesVendeur() {
       />
 
       <div className="container-fluid p-3 p-md-4">
-        {/* Barre d'authentification */}
-        <div className="row mb-3">
-          <div className="col-12">
-            <div className="alert alert-success d-flex align-items-center justify-content-between py-2">
-              <div className="d-flex align-items-center">
-                <FontAwesomeIcon icon={faCheckCircle} className="me-2" />
-                <small className="fw-semibold">
-                  Connecté en tant que vendeur
-                </small>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="btn btn-sm btn-outline-danger"
-              >
-                <FontAwesomeIcon icon={faSignOutAlt} className="me-1" />
-                Déconnexion
-              </button>
-            </div>
-          </div>
-        </div>
+
 
         {/* En-tête de la page */}
         <div className="row mb-4">
@@ -1163,23 +1144,7 @@ export default function ListeBoutiquesVendeur() {
                   <span className="d-none d-md-inline">Rafraîchir</span>
                 </button>
 
-                <button
-                  onClick={checkApiResponse}
-                  className="btn btn-outline-info d-flex align-items-center gap-2"
-                  disabled={loading}
-                >
-                  <FontAwesomeIcon icon={faBug} />
-                  <span className="d-none d-md-inline">Debug API</span>
-                </button>
-
-                <button
-                  onClick={handleExport}
-                  className="btn btn-outline-primary d-flex align-items-center gap-2"
-                  disabled={boutiques.length === 0 || loading}
-                >
-                  <FontAwesomeIcon icon={faDownload} />
-                  <span className="d-none d-md-inline">Exporter CSV</span>
-                </button>
+         
 
                 <button
                   onClick={handleOpenCreateModal}
@@ -1406,16 +1371,7 @@ export default function ListeBoutiquesVendeur() {
                     </div>
                   </div>
 
-                  <div className="col-md-2">
-                    <button
-                      onClick={resetFilters}
-                      className="btn btn-outline-secondary w-100 d-flex align-items-center justify-content-center gap-2"
-                      disabled={loading || !isAuthenticated}
-                    >
-                      <FontAwesomeIcon icon={faTimes} />
-                      <span className="d-none d-md-inline">Reset</span>
-                    </button>
-                  </div>
+            
                 </div>
 
                 {/* Résultats de recherche */}
@@ -1533,13 +1489,7 @@ export default function ListeBoutiquesVendeur() {
                           <small className="text-muted">
                             {filteredBoutiques.length} boutique(s) trouvée(s)
                           </small>
-                          <button
-                            onClick={() => setShowDebug(!showDebug)}
-                            className="btn btn-sm btn-outline-info"
-                          >
-                            <FontAwesomeIcon icon={faBug} className="me-1" />
-                            Debug
-                          </button>
+                        
                         </div>
                         <div className="dropdown">
                           <button

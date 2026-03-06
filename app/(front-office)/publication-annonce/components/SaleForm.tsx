@@ -44,11 +44,11 @@ const decodeToken = (token: string): any => {
       console.warn("⚠️ Format de token invalide");
       return null;
     }
-    
+
     const payload = parts[1];
     const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
     const paddedBase64 = base64.padEnd(base64.length + (4 - base64.length % 4) % 4, '=');
-    
+
     const decoded = atob(paddedBase64);
     return JSON.parse(decoded);
   } catch (error) {
@@ -132,76 +132,39 @@ const VenteForm: React.FC<VenteFormProps> = ({
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [isVendeur, setIsVendeur] = useState(false);
 
-  // ✅ Fonction pour formater le numéro de téléphone avec +225
-  const formatPhoneNumber = (value: string): string => {
-    // Garder seulement le préfixe +225 et les chiffres
-    let cleaned = value.replace(/[^\d+]/g, '');
-    
-    // Si ça commence par +225, on le garde, sinon on l'ajoute
-    if (!cleaned.startsWith('+225')) {
-      cleaned = '+225' + cleaned.replace(/^0+/, '');
+  // Fonction pour formater le prix avec séparateur de milliers
+  const formatPrix = (value: string): string => {
+    const numbers = value.replace(/\D/g, '');
+    if (numbers) {
+      return numbers.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
     }
-    
-    // Extraire les chiffres après +225
-    let numbers = cleaned.replace('+225', '').replace(/\s/g, '');
-    
-    // Limiter à 10 chiffres
-    numbers = numbers.slice(0, 10);
-    
-    // Formater avec des espaces tous les 2 chiffres
-    let formatted = '+225';
-    if (numbers.length > 0) {
-      // Format: +225 07 09 18 18 64
-      const parts = [];
-      for (let i = 0; i < numbers.length; i += 2) {
-        parts.push(numbers.substr(i, 2));
-      }
-      formatted += ' ' + parts.join(' ');
-    }
-    
-    return formatted;
+    return '';
   };
 
-  // ✅ Fonction pour valider le numéro de téléphone
-  const validatePhoneNumber = (phone: string): boolean => {
-    // Enlever le préfixe +225 et les espaces
-    const numbers = phone.replace(/^\+225\s*/, '').replace(/\s/g, '');
-    // Vérifier qu'il reste exactement 10 chiffres
-    return /^\d{10}$/.test(numbers);
+  const extractNumericValue = (formattedValue: string): string => {
+    return formattedValue.replace(/\s/g, '');
   };
 
-  // ✅ Gestionnaire de changement pour le téléphone (pour le champ lieu qui sert de contact)
-  const handlePhoneChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatPhoneNumber(e.target.value);
-    
-    // Mettre à jour les données
-    onChange({ ...venteData, lieu: formatted });
-    
-    // Valider et afficher une erreur si nécessaire
-    if (formatted !== '+225 ') {
-      const isValid = validatePhoneNumber(formatted);
-      setPhoneError(isValid ? null : "Le numéro doit contenir 10 chiffres (ex: 07 09 18 18 64)");
-    } else {
-      setPhoneError(null);
-    }
+  const handlePrixChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPrix(e.target.value);
+    e.target.value = formatted;
+    const numericValue = extractNumericValue(formatted);
+    onChange({ ...venteData, prix: numericValue });
   };
 
-  // ✅ RÉCUPÉRER LE TYPE D'UTILISATEUR DIRECTEMENT DEPUIS L'API CLIENT
+  // Récupérer le type d'utilisateur
   useEffect(() => {
     const getUserTypeFromApiClient = () => {
       try {
-        // Utiliser la méthode getUserType() de l'ApiClient
-        // Note: Cette méthode n'est pas exposée publiquement, on va récupérer directement depuis localStorage
         const userType = localStorage.getItem("oskar_user_type");
-        
+
         if (userType) {
           console.log("✅ Type utilisateur trouvé dans localStorage:", userType);
           setIsVendeur(userType.toLowerCase() === "vendeur");
           return;
         }
 
-        // Si pas trouvé dans oskar_user_type, essayer de décoder le token
-        const token = 
+        const token =
           localStorage.getItem("oskar_token") ||
           localStorage.getItem("temp_token") ||
           localStorage.getItem("tempToken") ||
@@ -217,7 +180,6 @@ const VenteForm: React.FC<VenteFormProps> = ({
           }
         }
 
-        // Vérifier aussi l'objet user passé en props
         if (user) {
           const userType = user.type || user.role;
           if (userType) {
@@ -238,20 +200,34 @@ const VenteForm: React.FC<VenteFormProps> = ({
     getUserTypeFromApiClient();
   }, [user]);
 
-  // Fonction pour vérifier si l'utilisateur est un vendeur
   const isUserVendeur = useCallback(() => {
     return isVendeur;
   }, [isVendeur]);
 
-  // Charger toutes les boutiques si aucune n'est fournie de l'extérieur
+  // Charger les boutiques
   useEffect(() => {
     const fetchAllBoutiques = async () => {
       console.log("🏪 Chargement des boutiques - isUserVendeur:", isUserVendeur());
       console.log("🏪 externalBoutiques:", externalBoutiques);
-      
+
       if (externalBoutiques && externalBoutiques.length > 0) {
         console.log(`✅ Utilisation des ${externalBoutiques.length} boutiques externes`);
         setBoutiques(externalBoutiques);
+
+        if (externalBoutiques.length > 0 && !venteData.boutiqueUuid) {
+          const premiereBoutique = externalBoutiques[0];
+          console.log(`🏪 Sélection automatique de la boutique: ${premiereBoutique.nom}`);
+          
+          onChange({
+            ...venteData,
+            boutiqueUuid: premiereBoutique.uuid,
+            boutiqueNom: premiereBoutique.nom,
+          });
+
+          if (externalOnBoutiqueChange) {
+            externalOnBoutiqueChange(premiereBoutique.uuid);
+          }
+        }
         return;
       }
 
@@ -281,6 +257,21 @@ const VenteForm: React.FC<VenteFormProps> = ({
 
         console.log(`✅ ${boutiquesValides.length} boutiques disponibles`);
         setBoutiques(boutiquesValides);
+
+        if (boutiquesValides.length > 0 && !venteData.boutiqueUuid) {
+          const premiereBoutique = boutiquesValides[0];
+          console.log(`🏪 Sélection automatique de la boutique: ${premiereBoutique.nom}`);
+          
+          onChange({
+            ...venteData,
+            boutiqueUuid: premiereBoutique.uuid,
+            boutiqueNom: premiereBoutique.nom,
+          });
+
+          if (externalOnBoutiqueChange) {
+            externalOnBoutiqueChange(premiereBoutique.uuid);
+          }
+        }
       } catch (error) {
         console.error("❌ Erreur chargement boutiques:", error);
       } finally {
@@ -289,7 +280,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
     };
 
     fetchAllBoutiques();
-  }, [externalBoutiques, isUserVendeur]);
+  }, [externalBoutiques, isUserVendeur, venteData.boutiqueUuid]);
 
   // Charger les catégories
   useEffect(() => {
@@ -297,25 +288,68 @@ const VenteForm: React.FC<VenteFormProps> = ({
       try {
         setLoading(true);
         setError(null);
-        
+
         const response = await api.get(API_ENDPOINTS.CATEGORIES.LIST);
         console.log("📦 Réponse catégories brute:", response);
 
         if (Array.isArray(response)) {
-          // Filtrer pour garder seulement les catégories principales (sans path ou path null)
-          const mainCategories = response.filter(
-            (cat: Category) => !cat.path || cat.path === null
+          const activeCategories = response.filter(
+            (cat: Category) => !cat.is_deleted && cat.deleted_at === null
           );
-          
-          console.log("📊 Catégories principales:", mainCategories.map(c => ({ 
-            libelle: c.libelle, 
-            uuid: c.uuid,
-            enfants: c.enfants?.length || 0 
-          })));
-          
-          setCategories(mainCategories);
-          
-          // Si une catégorie est déjà sélectionnée, charger ses sous-catégories
+
+          const mainCategories = activeCategories.filter(
+            (cat: Category) => !cat.path || cat.path === null || cat.path === ""
+          );
+
+          const uniqueCategoriesMap = new Map<string, Category>();
+
+          mainCategories.forEach((category: Category) => {
+            const existing = uniqueCategoriesMap.get(category.libelle);
+            if (!existing) {
+              uniqueCategoriesMap.set(category.libelle, category);
+            } else {
+              const existingId = existing.id || 0;
+              const currentId = category.id || 0;
+              if (currentId > existingId) {
+                uniqueCategoriesMap.set(category.libelle, category);
+              }
+            }
+          });
+
+          const uniqueMainCategories = Array.from(uniqueCategoriesMap.values());
+
+          const processedCategories: Category[] = uniqueMainCategories.map((category: Category) => {
+            const enfants = category.enfants || [];
+            const activeEnfants = enfants.filter(
+              (enfant: Category) => !enfant.is_deleted && enfant.deleted_at === null
+            );
+
+            const uniqueChildrenMap = new Map<string, Category>();
+            activeEnfants.forEach((enfant: Category) => {
+              if (!uniqueChildrenMap.has(enfant.libelle)) {
+                uniqueChildrenMap.set(enfant.libelle, enfant);
+              } else {
+                const existing = uniqueChildrenMap.get(enfant.libelle)!;
+                if ((enfant.id || 0) > (existing.id || 0)) {
+                  uniqueChildrenMap.set(enfant.libelle, enfant);
+                }
+              }
+            });
+
+            const uniqueChildren = Array.from(uniqueChildrenMap.values());
+
+            return {
+              ...category,
+              enfants: uniqueChildren
+            };
+          });
+
+          const sortedCategories = processedCategories.sort(
+            (a: Category, b: Category) => a.libelle.localeCompare(b.libelle)
+          );
+
+          setCategories(sortedCategories);
+
           if (venteData.categorie_uuid) {
             const selectedCat = response.find(c => c.uuid === venteData.categorie_uuid);
             if (selectedCat?.enfants && selectedCat.enfants.length > 0) {
@@ -334,19 +368,17 @@ const VenteForm: React.FC<VenteFormProps> = ({
     fetchCategories();
   }, [venteData.categorie_uuid]);
 
-  // Gérer le changement de catégorie principale
   const handleCategorieChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const categorieUuid = e.target.value;
     const selectedCategory = categories.find(c => c.uuid === categorieUuid);
-    
-    // Mettre à jour la catégorie principale
+
     onChange({
       ...venteData,
       categorie_uuid: categorieUuid,
-      sous_categorie_uuid: "", // Réinitialiser la sous-catégorie
+      sous_categorie_uuid: "",
+      final_categorie_uuid: categorieUuid
     });
 
-    // Charger les sous-catégories
     if (selectedCategory?.enfants && selectedCategory.enfants.length > 0) {
       setSousCategories(selectedCategory.enfants);
     } else {
@@ -354,20 +386,20 @@ const VenteForm: React.FC<VenteFormProps> = ({
     }
   };
 
-  // Gérer le changement de sous-catégorie
   const handleSousCategorieChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const sousCategorieUuid = e.target.value;
+
     onChange({
       ...venteData,
       sous_categorie_uuid: sousCategorieUuid,
+      final_categorie_uuid: sousCategorieUuid || venteData.categorie_uuid
     });
   };
 
-  // Gérer le changement de boutique
   const handleBoutiqueSelect = (e: ChangeEvent<HTMLSelectElement>) => {
     const uuid = e.target.value;
     const selectedBoutique = boutiques.find(b => b.uuid === uuid);
-    
+
     onChange({
       ...venteData,
       boutiqueUuid: uuid,
@@ -379,20 +411,15 @@ const VenteForm: React.FC<VenteFormProps> = ({
     }
   };
 
-  const handlePrixChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    const numericValue = value.replace(/[^0-9]/g, "");
-    onChange({ ...venteData, prix: numericValue });
-  };
-
   const renderVenteStep2 = () => {
     const vendeur = isUserVendeur();
     console.log("🎨 Rendu étape 2 - estVendeur:", vendeur);
     console.log("🎨 Boutiques disponibles:", boutiques.length);
+    console.log("🎨 Boutique sélectionnée:", venteData.boutiqueUuid);
 
     return (
       <div className="container-fluid p-4">
-        {/* En-tête avec progression */}
+        {/* En-tête */}
         <div className="row mb-5">
           <div className="col-12">
             <div className="d-flex align-items-center bg-success bg-opacity-10 p-4 rounded-4 border border-success border-opacity-25">
@@ -427,7 +454,6 @@ const VenteForm: React.FC<VenteFormProps> = ({
         )}
 
         <div className="row g-4">
-          {/* Colonne principale - Formulaire */}
           <div className="col-lg-8">
             <div className="card border shadow-lg rounded-4 mb-4 hover-shadow transition-all">
               <div className="card-header bg-white border-bottom py-4 px-4 rounded-top-4">
@@ -439,9 +465,8 @@ const VenteForm: React.FC<VenteFormProps> = ({
                   Information du produit
                 </h4>
               </div>
-              
+
               <div className="card-body p-4">
-                {/* Section Boutique - UNIQUEMENT pour les vendeurs */}
                 {vendeur && (
                   <div className="mb-5">
                     <label className="form-label fw-bold fs-5 mb-3 d-flex align-items-center">
@@ -449,7 +474,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
                         icon={faStore}
                         className="me-2 text-success"
                       />
-                      Boutique
+                      Boutique <span className="text-danger ms-1">*</span>
                       <span className="badge bg-success bg-opacity-10 text-success ms-3 px-3 py-2 fs-6 rounded-pill">
                         Requis pour les vendeurs
                       </span>
@@ -491,7 +516,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
                       <div className="position-relative">
                         <select
                           className="form-select form-select-lg border rounded-4 py-3 px-4 bg-white"
-                          style={{ 
+                          style={{
                             fontSize: "1.1rem",
                             WebkitAppearance: "none",
                             MozAppearance: "none",
@@ -499,7 +524,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
                             backgroundImage: "none",
                             paddingRight: "3rem"
                           }}
-                          value={venteData.boutiqueUuid}
+                          value={venteData.boutiqueUuid || ""}
                           onChange={handleBoutiqueSelect}
                           required
                         >
@@ -510,11 +535,11 @@ const VenteForm: React.FC<VenteFormProps> = ({
                             </option>
                           ))}
                         </select>
-                        <FontAwesomeIcon 
-                          icon={faChevronDown} 
+                        <FontAwesomeIcon
+                          icon={faChevronDown}
                           className="position-absolute end-0 top-50 translate-middle-y me-4 text-secondary"
-                          style={{ 
-                            pointerEvents: "none", 
+                          style={{
+                            pointerEvents: "none",
                             fontSize: "1.2rem",
                             zIndex: 2
                           }}
@@ -534,7 +559,6 @@ const VenteForm: React.FC<VenteFormProps> = ({
                   </div>
                 )}
 
-                {/* Message pour les non-vendeurs */}
                 {!vendeur && (
                   <div className="mb-5">
                     <div className="alert alert-info border rounded-4 p-4 d-flex align-items-center">
@@ -547,7 +571,6 @@ const VenteForm: React.FC<VenteFormProps> = ({
                   </div>
                 )}
 
-                {/* Nom du produit */}
                 <div className="mb-4" style={{ minHeight: "110px" }}>
                   <label className="form-label fw-bold fs-5 mb-3">
                     Nom du produit <span className="text-danger">*</span>
@@ -573,9 +596,8 @@ const VenteForm: React.FC<VenteFormProps> = ({
                   </div>
                 </div>
 
-                {/* Prix et Quantité */}
                 <div className="row g-4 mb-4">
-                  <div className="col-md-6" style={{ minHeight: "120px" }}>
+                  <div className="col-md-12" style={{ minHeight: "120px" }}>
                     <label className="form-label fw-bold fs-5 mb-3">
                       Prix (FCFA) <span className="text-danger">*</span>
                     </label>
@@ -587,12 +609,16 @@ const VenteForm: React.FC<VenteFormProps> = ({
                         type="text"
                         className={`form-control form-control-lg border ${validationErrors.prix ? 'border-danger' : 'border-secondary'} rounded-end-4 py-3`}
                         style={{ fontSize: "1.1rem" }}
-                        placeholder="250000"
-                        value={venteData.prix}
+                        placeholder="100 000"
+                        value={venteData.prix ? formatPrix(venteData.prix) : ""}
                         onChange={handlePrixChange}
+                        inputMode="numeric"
                         required
                       />
                     </div>
+                    <small className="text-muted mt-1 d-block">
+                      Les espaces sont ajoutés automatiquement pour les milliers
+                    </small>
                     {validationErrors.prix && (
                       <div className="text-danger mt-2 d-flex align-items-center">
                         <FontAwesomeIcon icon={faExclamationCircle} className="me-2" />
@@ -600,87 +626,29 @@ const VenteForm: React.FC<VenteFormProps> = ({
                       </div>
                     )}
                   </div>
+                </div>
 
-                  <div className="col-md-6" style={{ minHeight: "120px" }}>
+                <div className="row g-4 mb-4">
+                  <div className="col-md-12" style={{ minHeight: "100px" }}>
                     <label className="form-label fw-bold fs-5 mb-3">
-                      Quantité <span className="text-danger">*</span>
+                      Quantité <span className="text-muted">(optionnelle, défaut: 1)</span>
                     </label>
                     <input
                       type="number"
                       className="form-control form-control-lg border border-secondary rounded-4 py-3 px-4"
                       style={{ fontSize: "1.1rem" }}
-                      value={venteData.quantite}
+                      value={venteData.quantite || 1}
                       onChange={(e) =>
                         onChange({ ...venteData, quantite: e.target.value })
                       }
                       min="1"
-                      required
                     />
                   </div>
                 </div>
 
-                {/* Type de produit et Lieu (Contact) - avec gestion améliorée du téléphone */}
-                <div className="row g-4 mb-4">
-                  <div className="col-md-6" style={{ minHeight: "120px" }}>
-                    <label className="form-label fw-bold fs-5 mb-3">
-                      Type de produit
-                    </label>
-                    <input
-                      type="text"
-                      className="form-control form-control-lg border border-secondary rounded-4 py-3 px-4"
-                      style={{ fontSize: "1.1rem" }}
-                      placeholder="Ex: accessoire audio"
-                      value={venteData.type}
-                      onChange={(e) =>
-                        onChange({ ...venteData, type: e.target.value })
-                      }
-                    />
-                  </div>
-
-                  <div className="col-md-6" style={{ minHeight: "120px" }}>
-                    <label className="form-label fw-bold fs-5 mb-3 d-flex align-items-center">
-                      <FontAwesomeIcon
-                        icon={faPhone}
-                        className="me-2 text-success"
-                      />
-                      Numéro de contact <span className="text-danger">*</span>
-                    </label>
-                    <div className="input-group">
-                      <span className="input-group-text bg-light border rounded-start-4 px-4">
-                        <FontAwesomeIcon icon={faMapMarkerAlt} className="text-success fs-4" />
-                      </span>
-                      <input
-                        type="tel"
-                        className={`form-control form-control-lg border ${phoneError ? 'border-danger' : validationErrors.lieu ? 'border-danger' : 'border-secondary'} rounded-end-4 py-3`}
-                        style={{ fontSize: "1.1rem" }}
-                        placeholder="+225 07 09 18 18 64"
-                        value={venteData.lieu}
-                        onChange={handlePhoneChange}
-                        required
-                      />
-                    </div>
-                    {phoneError && (
-                      <div className="text-danger mt-2 small">
-                        <FontAwesomeIcon icon={faExclamationCircle} className="me-1" />
-                        {phoneError}
-                      </div>
-                    )}
-                    {validationErrors.lieu && !phoneError && (
-                      <div className="text-danger mt-2 d-flex align-items-center">
-                        <FontAwesomeIcon icon={faExclamationCircle} className="me-2" />
-                        {validationErrors.lieu}
-                      </div>
-                    )}
-                    <small className="text-muted mt-1 d-block">
-                      Format: +225 suivi de 10 chiffres
-                    </small>
-                  </div>
-                </div>
-
-                {/* Description */}
                 <div className="mb-4" style={{ minHeight: "200px" }}>
                   <label className="form-label fw-bold fs-5 mb-3">
-                    Description
+                    Description <span className="text-muted">(optionnelle)</span>
                   </label>
                   <textarea
                     className={`form-control form-control-lg border ${validationErrors.description ? 'border-danger' : 'border-secondary'} rounded-4 py-3 px-4`}
@@ -703,10 +671,8 @@ const VenteForm: React.FC<VenteFormProps> = ({
             </div>
           </div>
 
-          {/* Colonne latérale - Photo et Catégories */}
           <div className="col-lg-4">
             <div className="sticky-top" style={{ top: "20px" }}>
-              {/* Photo du produit */}
               <div className="card border shadow-lg rounded-4 mb-4 hover-shadow transition-all">
                 <div className="card-header bg-white border-bottom py-4 px-4 rounded-top-4">
                   <h4 className="fw-bold mb-0 text-dark d-flex align-items-center">
@@ -714,10 +680,10 @@ const VenteForm: React.FC<VenteFormProps> = ({
                       icon={faCamera}
                       className="text-success me-3 fs-3"
                     />
-                    Photo
+                    Photo <span className="text-danger ms-1">*</span>
                   </h4>
                 </div>
-                
+
                 <div className="card-body p-4" style={{ minHeight: "400px" }}>
                   {imagePreview ? (
                     <div className="position-relative mb-4">
@@ -744,21 +710,29 @@ const VenteForm: React.FC<VenteFormProps> = ({
                       </button>
                     </div>
                   ) : (
-                    <div 
-                      className="text-center border border-dashed border-secondary rounded-4 p-5 mb-4 bg-light bg-opacity-25"
+                    <div
+                      className="text-center border border-dashed rounded-4 p-5 mb-4 bg-light bg-opacity-25"
                       onClick={() => document.getElementById('fileInput')?.click()}
-                      style={{ cursor: 'pointer', minHeight: "250px", display: "flex", flexDirection: "column", justifyContent: "center" }}
+                      style={{
+                        cursor: 'pointer',
+                        minHeight: "250px",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "center",
+                        borderColor: "#28a745"
+                      }}
                     >
                       <FontAwesomeIcon
                         icon={faImage}
-                        className="text-secondary fs-1 mb-3"
+                        className="text-success fs-1 mb-3"
                       />
                       <p className="text-secondary fs-6 mb-0">
                         Cliquez pour ajouter une photo
                       </p>
+                      <p className="text-danger small mt-2">* Champ obligatoire</p>
                     </div>
                   )}
-                  
+
                   <div className="d-grid mt-3">
                     <label className="btn btn-outline-success btn-lg rounded-4 py-3 border fw-bold">
                       <FontAwesomeIcon icon={faCamera} className="me-2" />
@@ -772,25 +746,9 @@ const VenteForm: React.FC<VenteFormProps> = ({
                       />
                     </label>
                   </div>
-
-                  <div className="mt-4 p-3 bg-light rounded-4 border">
-                    <small className="text-secondary d-block">
-                      <strong className="text-dark">📸 Conseils :</strong>
-                    </small>
-                    <small className="text-secondary d-block mt-2">
-                      • Photos de qualité = plus de ventes
-                    </small>
-                    <small className="text-secondary d-block">
-                      • Montrez le produit sous différents angles
-                    </small>
-                    <small className="text-secondary d-block">
-                      • Évitez le flou et les arrière-plans encombrés
-                    </small>
-                  </div>
                 </div>
               </div>
 
-              {/* Catégorie principale */}
               <div className="card border shadow-lg rounded-4 mb-4 hover-shadow transition-all">
                 <div className="card-header bg-white border-bottom py-4 px-4 rounded-top-4">
                   <h4 className="fw-bold mb-0 text-dark d-flex align-items-center">
@@ -798,11 +756,11 @@ const VenteForm: React.FC<VenteFormProps> = ({
                       icon={faList}
                       className="text-success me-3 fs-3"
                     />
-                    Catégorie
+                    Catégorie <span className="text-danger ms-1">*</span>
                   </h4>
                 </div>
-                
-                <div className="card-body p-4" style={{ minHeight: "250px" }}>
+
+                <div className="card-body p-4" style={{ minHeight: "300px" }}>
                   {loading ? (
                     <div className="text-center py-4">
                       <div className="spinner-border text-success mb-3" role="status">
@@ -824,7 +782,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
                         <div className="position-relative">
                           <select
                             className={`form-select form-select-lg border ${validationErrors.categorie ? 'border-danger' : 'border-secondary'} rounded-4 py-3 px-4 bg-white`}
-                            style={{ 
+                            style={{
                               fontSize: "1rem",
                               WebkitAppearance: "none",
                               MozAppearance: "none",
@@ -843,15 +801,9 @@ const VenteForm: React.FC<VenteFormProps> = ({
                               </option>
                             ))}
                           </select>
-                          <FontAwesomeIcon 
-                            icon={faChevronDown} 
-                            className="position-absolute end-0 top-50 translate-middle-y me-4 text-secondary"
-                            style={{ 
-                              pointerEvents: "none", 
-                              fontSize: "1rem",
-                              zIndex: 2
-                            }}
-                          />
+                          <div className="position-absolute end-0 top-0 h-100 d-flex align-items-center pe-4" style={{ pointerEvents: "none", zIndex: 2 }}>
+                            <FontAwesomeIcon icon={faChevronDown} className="text-secondary" style={{ fontSize: "1rem" }} />
+                          </div>
                         </div>
                         {validationErrors.categorie && (
                           <div className="text-danger mt-2 d-flex align-items-center">
@@ -861,16 +813,15 @@ const VenteForm: React.FC<VenteFormProps> = ({
                         )}
                       </div>
 
-                      {/* Sous-catégorie */}
                       {sousCategories.length > 0 && (
                         <div className="mb-3" style={{ minHeight: "100px" }}>
                           <label className="form-label fw-bold fs-6 mb-3">
-                            Sous-catégorie
+                            Sous-catégorie <span className="text-info">(Recommandé)</span>
                           </label>
                           <div className="position-relative">
                             <select
                               className="form-select form-select-lg border border-secondary rounded-4 py-3 px-4 bg-white"
-                              style={{ 
+                              style={{
                                 fontSize: "1rem",
                                 WebkitAppearance: "none",
                                 MozAppearance: "none",
@@ -881,27 +832,27 @@ const VenteForm: React.FC<VenteFormProps> = ({
                               value={venteData.sous_categorie_uuid || ""}
                               onChange={handleSousCategorieChange}
                             >
-                              <option value="" className="py-2">🔽 Sous-catégorie</option>
+                              <option value="" className="py-2">🔽 Sous-catégorie (optionnel)</option>
                               {sousCategories.map((sousCat) => (
                                 <option key={sousCat.uuid} value={sousCat.uuid} className="py-2">
                                   {sousCat.libelle}
                                 </option>
                               ))}
                             </select>
-                            <FontAwesomeIcon 
-                              icon={faChevronDown} 
-                              className="position-absolute end-0 top-50 translate-middle-y me-4 text-secondary"
-                              style={{ 
-                                pointerEvents: "none", 
-                                fontSize: "1rem",
-                                zIndex: 2
-                              }}
-                            />
+                            <div className="position-absolute end-0 top-0 h-100 d-flex align-items-center pe-4" style={{ pointerEvents: "none", zIndex: 2 }}>
+                              <FontAwesomeIcon icon={faChevronDown} className="text-secondary" style={{ fontSize: "1rem" }} />
+                            </div>
                           </div>
-                          <small className="text-secondary mt-2 d-block">
-                            <i className="fa-regular fa-circle-question me-1"></i>
-                            Optionnel - Affinez votre catégorie
-                          </small>
+                          <div className="mt-2 p-2 bg-info bg-opacity-10 rounded-3">
+                            <small className="text-info">
+                              <i className="fa-regular fa-circle-info me-1"></i>
+                              {venteData.sous_categorie_uuid ? (
+                                <>✅ La sous-catégorie sélectionnée sera enregistrée</>
+                              ) : (
+                                <>👉 Sélectionnez une sous-catégorie pour un ciblage plus précis</>
+                              )}
+                            </small>
+                          </div>
                         </div>
                       )}
                     </>
@@ -909,7 +860,6 @@ const VenteForm: React.FC<VenteFormProps> = ({
                 </div>
               </div>
 
-              {/* État du produit */}
               <div className="card border shadow-lg rounded-4 hover-shadow transition-all">
                 <div className="card-header bg-white border-bottom py-4 px-4 rounded-top-4">
                   <h4 className="fw-bold mb-0 text-dark d-flex align-items-center">
@@ -920,12 +870,12 @@ const VenteForm: React.FC<VenteFormProps> = ({
                     État
                   </h4>
                 </div>
-                
+
                 <div className="card-body p-4" style={{ minHeight: "200px" }}>
                   <div className="position-relative">
                     <select
                       className="form-select form-select-lg border border-secondary rounded-4 py-3 px-4 bg-white"
-                      style={{ 
+                      style={{
                         fontSize: "1rem",
                         WebkitAppearance: "none",
                         MozAppearance: "none",
@@ -944,18 +894,11 @@ const VenteForm: React.FC<VenteFormProps> = ({
                         </option>
                       ))}
                     </select>
-                    <FontAwesomeIcon 
-                      icon={faChevronDown} 
-                      className="position-absolute end-0 top-50 translate-middle-y me-4 text-secondary"
-                      style={{ 
-                        pointerEvents: "none", 
-                        fontSize: "1rem",
-                        zIndex: 2
-                      }}
-                    />
+                    <div className="position-absolute end-0 top-0 h-100 d-flex align-items-center pe-4" style={{ pointerEvents: "none", zIndex: 2 }}>
+                      <FontAwesomeIcon icon={faChevronDown} className="text-secondary" style={{ fontSize: "1rem" }} />
+                    </div>
                   </div>
 
-                  {/* Badges d'informations supplémentaires */}
                   <div className="mt-4 d-flex gap-2 flex-wrap">
                     <span className="badge bg-light text-dark border border-secondary px-3 py-2 rounded-pill">
                       <FontAwesomeIcon icon={faGift} className="me-1" />
@@ -984,13 +927,20 @@ const VenteForm: React.FC<VenteFormProps> = ({
       (b) => b.uuid === venteData.boutiqueUuid,
     );
 
-    // Trouver la catégorie sélectionnée
     const selectedCategorie = categories.find(c => c.uuid === venteData.categorie_uuid);
-    
-    // Trouver la sous-catégorie sélectionnée
     const selectedSousCategorie = sousCategories.find(
       sc => sc.uuid === venteData.sous_categorie_uuid
     );
+
+    const formatPrixDisplay = (prix: string): string => {
+      if (!prix) return "Prix non défini";
+      const numbers = prix.replace(/\D/g, '');
+      if (numbers) {
+        const formatted = numbers.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+        return `${formatted} FCFA`;
+      }
+      return "Prix non défini";
+    };
 
     return (
       <div className="container-fluid p-4">
@@ -1015,7 +965,6 @@ const VenteForm: React.FC<VenteFormProps> = ({
           <div className="col-lg-8">
             <div className="card border shadow-lg rounded-4 hover-shadow transition-all">
               <div className="card-body p-5">
-                {/* En-tête avec badge */}
                 <div className="d-flex justify-content-between align-items-start mb-5 pb-4 border-bottom">
                   <div>
                     <h4 className="fw-bold text-dark mb-2">Détails du produit</h4>
@@ -1027,7 +976,6 @@ const VenteForm: React.FC<VenteFormProps> = ({
                   </div>
                 </div>
 
-                {/* Section boutique */}
                 {selectedBoutique && (
                   <div className="mb-5 p-4 bg-success bg-opacity-10 rounded-4 border border-success">
                     <h5 className="fw-bold text-dark mb-3 d-flex align-items-center">
@@ -1077,7 +1025,6 @@ const VenteForm: React.FC<VenteFormProps> = ({
                   </div>
                 )}
 
-                {/* Titre du produit et prix */}
                 <div className="row mb-5">
                   <div className="col-md-8">
                     <h3 className="fw-bold text-dark mb-3 display-6">
@@ -1085,19 +1032,16 @@ const VenteForm: React.FC<VenteFormProps> = ({
                     </h3>
                     <div className="d-flex align-items-center flex-wrap gap-4">
                       <div className="display-5 fw-bold text-success">
-                        {venteData.prix
-                          ? `${parseInt(venteData.prix).toLocaleString()} FCFA`
-                          : "Prix non défini"}
+                        {formatPrixDisplay(venteData.prix)}
                       </div>
                       <div className="badge bg-light text-dark border border-secondary p-3 rounded-pill">
                         <FontAwesomeIcon icon={faBox} className="me-2" />
-                        Quantité: {venteData.quantite}
+                        Quantité: {venteData.quantite || 1}
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Détails du produit */}
                 <div className="row g-4">
                   <div className="col-md-6">
                     <div className="p-4 bg-light rounded-4 border">
@@ -1112,16 +1056,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
                       )}
                     </div>
                   </div>
-                  
-                  <div className="col-md-6">
-                    <div className="p-4 bg-light rounded-4 border">
-                      <p className="text-secondary mb-2 small">Type</p>
-                      <p className="fw-bold text-dark mb-0 fs-5">
-                        {venteData.type || "Non spécifié"}
-                      </p>
-                    </div>
-                  </div>
-                  
+
                   <div className="col-md-6">
                     <div className="p-4 bg-light rounded-4 border">
                       <p className="text-secondary mb-2 small">État</p>
@@ -1131,18 +1066,8 @@ const VenteForm: React.FC<VenteFormProps> = ({
                       </p>
                     </div>
                   </div>
-                  
-                  <div className="col-md-6">
-                    <div className="p-4 bg-light rounded-4 border">
-                      <p className="text-secondary mb-2 small">Contact</p>
-                      <p className="fw-bold text-dark mb-0 fs-5">
-                        {venteData.lieu || "Non renseigné"}
-                      </p>
-                    </div>
-                  </div>
                 </div>
 
-                {/* Description */}
                 {venteData.description && (
                   <div className="mt-5">
                     <p className="text-secondary mb-3 fw-bold">Description</p>
@@ -1164,7 +1089,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
                   <FontAwesomeIcon icon={faImage} className="me-2 text-success" />
                   Photo du produit
                 </h5>
-                
+
                 {imagePreview ? (
                   <div className="text-center">
                     <img

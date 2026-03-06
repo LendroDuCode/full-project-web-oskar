@@ -345,139 +345,151 @@ const AuthModals = () => {
     setShowUserRegister(true);
   };
 
-  const handleCreateBoutique = async (boutiqueData: any) => {
-    console.log("🏪 Création de boutique demandée");
-    setLoadingBoutique(true);
-    setBoutiqueError(null);
+  // Dans AuthModals.tsx - Remplacer la fonction handleCreateBoutique par celle-ci
 
-    try {
-      const token =
-        vendeurData?.token ||
-        localStorage.getItem("oskar_token") ||
-        localStorage.getItem("token") ||
-        localStorage.getItem("temp_token");
+const handleCreateBoutique = async (boutiqueData: any) => {
+  console.log("🏪 Création de boutique demandée");
+  setLoadingBoutique(true);
+  setBoutiqueError(null);
 
-      if (!token) {
-        throw new Error("Token d'authentification manquant");
-      }
+  try {
+    const token =
+      vendeurData?.token ||
+      localStorage.getItem("oskar_token") ||
+      localStorage.getItem("token") ||
+      localStorage.getItem("temp_token");
 
-      console.log("🔑 Token trouvé, longueur:", token.length);
-
-      const formDataToSend = new FormData();
-
-      formDataToSend.append("nom", boutiqueData.get("nom"));
-      formDataToSend.append("type_boutique_uuid", boutiqueData.get("type_boutique_uuid"));
-
-      const description = boutiqueData.get("description");
-      if (description) formDataToSend.append("description", description);
-
-      const politique_retour = boutiqueData.get("politique_retour");
-      if (politique_retour) formDataToSend.append("politique_retour", politique_retour);
-
-      const conditions_utilisation = boutiqueData.get("conditions_utilisation");
-      if (conditions_utilisation)
-        formDataToSend.append("conditions_utilisation", conditions_utilisation);
-
-      const logo = boutiqueData.get("logo");
-      if (logo instanceof File) formDataToSend.append("logo", logo);
-
-      const banniere = boutiqueData.get("banniere");
-      if (banniere instanceof File) formDataToSend.append("banniere", banniere);
-
-      if (vendeurData?.vendeurId) {
-        formDataToSend.append("vendeur_uuid", vendeurData.vendeurId);
-      } else if (vendeurData?.uuid) {
-        formDataToSend.append("vendeur_uuid", vendeurData.uuid);
-      }
-
-      const response = await fetch(API_ENDPOINTS.BOUTIQUES.CREATE, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formDataToSend,
-      });
-
-      console.log("📦 Statut réponse:", response.status);
-
-      let responseData;
-      const contentType = response.headers.get("content-type");
-
-      if (contentType && contentType.includes("application/json")) {
-        responseData = await response.json();
-      } else {
-        const text = await response.text();
-        console.log("📦 Réponse texte:", text);
-        responseData = { message: text };
-      }
-
-      if (!response.ok) {
-        console.error("❌ Erreur réponse:", responseData);
-        throw new Error(
-          responseData.message ||
-            responseData.error ||
-            `Erreur ${response.status}`,
-        );
-      }
-
-      console.log("✅ Réponse API création boutique:", responseData);
-
-      setShowBoutiqueCreation(false);
-      setShowBoutiquePrompt(false);
-      setPromptVisible(false);
-
-      if (vendeurData) {
-        const updatedUser = {
-          ...vendeurData,
-          has_boutique: true,
-          boutique_uuid: responseData.boutique?.uuid || responseData.uuid,
-        };
-
-        if (token) {
-          console.log("💾 Sauvegarde du token");
-          localStorage.setItem("oskar_token", token);
-          localStorage.setItem("temp_token", token);
-          localStorage.setItem("tempToken", token);
-          localStorage.setItem("token", token);
-          
-          const expires = new Date();
-          expires.setDate(expires.getDate() + 1);
-          document.cookie = `oskar_token=${token}; path=/; expires=${expires.toUTCString()}; SameSite=Lax`;
-        }
-        
-        localStorage.setItem("oskar_user", JSON.stringify(updatedUser));
-        localStorage.setItem("oskar_user_type", "vendeur");
-
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(
-            new CustomEvent("auth-state-changed", {
-              detail: { isLoggedIn: true, user: updatedUser },
-            }),
-          );
-          window.dispatchEvent(new Event("force-header-update"));
-        }
-
-        console.log("🔑 Connexion du vendeur après création boutique");
-        // ✅ IMPORTANT: Le 3ème paramètre false signifie "pas de redirection"
-        login(updatedUser, token, false);
-        
-        setVendeurData(null);
-        setLoadingBoutique(false);
-        setVerificationDone(true);
-        setHasActiveBoutique(true);
-
-        // Afficher la notification de succès en vert
-        setSuccessMessage("Boutique créée avec succès !");
-        setShowSuccessNotif(true);
-      }
-    } catch (error: any) {
-      console.error("❌ Erreur création boutique:", error);
-      setBoutiqueError(
-        error.message || "Erreur lors de la création de la boutique",
-      );
-      setLoadingBoutique(false);
+    if (!token) {
+      throw new Error("Token d'authentification manquant");
     }
-  };
+
+    console.log("🔑 Token trouvé, longueur:", token.length);
+
+    const formDataToSend = new FormData();
+
+    // ✅ Champs obligatoires seulement
+    formDataToSend.append("nom", boutiqueData.get("nom"));
+    
+    // ❌ NE PAS ENVOYER type_boutique_uuid (maintenant optionnel)
+    // formDataToSend.append("type_boutique_uuid", boutiqueData.get("type_boutique_uuid"));
+
+    const description = boutiqueData.get("description");
+    if (description) formDataToSend.append("description", description);
+
+    const logo = boutiqueData.get("logo");
+    if (logo instanceof File) formDataToSend.append("logo", logo);
+
+    const banniere = boutiqueData.get("banniere");
+    if (banniere instanceof File) formDataToSend.append("banniere", banniere);
+
+    if (vendeurData?.vendeurId) {
+      formDataToSend.append("vendeur_uuid", vendeurData.vendeurId);
+    } else if (vendeurData?.uuid) {
+      formDataToSend.append("vendeur_uuid", vendeurData.uuid);
+    }
+
+    // Afficher le contenu du FormData pour déboguer
+    console.log("📦 FormData envoyé:");
+    for (const [key, value] of formDataToSend.entries()) {
+      if (value instanceof File) {
+        console.log(`   ${key}: [Fichier] ${value.name} (${value.size} bytes)`);
+      } else {
+        console.log(`   ${key}: "${value}"`);
+      }
+    }
+
+    const response = await fetch(API_ENDPOINTS.BOUTIQUES.CREATE, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        // Ne pas définir Content-Type, le navigateur le fera automatiquement avec la boundary
+      },
+      body: formDataToSend,
+    });
+
+    console.log("📦 Statut réponse:", response.status);
+
+    let responseData;
+    const contentType = response.headers.get("content-type");
+
+    if (contentType && contentType.includes("application/json")) {
+      responseData = await response.json();
+    } else {
+      const text = await response.text();
+      console.log("📦 Réponse texte:", text);
+      responseData = { message: text };
+    }
+
+    if (!response.ok) {
+      console.error("❌ Erreur réponse:", responseData);
+      
+      // Message d'erreur plus explicite
+      let errorMessage = responseData.message || responseData.error || `Erreur ${response.status}`;
+      
+      // Si l'erreur mentionne type_boutique_uuid, c'est que le backend n'a pas été mis à jour
+      if (errorMessage.includes("type_boutique_uuid")) {
+        errorMessage = "Le backend n'a pas été mis à jour. Contactez l'administrateur.";
+      }
+      
+      throw new Error(errorMessage);
+    }
+
+    console.log("✅ Réponse API création boutique:", responseData);
+
+    setShowBoutiqueCreation(false);
+    setShowBoutiquePrompt(false);
+    setPromptVisible(false);
+
+    if (vendeurData) {
+      const updatedUser = {
+        ...vendeurData,
+        has_boutique: true,
+        boutique_uuid: responseData.boutique?.uuid || responseData.uuid,
+      };
+
+      if (token) {
+        console.log("💾 Sauvegarde du token");
+        localStorage.setItem("oskar_token", token);
+        localStorage.setItem("temp_token", token);
+        localStorage.setItem("tempToken", token);
+        localStorage.setItem("token", token);
+        
+        const expires = new Date();
+        expires.setDate(expires.getDate() + 1);
+        document.cookie = `oskar_token=${token}; path=/; expires=${expires.toUTCString()}; SameSite=Lax`;
+      }
+      
+      localStorage.setItem("oskar_user", JSON.stringify(updatedUser));
+      localStorage.setItem("oskar_user_type", "vendeur");
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("auth-state-changed", {
+            detail: { isLoggedIn: true, user: updatedUser },
+          }),
+        );
+        window.dispatchEvent(new Event("force-header-update"));
+      }
+
+      console.log("🔑 Connexion du vendeur après création boutique");
+      login(updatedUser, token, false);
+      
+      setVendeurData(null);
+      setLoadingBoutique(false);
+      setVerificationDone(true);
+      setHasActiveBoutique(true);
+
+      setSuccessMessage("Boutique créée avec succès !");
+      setShowSuccessNotif(true);
+    }
+  } catch (error: any) {
+    console.error("❌ Erreur création boutique:", error);
+    setBoutiqueError(
+      error.message || "Erreur lors de la création de la boutique",
+    );
+    setLoadingBoutique(false);
+  }
+};
 
   const handleStartBoutiqueCreation = () => {
     console.log("🏪 Utilisateur a choisi de créer une boutique");
@@ -888,26 +900,6 @@ const AuthModals = () => {
                 >
                   <FontAwesomeIcon icon={faStore} />
                   Créer ma boutique maintenant
-                </button>
-
-                <button
-                  onClick={handleSkipBoutiqueCreation}
-                  disabled={loadingBoutique}
-                  className="btn-skip"
-                  style={{
-                    backgroundColor: "transparent",
-                    color: colors.textMuted,
-                    border: `2px solid ${colors.border}`,
-                    borderRadius: "0.75rem",
-                    padding: "clamp(0.875rem, 2.5vw, 1rem)",
-                    fontSize: "clamp(0.95rem, 2.8vw, 1rem)",
-                    fontWeight: 600,
-                    cursor: loadingBoutique ? "not-allowed" : "pointer",
-                    transition: "all 0.3s",
-                    opacity: loadingBoutique ? 0.5 : 1,
-                  }}
-                >
-                  Créer plus tard depuis mon tableau de bord
                 </button>
               </div>
 

@@ -27,6 +27,7 @@ interface AnnonceData {
     avatar?: string;
     isPro?: boolean;
     type?: string;
+    boutique?: string;
   };
   category?: string;
   originalData?: any;
@@ -58,7 +59,7 @@ export default function AnnoncesPage() {
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Fonction pour transformer les données selon le type
+  // ✅ Fonction pour transformer les données selon le type
   const transformAnnonceData = useCallback(
     (item: any, type: string): AnnonceData => {
       const baseData = {
@@ -72,23 +73,28 @@ export default function AnnoncesPage() {
         description: item.description || item.message,
         image:
           item.image ||
+          item.image_key ||
           item.photo ||
-          item.images?.[0] ||
           `https://via.placeholder.com/64?text=${type.charAt(0).toUpperCase()}`,
         type: type as "produit" | "don" | "echange",
         status: (item.statut || "").toLowerCase(),
         date:
           item.date_debut ||
           item.dateProposition ||
+          item.dateCreation ||
           item.createdAt ||
           item.updatedAt ||
           new Date().toISOString(),
         price: item.prix || null,
         quantity: item.quantite,
-        estPublie: item.estPublie || false,
-        estBloque: item.estBloque || item.est_bloque || false,
+        estPublie: item.estPublie === true,
+        estBloque: item.estBloque === true || item.est_bloque === true,
         category:
-          item.categorie || item.categorie_uuid || item.nom || "Non catégorisé",
+          typeof item.categorie === "string"
+            ? item.categorie
+            : item.categorie?.libelle ||
+              item.categorie?.nom ||
+              "Non catégorisé",
         originalData: item,
       };
 
@@ -102,6 +108,7 @@ export default function AnnoncesPage() {
               isPro: !!item.boutique || false,
               type: "vendeur",
               avatar: item.boutique?.logo,
+              boutique: item.boutique?.nom,
             },
           };
 
@@ -109,8 +116,8 @@ export default function AnnoncesPage() {
           return {
             ...baseData,
             seller: {
-              name: item.vendeur || item.utilisateur || "Donateur",
-              type: item.vendeur ? "vendeur" : "utilisateur",
+              name: item.vendeur || "Donateur",
+              type: "vendeur",
             },
           };
 
@@ -118,9 +125,8 @@ export default function AnnoncesPage() {
           return {
             ...baseData,
             seller: {
-              name:
-                item.vendeur || item.utilisateur || item.agent || "Initiateur",
-              type: item.typeDestinataire || "inconnu",
+              name: item.vendeur || "Initiateur",
+              type: "vendeur",
             },
           };
 
@@ -131,7 +137,43 @@ export default function AnnoncesPage() {
     [],
   );
 
-  // Fonction pour charger les données PUBLIÉES (non bloquées)
+  // ✅ Fonction pour extraire les items de la réponse (gère tous les formats)
+  const extractItems = (response: any): any[] => {
+    if (!response) return [];
+
+    // Si c'est déjà un tableau
+    if (Array.isArray(response)) return response;
+
+    // Format: { data: [...] }
+    if (response.data && Array.isArray(response.data)) return response.data;
+
+    // Format: { data: { produits: [...] } }
+    if (response.data?.produits && Array.isArray(response.data.produits))
+      return response.data.produits;
+
+    // Format: { data: { dons: [...] } }
+    if (response.data?.dons && Array.isArray(response.data.dons))
+      return response.data.dons;
+
+    // Format: { data: { echanges: [...] } }
+    if (response.data?.echanges && Array.isArray(response.data.echanges))
+      return response.data.echanges;
+
+    // Format: { produits: [...] }
+    if (response.produits && Array.isArray(response.produits))
+      return response.produits;
+
+    // Format: { dons: [...] }
+    if (response.dons && Array.isArray(response.dons)) return response.dons;
+
+    // Format: { echanges: [...] }
+    if (response.echanges && Array.isArray(response.echanges))
+      return response.echanges;
+
+    return [];
+  };
+
+  // ✅ Fonction pour charger les données PUBLIÉES
   const fetchPublishedData = useCallback(
     async (type: string) => {
       try {
@@ -147,27 +189,19 @@ export default function AnnoncesPage() {
                 api.get(API_ENDPOINTS.ECHANGES.VENDEUR_ECHANGES),
               ]);
 
-            // Traiter les réponses selon leur format
-            const produitsData =
-              produitsResponse.data?.data ||
-              produitsResponse.data ||
-              produitsResponse;
-            const donsData =
-              donsResponse.data?.data || donsResponse.data || donsResponse;
-            const echangesData =
-              echangesResponse.data?.data ||
-              echangesResponse.data ||
-              echangesResponse;
+            const produitsData = extractItems(produitsResponse);
+            const donsData = extractItems(donsResponse);
+            const echangesData = extractItems(echangesResponse);
 
             data = [
-              ...(Array.isArray(produitsData) ? produitsData : []).map(
-                (item: any) => transformAnnonceData(item, "produit"),
+              ...produitsData.map((item: any) =>
+                transformAnnonceData(item, "produit"),
               ),
-              ...(Array.isArray(donsData) ? donsData : []).map((item: any) =>
+              ...donsData.map((item: any) =>
                 transformAnnonceData(item, "don"),
               ),
-              ...(Array.isArray(echangesData) ? echangesData : []).map(
-                (item: any) => transformAnnonceData(item, "echange"),
+              ...echangesData.map((item: any) =>
+                transformAnnonceData(item, "echange"),
               ),
             ];
             break;
@@ -176,18 +210,17 @@ export default function AnnoncesPage() {
             const produits = await api.get(
               API_ENDPOINTS.PRODUCTS.VENDEUR_PRODUCTS,
             );
-            const produitsData2 =
-              produits.data?.data || produits.data || produits;
-            data = (Array.isArray(produitsData2) ? produitsData2 : []).map(
-              (item: any) => transformAnnonceData(item, "produit"),
+            const produitsData2 = extractItems(produits);
+            data = produitsData2.map((item: any) =>
+              transformAnnonceData(item, "produit"),
             );
             break;
 
           case "don":
             const dons = await api.get(API_ENDPOINTS.DONS.VENDEUR_DONS);
-            const donsData2 = dons.data?.data || dons.data || dons;
-            data = (Array.isArray(donsData2) ? donsData2 : []).map(
-              (item: any) => transformAnnonceData(item, "don"),
+            const donsData2 = extractItems(dons);
+            data = donsData2.map((item: any) =>
+              transformAnnonceData(item, "don"),
             );
             break;
 
@@ -195,16 +228,12 @@ export default function AnnoncesPage() {
             const echanges = await api.get(
               API_ENDPOINTS.ECHANGES.VENDEUR_ECHANGES,
             );
-            const echangesData2 =
-              echanges.data?.data || echanges.data || echanges;
-            data = (Array.isArray(echangesData2) ? echangesData2 : []).map(
-              (item: any) => transformAnnonceData(item, "echange"),
+            const echangesData2 = extractItems(echanges);
+            data = echangesData2.map((item: any) =>
+              transformAnnonceData(item, "echange"),
             );
             break;
         }
-
-        // Filtrer pour n'avoir que les publiés (estPublie = true)
-        data = data.filter((item) => item.estPublie === true);
 
         setAnnonces(data);
       } catch (err: any) {
@@ -222,7 +251,7 @@ export default function AnnoncesPage() {
     [transformAnnonceData],
   );
 
-  // Fonction pour charger les données BLOQUÉES
+  // ✅ Fonction pour charger les données BLOQUÉES
   const fetchBlockedData = useCallback(
     async (type: string) => {
       try {
@@ -239,44 +268,36 @@ export default function AnnoncesPage() {
                 api.get(API_ENDPOINTS.ECHANGES.VENDEUR_BLOCKED),
               ]);
 
-            const produitsData =
-              produitsResponse.data?.data ||
-              produitsResponse.data ||
-              produitsResponse;
-            const donsData =
-              donsResponse.data?.data || donsResponse.data || donsResponse;
-            const echangesData =
-              echangesResponse.data?.data ||
-              echangesResponse.data ||
-              echangesResponse;
+            const produitsData = extractItems(produitsResponse);
+            const donsData = extractItems(donsResponse);
+            const echangesData = extractItems(echangesResponse);
 
             data = [
-              ...(Array.isArray(produitsData) ? produitsData : []).map(
-                (item: any) => transformAnnonceData(item, "produit"),
+              ...produitsData.map((item: any) =>
+                transformAnnonceData(item, "produit"),
               ),
-              ...(Array.isArray(donsData) ? donsData : []).map((item: any) =>
+              ...donsData.map((item: any) =>
                 transformAnnonceData(item, "don"),
               ),
-              ...(Array.isArray(echangesData) ? echangesData : []).map(
-                (item: any) => transformAnnonceData(item, "echange"),
+              ...echangesData.map((item: any) =>
+                transformAnnonceData(item, "echange"),
               ),
             ];
             break;
 
           case "produit":
             const produits = await api.get(API_ENDPOINTS.PRODUCTS.BLOCKED);
-            const produitsData2 =
-              produits.data?.data || produits.data || produits;
-            data = (Array.isArray(produitsData2) ? produitsData2 : []).map(
-              (item: any) => transformAnnonceData(item, "produit"),
+            const produitsData2 = extractItems(produits);
+            data = produitsData2.map((item: any) =>
+              transformAnnonceData(item, "produit"),
             );
             break;
 
           case "don":
             const dons = await api.get(API_ENDPOINTS.DONS.VENDEUR_BLOCKED);
-            const donsData2 = dons.data?.data || dons.data || dons;
-            data = (Array.isArray(donsData2) ? donsData2 : []).map(
-              (item: any) => transformAnnonceData(item, "don"),
+            const donsData2 = extractItems(dons);
+            data = donsData2.map((item: any) =>
+              transformAnnonceData(item, "don"),
             );
             break;
 
@@ -284,10 +305,9 @@ export default function AnnoncesPage() {
             const echanges = await api.get(
               API_ENDPOINTS.ECHANGES.VENDEUR_BLOCKED,
             );
-            const echangesData2 =
-              echanges.data?.data || echanges.data || echanges;
-            data = (Array.isArray(echangesData2) ? echangesData2 : []).map(
-              (item: any) => transformAnnonceData(item, "echange"),
+            const echangesData2 = extractItems(echanges);
+            data = echangesData2.map((item: any) =>
+              transformAnnonceData(item, "echange"),
             );
             break;
         }
@@ -309,43 +329,122 @@ export default function AnnoncesPage() {
     [transformAnnonceData],
   );
 
-  // Fonction pour charger toutes les données (filtrées par statut)
+  // ✅ Fonction pour charger les données PUBLIÉES SPÉCIFIQUES (pour le statut "publie")
+  const fetchPublishedSpecificData = useCallback(
+    async (type: string) => {
+      try {
+        setLoading(true);
+        let data: any[] = [];
+
+        switch (type) {
+          case "tous":
+            const [produitsResponse, donsResponse, echangesResponse] =
+              await Promise.all([
+                api.get(API_ENDPOINTS.PRODUCTS.LISTE_PRODUITS_PUBLIES_VENDEUR),
+                api.get(API_ENDPOINTS.DONS.LISTE_DON_PUBLIE_VENDEUR),
+                api.get(API_ENDPOINTS.ECHANGES.LISTE_ECHANGES_PUBLIE_VENDEUR),
+              ]);
+
+            // Traitement spécial car ces endpoints retournent des tableaux directement
+            const produitsData = Array.isArray(produitsResponse)
+              ? produitsResponse
+              : [];
+            const donsData = Array.isArray(donsResponse) ? donsResponse : [];
+            const echangesData = Array.isArray(echangesResponse)
+              ? echangesResponse
+              : [];
+
+            data = [
+              ...produitsData.map((item: any) =>
+                transformAnnonceData(item, "produit"),
+              ),
+              ...donsData.map((item: any) =>
+                transformAnnonceData(item, "don"),
+              ),
+              ...echangesData.map((item: any) =>
+                transformAnnonceData(item, "echange"),
+              ),
+            ];
+            break;
+
+          case "produit":
+            const produits = await api.get(
+              API_ENDPOINTS.PRODUCTS.LISTE_PRODUITS_PUBLIES_VENDEUR,
+            );
+            const produitsData2 = Array.isArray(produits) ? produits : [];
+            data = produitsData2.map((item: any) =>
+              transformAnnonceData(item, "produit"),
+            );
+            break;
+
+          case "don":
+            const dons = await api.get(
+              API_ENDPOINTS.DONS.LISTE_DON_PUBLIE_VENDEUR,
+            );
+            const donsData2 = Array.isArray(dons) ? dons : [];
+            data = donsData2.map((item: any) =>
+              transformAnnonceData(item, "don"),
+            );
+            break;
+
+          case "echange":
+            const echanges = await api.get(
+              API_ENDPOINTS.ECHANGES.LISTE_ECHANGES_PUBLIE_VENDEUR,
+            );
+            const echangesData2 = Array.isArray(echanges) ? echanges : [];
+            data = echangesData2.map((item: any) =>
+              transformAnnonceData(item, "echange"),
+            );
+            break;
+        }
+
+        setAnnonces(data);
+      } catch (err: any) {
+        console.error("Erreur lors du chargement des annonces publiées:", err);
+        setError(
+          err.response?.data?.message ||
+            err.message ||
+            "Une erreur est survenue lors du chargement des annonces publiées",
+        );
+        setAnnonces([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [transformAnnonceData],
+  );
+
+  // ✅ Fonction principale pour charger les données selon le type et le statut
   const fetchData = useCallback(
     async (type: string, status: string) => {
       if (status === "bloque") {
         await fetchBlockedData(type);
+      } else if (status === "publie") {
+        await fetchPublishedSpecificData(type);
       } else {
         await fetchPublishedData(type);
 
-        // Filtrer par statut supplémentaire si nécessaire
-        if (status !== "tous") {
+        // Filtrer par statut "en-attente" si nécessaire
+        if (status === "en-attente") {
           setAnnonces((prev) => {
-            const filtered = prev.filter((item) => {
-              let itemStatus = item.status;
-
-              // Normaliser les statuts
-              if (itemStatus === "en_attente") itemStatus = "en-attente";
-              if (itemStatus === "publie") itemStatus = "publie";
-              if (itemStatus === "disponible") itemStatus = "disponible";
-              if (itemStatus === "valide") itemStatus = "valide";
-              if (itemStatus === "refuse") itemStatus = "refuse";
-
-              return itemStatus === status;
-            });
+            const filtered = prev.filter(
+              (item) =>
+                !item.estPublie && !item.estBloque && item.status !== "publie",
+            );
             return filtered;
           });
         }
       }
     },
-    [fetchPublishedData, fetchBlockedData],
+    [fetchPublishedData, fetchBlockedData, fetchPublishedSpecificData],
   );
 
-  // Effet pour charger les données quand les filtres changent
+  // ✅ Effet pour charger les données quand les filtres changent
   useEffect(() => {
     fetchData(selectedType, selectedStatus);
   }, [selectedType, selectedStatus, fetchData]);
 
-  // Filtrer par recherche
+  // ✅ Filtrer par recherche
   useEffect(() => {
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
@@ -368,7 +467,7 @@ export default function AnnoncesPage() {
     }
   }, [annonces, searchQuery]);
 
-  // Actions spécifiques pour vendeur
+  // ✅ Actions spécifiques pour vendeur
   const handlePublish = useCallback(
     async (uuid: string, type: string, publish: boolean) => {
       try {
@@ -387,13 +486,16 @@ export default function AnnoncesPage() {
             item.uuid === uuid ? { ...item, estPublie: publish } : item,
           ),
         );
+
+        // Rafraîchir les données
+        await fetchData(selectedType, selectedStatus);
       } catch (err: any) {
         console.error("Erreur lors de la publication:", err);
         setError(err.response?.data?.message || "Erreur lors de l'opération");
         alert(err.response?.data?.message || "Erreur lors de l'opération");
       }
     },
-    [],
+    [fetchData, selectedType, selectedStatus],
   );
 
   const handleBlock = useCallback(
@@ -414,16 +516,19 @@ export default function AnnoncesPage() {
             item.uuid === uuid ? { ...item, estBloque: block } : item,
           ),
         );
+
+        // Rafraîchir les données
+        await fetchData(selectedType, selectedStatus);
       } catch (err: any) {
         console.error("Erreur lors du blocage:", err);
         setError(err.response?.data?.message || "Erreur lors de l'opération");
         alert(err.response?.data?.message || "Erreur lors de l'opération");
       }
     },
-    [],
+    [fetchData, selectedType, selectedStatus],
   );
 
-  // Nouvelle fonction pour ouvrir le modal de confirmation de suppression
+  // ✅ Ouvrir le modal de confirmation de suppression
   const openDeleteModal = useCallback(
     (uuid: string, type: string, title: string) => {
       setItemToDelete({ uuid, type, title });
@@ -432,7 +537,7 @@ export default function AnnoncesPage() {
     [],
   );
 
-  // Fonction pour confirmer la suppression
+  // ✅ Confirmer la suppression
   const confirmDelete = useCallback(async () => {
     if (!itemToDelete) return;
 
@@ -469,7 +574,7 @@ export default function AnnoncesPage() {
     }
   }, [itemToDelete]);
 
-  // Annuler la suppression
+  // ✅ Annuler la suppression
   const cancelDelete = useCallback(() => {
     setDeleteModalOpen(false);
     setItemToDelete(null);
@@ -477,7 +582,6 @@ export default function AnnoncesPage() {
 
   const handleDelete = useCallback(
     (uuid: string, type: string) => {
-      // Trouver l'annonce pour obtenir le titre
       const annonce = annonces.find((item) => item.uuid === uuid);
       openDeleteModal(uuid, type, annonce?.title || "cette annonce");
     },
@@ -506,7 +610,6 @@ export default function AnnoncesPage() {
 
   const handleView = useCallback(
     (uuid: string, type: string) => {
-      // Trouver l'annonce sélectionnée
       const annonce = filteredAnnonces.find((item) => item.uuid === uuid);
       if (annonce && annonce.originalData) {
         setSelectedAnnonce({
@@ -524,7 +627,7 @@ export default function AnnoncesPage() {
     alert("Fonctionnalité d'édition non implémentée pour les vendeurs");
   }, []);
 
-  // Helper functions pour les endpoints
+  // ✅ Helper functions pour les endpoints
   const getPublishEndpoint = (
     type: string,
     uuid: string,
@@ -533,7 +636,7 @@ export default function AnnoncesPage() {
     if (publish) {
       switch (type) {
         case "produit":
-          return API_ENDPOINTS.PRODUCTS.PUBLLIER;
+          return API_ENDPOINTS.PRODUCTS.PUBLISH(uuid);
         case "don":
           return API_ENDPOINTS.DONS.PUBLISH;
         case "echange":
@@ -542,7 +645,7 @@ export default function AnnoncesPage() {
           return "";
       }
     } else {
-      // Pour dépublication, utiliser l'endpoint d'update avec estPublie = false
+      // Pour dépublication
       switch (type) {
         case "produit":
           return API_ENDPOINTS.PRODUCTS.UPDATE_STOCK_PRODUIT(uuid);
@@ -606,7 +709,6 @@ export default function AnnoncesPage() {
           `Action en masse "${action}" sur ${items.length} items pour vendeur`,
         );
 
-        // Implémenter les actions en masse
         for (const item of items) {
           switch (action) {
             case "publish":
@@ -627,7 +729,6 @@ export default function AnnoncesPage() {
           }
         }
 
-        // Réinitialiser la sélection
         setSelectedItems(new Set());
       } catch (err) {
         console.error("Erreur lors de l'action en masse:", err);

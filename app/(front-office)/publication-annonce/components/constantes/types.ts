@@ -77,16 +77,16 @@ export interface DonData {
 export interface EchangeData {
   nomElementEchange: string; // Nom de l'élément à échanger
   numero: string; // Numéro de téléphone
-  nom_initiateur: string; // Nom de la personne qui initie l'échange
-  typeEchange: EchangeType; // Type d'échange (produit ou service)
+  nom_initiateur?: string; // Nom de la personne qui initie l'échange
+  typeEchange?: EchangeType; // Type d'échange (produit ou service)
   sous_categorie_uuid: string;
-  objetPropose: string; // Objet proposé
+  objetPropose?: string; // Objet proposé
   objetDemande: string; // Objet demandé
-  message: string; // Message supplémentaire
+  message?: string; // Message supplémentaire
   prix: string; // Prix estimé (optionnel)
   categorie_uuid: string;
   image: File | null;
-  quantite: string;
+  quantite?: string;
     final_categorie_uuid?: string; // ✅ AJOUTER
   type_destinataire: DestinataireType; // Type de destinataire
   condition?: ProductCondition; // État de l'objet

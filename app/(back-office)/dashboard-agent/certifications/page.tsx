@@ -127,6 +127,13 @@ interface VerificationDetail {
   verificationNote: string;
 }
 
+interface AlertMessage {
+  type: "success" | "danger" | "warning" | "info";
+  title: string;
+  message: string;
+  visible: boolean;
+}
+
 // ============================================
 // FILTER BAR COMPONENT
 // ============================================
@@ -598,6 +605,110 @@ const RegistrePreview: React.FC<RegistrePreviewProps> = ({
 };
 
 // ============================================
+// ALERT COMPONENT
+// ============================================
+
+interface AlertProps {
+  alert: AlertMessage;
+  onClose: () => void;
+}
+
+const Alert: React.FC<AlertProps> = ({ alert, onClose }) => {
+  if (!alert.visible) return null;
+
+  const getIcon = () => {
+    switch (alert.type) {
+      case "success": return faCheckCircle;
+      case "danger": return faTimesCircle;
+      case "warning": return faExclamationCircle;
+      case "info": return faInfoCircle;
+      default: return faInfoCircle;
+    }
+  };
+
+  const getBgColor = () => {
+    switch (alert.type) {
+      case "success": return colors.oskar.green + "15";
+      case "danger": return "#FEE2E2";
+      case "warning": return "#FEF3C7";
+      case "info": return "#DBEAFE";
+      default: return colors.oskar.lightGrey;
+    }
+  };
+
+  const getBorderColor = () => {
+    switch (alert.type) {
+      case "success": return colors.oskar.green + "30";
+      case "danger": return "#FCA5A5";
+      case "warning": return "#FCD34D";
+      case "info": return "#93C5FD";
+      default: return colors.oskar.grey;
+    }
+  };
+
+  const getTextColor = () => {
+    switch (alert.type) {
+      case "success": return colors.oskar.green;
+      case "danger": return "#991B1B";
+      case "warning": return "#92400E";
+      case "info": return "#1E40AF";
+      default: return colors.oskar.black;
+    }
+  };
+
+  return (
+    <div
+      className="alert alert-dismissible fade show position-relative mb-4"
+      role="alert"
+      style={{
+        backgroundColor: getBgColor(),
+        borderLeft: `6px solid ${getTextColor()}`,
+        borderRadius: "12px",
+        boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
+        padding: "1rem 1.5rem",
+      }}
+    >
+      <div className="d-flex align-items-start gap-3">
+        <div
+          className="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+          style={{
+            width: "32px",
+            height: "32px",
+            backgroundColor: getTextColor() + "20",
+            color: getTextColor(),
+          }}
+        >
+          <FontAwesomeIcon icon={getIcon()} />
+        </div>
+        <div className="flex-grow-1">
+          <h6
+            className="fw-semibold mb-1"
+            style={{ color: getTextColor(), fontSize: "0.95rem" }}
+          >
+            {alert.title}
+          </h6>
+          <p className="small mb-0" style={{ color: colors.oskar.black }}>
+            {alert.message}
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn-close"
+          onClick={onClose}
+          aria-label="Fermer"
+          style={{
+            opacity: 0.6,
+            transition: "opacity 0.2s ease",
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+          onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.6")}
+        />
+      </div>
+    </div>
+  );
+};
+
+// ============================================
 // VERIFICATION WORKSTATION COMPONENT
 // ============================================
 
@@ -605,8 +716,9 @@ interface VerificationWorkstationProps {
   vendeur: Vendeur | null;
   onClose: () => void;
   onValidate?: (uuid: string) => Promise<void>;
-  onReject?: (uuid: string) => Promise<void>;
+  onReject?: (uuid: string, note?: string) => Promise<void>;
   onBlock?: (uuid: string) => Promise<void>;
+  showAlert?: (alert: AlertMessage) => void;
 }
 
 const VerificationWorkstation: React.FC<VerificationWorkstationProps> = ({
@@ -615,9 +727,58 @@ const VerificationWorkstation: React.FC<VerificationWorkstationProps> = ({
   onValidate,
   onReject,
   onBlock,
+  showAlert,
 }) => {
   const [processing, setProcessing] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [rejectionNote, setRejectionNote] = useState("");
+  const [showRejectionForm, setShowRejectionForm] = useState(false);
+
+  // ✅ CORRECTION: Initialiser les comparaisons avec le statut "pending" par défaut
+  const [comparisons, setComparisons] = useState<VerificationDetail["comparisons"]>([]);
+
+  useEffect(() => {
+    if (vendeur) {
+      // Initialiser les comparaisons avec le statut "pending"
+      const initialComparisons: VerificationDetail["comparisons"] = [
+        {
+          field: "name",
+          label: "Nom complet",
+          userValue: `${vendeur.prenoms} ${vendeur.nom}`,
+          documentValue: `${vendeur.prenoms} ${vendeur.nom}`,
+          status: "pending",
+        },
+        {
+          field: "email",
+          label: "Email",
+          userValue: vendeur.email,
+          documentValue: vendeur.email,
+          status: "pending",
+        },
+        {
+          field: "phone",
+          label: "Téléphone",
+          userValue: vendeur.telephone || "Non renseigné",
+          documentValue: vendeur.telephone || "Non renseigné",
+          status: "pending",
+        },
+        {
+          field: "address",
+          label: "Ville",
+          userValue: vendeur.ville || "Non renseignée",
+          documentValue: vendeur.ville || "Non renseignée",
+          status: "pending",
+        },
+      ];
+
+      // Si le vendeur est déjà vérifié, mettre à jour les statuts en conséquence
+      if (vendeur.est_verifie) {
+        setComparisons(initialComparisons.map(c => ({ ...c, status: "match" })));
+      } else {
+        setComparisons(initialComparisons);
+      }
+    }
+  }, [vendeur]);
 
   if (!vendeur) return null;
 
@@ -644,50 +805,6 @@ const VerificationWorkstation: React.FC<VerificationWorkstationProps> = ({
 
   const creationDate = formatDate(vendeur.date_creation);
 
-  // Générer les comparaisons pour la vérification
-  const getComparisons = (): VerificationDetail["comparisons"] => {
-    const comparisons: VerificationDetail["comparisons"] = [
-      {
-        field: "name",
-        label: "Nom complet",
-        userValue: `${vendeur.prenoms} ${vendeur.nom}`,
-        documentValue: `${vendeur.prenoms} ${vendeur.nom}`,
-        status: "match",
-      },
-      {
-        field: "email",
-        label: "Email",
-        userValue: vendeur.email,
-        documentValue: vendeur.email,
-        status: "match",
-      },
-      {
-        field: "phone",
-        label: "Téléphone",
-        userValue: vendeur.telephone || "Non renseigné",
-        documentValue: vendeur.telephone || "Non renseigné",
-        status: vendeur.telephone ? "match" : "pending",
-      },
-      {
-        field: "address",
-        label: "Ville",
-        userValue: vendeur.ville || "Non renseignée",
-        documentValue: vendeur.ville || "Non renseignée",
-        status: vendeur.ville ? "match" : "pending",
-      },
-    ];
-
-    // Simuler quelques différences pour la démo (à retirer en production)
-    if (vendeur.uuid === "demo-mismatch") {
-      comparisons[0].status = "mismatch";
-      comparisons[0].documentValue = "Jean Michel Kouassi";
-    }
-
-    return comparisons;
-  };
-
-  const comparisons = getComparisons();
-
   // Note de vérification
   const getVerificationNote = () => {
     const mismatches = comparisons.filter((c) => c.status === "mismatch");
@@ -697,7 +814,7 @@ const VerificationWorkstation: React.FC<VerificationWorkstationProps> = ({
     if (vendeur.est_verifie) {
       return "Ce compte a déjà été vérifié. Toutes les informations semblent correctes.";
     }
-    return "Toutes les informations semblent cohérentes. Vous pouvez procéder à la vérification.";
+    return "Toutes les informations sont en attente de vérification. Veuillez examiner les documents et valider ou rejeter la demande.";
   };
 
   const getRegistreUrl = () => {
@@ -714,7 +831,7 @@ const VerificationWorkstation: React.FC<VerificationWorkstationProps> = ({
       case "mismatch":
         return { bg: "#FEF3C7", text: "#92400E" };
       case "pending":
-        return { bg: colors.oskar.lightGrey, text: colors.oskar.grey };
+        return { bg: "#DBEAFE", text: "#1E40AF" };
       default:
         return { bg: colors.oskar.lightGrey, text: colors.oskar.grey };
     }
@@ -727,37 +844,130 @@ const VerificationWorkstation: React.FC<VerificationWorkstationProps> = ({
       case "mismatch":
         return "Différence détectée";
       case "pending":
-        return "Information manquante";
+        return "En attente de vérification";
       default:
         return "En vérification";
     }
   };
 
+  const getStatusIcon = (status: "match" | "mismatch" | "pending") => {
+    switch (status) {
+      case "match":
+        return faCheck;
+      case "mismatch":
+        return faExclamationCircle;
+      case "pending":
+        return faClock;
+      default:
+        return faClock;
+    }
+  };
+
+  // ✅ CORRECTION: Fonction pour valider le vendeur
   const handleValidate = async () => {
     if (!onValidate) return;
+    
     setProcessing(true);
     try {
+      // Mettre à jour tous les statuts des comparaisons à "match"
+      setComparisons(prev => prev.map(c => ({ ...c, status: "match" })));
+      
       await onValidate(vendeur.uuid);
+      
+      // Afficher une alerte de succès
+      if (showAlert) {
+        showAlert({
+          type: "success",
+          title: "Vérification réussie !",
+          message: `Le compte de ${vendeur.prenoms} ${vendeur.nom} a été vérifié avec succès.`,
+          visible: true,
+        });
+      }
+    } catch (error) {
+      console.error("Erreur lors de la validation:", error);
+      if (showAlert) {
+        showAlert({
+          type: "danger",
+          title: "Erreur",
+          message: "Une erreur est survenue lors de la vérification. Veuillez réessayer.",
+          visible: true,
+        });
+      }
     } finally {
       setProcessing(false);
     }
   };
 
+  // ✅ CORRECTION: Fonction pour rejeter le vendeur
   const handleReject = async () => {
     if (!onReject) return;
+    
+    if (!showRejectionForm) {
+      setShowRejectionForm(true);
+      return;
+    }
+
     setProcessing(true);
     try {
-      await onReject(vendeur.uuid);
+      // Mettre à jour tous les statuts des comparaisons à "mismatch"
+      setComparisons(prev => prev.map(c => ({ ...c, status: "mismatch" })));
+      
+      await onReject(vendeur.uuid, rejectionNote);
+      
+      // Afficher une alerte d'information
+      if (showAlert) {
+        showAlert({
+          type: "warning",
+          title: "Demande rejetée",
+          message: `La demande de ${vendeur.prenoms} ${vendeur.nom} a été rejetée.`,
+          visible: true,
+        });
+      }
+      
+      setShowRejectionForm(false);
+      setRejectionNote("");
+    } catch (error) {
+      console.error("Erreur lors du rejet:", error);
+      if (showAlert) {
+        showAlert({
+          type: "danger",
+          title: "Erreur",
+          message: "Une erreur est survenue lors du rejet. Veuillez réessayer.",
+          visible: true,
+        });
+      }
     } finally {
       setProcessing(false);
     }
   };
 
+  // ✅ CORRECTION: Fonction pour bloquer le vendeur
   const handleBlock = async () => {
     if (!onBlock) return;
+    
     setProcessing(true);
     try {
       await onBlock(vendeur.uuid);
+      
+      // Afficher une alerte
+      if (showAlert) {
+        showAlert({
+          type: "danger",
+          title: "Compte bloqué",
+          message: `Le compte de ${vendeur.prenoms} ${vendeur.nom} a été bloqué.`,
+          visible: true,
+        });
+      }
+    } catch (error) {
+      console.error("Erreur lors du blocage:", error);
+      if (showAlert) {
+        showAlert({
+          type: "danger",
+          title: "Erreur",
+          message: "Une erreur est survenue lors du blocage. Veuillez réessayer.",
+          visible: true,
+        });
+      }
     } finally {
       setProcessing(false);
     }
@@ -949,6 +1159,7 @@ const VerificationWorkstation: React.FC<VerificationWorkstationProps> = ({
             {comparisons.map((comparison, index) => {
               const statusColor = getStatusColor(comparison.status);
               const statusText = getStatusText(comparison.status);
+              const statusIcon = getStatusIcon(comparison.status);
 
               return (
                 <div
@@ -972,18 +1183,10 @@ const VerificationWorkstation: React.FC<VerificationWorkstationProps> = ({
                         padding: "0.25rem 0.75rem",
                       }}
                     >
-                      {comparison.status === "match" && (
-                        <FontAwesomeIcon
-                          icon={faCheck}
-                          style={{ fontSize: "0.65rem" }}
-                        />
-                      )}
-                      {comparison.status === "mismatch" && (
-                        <FontAwesomeIcon
-                          icon={faExclamationCircle}
-                          style={{ fontSize: "0.65rem" }}
-                        />
-                      )}
+                      <FontAwesomeIcon
+                        icon={statusIcon}
+                        style={{ fontSize: "0.65rem" }}
+                      />
                       {statusText}
                     </span>
                   </div>
@@ -999,7 +1202,7 @@ const VerificationWorkstation: React.FC<VerificationWorkstationProps> = ({
                       </p>
                     </div>
                     <div className="col-md-6">
-                      <p className="small text-muted mb-1">Document officiel</p>
+                      <p className="small text-muted mb-1">Document fourni</p>
                       <p
                         className="fw-semibold mb-0"
                         style={{ color: colors.oskar.black }}
@@ -1044,16 +1247,74 @@ const VerificationWorkstation: React.FC<VerificationWorkstationProps> = ({
           </div>
         </div>
 
+        {/* Formulaire de rejet */}
+        {showRejectionForm && (
+          <div className="bg-white rounded-3 p-4 shadow-sm mb-4">
+            <h4
+              className="fw-semibold mb-3"
+              style={{ color: colors.oskar.black }}
+            >
+              <FontAwesomeIcon icon={faTimesCircle} className="me-2 text-danger" />
+              Motif du rejet
+            </h4>
+            <div className="mb-3">
+              <textarea
+                className="form-control"
+                rows={4}
+                placeholder="Veuillez indiquer la raison du rejet..."
+                value={rejectionNote}
+                onChange={(e) => setRejectionNote(e.target.value)}
+                style={{
+                  borderColor: colors.oskar.lightGrey,
+                  borderRadius: "8px",
+                  resize: "vertical",
+                }}
+              />
+            </div>
+            <div className="d-flex gap-2 justify-content-end">
+              <button
+                type="button"
+                className="btn btn-outline-secondary"
+                onClick={() => {
+                  setShowRejectionForm(false);
+                  setRejectionNote("");
+                }}
+                disabled={processing}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={handleReject}
+                disabled={processing || !rejectionNote.trim()}
+              >
+                {processing ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm me-2" />
+                    Traitement...
+                  </>
+                ) : (
+                  <>
+                    <FontAwesomeIcon icon={faTimesCircle} className="me-2" />
+                    Confirmer le rejet
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Actions */}
         <div className="bg-white rounded-3 p-4 shadow-sm">
           <div className="row g-3">
-            {!vendeur.est_verifie && (
+            {!vendeur.est_verifie && !showRejectionForm && (
               <>
                 <div className="col-md-6">
                   <button
                     type="button"
                     className="btn w-100 d-flex align-items-center justify-content-center gap-2"
-                    onClick={handleReject}
+                    onClick={() => setShowRejectionForm(true)}
                     disabled={processing}
                     style={{
                       backgroundColor: "#EF4444",
@@ -1189,6 +1450,14 @@ export default function VendeursList() {
   } | null>(null);
   const [showRegistre, setShowRegistre] = useState(false);
 
+  // État pour les alertes
+  const [alert, setAlert] = useState<AlertMessage>({
+    type: "info",
+    title: "",
+    message: "",
+    visible: false,
+  });
+
   // Charger les vendeurs
   useEffect(() => {
     const fetchVendeurs = async () => {
@@ -1223,6 +1492,24 @@ export default function VendeursList() {
 
     fetchVendeurs();
   }, []);
+
+  // Fonction pour afficher une alerte
+  const showAlert = (alertData: Omit<AlertMessage, "visible">) => {
+    setAlert({
+      ...alertData,
+      visible: true,
+    });
+
+    // Auto-fermeture après 5 secondes
+    setTimeout(() => {
+      setAlert(prev => ({ ...prev, visible: false }));
+    }, 5000);
+  };
+
+  // Fermer l'alerte
+  const closeAlert = () => {
+    setAlert(prev => ({ ...prev, visible: false }));
+  };
 
   // Filtrer les vendeurs
   const filteredVendeurs = vendeurs.filter((vendeur) => {
@@ -1307,31 +1594,57 @@ export default function VendeursList() {
     setSelectedVendeur(null);
   };
 
-  // Actions simulées (à connecter avec vos vraies fonctions API)
+  // ✅ CORRECTION: Actions avec mise à jour de l'état local
   const handleValidate = async (uuid: string) => {
     console.log("Valider vendeur:", uuid);
+    
     // Mettre à jour l'état local
     setVendeurs(prev => 
       prev.map(v => 
         v.uuid === uuid ? { ...v, est_verifie: true } : v
       )
     );
-    alert(`Vendeur ${uuid} vérifié avec succès (simulation)`);
+
+    // Mettre à jour le vendeur sélectionné si c'est le même
+    if (selectedVendeur?.uuid === uuid) {
+      setSelectedVendeur(prev => prev ? { ...prev, est_verifie: true } : null);
+    }
+
+    // Ici, vous appelleriez votre API réelle
+    // await api.post(API_ENDPOINTS.ADMIN.VENDEURS.VALIDATE(uuid));
   };
 
-  const handleReject = async (uuid: string) => {
-    console.log("Rejeter vendeur:", uuid);
-    alert(`Vendeur ${uuid} rejeté (simulation)`);
+  const handleReject = async (uuid: string, note?: string) => {
+    console.log("Rejeter vendeur:", uuid, "Note:", note);
+    
+    // Mettre à jour l'état local (vous pouvez définir un champ "est_rejete" si nécessaire)
+    setVendeurs(prev => 
+      prev.map(v => 
+        v.uuid === uuid ? { ...v, est_verifie: false } : v
+      )
+    );
+
+    // Ici, vous appelleriez votre API réelle
+    // await api.post(API_ENDPOINTS.ADMIN.VENDEURS.REJECT(uuid), { reason: note });
   };
 
   const handleBlock = async (uuid: string) => {
     console.log("Bloquer vendeur:", uuid);
+    
+    // Mettre à jour l'état local
     setVendeurs(prev => 
       prev.map(v => 
         v.uuid === uuid ? { ...v, est_bloque: true } : v
       )
     );
-    alert(`Vendeur ${uuid} bloqué (simulation)`);
+
+    // Mettre à jour le vendeur sélectionné si c'est le même
+    if (selectedVendeur?.uuid === uuid) {
+      setSelectedVendeur(prev => prev ? { ...prev, est_bloque: true } : null);
+    }
+
+    // Ici, vous appelleriez votre API réelle
+    // await api.post(API_ENDPOINTS.ADMIN.VENDEURS.BLOCK(uuid));
   };
 
   const getStatusBadge = (vendeur: Vendeur) => {
@@ -1378,6 +1691,13 @@ export default function VendeursList() {
 
   return (
     <main style={{ fontFamily: "Arial, sans-serif" }}>
+      {/* Alerte globale */}
+      {alert.visible && (
+        <div className="container-fluid px-4 pt-4">
+          <Alert alert={alert} onClose={closeAlert} />
+        </div>
+      )}
+
       {/* Filter Bar */}
       <FilterBar
         onAccountTypeChange={setFilterType}
@@ -1642,6 +1962,7 @@ export default function VendeursList() {
             onValidate={handleValidate}
             onReject={handleReject}
             onBlock={handleBlock}
+            showAlert={showAlert}
           />
         ) : (
           <section

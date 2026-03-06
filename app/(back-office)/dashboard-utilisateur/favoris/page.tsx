@@ -639,14 +639,7 @@ export default function MesFavorisPage() {
                   )}
                   {loading ? "Chargement..." : "Actualiser"}
                 </button>
-                <button
-                  type="button"
-                  className="btn btn-danger d-flex align-items-center gap-2"
-                  onClick={navigateToMarketplace}
-                >
-                  <FontAwesomeIcon icon={faPlus} />
-                  Explorer
-                </button>
+             
               </div>
             </div>
           </div>
