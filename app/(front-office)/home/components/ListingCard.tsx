@@ -348,6 +348,12 @@ const ListingCard: React.FC<ListingCardProps> = ({
     }
   };
 
+  // ✅ FONCTION POUR GÉRER LE CLIC SUR L'IMAGE
+  const handleImageClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    window.location.href = getDetailLink();
+  };
+
   if (viewMode === "list") {
     return (
       <div
@@ -355,7 +361,12 @@ const ListingCard: React.FC<ListingCardProps> = ({
         style={{ height: "200px" }}
       >
         <div className="row g-0 h-100">
-          <div className="col-md-3 position-relative h-100">
+          {/* Image cliquable */}
+          <div 
+            className="col-md-3 position-relative h-100"
+            onClick={handleImageClick}
+            style={{ cursor: "pointer" }}
+          >
             <div className="position-relative h-100">
               <img
                 src={buildImageUrl(listing.image) || "https://storage.googleapis.com/uxpilot-auth.appspot.com/placeholder.jpg"}
@@ -404,14 +415,14 @@ const ListingCard: React.FC<ListingCardProps> = ({
             <div className="card-body h-100 d-flex flex-column p-3">
               <div className="d-flex justify-content-between align-items-start mb-1">
                 <div className="flex-grow-1">
-                  <h6 className="card-title fw-bold text-dark mb-0">
-                    <Link
-                      href={getDetailLink()}
-                      className="text-decoration-none text-dark"
-                    >
+                  <Link 
+                    href={getDetailLink()} 
+                    className="text-decoration-none"
+                  >
+                    <h6 className="card-title fw-bold text-dark mb-0">
                       {listing.titre}
-                    </Link>
-                  </h6>
+                    </h6>
+                  </Link>
                   <div className="d-flex flex-wrap gap-2 mt-1">
                     {listing.statut && (
                       <span className="badge bg-secondary" style={{ fontSize: "10px" }}>
@@ -487,10 +498,11 @@ const ListingCard: React.FC<ListingCardProps> = ({
   // MODE GRID
   return (
     <div className={getCardClasses()} style={{ height: "420px" }}>
-      {/* Image */}
+      {/* Image cliquable */}
       <div
         className="position-relative overflow-hidden"
-        style={{ height: "180px", flexShrink: 0 }}
+        style={{ height: "180px", flexShrink: 0, cursor: "pointer" }}
+        onClick={handleImageClick}
       >
         <img
           src={buildImageUrl(listing.image) || "https://storage.googleapis.com/uxpilot-auth.appspot.com/placeholder.jpg"}

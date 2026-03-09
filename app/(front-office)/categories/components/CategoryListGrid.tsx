@@ -1,4 +1,3 @@
-// app/(front-office)/categories/components/CategoryListGrid.tsx
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -7,10 +6,12 @@ import { API_ENDPOINTS } from "@/config/api-endpoints";
 import ListingCard from "../../home/components/ListingCard";
 import { useSearch } from "../../home/contexts/SearchContext";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import colors from "@/app/shared/constants/colors";
 import {
   faInbox,
   faRotate,
   faExclamationTriangle,
+  faBoxOpen,
 } from "@fortawesome/free-solid-svg-icons";
 
 interface CategoryListGridProps {
@@ -42,7 +43,8 @@ interface ListingItem {
     name: string;
     avatar: string;
   };
-  categorie_uuid?: string; // Pour le filtrage
+  categorie_uuid?: string;
+  categorie_libelle?: string;
 }
 
 const CategoryListGrid: React.FC<CategoryListGridProps> = ({
@@ -73,9 +75,21 @@ const CategoryListGrid: React.FC<CategoryListGridProps> = ({
   // FONCTION DE TRANSFORMATION DES DONNÉES
   // ============================================
   const transformItem = (item: any, type: "produit" | "don" | "echange"): ListingItem => {
-    // Récupérer l'UUID de la catégorie
-    const categorieUuid = item.categorie_uuid || item.categorie?.uuid;
+    // Récupérer l'UUID de la catégorie de différentes manières
+    const categorieUuid = 
+      item.categorie_uuid || 
+      item.categorie?.uuid || 
+      item.categorieId ||
+      item.category_uuid ||
+      item.category?.uuid;
     
+    const categorieLibelle = 
+      item.categorie_libelle ||
+      item.categorie?.libelle ||
+      item.category?.libelle ||
+      item.categorie?.nom ||
+      "";
+
     return {
       uuid: item.uuid,
       type,
@@ -84,14 +98,15 @@ const CategoryListGrid: React.FC<CategoryListGridProps> = ({
       libelle: item.libelle,
       description: item.description || item.message,
       prix: item.prix,
-      image: item.image || item.image_key || "",
+      image: item.image || item.image_key || item.images?.[0] || "",
       date: item.date || item.createdAt || item.publieLe || item.dateProposition || item.date_debut,
       disponible: item.disponible !== false,
       statut: item.statut || item.status,
       numero: item.numero || item.telephone,
       localisation: item.localisation || item.ville || item.lieu_retrait || item.lieu_rencontre || "",
       createdAt: item.createdAt,
-      categorie_uuid: categorieUuid, // 🔥 GARDER POUR FILTRAGE
+      categorie_uuid: categorieUuid,
+      categorie_libelle: categorieLibelle,
       seller: item.createurDetails ? {
         name: item.createurDetails.nom || "Annonceur",
         avatar: item.createurDetails.avatar,
@@ -109,7 +124,7 @@ const CategoryListGrid: React.FC<CategoryListGridProps> = ({
   };
 
   // ============================================
-  // FONCTION DE CHARGEMENT AVEC FILTRAGE PAR CATÉGORIE
+  // FONCTION DE CHARGEMENT AVEC GESTION ROBUSTE DES ENDPOINTS
   // ============================================
   const fetchCategoryItems = useCallback(async () => {
     if (!categoryUuid) return;
@@ -132,117 +147,59 @@ const CategoryListGrid: React.FC<CategoryListGridProps> = ({
       let allItems: ListingItem[] = [];
 
       // ============================================
-      // STRATÉGIE 1: SOUS-CATÉGORIE (vos endpoints fonctionnent bien)
+      // STRATÉGIE: UTILISER LES ENDPOINTS QUI FONCTIONNENT (d'après vos logs)
       // ============================================
-      if (isSubCategory) {
-        if (filterType === "all") {
-          console.log("📦 Chargement de tous les types pour sous-catégorie");
+      
+      // L'endpoint CATEGORIES.ANNONCES fonctionne (status 200 dans vos logs)
+      try {
+        console.log("📦 Tentative avec CATEGORIES.ANNONCES");
+        const response = await api.get(API_ENDPOINTS.CATEGORIES.ANNONCES(categoryUuid));
+        
+        if (response.annonces && Array.isArray(response.annonces)) {
+          // Transformer toutes les annonces
+          allItems = response.annonces.map((item: any) => {
+            let type: "produit" | "don" | "echange" = "produit";
+            if (item.type === "don" || item.type_don) type = "don";
+            else if (item.type === "echange" || item.type_echange) type = "echange";
+            return transformItem(item, type);
+          });
           
-          // Charger les 3 types en parallèle
-          const [donsRes, produitsRes, echangesRes] = await Promise.allSettled([
-            api.get(API_ENDPOINTS.CATEGORIES.RECUPERER_LISTE_DON_UUID_SOUS_CATEGORIES(categoryUuid)),
-            api.get(API_ENDPOINTS.CATEGORIES.RECUPERER_LISTE_PRODUIT_UUID_SOUS_CATEGORIES(categoryUuid)),
-            api.get(API_ENDPOINTS.CATEGORIES.RECUPERER_LISTE_ECHANGE_UUID_SOUS_CATEGORIES(categoryUuid)),
-          ]);
-
-          // Traiter les dons
-          if (donsRes.status === 'fulfilled' && donsRes.value.data?.items) {
-            const dons = donsRes.value.data.items.map((item: any) => transformItem(item, "don"));
-            allItems.push(...dons);
-            console.log(`✅ ${dons.length} dons trouvés`);
-          }
-
-          // Traiter les produits
-          if (produitsRes.status === 'fulfilled' && produitsRes.value.data?.items) {
-            const produits = produitsRes.value.data.items.map((item: any) => transformItem(item, "produit"));
-            allItems.push(...produits);
-            console.log(`✅ ${produits.length} produits trouvés`);
-          }
-
-          // Traiter les échanges
-          if (echangesRes.status === 'fulfilled' && echangesRes.value.data?.items) {
-            const echanges = echangesRes.value.data.items.map((item: any) => transformItem(item, "echange"));
-            allItems.push(...echanges);
-            console.log(`✅ ${echanges.length} échanges trouvés`);
-          }
-        } 
-        else if (filterType === "don") {
-          const response = await api.get(API_ENDPOINTS.CATEGORIES.RECUPERER_LISTE_DON_UUID_SOUS_CATEGORIES(categoryUuid));
-          if (response.data?.items) {
-            allItems = response.data.items.map((item: any) => transformItem(item, "don"));
-          }
+          console.log(`✅ ${allItems.length} items trouvés via ANNONCES`);
         }
-        else if (filterType === "produit") {
-          const response = await api.get(API_ENDPOINTS.CATEGORIES.RECUPERER_LISTE_PRODUIT_UUID_SOUS_CATEGORIES(categoryUuid));
-          if (response.data?.items) {
-            allItems = response.data.items.map((item: any) => transformItem(item, "produit"));
+      } catch (error) {
+        console.warn("⚠️ Endpoint ANNONCES a échoué, essai des endpoints spécifiques");
+        
+        // Fallback: essayer les endpoints spécifiques selon le type
+        try {
+          if (filterType === "all" || filterType === "don") {
+            const donRes = await api.get(API_ENDPOINTS.CATEGORIES.DONS(categoryUuid));
+            if (donRes.dons && Array.isArray(donRes.dons)) {
+              const dons = donRes.dons.map((item: any) => transformItem(item, "don"));
+              allItems.push(...dons);
+            }
           }
-        }
-        else if (filterType === "echange") {
-          const response = await api.get(API_ENDPOINTS.CATEGORIES.RECUPERER_LISTE_ECHANGE_UUID_SOUS_CATEGORIES(categoryUuid));
-          if (response.data?.items) {
-            allItems = response.data.items.map((item: any) => transformItem(item, "echange"));
-          }
-        }
-      } 
-      // ============================================
-      // STRATÉGIE 2: CATÉGORIE PRINCIPALE - AVEC FILTRAGE
-      // ============================================
-      else {
-        if (filterType === "all") {
-          console.log("📦 Chargement via ANNONCES pour catégorie principale");
-          const response = await api.get(API_ENDPOINTS.CATEGORIES.ANNONCES(categoryUuid));
           
-          if (response.annonces && Array.isArray(response.annonces)) {
-            console.log(`📊 ${response.annonces.length} annonces reçues de l'API`);
-            
-            // 🔥 FILTRER POUR GARDER UNIQUEMENT LES ANNONCES DE CETTE CATÉGORIE
-            const annoncesDeLaCategorie = response.annonces.filter((item: any) => {
-              // Vérifier si l'annonce appartient à cette catégorie
-              const itemCategorieUuid = item.categorie_uuid || item.categorie?.uuid;
-              const appartient = itemCategorieUuid === categoryUuid;
-              
-              if (!appartient) {
-                console.log(`🗑️ Annonce ${item.uuid} filtrée - catégorie ${itemCategorieUuid} ≠ ${categoryUuid}`);
-              }
-              
-              return appartient;
-            });
-
-            console.log(`✅ ${annoncesDeLaCategorie.length} annonces pour cette catégorie après filtrage`);
-
-            allItems = annoncesDeLaCategorie.map((item: any) => {
-              // Déterminer le type
-              let type: "produit" | "don" | "echange" = "produit";
-              if (item.type === "don" || item.type_don) type = "don";
-              else if (item.type === "echange" || item.type_echange) type = "echange";
-              return transformItem(item, type);
-            });
-          } else {
-            console.warn("⚠️ Format de réponse inattendu pour ANNONCES:", response);
+          if (filterType === "all" || filterType === "produit") {
+            const produitRes = await api.get(API_ENDPOINTS.CATEGORIES.PRODUITS(categoryUuid));
+            if (produitRes.produits && Array.isArray(produitRes.produits)) {
+              const produits = produitRes.produits.map((item: any) => transformItem(item, "produit"));
+              allItems.push(...produits);
+            }
           }
-        } 
-        else if (filterType === "don") {
-          const response = await api.get(API_ENDPOINTS.CATEGORIES.DONS(categoryUuid));
-          if (response.dons && Array.isArray(response.dons)) {
-            allItems = response.dons.map((item: any) => transformItem(item, "don"));
+          
+          if (filterType === "all" || filterType === "echange") {
+            const echangeRes = await api.get(API_ENDPOINTS.CATEGORIES.ECHANGES(categoryUuid));
+            if (echangeRes.echanges && Array.isArray(echangeRes.echanges)) {
+              const echanges = echangeRes.echanges.map((item: any) => transformItem(item, "echange"));
+              allItems.push(...echanges);
+            }
           }
-        }
-        else if (filterType === "produit") {
-          const response = await api.get(API_ENDPOINTS.CATEGORIES.PRODUITS(categoryUuid));
-          if (response.produits && Array.isArray(response.produits)) {
-            allItems = response.produits.map((item: any) => transformItem(item, "produit"));
-          }
-        }
-        else if (filterType === "echange") {
-          const response = await api.get(API_ENDPOINTS.CATEGORIES.ECHANGES(categoryUuid));
-          if (response.echanges && Array.isArray(response.echanges)) {
-            allItems = response.echanges.map((item: any) => transformItem(item, "echange"));
-          }
+        } catch (fallbackError) {
+          console.error("❌ Tous les endpoints ont échoué:", fallbackError);
         }
       }
 
-      console.log(`📊 ${allItems.length} items pour la catégorie ${categoryUuid}`);
+      console.log(`📊 Total: ${allItems.length} items pour la catégorie ${categoryUuid}`);
 
       // ============================================
       // FILTRES DE RECHERCHE
@@ -316,7 +273,6 @@ const CategoryListGrid: React.FC<CategoryListGridProps> = ({
       });
 
       setItems(filteredItems);
-      console.log(`✅ ${filteredItems.length} items après filtres`);
 
       // Notifier le parent
       if (onDataLoaded) {
@@ -350,10 +306,10 @@ const CategoryListGrid: React.FC<CategoryListGridProps> = ({
     onDataLoaded
   ]);
 
-  // ✅ CHARGEMENT INITIAL - UNE SEULE FOIS
+  // ✅ CHARGEMENT INITIAL
   useEffect(() => {
     fetchedRef.current = false;
-  }, [categoryUuid, filterType, sortOption, searchQuery, selectedLocation, maxPrice]);
+  }, [categoryUuid, filterType]);
 
   useEffect(() => {
     if (!fetchedRef.current) {
@@ -361,8 +317,22 @@ const CategoryListGrid: React.FC<CategoryListGridProps> = ({
       fetchCategoryItems();
     }
 
+    // Écouter les événements de filtre
+    const handleFilterChange = () => {
+      fetchedRef.current = false;
+      fetchCategoryItems();
+    };
+
+    window.addEventListener('category-filter-changed', handleFilterChange);
+    window.addEventListener('category-sort-changed', handleFilterChange);
+    window.addEventListener('category-filters-updated', handleFilterChange);
+
     // Nettoyage
     return () => {
+      window.removeEventListener('category-filter-changed', handleFilterChange);
+      window.removeEventListener('category-sort-changed', handleFilterChange);
+      window.removeEventListener('category-filters-updated', handleFilterChange);
+      
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
@@ -378,11 +348,11 @@ const CategoryListGrid: React.FC<CategoryListGridProps> = ({
   // États de chargement
   if (loading) {
     return (
-      <div className="d-flex flex-column justify-content-center align-items-center py-5">
+      <div className="d-flex flex-column justify-content-center align-items-center py-5 min-vh-50">
         <div
-          className="spinner-border text-success mb-3"
+          className="spinner-border mb-3"
+          style={{ color: colors.oskar.green, width: "3rem", height: "3rem" }}
           role="status"
-          style={{ width: "3rem", height: "3rem" }}
         >
           <span className="visually-hidden">Chargement...</span>
         </div>
@@ -393,13 +363,13 @@ const CategoryListGrid: React.FC<CategoryListGridProps> = ({
 
   if (error) {
     return (
-      <div className="alert alert-danger m-3 d-flex align-items-center justify-content-between">
-        <div>
-          <FontAwesomeIcon icon={faExclamationTriangle} className="me-2" />
+      <div className="alert alert-danger m-3 d-flex align-items-center justify-content-between rounded-3">
+        <div className="d-flex align-items-center gap-2">
+          <FontAwesomeIcon icon={faExclamationTriangle} className="fa-lg" />
           <span>{error}</span>
         </div>
         <button
-          className="btn btn-outline-danger btn-sm"
+          className="btn btn-outline-danger btn-sm rounded-pill px-3"
           onClick={handleRefresh}
         >
           <FontAwesomeIcon icon={faRotate} className="me-1" />
@@ -412,22 +382,34 @@ const CategoryListGrid: React.FC<CategoryListGridProps> = ({
   if (items.length === 0) {
     return (
       <div className="text-center py-5">
-        <div className="mb-3">
-          <FontAwesomeIcon icon={faInbox} className="fa-3x text-muted" />
+        <div className="mb-4">
+          <FontAwesomeIcon 
+            icon={faBoxOpen} 
+            className="fa-4x" 
+            style={{ color: colors.oskar.green + '40' }}
+          />
         </div>
-        <h5 className="text-muted mb-2">Aucune annonce trouvée</h5>
-        <p className="text-muted mb-4">
+        <h5 className="text-dark mb-2">Aucune annonce trouvée</h5>
+        <p className="text-muted mb-4" style={{ maxWidth: "400px", margin: "0 auto" }}>
           {searchQuery || selectedLocation || maxPrice ? (
-            "Aucun résultat ne correspond à vos critères de recherche."
+            "Aucun résultat ne correspond à vos critères de recherche. Essayez de modifier vos filtres."
           ) : filterType === "all" ? (
             isSubCategory 
-              ? "Aucune annonce n'est disponible dans cette sous-catégorie."
-              : "Aucune annonce n'est disponible dans cette catégorie."
+              ? "Aucune annonce n'est disponible dans cette sous-catégorie pour le moment."
+              : "Aucune annonce n'est disponible dans cette catégorie pour le moment."
           ) : (
-            `Aucun ${filterType === "don" ? "don" : filterType === "echange" ? "échange" : "produit"} n'est disponible.`
+            `Aucun ${filterType === "don" ? "don" : filterType === "echange" ? "échange" : "produit"} n'est disponible pour le moment.`
           )}
         </p>
-        <button className="btn btn-success" onClick={handleRefresh}>
+        <button 
+          className="btn px-4 py-2 rounded-pill"
+          style={{ 
+            backgroundColor: colors.oskar.green,
+            color: 'white',
+            border: 'none'
+          }}
+          onClick={handleRefresh}
+        >
           <FontAwesomeIcon icon={faRotate} className="me-2" />
           Rafraîchir
         </button>
@@ -440,13 +422,13 @@ const CategoryListGrid: React.FC<CategoryListGridProps> = ({
       {viewMode === "grid" ? (
         <div className="row g-4">
           {items.map((item) => (
-            <div key={item.uuid} className="col-lg-4 col-md-6">
+            <div key={item.uuid} className="col-xl-4 col-lg-6 col-md-6">
               <ListingCard listing={item} viewMode="grid" />
             </div>
           ))}
         </div>
       ) : (
-        <div className="list-view-container">
+        <div className="d-flex flex-column gap-3">
           {items.map((item) => (
             <ListingCard key={item.uuid} listing={item} viewMode="list" />
           ))}

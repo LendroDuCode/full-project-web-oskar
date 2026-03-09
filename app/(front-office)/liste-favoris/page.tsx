@@ -122,7 +122,7 @@ function LoginRequiredPage() {
       <section
         className="py-4 py-md-5"
         style={{
-          background: `linear-gradient(135deg, ${colors.oskar.green || "#9C27B0"} 0%, ${colors.oskar.greenHover || "#7B1FA2"} 100%)`,
+          background: `linear-gradient(135deg, ${colors.oskar.green || "#0ead29"} 0%, ${colors.oskar.greenHover || "#0ead29"} 100%)`,
           color: "white",
         }}
       >
@@ -163,7 +163,7 @@ function LoginRequiredPage() {
                   <div
                     className="col-md-5 d-none d-md-block"
                     style={{
-                      background: `linear-gradient(135deg, ${colors.oskar.purple || "#F3E5F5"} 0%, ${colors.oskar.purpleLight}20 100%)`,
+                      background: `linear-gradient(135deg, ${colors.oskar.green}15 0%, ${colors.oskar.green}10 100%)`,
                     }}
                   >
                     <div className="h-100 d-flex flex-column justify-content-center align-items-center p-5">
@@ -174,7 +174,7 @@ function LoginRequiredPage() {
                             style={{
                               width: "120px",
                               height: "120px",
-                              background: `linear-gradient(135deg, ${colors.oskar.purple || "#9C27B0"} 0%, ${colors.oskar.purple}80 100%)`,
+                              background: `linear-gradient(135deg, ${colors.oskar.green} 0%, ${colors.oskar.green}80 100%)`,
                             }}
                           >
                             <i className="fas fa-heart fa-3x text-white"></i>
@@ -194,7 +194,7 @@ function LoginRequiredPage() {
                             style={{
                               width: "60px",
                               height: "60px",
-                              background: `linear-gradient(135deg, ${colors.oskar.blue || "#2196F3"} 0%, ${colors.oskar.blue}80 100%)`,
+                              background: `linear-gradient(135deg, ${colors.oskar.green} 0%, ${colors.oskar.green}80 100%)`,
                               opacity: 0.3,
                             }}
                           ></div>
@@ -203,7 +203,7 @@ function LoginRequiredPage() {
 
                       <h3
                         className="fw-bold text-center mb-3"
-                        style={{ color: colors.oskar.purple }}
+                        style={{ color: colors.oskar.green }}
                       >
                         Vos annonces préférées
                       </h3>
@@ -222,14 +222,14 @@ function LoginRequiredPage() {
                           style={{
                             width: "80px",
                             height: "80px",
-                            background: `linear-gradient(135deg, ${colors.oskar.purple || "#9C27B0"} 0%, ${colors.oskar.purple}80 100%)`,
+                            background: `linear-gradient(135deg, ${colors.oskar.green} 0%, ${colors.oskar.green}80 100%)`,
                           }}
                         >
                           <i className="fas fa-heart fa-2x text-white"></i>
                         </div>
                         <h3
                           className="fw-bold mb-2"
-                          style={{ color: colors.oskar.purple }}
+                          style={{ color: colors.oskar.green }}
                         >
                           Connectez-vous
                         </h3>
@@ -238,7 +238,7 @@ function LoginRequiredPage() {
                       <div className="text-center mb-4 d-none d-md-block">
                         <h2
                           className="fw-bold mb-3"
-                          style={{ color: colors.oskar.purple }}
+                          style={{ color: colors.oskar.green }}
                         >
                           Connectez-vous à votre compte
                         </h2>
@@ -274,13 +274,13 @@ function LoginRequiredPage() {
                               style={{
                                 width: "60px",
                                 height: "60px",
-                                background: "#F3E5F5",
-                                border: `2px solid #E1BEE7`,
+                                background: `${colors.oskar.green}15`,
+                                border: `2px solid ${colors.oskar.green}`,
                               }}
                             >
                               <i
                                 className="fas fa-gift fa-lg"
-                                style={{ color: "#9C27B0" }}
+                                style={{ color: colors.oskar.green }}
                               ></i>
                             </div>
                             <p className="small mb-0 fw-semibold">Dons</p>
@@ -293,13 +293,13 @@ function LoginRequiredPage() {
                               style={{
                                 width: "60px",
                                 height: "60px",
-                                background: "#E3F2FD",
-                                border: `2px solid #BBDEFB`,
+                                background: `${colors.oskar.green}10`,
+                                border: `2px solid ${colors.oskar.green}`,
                               }}
                             >
                               <i
                                 className="fas fa-exchange-alt fa-lg"
-                                style={{ color: "#2196F3" }}
+                                style={{ color: colors.oskar.green }}
                               ></i>
                             </div>
                             <p className="small mb-0 fw-semibold">Échanges</p>
@@ -373,7 +373,7 @@ function LoginRequiredPage() {
                           className="btn btn-lg"
                           onClick={openLoginModal}
                           style={{
-                            background: `linear-gradient(135deg, ${colors.oskar.purple || "#9C27B0"} 0%, ${colors.oskar.purple}90 100%)`,
+                            background: `linear-gradient(135deg, ${colors.oskar.green} 0%, ${colors.oskar.green}90 100%)`,
                             color: "white",
                             border: "none",
                             padding: "12px 24px",
@@ -412,7 +412,7 @@ function LoginRequiredPage() {
                         <Link
                           href="/dons-echanges"
                           className="btn btn-link text-decoration-none"
-                          style={{ color: colors.oskar.purple }}
+                          style={{ color: colors.oskar.green }}
                         >
                           <i className="fas fa-search me-1"></i>
                           Explorer les annonces disponibles
@@ -455,18 +455,18 @@ const FavoriCard = ({
       case "don":
         return {
           label: "don",
-          color: "#9333ea",
-          bgColor: "#9333ea",
-          btnColor: "#9333ea",
+          color: colors.oskar.green,
+          bgColor: colors.oskar.green,
+          btnColor: colors.oskar.green,
           icon: "fa-gift",
-          priceColor: "text-purple-600",
+          priceColor: "text-green-600",
         };
       case "echange":
         return {
           label: "échange",
-          color: "#2563eb",
-          bgColor: "#2563eb",
-          btnColor: "#2563eb",
+          color: colors.oskar.green,
+          bgColor: colors.oskar.green,
+          btnColor: colors.oskar.green,
           icon: "fa-exchange-alt",
           priceColor: "text-primary",
         };
@@ -675,8 +675,8 @@ const FavoriCard = ({
           object-fit: cover;
         }
 
-        .text-purple-600 {
-          color: #9333ea;
+        .text-green-600 {
+          color: ${colors.oskar.green};
         }
       `}</style>
     </div>
@@ -926,7 +926,7 @@ export default function ListeFavorisPage() {
       <section
         className="py-4 py-md-5"
         style={{
-          background: `linear-gradient(135deg, ${colors.oskar.green || "#9C27B0"} 0%, ${colors.oskar.greenHover || "#7B1FA2"} 100%)`,
+          background: `linear-gradient(135deg, ${colors.oskar.green || "#0ead29"} 0%, ${colors.oskar.greenHover || "#0ead29"} 100%)`,
           color: "white",
         }}
       >
@@ -941,7 +941,7 @@ export default function ListeFavorisPage() {
                 <div className="d-flex flex-wrap gap-2">
                   <button
                     className="btn btn-light btn-sm px-3 py-2 fw-semibold"
-                    style={{ color: colors.oskar.purple || "#9C27B0" }}
+                    style={{ color: colors.oskar.green }}
                     onClick={handleRefresh}
                   >
                     <i className="fas fa-sync-alt me-1"></i>
@@ -981,7 +981,7 @@ export default function ListeFavorisPage() {
               <div className="text-center">
                 <div
                   className="fs-4 fw-bold"
-                  style={{ color: colors.oskar.purple || "#9C27B0" }}
+                  style={{ color: colors.oskar.green }}
                 >
                   {stats.totalFavoris}
                 </div>
@@ -1001,7 +1001,7 @@ export default function ListeFavorisPage() {
             </div>
             <div className="col-3">
               <div className="text-center">
-                <div className="fs-4 fw-bold" style={{ color: "#9C27B0" }}>
+                <div className="fs-4 fw-bold" style={{ color: colors.oskar.green }}>
                   {stats.totalDons}
                 </div>
                 <div className="text-muted small">Dons</div>
@@ -1033,7 +1033,7 @@ export default function ListeFavorisPage() {
                       <i
                         className="fas fa-filter me-1"
                         style={{
-                          color: colors.oskar.purple || "#9C27B0",
+                          color: colors.oskar.green,
                         }}
                       ></i>
                       Filtrer par type
@@ -1047,13 +1047,13 @@ export default function ListeFavorisPage() {
                         style={{
                           background:
                             activeFilter === "all"
-                              ? `${colors.oskar.purpleLight || "#F3E5F5"}`
+                              ? `${colors.oskar.green}20`
                               : "transparent",
                           color:
                             activeFilter === "all"
-                              ? colors.oskar.purple || "#9C27B0"
+                              ? colors.oskar.green
                               : colors.oskar.grey,
-                          border: `1px solid ${activeFilter === "all" ? colors.oskar.purple || "#9C27B0" : "#dee2e6"}`,
+                          border: `1px solid ${activeFilter === "all" ? colors.oskar.green : "#dee2e6"}`,
                         }}
                       >
                         <span>
@@ -1094,12 +1094,14 @@ export default function ListeFavorisPage() {
                         onClick={() => handleFilterChange("dons")}
                         style={{
                           background:
-                            activeFilter === "dons" ? "#F3E5F5" : "transparent",
+                            activeFilter === "dons"
+                              ? `${colors.oskar.green}20`
+                              : "transparent",
                           color:
                             activeFilter === "dons"
-                              ? "#9C27B0"
+                              ? colors.oskar.green
                               : colors.oskar.grey,
-                          border: `1px solid ${activeFilter === "dons" ? "#9C27B0" : "#dee2e6"}`,
+                          border: `1px solid ${activeFilter === "dons" ? colors.oskar.green : "#dee2e6"}`,
                         }}
                       >
                         <span>
@@ -1117,7 +1119,7 @@ export default function ListeFavorisPage() {
                         style={{
                           background:
                             activeFilter === "echanges"
-                              ? "#E3F2FD"
+                              ? `${colors.oskar.green}20`
                               : "transparent",
                           color:
                             activeFilter === "echanges"
@@ -1145,7 +1147,7 @@ export default function ListeFavorisPage() {
                       <i
                         className="fas fa-info-circle me-1"
                         style={{
-                          color: colors.oskar.purple || "#9C27B0",
+                          color: colors.oskar.green,
                           fontSize: "0.9rem",
                         }}
                       ></i>
@@ -1166,7 +1168,7 @@ export default function ListeFavorisPage() {
                         <i
                           className="fas fa-sync-alt me-1"
                           style={{
-                            color: colors.oskar.purple || "#9C27B0",
+                            color: colors.oskar.green,
                           }}
                         ></i>
                         <strong>Mise à jour :</strong> Cliquez sur "Actualiser"
@@ -1194,7 +1196,7 @@ export default function ListeFavorisPage() {
                       )}
                       {activeFilter === "dons" && (
                         <>
-                          <i className="fas fa-gift text-purple-600 me-2"></i>
+                          <i className="fas fa-gift text-green-600 me-2"></i>
                           Mes dons favoris
                         </>
                       )}
@@ -1252,13 +1254,13 @@ export default function ListeFavorisPage() {
                         style={{
                           background:
                             activeFilter === "all"
-                              ? `${colors.oskar.purpleLight || "#F3E5F5"}`
+                              ? `${colors.oskar.green}20`
                               : "transparent",
                           color:
                             activeFilter === "all"
-                              ? colors.oskar.purple || "#9C27B0"
+                              ? colors.oskar.green
                               : colors.oskar.grey,
-                          border: `1px solid ${activeFilter === "all" ? colors.oskar.purple || "#9C27B0" : "#dee2e6"}`,
+                          border: `1px solid ${activeFilter === "all" ? colors.oskar.green : "#dee2e6"}`,
                         }}
                       >
                         <span>
@@ -1305,12 +1307,14 @@ export default function ListeFavorisPage() {
                         }}
                         style={{
                           background:
-                            activeFilter === "dons" ? "#F3E5F5" : "transparent",
+                            activeFilter === "dons"
+                              ? `${colors.oskar.green}20`
+                              : "transparent",
                           color:
                             activeFilter === "dons"
-                              ? "#9C27B0"
+                              ? colors.oskar.green
                               : colors.oskar.grey,
-                          border: `1px solid ${activeFilter === "dons" ? "#9C27B0" : "#dee2e6"}`,
+                          border: `1px solid ${activeFilter === "dons" ? colors.oskar.green : "#dee2e6"}`,
                         }}
                       >
                         <span>
@@ -1331,7 +1335,7 @@ export default function ListeFavorisPage() {
                         style={{
                           background:
                             activeFilter === "echanges"
-                              ? "#E3F2FD"
+                              ? `${colors.oskar.green}20`
                               : "transparent",
                           color:
                             activeFilter === "echanges"
@@ -1448,12 +1452,12 @@ export default function ListeFavorisPage() {
                           <div className="d-flex align-items-start">
                             <div
                               className="rounded-circle p-2 me-2 flex-shrink-0"
-                              style={{ backgroundColor: "#F3E5F5" }}
+                              style={{ backgroundColor: `${colors.oskar.green}15` }}
                             >
                               <i
                                 className="fas fa-heart"
                                 style={{
-                                  color: colors.oskar.purple || "#9C27B0",
+                                  color: colors.oskar.green,
                                 }}
                               ></i>
                             </div>
@@ -1470,7 +1474,7 @@ export default function ListeFavorisPage() {
                                   <i
                                     className="fas fa-check-circle me-1"
                                     style={{
-                                      color: colors.oskar.purple || "#9C27B0",
+                                      color: colors.oskar.green,
                                       fontSize: "0.7rem",
                                     }}
                                   ></i>
@@ -1480,7 +1484,7 @@ export default function ListeFavorisPage() {
                                   <i
                                     className="fas fa-check-circle me-1"
                                     style={{
-                                      color: colors.oskar.purple || "#9C27B0",
+                                      color: colors.oskar.green,
                                       fontSize: "0.7rem",
                                     }}
                                   ></i>
@@ -1548,8 +1552,8 @@ export default function ListeFavorisPage() {
                 <div
                   className="mt-4 rounded-2 p-3 text-center"
                   style={{
-                    background: `linear-gradient(135deg, ${colors.oskar.purpleLight || "#F3E5F5"} 0%, ${colors.oskar.purpleLight || "#F3E5F5"}20 100%)`,
-                    border: `1px solid ${colors.oskar.purple || "#9C27B0"}20`,
+                    background: `linear-gradient(135deg, ${colors.oskar.green}15 0%, ${colors.oskar.green}10 100%)`,
+                    border: `1px solid ${colors.oskar.green}20`,
                   }}
                 >
                   <h6 className="fw-bold mb-2">Trouvez plus d'annonces</h6>
@@ -1597,7 +1601,7 @@ export default function ListeFavorisPage() {
                     <i
                       className="fas fa-question-circle me-1"
                       style={{
-                        color: colors.oskar.purple || "#9C27B0",
+                        color: colors.oskar.green,
                         fontSize: "0.9rem",
                       }}
                     ></i>
@@ -1617,7 +1621,7 @@ export default function ListeFavorisPage() {
                     <i
                       className="fas fa-question-circle me-1"
                       style={{
-                        color: colors.oskar.purple || "#9C27B0",
+                        color: colors.oskar.green,
                         fontSize: "0.9rem",
                       }}
                     ></i>
@@ -1637,7 +1641,7 @@ export default function ListeFavorisPage() {
                     <i
                       className="fas fa-question-circle me-1"
                       style={{
-                        color: colors.oskar.purple || "#9C27B0",
+                        color: colors.oskar.green,
                         fontSize: "0.9rem",
                       }}
                     ></i>
@@ -1657,7 +1661,7 @@ export default function ListeFavorisPage() {
                     <i
                       className="fas fa-question-circle me-1"
                       style={{
-                        color: colors.oskar.purple || "#9C27B0",
+                        color: colors.oskar.green,
                         fontSize: "0.9rem",
                       }}
                     ></i>
@@ -1691,7 +1695,7 @@ export default function ListeFavorisPage() {
         .group:hover {
           transform: translateY(-4px);
           box-shadow:
-            0 20px 25px -5px rgba(0, 0, 0, 0.1),
+            0 20px 25px -5px rgba(31, 148, 15, 0.1),
             0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
         }
 
@@ -1707,8 +1711,8 @@ export default function ListeFavorisPage() {
           transition: all 0.3s ease;
         }
 
-        .text-purple-600 {
-          color: #9333ea;
+        .text-green-600 {
+          color: ${colors.oskar.green};
         }
 
         @media (max-width: 1199.98px) {

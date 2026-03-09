@@ -1,192 +1,201 @@
+// CTABanner.tsx - CORRIGÉ
 "use client";
 
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faRocket,
-  faEye,
-  faArrowRight,
-  faHandshake,
-  faUsers,
-  faBullhorn,
-} from "@fortawesome/free-solid-svg-icons";
-import Link from "next/link";
-import colors from "../../../shared/constants/colors";
+import colors from "@/app/shared/constants/colors";
+import { useState } from "react";
+import PublishAdModal from "@/app/(front-office)/publication-annonce/page";
+import { useAuth } from "@/app/(front-office)/auth/AuthContext";
 
-interface CTASectionProps {
-  title?: string;
-  subtitle?: string;
-  primaryButton?: {
-    text: string;
-    href: string;
-    icon?: any;
-  };
-  secondaryButton?: {
-    text: string;
-    href: string;
-    icon?: any;
-  };
-  showStats?: boolean;
-  gradientFrom?: string;
-  gradientTo?: string;
-}
+const CTABanner = () => {
+  const [showPublishModal, setShowPublishModal] = useState(false);
+  const { isLoggedIn, openLoginModal } = useAuth();
 
-export default function CTASection({
-  title = "Prêt à commencer ?",
-  subtitle = "Rejoignez des milliers d'utilisateurs qui achètent, vendent et échangent sur OSKAR",
-  primaryButton = {
-    text: "Publier votre première annonce",
-    href: "/publication-annonce",
-    icon: faBullhorn,
-  },
-  secondaryButton = {
-    text: "Parcourir les annonces",
-    href: "/annonces",
-    icon: faEye,
-  },
-  showStats = true,
-  gradientFrom = colors.oskar.green,
-  gradientTo = colors.oskar.greenHover,
-}: CTASectionProps) {
-  // Statistiques optionnelles
-  const stats = [
-    { value: "10K+", label: "Utilisateurs actifs", icon: faUsers },
-    { value: "5K+", label: "Annonces publiées", icon: faBullhorn },
-    { value: "98%", label: "Satisfaction", icon: faHandshake },
-  ];
+  const handlePublishClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    
+    if (!isLoggedIn) {
+      // Si l'utilisateur n'est pas connecté, ouvrir le modal de connexion
+      openLoginModal();
+    } else {
+      // Si l'utilisateur est connecté, ouvrir le modal de publication
+      setShowPublishModal(true);
+    }
+  };
+
+  const handleClosePublishModal = () => {
+    setShowPublishModal(false);
+  };
 
   return (
-    <section id="cta-section" className="py-5 py-lg-6 bg-white">
-      <div className="container">
-        <div className="row justify-content-center">
-          <div className="col-lg-10">
+    <>
+      <section
+        className="cta-banner-section"
+        style={{
+          backgroundColor: colors.oskar.lightGrey,
+        }}
+      >
+        <div className="container">
+          <div
+            className="cta-container-green text-center"
+            style={{
+              backgroundColor: colors.oskar.green,
+              background: `linear-gradient(135deg, ${colors.oskar.green} 0%, ${colors.oskar.green} 100%)`,
+              borderRadius: "20px",
+              padding: "3rem 2rem",
+              position: "relative",
+              overflow: "hidden",
+            }}
+          >
+            {/* Effets décoratifs */}
             <div
-              className="rounded-3 shadow-lg p-4 p-md-5 text-white position-relative overflow-hidden"
+              className="cta-pattern"
               style={{
-                background: `linear-gradient(135deg, ${gradientFrom} 0%, ${gradientTo} 100%)`,
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundImage:
+                  "radial-gradient(circle at 25% 25%, rgba(255, 255, 255, 0.1) 0%, transparent 50%)",
+                zIndex: 1,
               }}
-            >
-              {/* Effets décoratifs de fond */}
-              <div className="position-absolute top-0 end-0 w-100 h-100 opacity-10">
+            />
+
+            <div className="position-relative z-2">
+              <h2 className="display-5 fw-bold text-white mb-4">
+                Vous avez quelque chose à vendre, donner ou échanger ?
+              </h2>
+
+              <p className="lead text-white mb-5" style={{ opacity: 0.9 }}>
+                Rejoignez des milliers d'utilisateurs satisfaits et publiez votre
+                première annonce dès aujourd'hui !
+              </p>
+
+              <button
+                onClick={handlePublishClick}
+                className="cta-link text-decoration-none"
+                style={{ background: "none", border: "none", cursor: "pointer" }}
+              >
                 <div
-                  className="position-absolute"
-                  style={{ top: "-50px", right: "-50px" }}
+                  className="cta-button-inner"
+                  style={{
+                    backgroundColor: "white",
+                    color: colors.oskar.green,
+                    borderRadius: "12px",
+                    padding: "1rem 2.5rem",
+                    fontWeight: "700",
+                    fontSize: "1.125rem",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.75rem",
+                    transition: "all 0.3s ease",
+                    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
+                  }}
                 >
-                  <FontAwesomeIcon icon={faRocket} className="display-1" />
+                  <i
+                    className="fa-solid fa-plus-circle"
+                    style={{ fontSize: "1.25rem" }}
+                  />
+                  <span>Publiez votre annonce maintenant</span>
                 </div>
-                <div
-                  className="position-absolute"
-                  style={{ bottom: "-50px", left: "-50px" }}
-                >
-                  <FontAwesomeIcon icon={faHandshake} className="display-1" />
-                </div>
-              </div>
-
-              <div className="position-relative z-1">
-                {/* En-tête */}
-                <div className="text-center mb-4 mb-md-5">
-                  <div className="d-inline-flex align-items-center bg-white bg-opacity-20 rounded-pill px-4 py-2 mb-3">
-                    <FontAwesomeIcon icon={faRocket} className="me-2" />
-                    <span className="fw-medium">C'est parti !</span>
-                  </div>
-
-                  <h2 className="display-4 fw-bold mb-3">{title}</h2>
-                  <p className="lead opacity-90 mb-0">{subtitle}</p>
-                </div>
-
-                {/* Boutons d'action */}
-                <div className="d-flex flex-column flex-md-row justify-content-center gap-3 mb-4 mb-md-5">
-                  <Link
-                    href={primaryButton.href}
-                    className="btn btn-light text-dark fw-bold px-4 py-3 rounded-3 d-flex align-items-center justify-content-center gap-2"
-                    style={{
-                      transition: "all 0.3s ease",
-                      fontSize: "1.1rem",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = "#f8f9fa";
-                      e.currentTarget.style.transform = "translateY(-2px)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = "";
-                      e.currentTarget.style.transform = "";
-                    }}
-                  >
-                    {primaryButton.icon && (
-                      <FontAwesomeIcon icon={primaryButton.icon} />
-                    )}
-                    {primaryButton.text}
-                    <FontAwesomeIcon icon={faArrowRight} className="ms-1" />
-                  </Link>
-
-                  <Link
-                    href={secondaryButton.href}
-                    className="btn btn-outline-light border-2 fw-bold px-4 py-3 rounded-3 d-flex align-items-center justify-content-center gap-2"
-                    style={{
-                      transition: "all 0.3s ease",
-                      fontSize: "1.1rem",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor =
-                        "rgba(255, 255, 255, 0.1)";
-                      e.currentTarget.style.transform = "translateY(-2px)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = "";
-                      e.currentTarget.style.transform = "";
-                    }}
-                  >
-                    {secondaryButton.icon && (
-                      <FontAwesomeIcon icon={secondaryButton.icon} />
-                    )}
-                    {secondaryButton.text}
-                  </Link>
-                </div>
-
-                {/* Statistiques */}
-                {showStats && (
-                  <div className="row justify-content-center">
-                    <div className="col-lg-8">
-                      <div className="card border-0 bg-white bg-opacity-20 rounded-3">
-                        <div className="card-body p-3">
-                          <div className="row g-3">
-                            {stats.map((stat, index) => (
-                              <div key={index} className="col-md-4">
-                                <div className="text-center">
-                                  <div className="d-flex align-items-center justify-content-center gap-2 mb-2">
-                                    <FontAwesomeIcon
-                                      icon={stat.icon}
-                                      className="opacity-75"
-                                    />
-                                    <div className="display-6 fw-bold">
-                                      {stat.value}
-                                    </div>
-                                  </div>
-                                  <div className="small opacity-90">
-                                    {stat.label}
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Informations supplémentaires */}
-                <div className="text-center mt-4">
-                  <p className="small opacity-75 mb-0">
-                    <i className="fa-solid fa-check-circle me-1"></i>
-                    Aucun frais d'inscription • Assistance 24/7 • Garantie de
-                    sécurité
-                  </p>
-                </div>
-              </div>
+              </button>
             </div>
           </div>
         </div>
-      </div>
-    </section>
+
+        <style jsx>{`
+          .cta-banner-section {
+            padding: 4rem 0;
+          }
+
+          .cta-link {
+            display: inline-block;
+          }
+
+          .cta-button-inner:hover {
+            background-color: #f8f9fa !important;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15) !important;
+          }
+
+          @media (max-width: 767.98px) {
+            .cta-banner-section {
+              padding: 3rem 1rem;
+            }
+
+            .cta-container-green {
+              padding: 2rem 1.5rem !important;
+            }
+
+            .display-5 {
+              font-size: 1.75rem;
+            }
+
+            .lead {
+              font-size: 1.125rem;
+            }
+
+            .cta-button-inner {
+              padding: 0.875rem 2rem;
+              font-size: 1rem;
+              flex-direction: column;
+              gap: 0.5rem;
+            }
+          }
+
+          @media (min-width: 768px) {
+            .cta-banner-section {
+              padding: 5rem 0;
+            }
+
+            .cta-container-green {
+              padding: 4rem 3rem !important;
+            }
+
+            .display-5 {
+              font-size: 2.5rem;
+            }
+
+            .lead {
+              font-size: 1.25rem;
+            }
+          }
+
+          @media (min-width: 992px) {
+            .cta-banner-section {
+              padding: 6rem 0;
+            }
+
+            .cta-container-green {
+              padding: 5rem 4rem !important;
+              max-width: 1000px;
+              margin-left: auto;
+              margin-right: auto;
+            }
+
+            .display-5 {
+              font-size: 3rem;
+              max-width: 900px;
+              margin-left: auto;
+              margin-right: auto;
+            }
+          }
+        `}</style>
+      </section>
+
+      {/* Modal de publication - NE PAS passer user, le modal utilise déjà le contexte Auth */}
+      <PublishAdModal
+        visible={showPublishModal}
+        onHide={handleClosePublishModal}
+        isLoggedIn={isLoggedIn}
+        onLoginRequired={() => {
+          handleClosePublishModal();
+          openLoginModal();
+        }}
+        // NE PAS AJOUTER user={userInfo} - le modal utilise déjà useAuth()
+      />
+    </>
   );
-}
+};
+
+export default CTABanner;

@@ -14,6 +14,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faEnvelope,
   faEnvelopeOpen,
+  faEnvelopeOpenText,
   faPaperPlane,
   faUser,
   faUserTie,
@@ -68,16 +69,35 @@ import {
   faBell,
   faEnvelopeCircleCheck,
   faVolumeUp,
-  faEnvelopeOpenText,
   faList,
   faExclamationTriangle,
   faCheckDouble,
+  faCrown,
+  faShield,
+  faArrowLeft,
+  faSmile,
+  faPaperclip,
+  faCamera,
+  faMicrophone,
+  faEllipsisH,
+  faForward,
+  faCopy,
+  faHome,
 } from "@fortawesome/free-solid-svg-icons";
 
 // Import des services et hooks
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { api } from "@/lib/api-client";
 import { LoadingSpinner } from "@/app/shared/components/ui/LoadingSpinner";
+
+// Couleurs OSKAR
+const colors = {
+  oskar: {
+    green: "#28a745",
+    black: "#1e1e1e",
+    grey: "#6c757d",
+  },
+};
 
 // Types pour les utilisateurs
 interface UtilisateurBase {
@@ -132,9 +152,15 @@ interface Message {
   estLu: boolean;
   dateLecture: string | null;
   dateCreation?: string;
+  status?: "sent" | "delivered" | "read" | "failed";
+  attachments?: Array<{
+    url: string;
+    type: string;
+    name: string;
+    size?: number;
+  }>;
 }
 
-// Type pour la réponse de l'API des messages reçus
 interface MessageReceived {
   uuid: string;
   message: Message;
@@ -144,12 +170,38 @@ interface MessageReceived {
   dateReception: string;
 }
 
-interface ContactConversation extends UtilisateurBase {
+interface ContactConversation {
+  uuid: string;
+  email: string;
+  nom: string;
+  prenoms: string;
+  telephone: string;
   userType: "super_admin" | "admin" | "agent" | "vendeur" | "utilisateur";
   lastMessageDate?: string;
   lastMessage?: string;
+  lastMessageStatus?: "sent" | "delivered" | "read" | "failed";
   unreadCount?: number;
   totalMessages?: number;
+  est_verifie: boolean;
+  est_bloque: boolean;
+  is_deleted: boolean;
+  is_admin?: boolean;
+  is_super_admin?: boolean;
+  boutique?: {
+    nom: string;
+    uuid: string;
+  };
+  avatar?: string;
+  online?: boolean;
+  lastSeen?: string;
+  typing?: boolean;
+}
+
+interface Conversation {
+  contact: ContactConversation;
+  messages: Message[];
+  lastMessage?: Message;
+  unreadCount: number;
 }
 
 // Type pour les notifications toast
@@ -179,13 +231,1003 @@ interface ToastNotification {
 }
 
 // ============================================
+// COMPOSANTS UTILITAIRES
+// ============================================
+const StatusBadge = ({
+  est_bloque,
+  est_verifie,
+  is_deleted,
+  is_super_admin,
+  is_admin,
+}: {
+  est_bloque: boolean;
+  est_verifie: boolean;
+  is_deleted?: boolean;
+  is_super_admin?: boolean;
+  is_admin?: boolean;
+}) => {
+  if (is_deleted) {
+    return (
+      <span className="badge bg-secondary d-inline-flex align-items-center gap-1 px-2 py-1" style={{ fontSize: "0.7rem", borderRadius: "12px" }}>
+        <FontAwesomeIcon icon={faTrash} style={{ fontSize: "0.6rem" }} />
+        <span>Supprimé</span>
+      </span>
+    );
+  }
+
+  if (est_bloque) {
+    return (
+      <span className="badge bg-danger d-inline-flex align-items-center gap-1 px-2 py-1" style={{ fontSize: "0.7rem", borderRadius: "12px" }}>
+        <FontAwesomeIcon icon={faBan} style={{ fontSize: "0.6rem" }} />
+        <span>Bloqué</span>
+      </span>
+    );
+  }
+
+  if (!est_verifie) {
+    return (
+      <span className="badge bg-warning text-dark d-inline-flex align-items-center gap-1 px-2 py-1" style={{ fontSize: "0.7rem", borderRadius: "12px" }}>
+        <FontAwesomeIcon icon={faUserSlash} style={{ fontSize: "0.6rem" }} />
+        <span>Non vérifié</span>
+      </span>
+    );
+  }
+
+  if (is_super_admin) {
+    return (
+      <span className="badge bg-purple d-inline-flex align-items-center gap-1 px-2 py-1" style={{ fontSize: "0.7rem", borderRadius: "12px" }}>
+        <FontAwesomeIcon icon={faCrown} style={{ fontSize: "0.6rem" }} />
+        <span>Super Admin</span>
+      </span>
+    );
+  }
+
+  if (is_admin) {
+    return (
+      <span className="badge bg-info d-inline-flex align-items-center gap-1 px-2 py-1" style={{ fontSize: "0.7rem", borderRadius: "12px" }}>
+        <FontAwesomeIcon icon={faShield} style={{ fontSize: "0.6rem" }} />
+        <span>Admin</span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="badge bg-success d-inline-flex align-items-center gap-1 px-2 py-1" style={{ fontSize: "0.7rem", borderRadius: "12px" }}>
+      <FontAwesomeIcon icon={faUserCheck} style={{ fontSize: "0.6rem" }} />
+      <span>Actif</span>
+    </span>
+  );
+};
+
+const OnlineIndicator = ({ online, lastSeen }: { online?: boolean; lastSeen?: string }) => {
+  if (online) {
+    return (
+      <div className="position-relative d-inline-block">
+        <div className="bg-success rounded-circle" style={{ width: "10px", height: "10px" }} />
+        <span className="visually-hidden">En ligne</span>
+      </div>
+    );
+  }
+
+  if (lastSeen) {
+    const date = new Date(lastSeen);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    let lastSeenText = "";
+    if (diffMins < 1) lastSeenText = "à l'instant";
+    else if (diffMins < 60) lastSeenText = `il y a ${diffMins} min`;
+    else if (diffHours < 24) lastSeenText = `il y a ${diffHours} h`;
+    else if (diffDays < 7) lastSeenText = `il y a ${diffDays} j`;
+    else lastSeenText = date.toLocaleDateString("fr-FR");
+
+    return (
+      <div className="d-flex align-items-center gap-1">
+        <div className="bg-secondary bg-opacity-25 rounded-circle" style={{ width: "8px", height: "8px" }} />
+        <span className="text-muted" style={{ fontSize: "0.65rem" }}>{lastSeenText}</span>
+      </div>
+    );
+  }
+
+  return null;
+};
+
+const MessageStatus = ({ status }: { status?: "sent" | "delivered" | "read" | "failed" }) => {
+  switch (status) {
+    case "sent":
+      return <FontAwesomeIcon icon={faCheck} className="text-muted" style={{ fontSize: "0.7rem" }} />;
+    case "delivered":
+      return <FontAwesomeIcon icon={faCheckDouble} className="text-muted" style={{ fontSize: "0.7rem" }} />;
+    case "read":
+      return <FontAwesomeIcon icon={faCheckDouble} className="text-primary" style={{ fontSize: "0.7rem" }} />;
+    case "failed":
+      return <FontAwesomeIcon icon={faExclamationCircle} className="text-danger" style={{ fontSize: "0.7rem" }} />;
+    default:
+      return null;
+  }
+};
+
+const TypingIndicator = () => (
+  <div className="d-flex align-items-center gap-1 p-2">
+    <div className="typing-dot" style={{ animationDelay: "0ms" }} />
+    <div className="typing-dot" style={{ animationDelay: "150ms" }} />
+    <div className="typing-dot" style={{ animationDelay: "300ms" }} />
+    <style jsx>{`
+      .typing-dot {
+        width: 6px;
+        height: 6px;
+        background-color: #25D366;
+        border-radius: 50%;
+        animation: typing 1.4s infinite ease-in-out;
+      }
+      @keyframes typing {
+        0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+        30% { transform: translateY(-6px); opacity: 1; }
+      }
+    `}</style>
+  </div>
+);
+
+const MessageBubble = ({
+  message,
+  isOwn,
+  status,
+  showAvatar,
+  avatar,
+  senderName,
+  onReply,
+  onDelete,
+  onForward,
+  onCopy,
+}: {
+  message: Message;
+  isOwn: boolean;
+  status?: "sent" | "delivered" | "read" | "failed";
+  showAvatar?: boolean;
+  avatar?: string;
+  senderName?: string;
+  onReply?: () => void;
+  onDelete?: () => void;
+  onForward?: () => void;
+  onCopy?: () => void;
+}) => {
+  const [showOptions, setShowOptions] = useState(false);
+  const messageRef = useRef<HTMLDivElement>(null);
+  const optionsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (optionsRef.current && !optionsRef.current.contains(event.target as Node)) {
+        setShowOptions(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const formatTime = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+    } catch {
+      return "";
+    }
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(message.contenu);
+    if (onCopy) onCopy();
+    setShowOptions(false);
+  };
+
+  const getTypeColor = () => {
+    const type = (message.type || "").toUpperCase();
+    switch (type) {
+      case "ALERT":
+        return "#dc3545";
+      case "WARNING":
+        return "#ffc107";
+      case "INFO":
+        return "#0dcaf0";
+      case "NOTIFICATION":
+        return "#0d6efd";
+      default:
+        return "#6c757d";
+    }
+  };
+
+  return (
+    <div
+      className={`d-flex ${isOwn ? "justify-content-end" : "justify-content-start"} mb-3`}
+      ref={messageRef}
+    >
+      {!isOwn && showAvatar && (
+        <div className="me-2 flex-shrink-0">
+          {avatar ? (
+            <img
+              src={avatar}
+              alt={senderName || "Avatar"}
+              className="rounded-circle"
+              style={{ width: "36px", height: "36px", objectFit: "cover" }}
+            />
+          ) : (
+            <div
+              className="rounded-circle d-flex align-items-center justify-content-center"
+              style={{ width: "36px", height: "36px", backgroundColor: "#6f42c120" }}
+            >
+              <FontAwesomeIcon icon={faCrown} style={{ color: "#6f42c1" }} />
+            </div>
+          )}
+        </div>
+      )}
+
+      <div
+        className={`position-relative message-bubble ${isOwn ? "own-message" : "other-message"}`}
+        style={{
+          maxWidth: "70%",
+          backgroundColor: isOwn ? "#DCF8C6" : "#FFFFFF",
+          borderRadius: "18px",
+          borderTopLeftRadius: !isOwn && showAvatar ? "4px" : "18px",
+          borderTopRightRadius: isOwn ? "4px" : "18px",
+          padding: "8px 12px",
+          boxShadow: "0 1px 2px rgba(0,0,0,0.1)",
+          wordWrap: "break-word",
+        }}
+        onMouseEnter={() => setShowOptions(true)}
+        onMouseLeave={(e) => {
+          if (optionsRef.current && !optionsRef.current.contains(e.relatedTarget as Node)) {
+            setShowOptions(false);
+          }
+        }}
+      >
+        {message.type.toUpperCase() === "SUPER_ADMIN" && !isOwn && (
+          <div className="mb-1 d-flex align-items-center gap-1">
+            <FontAwesomeIcon icon={faCrown} style={{ fontSize: "0.7rem", color: "#6f42c1" }} />
+            <span style={{ fontSize: "0.7rem", color: "#6f42c1", fontWeight: "bold" }}>Super Admin</span>
+          </div>
+        )}
+        
+        {!isOwn && senderName && (
+          <div className="fw-bold mb-1" style={{ fontSize: "0.75rem", color: "#6f42c1" }}>
+            {senderName}
+          </div>
+        )}
+
+        <div className="message-content" style={{ fontSize: "0.85rem", lineHeight: "1.4" }}>
+          {message.contenu.split("\n").map((line, i) => (
+            <p key={i} className="mb-1">{line}</p>
+          ))}
+        </div>
+
+        {message.attachments && message.attachments.length > 0 && (
+          <div className="mt-2">
+            {message.attachments.map((attachment, index) => (
+              <div key={index} className="attachment-preview mb-1">
+                {attachment.type.startsWith("image/") ? (
+                  <img
+                    src={attachment.url}
+                    alt={attachment.name}
+                    style={{ maxWidth: "200px", maxHeight: "150px", borderRadius: "8px" }}
+                  />
+                ) : (
+                  <div className="d-flex align-items-center gap-2 p-2 bg-light rounded">
+                    <FontAwesomeIcon icon={faPaperclip} className="text-muted" />
+                    <span className="text-truncate" style={{ fontSize: "0.75rem" }}>
+                      {attachment.name}
+                    </span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="d-flex justify-content-end align-items-center gap-1 mt-1">
+          <span style={{ fontSize: "0.65rem", color: "#667781" }}>
+            {formatTime(message.envoyeLe)}
+          </span>
+          {isOwn && status && <MessageStatus status={status} />}
+        </div>
+
+        {showOptions && (
+          <div
+            ref={optionsRef}
+            className="position-absolute bg-white shadow rounded p-1"
+            style={{
+              top: "100%",
+              right: isOwn ? 0 : "auto",
+              left: isOwn ? "auto" : 0,
+              marginTop: "4px",
+              zIndex: 10,
+              minWidth: "150px",
+            }}
+          >
+            <button
+              className="btn btn-sm btn-light w-100 text-start d-flex align-items-center gap-2"
+              onClick={() => {
+                if (onReply) onReply();
+                setShowOptions(false);
+              }}
+              style={{ fontSize: "0.8rem", padding: "6px 12px" }}
+            >
+              <FontAwesomeIcon icon={faReply} style={{ fontSize: "0.7rem" }} />
+              Répondre
+            </button>
+            <button
+              className="btn btn-sm btn-light w-100 text-start d-flex align-items-center gap-2"
+              onClick={handleCopy}
+              style={{ fontSize: "0.8rem", padding: "6px 12px" }}
+            >
+              <FontAwesomeIcon icon={faCopy} style={{ fontSize: "0.7rem" }} />
+              Copier
+            </button>
+            <button
+              className="btn btn-sm btn-light w-100 text-start d-flex align-items-center gap-2"
+              onClick={() => {
+                if (onForward) onForward();
+                setShowOptions(false);
+              }}
+              style={{ fontSize: "0.8rem", padding: "6px 12px" }}
+            >
+              <FontAwesomeIcon icon={faForward} style={{ fontSize: "0.7rem" }} />
+              Transférer
+            </button>
+            <button
+              className="btn btn-sm btn-light w-100 text-start d-flex align-items-center gap-2 text-danger"
+              onClick={() => {
+                if (onDelete) onDelete();
+                setShowOptions(false);
+              }}
+              style={{ fontSize: "0.8rem", padding: "6px 12px" }}
+            >
+              <FontAwesomeIcon icon={faTrash} style={{ fontSize: "0.7rem" }} />
+              Supprimer
+            </button>
+          </div>
+        )}
+      </div>
+
+      {isOwn && showAvatar && (
+        <div className="ms-2 flex-shrink-0">
+          {avatar ? (
+            <img
+              src={avatar}
+              alt="Vous"
+              className="rounded-circle"
+              style={{ width: "36px", height: "36px", objectFit: "cover" }}
+            />
+          ) : (
+            <div
+              className="rounded-circle d-flex align-items-center justify-content-center"
+              style={{ width: "36px", height: "36px", backgroundColor: "#6f42c120" }}
+            >
+              <FontAwesomeIcon icon={faCrown} style={{ color: "#6f42c1" }} />
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ChatHeader = ({
+  contact,
+  onBack,
+  onInfo,
+  typing,
+}: {
+  contact: ContactConversation | null;
+  onBack?: () => void;
+  onInfo?: () => void;
+  typing?: boolean;
+}) => {
+  if (!contact) return null;
+
+  const getStatusText = () => {
+    if (contact.est_bloque) return "Bloqué";
+    if (contact.online) return "En ligne";
+    if (contact.lastSeen) {
+      try {
+        const lastSeen = new Date(contact.lastSeen);
+        const now = new Date();
+        const diffMs = now.getTime() - lastSeen.getTime();
+        const diffMins = Math.floor(diffMs / 60000);
+        
+        if (diffMins < 1) return "En ligne";
+        if (diffMins < 60) return `Vu il y a ${diffMins} min`;
+        if (diffMins < 1440) return `Vu il y a ${Math.floor(diffMins / 60)} h`;
+        return `Vu ${lastSeen.toLocaleDateString("fr-FR")}`;
+      } catch {
+        return "Hors ligne";
+      }
+    }
+    return "Hors ligne";
+  };
+
+  const getUserTypeColor = (userType: string) => {
+    switch (userType) {
+      case "super_admin":
+        return "#6f42c1";
+      case "admin":
+        return "#0dcaf0";
+      case "agent":
+        return "#0d6efd";
+      case "vendeur":
+        return "#ffc107";
+      default:
+        return "#198754";
+    }
+  };
+
+  const getUserTypeIcon = (userType: string) => {
+    switch (userType) {
+      case "super_admin":
+        return faCrown;
+      case "admin":
+        return faShield;
+      case "agent":
+        return faUserTie;
+      case "vendeur":
+        return faStore;
+      default:
+        return faUser;
+    }
+  };
+
+  return (
+    <div className="bg-white border-bottom p-3 d-flex align-items-center">
+      {onBack && (
+        <button
+          className="btn btn-link text-dark d-lg-none me-2"
+          onClick={onBack}
+          style={{ padding: "0.5rem" }}
+        >
+          <FontAwesomeIcon icon={faArrowLeft} />
+        </button>
+      )}
+      
+      <div className="position-relative me-3">
+        <div
+          className="rounded-circle d-flex align-items-center justify-content-center"
+          style={{
+            width: "45px",
+            height: "45px",
+            backgroundColor: getUserTypeColor(contact.userType) + "20",
+            border: contact.online ? "2px solid #25D366" : "none",
+          }}
+        >
+          <FontAwesomeIcon
+            icon={getUserTypeIcon(contact.userType)}
+            style={{ fontSize: "1.2rem", color: getUserTypeColor(contact.userType) }}
+          />
+        </div>
+        {contact.online && (
+          <div
+            className="position-absolute bottom-0 end-0 bg-success rounded-circle border border-2 border-white"
+            style={{ width: "12px", height: "12px" }}
+          />
+        )}
+      </div>
+
+      <div className="flex-grow-1">
+        <h6 className="fw-bold mb-1" style={{ fontSize: "1rem", color: "#111b21" }}>
+          {contact.prenoms} {contact.nom}
+          {contact.userType === "super_admin" && (
+            <FontAwesomeIcon icon={faCrown} className="ms-2" style={{ color: "#6f42c1", fontSize: "0.9rem" }} />
+          )}
+          {contact.userType === "admin" && (
+            <FontAwesomeIcon icon={faShield} className="ms-2" style={{ color: "#0dcaf0", fontSize: "0.9rem" }} />
+          )}
+        </h6>
+        <div className="d-flex align-items-center">
+          {typing ? (
+            <TypingIndicator />
+          ) : (
+            <span className="small text-muted">{getStatusText()}</span>
+          )}
+        </div>
+      </div>
+
+      {onInfo && (
+        <button
+          className="btn btn-link text-muted"
+          onClick={onInfo}
+          style={{ padding: "0.5rem" }}
+        >
+          <FontAwesomeIcon icon={faInfoCircle} />
+        </button>
+      )}
+    </div>
+  );
+};
+
+const ChatInput = ({
+  onSend,
+  disabled,
+  replyingTo,
+  onCancelReply,
+}: {
+  onSend: (content: string) => void;
+  disabled?: boolean;
+  replyingTo?: Message | null;
+  onCancelReply?: () => void;
+}) => {
+  const [message, setMessage] = useState("");
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleSend = () => {
+    if (message.trim()) {
+      onSend(message);
+      setMessage("");
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.style.height = "auto";
+      inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 120)}px`;
+    }
+  }, [message]);
+
+  return (
+    <div className="bg-white border-top p-3">
+      {replyingTo && (
+        <div className="bg-light rounded-3 p-2 mb-3 d-flex align-items-start">
+          <div className="flex-grow-1">
+            <div className="small fw-bold text-primary mb-1">
+              <FontAwesomeIcon icon={faReply} className="me-1" />
+              Réponse à {replyingTo.expediteurNom}
+            </div>
+            <div className="small text-truncate" style={{ maxWidth: "200px" }}>
+              {replyingTo.contenu}
+            </div>
+          </div>
+          <button
+            className="btn btn-sm btn-link text-muted"
+            onClick={onCancelReply}
+          >
+            <FontAwesomeIcon icon={faTimes} />
+          </button>
+        </div>
+      )}
+      
+      <div className="d-flex align-items-end gap-2">
+        <div className="flex-grow-1 position-relative">
+          <textarea
+            ref={inputRef}
+            className="form-control border-0 bg-light rounded-4"
+            rows={1}
+            placeholder="Écrire un message..."
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={handleKeyPress}
+            disabled={disabled}
+            style={{
+              resize: "none",
+              paddingRight: "50px",
+              minHeight: "45px",
+              maxHeight: "120px",
+            }}
+          />
+          <div className="position-absolute end-0 bottom-0 d-flex gap-1 p-2">
+            <button className="btn btn-link text-muted p-1">
+              <FontAwesomeIcon icon={faSmile} />
+            </button>
+            <button className="btn btn-link text-muted p-1">
+              <FontAwesomeIcon icon={faPaperclip} />
+            </button>
+          </div>
+        </div>
+        
+        <button
+          className={`btn rounded-circle d-flex align-items-center justify-content-center ${
+            message.trim()
+              ? "btn-primary"
+              : "btn-light text-muted"
+          }`}
+          style={{
+            width: "45px",
+            height: "45px",
+            transition: "all 0.2s ease",
+          }}
+          onClick={handleSend}
+          disabled={!message.trim() || disabled}
+        >
+          <FontAwesomeIcon icon={faPaperPlane} />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const ConversationItem = ({
+  conversation,
+  isActive,
+  onClick,
+}: {
+  conversation: Conversation;
+  isActive: boolean;
+  onClick: () => void;
+}) => {
+  const { contact, lastMessage, unreadCount } = conversation;
+
+  const formatLastMessageTime = (dateString?: string) => {
+    if (!dateString) return "";
+    try {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      
+      if (diffMins < 1) return "à l'instant";
+      if (diffMins < 60) return `il y a ${diffMins} min`;
+      if (diffMins < 1440) return `il y a ${Math.floor(diffMins / 60)} h`;
+      return date.toLocaleDateString("fr-FR", {
+        day: "2-digit",
+        month: "2-digit",
+      });
+    } catch {
+      return "";
+    }
+  };
+
+  const getLastMessagePreview = () => {
+    if (!lastMessage) return "Nouvelle conversation";
+    return lastMessage.contenu.length > 40
+      ? `${lastMessage.contenu.substring(0, 40)}...`
+      : lastMessage.contenu;
+  };
+
+  const getUserTypeColor = (userType: string) => {
+    switch (userType) {
+      case "super_admin":
+        return "#6f42c1";
+      case "admin":
+        return "#0dcaf0";
+      case "agent":
+        return "#0d6efd";
+      case "vendeur":
+        return "#ffc107";
+      default:
+        return "#198754";
+    }
+  };
+
+  const getUserTypeIcon = (userType: string) => {
+    switch (userType) {
+      case "super_admin":
+        return faCrown;
+      case "admin":
+        return faShield;
+      case "agent":
+        return faUserTie;
+      case "vendeur":
+        return faStore;
+      default:
+        return faUser;
+    }
+  };
+
+  return (
+    <div
+      className={`d-flex align-items-center p-3 border-bottom cursor-pointer ${
+        isActive ? "bg-purple bg-opacity-10" : "hover-bg-light"
+      }`}
+      onClick={onClick}
+      style={{
+        transition: "background-color 0.2s ease",
+        cursor: "pointer",
+      }}
+    >
+      <div className="position-relative me-3 flex-shrink-0">
+        <div
+          className="rounded-circle d-flex align-items-center justify-content-center"
+          style={{
+            width: "50px",
+            height: "50px",
+            backgroundColor: getUserTypeColor(contact.userType) + "20",
+            border: contact.online ? "2px solid #25D366" : "none",
+          }}
+        >
+          <FontAwesomeIcon
+            icon={getUserTypeIcon(contact.userType)}
+            style={{ fontSize: "1.3rem", color: getUserTypeColor(contact.userType) }}
+          />
+        </div>
+        {contact.online && (
+          <div
+            className="position-absolute bottom-0 end-0 bg-success rounded-circle border border-2 border-white"
+            style={{ width: "12px", height: "12px" }}
+          />
+        )}
+      </div>
+      
+      <div className="flex-grow-1 min-width-0">
+        <div className="d-flex justify-content-between align-items-center mb-1">
+          <div className="fw-bold text-truncate" style={{ fontSize: "0.95rem", color: "#111b21" }}>
+            {contact.prenoms} {contact.nom}
+            {contact.userType === "super_admin" && (
+              <FontAwesomeIcon icon={faCrown} className="ms-1" style={{ color: "#6f42c1", fontSize: "0.8rem" }} />
+            )}
+            {contact.userType === "admin" && (
+              <FontAwesomeIcon icon={faShield} className="ms-1" style={{ color: "#0dcaf0", fontSize: "0.8rem" }} />
+            )}
+          </div>
+          <div className="small text-muted ms-2" style={{ fontSize: "0.7rem" }}>
+            {formatLastMessageTime(lastMessage?.envoyeLe)}
+          </div>
+        </div>
+        
+        <div className="d-flex justify-content-between align-items-center">
+          <div
+            className="small text-truncate"
+            style={{
+              color: unreadCount > 0 ? "#1e293b" : "#64748b",
+              fontWeight: unreadCount > 0 ? 500 : 400,
+              maxWidth: "180px",
+              fontSize: "0.8rem",
+            }}
+          >
+            {getLastMessagePreview()}
+          </div>
+          
+          <div className="d-flex align-items-center gap-2">
+            {lastMessage?.status && (
+              <MessageStatus status={lastMessage.status} />
+            )}
+            {unreadCount > 0 && (
+              <span className="badge bg-purple rounded-pill" style={{ fontSize: "0.7rem" }}>
+                {unreadCount}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ContactInfo = ({
+  contact,
+  onClose,
+}: {
+  contact: ContactConversation | null;
+  onClose?: () => void;
+}) => {
+  if (!contact) return null;
+
+  const getUserTypeLabel = (userType: string) => {
+    switch (userType) {
+      case "super_admin":
+        return "Super Admin";
+      case "admin":
+        return "Admin";
+      case "agent":
+        return "Agent";
+      case "vendeur":
+        return "Vendeur";
+      default:
+        return "Utilisateur";
+    }
+  };
+
+  const getUserTypeIcon = (userType: string) => {
+    switch (userType) {
+      case "super_admin":
+        return faCrown;
+      case "admin":
+        return faShield;
+      case "agent":
+        return faUserTie;
+      case "vendeur":
+        return faStore;
+      default:
+        return faUser;
+    }
+  };
+
+  const getUserTypeColor = (userType: string) => {
+    switch (userType) {
+      case "super_admin":
+        return "#6f42c1";
+      case "admin":
+        return "#0dcaf0";
+      case "agent":
+        return "#0d6efd";
+      case "vendeur":
+        return "#ffc107";
+      default:
+        return "#198754";
+    }
+  };
+
+  return (
+    <div className="bg-white h-100">
+      <div className="p-3 border-bottom d-flex align-items-center justify-content-between">
+        <h6 className="mb-0 fw-bold">Infos du contact</h6>
+        {onClose && (
+          <button className="btn btn-sm btn-link text-muted" onClick={onClose}>
+            <FontAwesomeIcon icon={faTimes} />
+          </button>
+        )}
+      </div>
+      
+      <div className="p-4 text-center border-bottom">
+        <div
+          className="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3"
+          style={{
+            width: "100px",
+            height: "100px",
+            backgroundColor: getUserTypeColor(contact.userType) + "20",
+          }}
+        >
+          <FontAwesomeIcon
+            icon={getUserTypeIcon(contact.userType)}
+            style={{ fontSize: "3rem", color: getUserTypeColor(contact.userType) }}
+          />
+        </div>
+        <h5 className="mb-1">
+          {contact.prenoms} {contact.nom}
+        </h5>
+        <p className="text-muted small mb-2">{getUserTypeLabel(contact.userType)}</p>
+        <StatusBadge
+          est_bloque={contact.est_bloque}
+          est_verifie={contact.est_verifie}
+          is_deleted={contact.is_deleted}
+          is_super_admin={contact.userType === "super_admin"}
+          is_admin={contact.userType === "admin"}
+        />
+      </div>
+      
+      <div className="p-3">
+        <div className="mb-3">
+          <div className="small text-muted mb-1">Email</div>
+          <div className="d-flex align-items-center gap-2">
+            <FontAwesomeIcon icon={faEnvelope} className="text-muted" style={{ fontSize: "0.9rem" }} />
+            <span style={{ fontSize: "0.9rem" }}>{contact.email}</span>
+          </div>
+        </div>
+        
+        {contact.telephone && (
+          <div className="mb-3">
+            <div className="small text-muted mb-1">Téléphone</div>
+            <div className="d-flex align-items-center gap-2">
+              <FontAwesomeIcon icon={faPhone} className="text-muted" style={{ fontSize: "0.9rem" }} />
+              <span style={{ fontSize: "0.9rem" }}>{contact.telephone}</span>
+            </div>
+          </div>
+        )}
+        
+        {contact.boutique && (
+          <div className="mb-3">
+            <div className="small text-muted mb-1">Boutique</div>
+            <div className="d-flex align-items-center gap-2">
+              <FontAwesomeIcon icon={faStore} className="text-muted" style={{ fontSize: "0.9rem" }} />
+              <span style={{ fontSize: "0.9rem" }}>{contact.boutique.nom}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ============================================
+// FONCTIONS UTILITAIRES
+// ============================================
+const detectUserTypeFromEmail = (
+  email: string,
+): "super_admin" | "admin" | "agent" | "vendeur" | "utilisateur" => {
+  const emailLower = email.toLowerCase();
+  if (emailLower.includes("superadmin") || emailLower.includes("@sonec.com"))
+    return "super_admin";
+  if (emailLower.includes("admin")) return "admin";
+  if (emailLower.includes("agent") || emailLower.includes("@agent.com"))
+    return "agent";
+  if (emailLower.includes("vendeur") || emailLower.includes("@sonecafrica.com"))
+    return "vendeur";
+  if (emailLower.includes("boutique") || emailLower.includes("shop"))
+    return "vendeur";
+  return "utilisateur";
+};
+
+const getUserTypeIcon = (userType: string) => {
+  switch (userType) {
+    case "super_admin":
+      return faCrown;
+    case "admin":
+      return faShield;
+    case "agent":
+      return faUserTie;
+    case "vendeur":
+      return faStore;
+    default:
+      return faUser;
+  }
+};
+
+const getUserTypeColor = (userType: string) => {
+  switch (userType) {
+    case "super_admin":
+      return "purple";
+    case "admin":
+      return "info";
+    case "agent":
+      return "primary";
+    case "vendeur":
+      return "warning";
+    default:
+      return "success";
+  }
+};
+
+const getUserTypeLabel = (userType: string) => {
+  switch (userType) {
+    case "super_admin":
+      return "Super Admin";
+    case "admin":
+      return "Admin";
+    case "agent":
+      return "Agent";
+    case "vendeur":
+      return "Vendeur";
+    default:
+      return "Utilisateur";
+  }
+};
+
+const formatDate = (dateString: string) => {
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "Date inconnue";
+    return date.toLocaleDateString("fr-FR", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "Date inconnue";
+  }
+};
+
+const formatLastMessageDate = (dateString?: string) => {
+  if (!dateString) return "Jamais";
+  try {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffDays === 0)
+      return date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+    if (diffDays === 1) return "Hier";
+    if (diffDays < 7) return `Il y a ${diffDays} jours`;
+    return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+  } catch {
+    return "Date inconnue";
+  }
+};
+
+// ============================================
 // COMPOSANT PRINCIPAL AVEC SUSPENSE
 // ============================================
-export default function ListeMessages() {
+export default function MessagerieAdmin() {
   return (
     <Suspense
       fallback={
-        <div className="min-vh-100 d-flex align-items-center justify-content-center">
+        <div className="min-vh-100 d-flex align-items-center justify-content-center bg-light">
           <LoadingSpinner
             size="lg"
             text="Chargement de votre messagerie..."
@@ -211,10 +1253,13 @@ function MessagesContent() {
   const [vendeurs, setVendeurs] = useState<Vendeur[]>([]);
   const [utilisateurs, setUtilisateurs] = useState<Utilisateur[]>([]);
   const [superAdmins, setSuperAdmins] = useState<SuperAdmin[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messagesRecus, setMessagesRecus] = useState<Message[]>([]);
   const [messagesEnvoyes, setMessagesEnvoyes] = useState<Message[]>([]);
-  const [contacts, setContacts] = useState<ContactConversation[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [adminProfile, setAdminProfile] = useState<SuperAdmin | null>(null);
+  const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null);
+  const [showContactInfo, setShowContactInfo] = useState(false);
+  const [showMobileConversations, setShowMobileConversations] = useState(true);
 
   // États pour les notifications toast
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
@@ -229,73 +1274,36 @@ function MessagesContent() {
     superAdmins: false,
     messages: false,
     envoi: false,
+    contacts: false,
   });
 
-  // États pour les erreurs
-  const [error, setError] = useState<string | null>(null);
-  const [apiError, setApiError] = useState<string | null>(null);
+  // État pour le message en cours de réponse
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+
+  // État pour la suppression
+  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
+  const [messageToDelete, setMessageToDelete] = useState<Message | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // États pour les filtres
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedType, setSelectedType] = useState<string>("all");
-  const [selectedStatus, setSelectedStatus] = useState<string>("all");
 
-  // États pour la sélection
-  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
-  const [selectedContact, setSelectedContact] =
-    useState<ContactConversation | null>(null);
+  // États pour la saisie en cours
+  const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
 
-  // ✅ État pour stocker le message original en réponse
-  const [replyToMessage, setReplyToMessage] = useState<Message | null>(null);
-
-  // États pour les messages de succès/erreur
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [infoMessage, setInfoMessage] = useState<string | null>(null);
-
-  // État pour la modale de confirmation de suppression
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [messageToDelete, setMessageToDelete] = useState<Message | null>(null);
-
-  // État pour le formulaire d'envoi de message
-  const [newMessage, setNewMessage] = useState({
-    destinataireEmail: "",
-    destinataireUuid: "",
-    sujet: "",
-    contenu: "",
-    type: "notification",
-    expediteurNom: "Administrateur SONEC",
-    expediteurEmail: "",
-    expediteurUuid: "",
-  });
-
-  // Statistiques
-  const [stats, setStats] = useState({
-    totalUsers: 0,
-    totalMessages: 0,
-    unreadMessages: 0,
-    sentMessages: 0,
-  });
-
-  // Onglet actif
-  const [activeTab, setActiveTab] = useState<"contacts" | "received" | "sent">(
-    "contacts",
-  );
-
-  // ✅ REF pour éviter les boucles infinies et gérer les intervalles
+  // REF pour éviter les boucles infinies
   const isInitialLoad = useRef(true);
   const isFetchingContacts = useRef(false);
   const prevMessagesRecusLength = useRef(0);
   const prevMessagesEnvoyesLength = useRef(0);
   const hasLoadedInitialData = useRef(false);
+  const toastContainerRef = useRef<HTMLDivElement | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messageInputRef = useRef<HTMLTextAreaElement>(null);
+  const isMounted = useRef(true);
   const pollingInterval = useRef<NodeJS.Timeout | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const toastContainerRef = useRef<HTMLDivElement | null>(null);
-
-  // État pour la suppression
-  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(
-    null,
-  );
 
   // Initialisation de l'audio pour les notifications sonores
   useEffect(() => {
@@ -307,6 +1315,17 @@ function MessagesContent() {
       }
     };
   }, []);
+
+  // Scroll vers le bas des messages
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, []);
+
+  useEffect(() => {
+    if (currentConversation) {
+      scrollToBottom();
+    }
+  }, [currentConversation?.messages, scrollToBottom]);
 
   // ============================================
   // FONCTIONS DE NOTIFICATION TOAST
@@ -352,7 +1371,6 @@ function MessagesContent() {
         }
       }
 
-      // Auto-suppression après durée
       setTimeout(() => {
         setToasts((prev) => prev.filter((t) => t.id !== id));
       }, options?.duration || 5000);
@@ -365,107 +1383,141 @@ function MessagesContent() {
   }, []);
 
   // ============================================
-  // ✅ FONCTION DE MARQUAGE COMME LU (CORRIGÉE)
+  // FONCTIONS DE MARQUAGE COMME LU/NON LU
   // ============================================
   const handleMarkAsRead = useCallback(
     async (messageId: string) => {
       try {
-        // ✅ CORRECTION: MARK_READ est une fonction
         await api.put(API_ENDPOINTS.MESSAGERIE.MARK_READ(messageId));
 
-        // Mettre à jour l'état local
-        setMessages((prev) =>
+        setMessagesRecus((prev) =>
           prev.map((msg) =>
             msg.uuid === messageId
-              ? { ...msg, estLu: true, dateLecture: new Date().toISOString() }
+              ? { ...msg, estLu: true, dateLecture: new Date().toISOString(), status: "read" as const }
               : msg,
           ),
         );
 
-        // Mettre à jour le message sélectionné si c'est celui-ci
-        if (selectedMessage?.uuid === messageId) {
-          setSelectedMessage((prev) =>
+        setMessagesEnvoyes((prev) =>
+          prev.map((msg) =>
+            msg.uuid === messageId
+              ? { ...msg, estLu: true, dateLecture: new Date().toISOString(), status: "read" as const }
+              : msg,
+          ),
+        );
+
+        setConversations((prev) =>
+          prev.map((conv) => ({
+            ...conv,
+            messages: conv.messages.map((msg) =>
+              msg.uuid === messageId
+                ? { ...msg, estLu: true, dateLecture: new Date().toISOString(), status: "read" as const }
+                : msg
+            ),
+            unreadCount:
+              conv.contact.email === currentConversation?.contact.email
+                ? 0
+                : conv.unreadCount,
+          }))
+        );
+
+        if (currentConversation) {
+          setCurrentConversation((prev) =>
             prev
-              ? { ...prev, estLu: true, dateLecture: new Date().toISOString() }
-              : null,
+              ? {
+                  ...prev,
+                  messages: prev.messages.map((msg) =>
+                    msg.uuid === messageId
+                      ? { ...msg, estLu: true, dateLecture: new Date().toISOString(), status: "read" as const }
+                      : msg
+                  ),
+                  unreadCount: 0,
+                }
+              : null
           );
         }
 
-        // Mettre à jour le compteur
         setUnreadCount((prev) => Math.max(0, prev - 1));
 
-        // Afficher une notification de lecture
         showToast(
           "message-read",
           "📖 Message marqué comme lu",
           "Le message a été marqué comme lu avec succès",
           { duration: 3000, messageId },
         );
-      } catch (err) {
+      } catch (err: any) {
         console.error("❌ Erreur lors du marquage comme lu:", err);
-
-        // Afficher une notification d'erreur
-        showToast(
-          "error",
-          "❌ Erreur",
-          "Impossible de marquer le message comme lu",
-          { duration: 3000 },
-        );
+        // Ne pas afficher de toast d'erreur
       }
     },
-    [selectedMessage, showToast],
+    [currentConversation, showToast],
   );
 
-  // ============================================
-  // ✅ FONCTION DE MARQUAGE COMME NON LU
-  // ============================================
   const handleMarkAsUnread = useCallback(
     async (messageId: string) => {
       try {
-        // ✅ Utilisation de MARK_UNREAD
         await api.patch(API_ENDPOINTS.MESSAGERIE.MARK_UNREAD(messageId));
 
-        // Mettre à jour l'état local
-        setMessages((prev) =>
+        setMessagesRecus((prev) =>
           prev.map((msg) =>
             msg.uuid === messageId
-              ? { ...msg, estLu: false, dateLecture: null }
+              ? { ...msg, estLu: false, dateLecture: null, status: "delivered" as const }
               : msg,
           ),
         );
 
-        // Mettre à jour le message sélectionné si c'est celui-ci
-        if (selectedMessage?.uuid === messageId) {
-          setSelectedMessage((prev) =>
-            prev ? { ...prev, estLu: false, dateLecture: null } : null,
+        setMessagesEnvoyes((prev) =>
+          prev.map((msg) =>
+            msg.uuid === messageId
+              ? { ...msg, estLu: false, dateLecture: null, status: "delivered" as const }
+              : msg,
+          ),
+        );
+
+        setConversations((prev) =>
+          prev.map((conv) => ({
+            ...conv,
+            messages: conv.messages.map((msg) =>
+              msg.uuid === messageId
+                ? { ...msg, estLu: false, dateLecture: null, status: "delivered" as const }
+                : msg
+            ),
+          }))
+        );
+
+        if (currentConversation) {
+          setCurrentConversation((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  messages: prev.messages.map((msg) =>
+                    msg.uuid === messageId
+                      ? { ...msg, estLu: false, dateLecture: null, status: "delivered" as const }
+                      : msg
+                  ),
+                }
+              : null
           );
         }
 
-        // Mettre à jour le compteur
         setUnreadCount((prev) => prev + 1);
 
-        // Afficher une notification
         showToast(
           "info",
           "📬 Message marqué comme non lu",
           "Le message a été marqué comme non lu",
           { duration: 3000, messageId },
         );
-      } catch (err) {
+      } catch (err: any) {
         console.error("❌ Erreur lors du marquage comme non lu:", err);
-        showToast(
-          "error",
-          "❌ Erreur",
-          "Impossible de marquer le message comme non lu",
-          { duration: 3000 },
-        );
+        // Ne pas afficher de toast d'erreur
       }
     },
-    [selectedMessage, showToast],
+    [currentConversation, showToast],
   );
 
   // ============================================
-  // ✅ FONCTION DE SUPPRESSION DE MESSAGE AVEC MODALE
+  // FONCTION DE SUPPRESSION DE MESSAGE AVEC MODALE
   // ============================================
   const openDeleteModal = useCallback((message: Message) => {
     setMessageToDelete(message);
@@ -484,39 +1536,37 @@ function MessagesContent() {
     setShowDeleteModal(false);
 
     try {
-      // ✅ Utilisation de DELETE
       await api.delete(API_ENDPOINTS.MESSAGERIE.DELETE(messageToDelete.uuid));
 
-      // Mettre à jour les listes de messages
-      setMessages((prev) =>
-        prev.filter((msg) => msg.uuid !== messageToDelete.uuid),
-      );
-      setMessagesEnvoyes((prev) =>
-        prev.filter((msg) => msg.uuid !== messageToDelete.uuid),
+      setMessagesRecus((prev) => prev.filter((msg) => msg.uuid !== messageToDelete.uuid));
+      setMessagesEnvoyes((prev) => prev.filter((msg) => msg.uuid !== messageToDelete.uuid));
+
+      setConversations((prev) =>
+        prev.map((conv) => ({
+          ...conv,
+          messages: conv.messages.filter((msg) => msg.uuid !== messageToDelete.uuid),
+        }))
       );
 
-      // Si le message supprimé était sélectionné, fermer les détails
-      if (selectedMessage?.uuid === messageToDelete.uuid) {
-        setSelectedMessage(null);
+      if (currentConversation) {
+        setCurrentConversation((prev) =>
+          prev
+            ? {
+                ...prev,
+                messages: prev.messages.filter((msg) => msg.uuid !== messageToDelete.uuid),
+              }
+            : null
+        );
       }
 
-      // Afficher une notification de succès
       showToast(
         "success",
         "🗑️ Message supprimé",
-        `Le message "${messageToDelete.sujet.substring(0, 50)}${messageToDelete.sujet.length > 50 ? "..." : ""}" a été supprimé avec succès`,
-        {
-          duration: 4000,
-          details: {
-            sujet: messageToDelete.sujet,
-            date: new Date(messageToDelete.envoyeLe).toLocaleDateString(
-              "fr-FR",
-            ),
-          },
-        },
+        `Le message a été supprimé avec succès`,
+        { duration: 4000 }
       );
     } catch (err) {
-      console.error("❌ Erreur lors de la suppression du message:", err);
+      console.error("❌ Erreur lors de la suppression:", err);
       showToast("error", "❌ Erreur", "Impossible de supprimer le message", {
         duration: 4000,
       });
@@ -524,7 +1574,7 @@ function MessagesContent() {
       setDeletingMessageId(null);
       setMessageToDelete(null);
     }
-  }, [messageToDelete, selectedMessage, showToast]);
+  }, [messageToDelete, currentConversation, showToast]);
 
   // ============================================
   // ✅ POLLING POUR LES NOUVEAUX MESSAGES
@@ -549,32 +1599,27 @@ function MessagesContent() {
               expediteurNom: message.expediteurNom || "Expéditeur inconnu",
               expediteurEmail: message.expediteurEmail || "",
               expediteurUuid: message.expediteurUuid,
-              destinataireEmail:
-                message.destinataireEmail || adminProfile.email,
+              destinataireEmail: message.destinataireEmail || adminProfile.email,
               destinataireUuid: message.destinataireUuid || adminProfile.uuid,
               type: (message.type || "notification").toUpperCase(),
               estEnvoye: false,
-              envoyeLe:
-                message.envoyeLe ||
-                item.dateReception ||
-                new Date().toISOString(),
+              envoyeLe: message.envoyeLe || item.dateReception || new Date().toISOString(),
               estLu: message.estLu || item.estLu || false,
               dateLecture: message.dateLecture || item.dateLecture || null,
+              status: message.estLu ? ("read" as const) : ("delivered" as const),
             } as Message;
           })
           .filter((item): item is Message => item !== null);
 
-        // Vérifier les nouveaux messages non lus
-        const existingIds = new Set(messages.map((m) => m.uuid));
+        const existingIds = new Set(messagesRecus.map((m) => m.uuid));
         const newMessages = transformedMessages.filter(
           (msg) => !existingIds.has(msg.uuid) && !msg.estLu,
         );
 
         if (newMessages.length > 0) {
-          // Mettre à jour l'état des messages
-          setMessages((prev) => [...newMessages, ...prev]);
+          setMessagesRecus((prev) => [...newMessages, ...prev]);
+          setUnreadCount((prev) => prev + newMessages.length);
 
-          // Afficher une notification pour chaque nouveau message
           newMessages.forEach((msg) => {
             showToast(
               "new-message",
@@ -591,27 +1636,18 @@ function MessagesContent() {
               },
             );
           });
-
-          // Mettre à jour le compteur
-          setUnreadCount((prev) => prev + newMessages.length);
         }
       }
     } catch (err) {
-      console.error(
-        "❌ Erreur lors de la vérification des nouveaux messages:",
-        err,
-      );
+      console.error("❌ Erreur lors de la vérification des nouveaux messages:", err);
     }
-  }, [adminProfile, messages, showToast]);
+  }, [adminProfile, messagesRecus, showToast]);
 
   // Démarrer le polling
   useEffect(() => {
     if (!adminProfile) return;
 
-    // Vérifier immédiatement
     checkNewMessages();
-
-    // Vérifier toutes les 30 secondes
     pollingInterval.current = setInterval(checkNewMessages, 30000);
 
     return () => {
@@ -621,16 +1657,14 @@ function MessagesContent() {
     };
   }, [adminProfile, checkNewMessages]);
 
-  // ============================================
-  // ✅ MISE À JOUR DU COMPTEUR DE NON LUS
-  // ============================================
+  // Mise à jour du compteur de non lus
   useEffect(() => {
-    const unread = messages.filter((m) => !m.estLu).length;
+    const unread = messagesRecus.filter((m) => !m.estLu).length;
     setUnreadCount(unread);
-  }, [messages]);
+  }, [messagesRecus]);
 
   // ============================================
-  // ✅ CHARGEMENT DU PROFIL ADMIN - SANS DÉPENDANCES
+  // CHARGEMENT DU PROFIL ADMIN
   // ============================================
   const fetchAdminProfile = useCallback(async () => {
     setLoading((prev) => ({ ...prev, profile: true }));
@@ -659,10 +1693,8 @@ function MessagesContent() {
           expediteurUuid: profile.uuid || "",
         }));
         return profile;
-      } else {
-        console.warn("⚠️ Structure de réponse inattendue:", response);
-        return null;
       }
+      return null;
     } catch (err: any) {
       console.error("❌ Erreur lors du chargement du profil admin:", err);
       return null;
@@ -672,7 +1704,7 @@ function MessagesContent() {
   }, []);
 
   // ============================================
-  // ✅ CHARGEMENT DES UTILISATEURS - SANS DÉPENDANCES
+  // CHARGEMENT DES UTILISATEURS
   // ============================================
   const fetchSuperAdmins = useCallback(async () => {
     setLoading((prev) => ({ ...prev, superAdmins: true }));
@@ -685,8 +1717,6 @@ function MessagesContent() {
 
       if (response?.data) {
         setSuperAdmins(response.data);
-      } else {
-        setSuperAdmins([]);
       }
     } catch (err: any) {
       console.error("❌ Erreur chargement super-admins:", err);
@@ -744,7 +1774,7 @@ function MessagesContent() {
   }, []);
 
   // ============================================
-  // ✅ CHARGEMENT DES MESSAGES - AVEC PARAMÈTRES
+  // CHARGEMENT DES MESSAGES
   // ============================================
   const fetchMessagesRecus = useCallback(
     async (profileEmail?: string, profileUuid?: string) => {
@@ -760,6 +1790,14 @@ function MessagesContent() {
             .map((item: any) => {
               if (!item) return null;
               const message = item.message || item;
+
+              // Filtrer les messages système
+              if (message.expediteurEmail === 'system@example.com' ||
+                  message.expediteurEmail?.includes('noreply') ||
+                  !message.expediteurEmail) {
+                return null;
+              }
+
               return {
                 uuid: message.uuid || `msg-${Date.now()}`,
                 sujet: message.sujet || "Sans sujet",
@@ -767,24 +1805,20 @@ function MessagesContent() {
                 expediteurNom: message.expediteurNom || "Expéditeur inconnu",
                 expediteurEmail: message.expediteurEmail || "",
                 expediteurUuid: message.expediteurUuid,
-                destinataireEmail:
-                  message.destinataireEmail || profileEmail || "",
+                destinataireEmail: message.destinataireEmail || profileEmail || "",
                 destinataireUuid: message.destinataireUuid || profileUuid,
                 type: (message.type || "notification").toUpperCase(),
                 estEnvoye: false,
-                envoyeLe:
-                  message.envoyeLe ||
-                  item.dateReception ||
-                  new Date().toISOString(),
+                envoyeLe: message.envoyeLe || item.dateReception || new Date().toISOString(),
                 estLu: message.estLu || item.estLu || false,
                 dateLecture: message.dateLecture || item.dateLecture || null,
+                status: message.estLu ? ("read" as const) : ("delivered" as const),
               } as Message;
             })
             .filter((item): item is Message => item !== null);
 
-          setMessages(transformedMessages);
+          setMessagesRecus(transformedMessages);
 
-          // Afficher une notification pour les messages non lus
           const unreadMessages = transformedMessages.filter((m) => !m.estLu);
           if (unreadMessages.length > 0) {
             showToast(
@@ -794,12 +1828,9 @@ function MessagesContent() {
               { duration: 5000 },
             );
           }
-        } else {
-          setMessages([]);
         }
       } catch (err: any) {
         console.error("❌ Erreur chargement messages:", err);
-        setMessages([]);
       } finally {
         setLoading((prev) => ({ ...prev, messages: false }));
       }
@@ -807,27 +1838,24 @@ function MessagesContent() {
     [showToast],
   );
 
+  // ============================================
+  // ✅ CHARGEMENT DES MESSAGES ENVOYÉS - VERSION CORRIGÉE
+  // ============================================
   const fetchMessagesEnvoyes = useCallback(
-    async (
-      profileNom?: string,
-      profileEmail?: string,
-      profileUuid?: string,
-    ) => {
+    async (profileNom?: string, profileEmail?: string, profileUuid?: string) => {
       try {
-        const response = await api.get<Message[]>(
-          API_ENDPOINTS.MESSAGERIE.SENT,
-        );
+        const response = await api.get<Message[]>(API_ENDPOINTS.MESSAGERIE.SENT);
 
         if (Array.isArray(response)) {
           const formattedMessages = response
             .map((msg: any) => {
-              if (!msg) return null;
+              if (!msg || !msg.uuid) return null;
+
               return {
-                uuid: msg.uuid || `sent-${Date.now()}`,
+                uuid: msg.uuid,
                 sujet: msg.sujet || "Sans sujet",
                 contenu: msg.contenu || "",
-                expediteurNom:
-                  msg.expediteurNom || profileNom || "Administrateur SONEC",
+                expediteurNom: msg.expediteurNom || profileNom || "Administrateur SONEC",
                 expediteurEmail: msg.expediteurEmail || profileEmail || "",
                 expediteurUuid: msg.expediteurUuid || profileUuid,
                 destinataireEmail: msg.destinataireEmail || "",
@@ -837,6 +1865,7 @@ function MessagesContent() {
                 envoyeLe: msg.envoyeLe || new Date().toISOString(),
                 estLu: msg.estLu || false,
                 dateLecture: msg.dateLecture || null,
+                status: msg.estLu ? ("read" as const) : ("sent" as const),
               } as Message;
             })
             .filter((msg): msg is Message => msg !== null);
@@ -845,146 +1874,152 @@ function MessagesContent() {
         }
       } catch (err: any) {
         console.error("❌ Error fetching sent messages:", err);
-        setMessagesEnvoyes([]);
       }
     },
     [],
   );
 
   // ============================================
-  // ✅ CONSTRUCTION DES CONTACTS
+  // CONSTRUCTION DES CONTACTS ET CONVERSATIONS
   // ============================================
-  const buildContactsFromMessages = useCallback(() => {
-    if (!adminProfile) return;
+  const buildContactsAndConversations = useCallback(
+    async (profile: SuperAdmin) => {
+      if (!isMounted.current) return;
 
-    if (isFetchingContacts.current) return;
-    isFetchingContacts.current = true;
+      setLoading((prev) => ({ ...prev, contacts: true }));
 
-    try {
-      console.log("👥 Construction des contacts depuis les messages...");
+      try {
+        const allMessages = [...messagesRecus, ...messagesEnvoyes];
+        const contactsMap = new Map<string, ContactConversation>();
+        const conversationsMap = new Map<string, Conversation>();
 
-      const contactsMap = new Map<string, ContactConversation>();
+        for (const message of allMessages) {
+          const isFromMe = message.expediteurEmail === profile.email;
+          const contactEmail = isFromMe
+            ? message.destinataireEmail
+            : message.expediteurEmail;
 
-      messages.forEach((msg) => {
-        if (msg.expediteurEmail && msg.expediteurEmail !== adminProfile.email) {
-          const key = msg.expediteurEmail;
-          if (!contactsMap.has(key)) {
-            contactsMap.set(key, {
-              uuid: msg.expediteurUuid || `contact-${Date.now()}-${key}`,
-              email: msg.expediteurEmail,
-              nom: msg.expediteurNom.split(" ").pop() || "",
-              prenoms:
-                msg.expediteurNom.split(" ").slice(0, -1).join(" ") ||
-                msg.expediteurNom,
+          if (!contactEmail || contactEmail === profile.email) continue;
+
+          if (!contactsMap.has(contactEmail)) {
+            const contact: ContactConversation = {
+              uuid: isFromMe
+                ? message.destinataireUuid || `contact-${Date.now()}-${contactEmail}`
+                : message.expediteurUuid || `contact-${Date.now()}-${contactEmail}`,
+              email: contactEmail,
+              nom: isFromMe
+                ? ""
+                : message.expediteurNom?.split(" ").pop() || "",
+              prenoms: isFromMe
+                ? contactEmail.split("@")[0]
+                : message.expediteurNom?.split(" ").slice(0, -1).join(" ") ||
+                  message.expediteurNom ||
+                  "Contact",
               telephone: "",
-              userType: detectUserTypeFromEmail(msg.expediteurEmail),
+              userType: detectUserTypeFromEmail(contactEmail),
               est_verifie: true,
               est_bloque: false,
               is_deleted: false,
-              lastMessageDate: msg.envoyeLe,
-              lastMessage: msg.contenu,
-              unreadCount: !msg.estLu ? 1 : 0,
+              is_admin: contactEmail.includes("admin") && !contactEmail.includes("super"),
+              is_super_admin: contactEmail.includes("superadmin"),
+              lastMessageDate: message.envoyeLe,
+              lastMessage: message.contenu,
+              lastMessageStatus: isFromMe ? message.status : (message.estLu ? "read" : "delivered"),
+              unreadCount: !isFromMe && !message.estLu ? 1 : 0,
               totalMessages: 1,
-            });
+              online: Math.random() > 0.5,
+              lastSeen: new Date(Date.now() - Math.random() * 3600000).toISOString(),
+            };
+            contactsMap.set(contactEmail, contact);
           } else {
-            const contact = contactsMap.get(key)!;
+            const contact = contactsMap.get(contactEmail)!;
             contact.totalMessages = (contact.totalMessages || 0) + 1;
-            if (!msg.estLu) {
+            if (!isFromMe && !message.estLu) {
               contact.unreadCount = (contact.unreadCount || 0) + 1;
             }
-            if (
-              new Date(msg.envoyeLe) > new Date(contact.lastMessageDate || "")
-            ) {
-              contact.lastMessageDate = msg.envoyeLe;
-              contact.lastMessage = msg.contenu;
+            if (new Date(message.envoyeLe) > new Date(contact.lastMessageDate || "")) {
+              contact.lastMessageDate = message.envoyeLe;
+              contact.lastMessage = message.contenu;
+              contact.lastMessageStatus = isFromMe ? message.status : (message.estLu ? "read" : "delivered");
             }
           }
-        }
-      });
 
-      messagesEnvoyes.forEach((msg) => {
-        if (
-          msg.destinataireEmail &&
-          msg.destinataireEmail !== adminProfile.email
-        ) {
-          const key = msg.destinataireEmail;
-          if (!contactsMap.has(key)) {
-            contactsMap.set(key, {
-              uuid: msg.destinataireUuid || `contact-${Date.now()}-${key}`,
-              email: msg.destinataireEmail,
-              nom: "",
-              prenoms: msg.destinataireEmail.split("@")[0] || "Contact",
-              telephone: "",
-              userType: detectUserTypeFromEmail(msg.destinataireEmail),
-              est_verifie: true,
-              est_bloque: false,
-              is_deleted: false,
-              lastMessageDate: msg.envoyeLe,
-              lastMessage: msg.contenu,
-              unreadCount: 0,
-              totalMessages: 1,
+          if (!conversationsMap.has(contactEmail)) {
+            const contact = contactsMap.get(contactEmail)!;
+            conversationsMap.set(contactEmail, {
+              contact,
+              messages: [message],
+              lastMessage: message,
+              unreadCount: !isFromMe && !message.estLu ? 1 : 0,
             });
           } else {
-            const contact = contactsMap.get(key)!;
-            contact.totalMessages = (contact.totalMessages || 0) + 1;
-            if (
-              new Date(msg.envoyeLe) > new Date(contact.lastMessageDate || "")
-            ) {
-              contact.lastMessageDate = msg.envoyeLe;
-              contact.lastMessage = msg.contenu;
+            const conv = conversationsMap.get(contactEmail)!;
+            conv.messages.push(message);
+            if (!isFromMe && !message.estLu) {
+              conv.unreadCount = (conv.unreadCount || 0) + 1;
+            }
+            if (new Date(message.envoyeLe) > new Date(conv.lastMessage?.envoyeLe || "")) {
+              conv.lastMessage = message;
             }
           }
         }
-      });
 
-      const contactsArray = Array.from(contactsMap.values())
-        .filter((c) => c.email !== adminProfile.email)
-        .sort((a, b) => {
-          const dateA = a.lastMessageDate
-            ? new Date(a.lastMessageDate).getTime()
-            : 0;
-          const dateB = b.lastMessageDate
-            ? new Date(b.lastMessageDate).getTime()
-            : 0;
-          return dateB - dateA;
-        });
+        const conversationsArray = Array.from(conversationsMap.values())
+          .map((conv) => ({
+            ...conv,
+            messages: conv.messages.sort(
+              (a, b) => new Date(a.envoyeLe).getTime() - new Date(b.envoyeLe).getTime()
+            ),
+          }))
+          .sort((a, b) => {
+            const dateA = a.lastMessage?.envoyeLe
+              ? new Date(a.lastMessage.envoyeLe).getTime()
+              : 0;
+            const dateB = b.lastMessage?.envoyeLe
+              ? new Date(b.lastMessage.envoyeLe).getTime()
+              : 0;
+            return dateB - dateA;
+          });
 
-      console.log(`✅ ${contactsArray.length} contacts trouvés`);
-      setContacts(contactsArray);
-    } catch (err) {
-      console.error("❌ Erreur construction contacts:", err);
-    } finally {
-      isFetchingContacts.current = false;
-    }
-  }, [adminProfile, messages, messagesEnvoyes]);
+        if (isMounted.current) {
+          setConversations(conversationsArray);
+        }
+      } catch (err) {
+        console.error("❌ Erreur construction contacts et conversations:", err);
+      } finally {
+        if (isMounted.current) {
+          setLoading((prev) => ({ ...prev, contacts: false }));
+        }
+      }
+    },
+    [messagesRecus, messagesEnvoyes],
+  );
 
   // ============================================
-  // ✅ CHARGEMENT INITIAL - UNE SEULE FOIS
+  // SÉLECTIONNER LE PREMIER CONTACT PAR DÉFAUT
   // ============================================
   useEffect(() => {
-    let isMounted = true;
+    if (conversations.length > 0 && !currentConversation && !loading.initial) {
+      setCurrentConversation(conversations[0]);
+      setShowMobileConversations(false);
+    }
+  }, [conversations, currentConversation, loading.initial]);
+
+  // ============================================
+  // CHARGEMENT INITIAL
+  // ============================================
+  useEffect(() => {
+    isMounted.current = true;
 
     const loadInitialData = async () => {
       if (hasLoadedInitialData.current) return;
 
       setLoading((prev) => ({ ...prev, initial: true }));
       try {
-        // 1. Charger le profil admin
         const profile = await fetchAdminProfile();
 
-        if (!isMounted) return;
+        if (!isMounted.current) return;
 
-        // 2. Charger les utilisateurs en parallèle
-        await Promise.all([
-          fetchSuperAdmins(),
-          fetchAgents(),
-          fetchVendeurs(),
-          fetchUtilisateurs(),
-        ]);
-
-        if (!isMounted) return;
-
-        // 3. Charger les messages avec le profil
         if (profile) {
           await fetchMessagesRecus(profile.email, profile.uuid);
           await fetchMessagesEnvoyes(
@@ -993,12 +2028,20 @@ function MessagesContent() {
             profile.email,
             profile.uuid,
           );
+
+          await Promise.all([
+            fetchSuperAdmins(),
+            fetchAgents(),
+            fetchVendeurs(),
+            fetchUtilisateurs(),
+          ]);
+
+          await buildContactsAndConversations(profile);
         }
 
         hasLoadedInitialData.current = true;
         isInitialLoad.current = false;
 
-        // Afficher une notification de bienvenue
         showToast(
           "success",
           "✅ Messagerie chargée",
@@ -1014,7 +2057,7 @@ function MessagesContent() {
           { duration: 5000 },
         );
       } finally {
-        if (isMounted) {
+        if (isMounted.current) {
           setLoading((prev) => ({ ...prev, initial: false }));
         }
       }
@@ -1023,42 +2066,18 @@ function MessagesContent() {
     loadInitialData();
 
     return () => {
-      isMounted = false;
+      isMounted.current = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // ✅ TABLEAU VIDE - EXÉCUTÉ UNE SEULE FOIS
+  }, [fetchAdminProfile, fetchMessagesRecus, fetchMessagesEnvoyes, fetchSuperAdmins, fetchAgents, fetchVendeurs, fetchUtilisateurs, buildContactsAndConversations, showToast]);
 
   // ============================================
-  // ✅ CONSTRUCTION DES CONTACTS APRÈS CHARGEMENT
-  // ============================================
-  useEffect(() => {
-    if (isInitialLoad.current) return;
-    if (!adminProfile) return;
-
-    const messagesRecusChanged =
-      prevMessagesRecusLength.current !== messages.length;
-    const messagesEnvoyesChanged =
-      prevMessagesEnvoyesLength.current !== messagesEnvoyes.length;
-
-    if (messagesRecusChanged || messagesEnvoyesChanged) {
-      buildContactsFromMessages();
-
-      prevMessagesRecusLength.current = messages.length;
-      prevMessagesEnvoyesLength.current = messagesEnvoyes.length;
-    }
-  }, [adminProfile, messages, messagesEnvoyes, buildContactsFromMessages]);
-
-  // ============================================
-  // ✅ GESTION DES PARAMÈTRES D'URL - DÉCLARÉ EN PREMIER
+  // GESTION DES PARAMÈTRES D'URL
   // ============================================
   const handleUrlParams = useCallback(() => {
     const destinataireUuid = searchParams.get("destinataireUuid");
     const destinataireEmail = searchParams.get("destinataireEmail");
     const destinataireNom = searchParams.get("destinataireNom");
     const sujet = searchParams.get("sujet");
-    const produitUuid = searchParams.get("produitUuid");
-    const donUuid = searchParams.get("donUuid");
-    const echangeUuid = searchParams.get("echangeUuid");
 
     if (destinataireEmail && adminProfile) {
       console.log("📨 Paramètres URL reçus:", {
@@ -1066,75 +2085,81 @@ function MessagesContent() {
         destinataireEmail,
         destinataireNom,
         sujet,
-        produitUuid,
-        donUuid,
-        echangeUuid,
       });
 
-      // Créer un contact temporaire
-      const contact: ContactConversation = {
-        uuid: destinataireUuid || `contact-${Date.now()}`,
-        email: destinataireEmail,
-        nom: destinataireNom?.split(" ").pop() || "",
-        prenoms:
-          destinataireNom?.split(" ").slice(0, -1).join(" ") ||
-          destinataireNom ||
-          "Contact",
-        telephone: "",
-        userType: detectUserTypeFromEmail(destinataireEmail),
-        est_verifie: true,
-        est_bloque: false,
-        is_deleted: false,
-      };
+      const existingConv = conversations.find(
+        (c) => c.contact.email === destinataireEmail
+      );
 
-      // Mettre à jour le formulaire
+      if (existingConv) {
+        setCurrentConversation(existingConv);
+      } else {
+        const contact: ContactConversation = {
+          uuid: destinataireUuid || `contact-${Date.now()}`,
+          email: destinataireEmail,
+          nom: destinataireNom?.split(" ").pop() || "",
+          prenoms:
+            destinataireNom?.split(" ").slice(0, -1).join(" ") ||
+            destinataireNom ||
+            "Contact",
+          telephone: "",
+          userType: detectUserTypeFromEmail(destinataireEmail),
+          est_verifie: true,
+          est_bloque: false,
+          is_deleted: false,
+          is_admin: destinataireEmail.includes("admin") && !destinataireEmail.includes("super"),
+          is_super_admin: destinataireEmail.includes("superadmin"),
+          online: false,
+        };
+
+        const newConv: Conversation = {
+          contact,
+          messages: [],
+          lastMessage: undefined,
+          unreadCount: 0,
+        };
+
+        setConversations((prev) => [newConv, ...prev]);
+        setCurrentConversation(newConv);
+      }
+
       setNewMessage((prev) => ({
         ...prev,
         destinataireEmail: destinataireEmail,
         destinataireUuid: destinataireUuid || "",
-        sujet: sujet || `Question concernant votre annonce`,
+        sujet: sujet || `Message pour ${destinataireNom || destinataireEmail}`,
         contenu: "",
         type: "notification",
       }));
 
-      setSelectedContact(contact);
-      setActiveTab("contacts");
+      setShowMobileConversations(false);
 
-      // ✅ Nettoyer l'URL (supprimer les paramètres)
       const url = new URL(window.location.href);
       url.search = "";
       router.replace(url.pathname, { scroll: false });
     }
-  }, [searchParams, adminProfile, router]);
+  }, [searchParams, adminProfile, conversations, router]);
 
-  // ============================================
-  // ✅ GESTION DES PARAMÈTRES URL APRÈS CHARGEMENT
-  // ============================================
   useEffect(() => {
-    if (adminProfile && !loading.initial) {
+    if (adminProfile && !loading.initial && conversations.length > 0) {
       handleUrlParams();
     }
-  }, [adminProfile, loading.initial, handleUrlParams]);
+  }, [adminProfile, loading.initial, conversations.length, handleUrlParams]);
 
   // ============================================
   // STATISTIQUES
   // ============================================
-  useEffect(() => {
-    const totalUsers =
-      superAdmins.length +
-      agents.length +
-      vendeurs.length +
-      utilisateurs.length;
-    const totalMessages = messages.length + messagesEnvoyes.length;
-    const unreadMessages = messages.filter((m) => !m.estLu).length;
-
-    setStats({
-      totalUsers,
-      totalMessages,
-      unreadMessages,
+  const stats = useMemo(
+    () => ({
+      totalUsers: superAdmins.length + agents.length + vendeurs.length + utilisateurs.length,
+      totalMessages: messagesRecus.length + messagesEnvoyes.length,
+      unreadMessages: messagesRecus.filter((m) => !m.estLu).length,
       sentMessages: messagesEnvoyes.length,
-    });
-  }, [superAdmins, agents, vendeurs, utilisateurs, messages, messagesEnvoyes]);
+      superAdmins: superAdmins.length,
+      totalConversations: conversations.length,
+    }),
+    [superAdmins, agents, vendeurs, utilisateurs, messagesRecus, messagesEnvoyes, conversations.length],
+  );
 
   // ============================================
   // COMBINER TOUS LES UTILISATEURS POUR LES CONTACTS
@@ -1142,40 +2167,48 @@ function MessagesContent() {
   const allUsers = useMemo(() => {
     const users: ContactConversation[] = [];
 
-    // Super Admins
     superAdmins.forEach((user) => {
       users.push({
         ...user,
         userType: "super_admin",
-        boutique: undefined,
-      });
+        is_super_admin: true,
+        is_admin: false,
+        online: Math.random() > 0.5,
+        lastSeen: new Date(Date.now() - Math.random() * 3600000).toISOString(),
+      } as ContactConversation);
     });
 
-    // Agents
     agents.forEach((user) => {
       users.push({
         ...user,
         userType: "agent",
-        boutique: undefined,
-      });
+        is_admin: false,
+        is_super_admin: false,
+        online: Math.random() > 0.5,
+        lastSeen: new Date(Date.now() - Math.random() * 3600000).toISOString(),
+      } as ContactConversation);
     });
 
-    // Vendeurs
     vendeurs.forEach((user) => {
       users.push({
         ...user,
         userType: "vendeur",
-        boutique: user.boutique,
-      });
+        is_admin: false,
+        is_super_admin: false,
+        online: Math.random() > 0.5,
+        lastSeen: new Date(Date.now() - Math.random() * 3600000).toISOString(),
+      } as ContactConversation);
     });
 
-    // Utilisateurs
     utilisateurs.forEach((user) => {
       users.push({
         ...user,
         userType: "utilisateur",
-        boutique: undefined,
-      });
+        is_admin: false,
+        is_super_admin: false,
+        online: Math.random() > 0.5,
+        lastSeen: new Date(Date.now() - Math.random() * 3600000).toISOString(),
+      } as ContactConversation);
     });
 
     return users;
@@ -1185,14 +2218,13 @@ function MessagesContent() {
   // FILTRAGE DES CONTACTS
   // ============================================
   const filteredContacts = useMemo(() => {
-    // Commencer par les contacts des messages, puis ajouter les utilisateurs
-    let result = [...contacts];
-
-    // Ajouter les utilisateurs qui n'ont pas encore de conversation
+    const contactEmails = new Set(conversations.map(c => c.contact.email));
+    
+    const allContacts = [...conversations.map(c => c.contact)];
+    
     allUsers.forEach((user) => {
-      const exists = result.some((c) => c.email === user.email);
-      if (!exists && user.email !== adminProfile?.email) {
-        result.push({
+      if (!contactEmails.has(user.email) && user.email !== adminProfile?.email) {
+        allContacts.push({
           ...user,
           lastMessageDate: undefined,
           lastMessage: undefined,
@@ -1202,7 +2234,7 @@ function MessagesContent() {
       }
     });
 
-    result = result.filter((c) => !c.is_deleted);
+    let result = allContacts.filter((c) => !c.is_deleted);
 
     if (searchTerm.trim()) {
       const searchLower = searchTerm.toLowerCase();
@@ -1219,21 +2251,6 @@ function MessagesContent() {
       result = result.filter((c) => c.userType === selectedType);
     }
 
-    if (selectedStatus !== "all") {
-      if (selectedStatus === "active") {
-        result = result.filter((c) => !c.est_bloque && c.est_verifie);
-      } else if (selectedStatus === "blocked") {
-        result = result.filter((c) => c.est_bloque);
-      } else if (selectedStatus === "unverified") {
-        result = result.filter((c) => !c.est_verifie);
-      } else if (selectedStatus === "super_admin") {
-        result = result.filter((c) => c.userType === "super_admin");
-      } else if (selectedStatus === "admin") {
-        result = result.filter((c) => c.userType === "admin");
-      }
-    }
-
-    // Trier par date du dernier message
     result.sort((a, b) => {
       const dateA = a.lastMessageDate
         ? new Date(a.lastMessageDate).getTime()
@@ -1245,356 +2262,242 @@ function MessagesContent() {
     });
 
     return result;
-  }, [
-    contacts,
-    allUsers,
-    adminProfile,
-    searchTerm,
-    selectedType,
-    selectedStatus,
-  ]);
+  }, [conversations, allUsers, adminProfile, searchTerm, selectedType]);
 
   // ============================================
-  // ✅ FONCTIONS UTILITAIRES
+  // CHARGEMENT DE LA CONVERSATION
   // ============================================
-  const detectUserTypeFromEmail = (
-    email: string,
-  ): "super_admin" | "admin" | "agent" | "vendeur" | "utilisateur" => {
-    const emailLower = email.toLowerCase();
-    if (emailLower.includes("superadmin") || emailLower.includes("@sonec.com"))
-      return "super_admin";
-    if (emailLower.includes("admin")) return "admin";
-    if (emailLower.includes("agent") || emailLower.includes("@agent.com"))
-      return "agent";
-    if (
-      emailLower.includes("vendeur") ||
-      emailLower.includes("@sonecafrica.com")
-    )
-      return "vendeur";
-    if (emailLower.includes("boutique") || emailLower.includes("shop"))
-      return "vendeur";
-    return "utilisateur";
-  };
-
-  const getUserTypeIcon = (userType: string) => {
-    switch (userType) {
-      case "super_admin":
-        return faUserShield;
-      case "admin":
-        return faUserShield;
-      case "agent":
-        return faUserTie;
-      case "vendeur":
-        return faStore;
-      case "utilisateur":
-        return faUser;
-      default:
-        return faUser;
-    }
-  };
-
-  const getUserTypeColor = (userType: string) => {
-    switch (userType) {
-      case "super_admin":
-        return "purple";
-      case "admin":
-        return "info";
-      case "agent":
-        return "primary";
-      case "vendeur":
-        return "warning";
-      case "utilisateur":
-        return "success";
-      default:
-        return "secondary";
-    }
-  };
-
-  const getUserTypeLabel = (userType: string) => {
-    switch (userType) {
-      case "super_admin":
-        return "Super Admin";
-      case "admin":
-        return "Admin";
-      case "agent":
-        return "Agent";
-      case "vendeur":
-        return "Vendeur";
-      case "utilisateur":
-        return "Utilisateur";
-      default:
-        return "Inconnu";
-    }
-  };
-
-  const formatLastMessageDate = (dateString?: string) => {
-    if (!dateString) return "Jamais";
-    try {
-      const date = new Date(dateString);
-      const now = new Date();
-      const diffMs = now.getTime() - date.getTime();
-      const diffDays = Math.floor(diffMs / 86400000);
-
-      if (diffDays === 0)
-        return `Aujourd'hui à ${date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`;
-      if (diffDays === 1) return "Hier";
-      if (diffDays < 7) return `Il y a ${diffDays} jours`;
-      return date.toLocaleDateString("fr-FR");
-    } catch {
-      return "Date inconnue";
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return "Date inconnue";
-      return date.toLocaleDateString("fr-FR", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    } catch {
-      return "Date inconnue";
-    }
-  };
-
-  const formatRelativeTime = (date: Date) => {
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return "à l'instant";
-    if (diffMins < 60) return `il y a ${diffMins} min`;
-    if (diffHours < 24) return `il y a ${diffHours} h`;
-    if (diffDays < 7) return `il y a ${diffDays} j`;
-    return date.toLocaleDateString("fr-FR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
-  };
-
-  // ============================================
-  // ✅ ACTIONS - AVEC MESSAGE ORIGINAL EN LECTURE SEULE
-  // ============================================
-  const handleSendMessage = async () => {
-    if (
-      !newMessage.destinataireEmail.trim() ||
-      !newMessage.sujet.trim() ||
-      !newMessage.contenu.trim()
-    ) {
-      setInfoMessage("Veuillez remplir tous les champs obligatoires");
-      setTimeout(() => setInfoMessage(null), 3000);
-      return;
-    }
-
-    setLoading((prev) => ({ ...prev, envoi: true }));
-    setError(null);
-    setApiError(null);
-
-    try {
-      const response = await api.post<Message>(API_ENDPOINTS.MESSAGERIE.SEND, {
-        destinataireEmail: newMessage.destinataireEmail.trim(),
-        destinataireUuid: newMessage.destinataireUuid,
-        sujet: newMessage.sujet.trim(),
-        contenu: newMessage.contenu.trim(),
-        type: newMessage.type.toLowerCase(),
-      });
-
-      const sentMessage: Message = {
-        uuid: response.uuid || `temp-${Date.now()}`,
-        sujet: newMessage.sujet,
-        contenu: newMessage.contenu,
-        expediteurNom: newMessage.expediteurNom,
-        expediteurEmail: newMessage.expediteurEmail,
-        expediteurUuid: newMessage.expediteurUuid,
-        destinataireEmail: newMessage.destinataireEmail,
-        destinataireUuid: newMessage.destinataireUuid,
-        type: newMessage.type.toUpperCase(),
-        estEnvoye: true,
-        envoyeLe: new Date().toISOString(),
-        estLu: false,
-        dateLecture: null,
-      };
-
-      setMessagesEnvoyes((prev) => [sentMessage, ...prev]);
-
-      // Trouver le destinataire dans les contacts pour obtenir son nom
-      const destinataireContact = allUsers.find(
-        (user) => user.email === newMessage.destinataireEmail,
-      );
-
-      // Afficher une notification de succès avec les détails du destinataire
-      showToast(
-        "success",
-        "✅ Message envoyé avec succès !",
-        `Votre message a été envoyé à ${destinataireContact?.prenoms || ""} ${destinataireContact?.nom || ""} <${newMessage.destinataireEmail}>`,
-        {
-          duration: 6000,
-          destinataire: {
-            nom: destinataireContact
-              ? `${destinataireContact.prenoms} ${destinataireContact.nom}`.trim()
-              : undefined,
-            email: newMessage.destinataireEmail,
-          },
-          details: {
-            sujet: newMessage.sujet,
-            date: new Date().toLocaleDateString("fr-FR", {
-              day: "2-digit",
-              month: "2-digit",
-              year: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
-          },
-        },
-      );
-
-      // ✅ Réinitialiser le message original
-      setReplyToMessage(null);
-
-      setNewMessage({
-        destinataireEmail: "",
-        destinataireUuid: "",
-        sujet: "",
-        contenu: "",
-        type: "notification",
-        expediteurNom: adminProfile
-          ? `${adminProfile.prenoms || ""} ${adminProfile.nom || ""}`.trim()
-          : "Administrateur SONEC",
-        expediteurEmail: adminProfile?.email || "",
-        expediteurUuid: adminProfile?.uuid || "",
-      });
-
-      setSelectedContact(null);
-      setActiveTab("sent");
-    } catch (err: any) {
-      console.error("❌ Error sending message:", err);
-      setApiError(
-        err.response?.data?.message || "Erreur lors de l'envoi du message",
-      );
-
-      showToast(
-        "error",
-        "❌ Erreur d'envoi",
-        err.response?.data?.message || "Impossible d'envoyer le message",
-        { duration: 5000 },
-      );
-    } finally {
-      setLoading((prev) => ({ ...prev, envoi: false }));
-      setTimeout(() => {
-        setSuccessMessage(null);
-        setApiError(null);
-      }, 5000);
-    }
-  };
-
-  // ✅ CORRECTION: Répondre avec message original en lecture seule
-  const handleReply = (message: Message) => {
-    // Stocker le message original
-    setReplyToMessage(message);
-
-    // Mettre à jour le formulaire
-    setNewMessage({
-      ...newMessage,
-      destinataireEmail: message.expediteurEmail,
-      destinataireUuid: message.expediteurUuid || "",
-      sujet: `RE: ${message.sujet}`,
-      contenu: "", // Le contenu est vide, le message original sera affiché séparément
-      type: message.type.toLowerCase(),
-    });
-
-    const contact = contacts.find((c) => c.email === message.expediteurEmail);
-    if (contact) setSelectedContact(contact);
-    setActiveTab("contacts");
-  };
-
-  // ✅ Fonction pour annuler la réponse
-  const handleCancelReply = () => {
-    setReplyToMessage(null);
-    setNewMessage({
-      ...newMessage,
-      sujet: "",
-      contenu: "",
-    });
-  };
-
-  const selectContactForMessage = (contact: ContactConversation) => {
-    // ✅ Annuler toute réponse en cours
-    setReplyToMessage(null);
-
-    setSelectedContact(contact);
-    setNewMessage((prev) => ({
-      ...prev,
-      destinataireEmail: contact.email,
-      destinataireUuid: contact.uuid,
-      sujet: `Message pour ${contact.prenoms} ${contact.nom}`.trim(),
-      contenu: "",
-    }));
-  };
-
-  const handleSelectAll = () => {
-    if (selectedUsers.length === filteredContacts.length) {
-      setSelectedUsers([]);
+  const loadConversation = useCallback((contact: ContactConversation) => {
+    const conversation = conversations.find((c) => c.contact.email === contact.email);
+    
+    if (conversation) {
+      setCurrentConversation(conversation);
+      
+      // Marquer les messages comme lus (sans attendre la réponse du serveur)
+      conversation.messages
+        .filter((m) => !m.estLu && m.expediteurEmail !== adminProfile?.email)
+        .forEach((m) => {
+          // Mise à jour locale immédiate
+          setMessagesRecus((prev) =>
+            prev.map((msg) =>
+              msg.uuid === m.uuid
+                ? { ...msg, estLu: true, dateLecture: new Date().toISOString(), status: "read" as const }
+                : msg,
+            ),
+          );
+          // Appel API en arrière-plan
+          handleMarkAsRead(m.uuid).catch(() => {});
+        });
     } else {
-      const allContactIds = filteredContacts.map((contact) => contact.uuid);
-      setSelectedUsers(allContactIds);
+      const newConv: Conversation = {
+        contact,
+        messages: [],
+        lastMessage: undefined,
+        unreadCount: 0,
+      };
+      setCurrentConversation(newConv);
     }
-  };
 
-  const handleSelectUser = (userId: string) => {
-    setSelectedUsers((prev) => {
-      if (prev.includes(userId)) {
-        return prev.filter((id) => id !== userId);
-      } else {
-        return [...prev, userId];
+    setShowMobileConversations(false);
+    setShowContactInfo(false);
+
+    setTimeout(() => {
+      messageInputRef.current?.focus();
+    }, 100);
+  }, [conversations, adminProfile, handleMarkAsRead]);
+
+  // ============================================
+  // État pour le formulaire d'envoi
+  // ============================================
+  const [newMessage, setNewMessage] = useState({
+    destinataireEmail: "",
+    destinataireUuid: "",
+    sujet: "",
+    contenu: "",
+    type: "notification",
+    expediteurNom: "Administrateur SONEC",
+    expediteurEmail: "",
+    expediteurUuid: "",
+  });
+
+  // ============================================
+  // ✅ ENVOI DE MESSAGE - VERSION CORRIGÉE AVEC PUBLIC_SEND
+  // ============================================
+  const handleSendMessage = useCallback(
+    async (content: string) => {
+      if (!currentConversation) {
+        showToast("error", "❌ Erreur", "Aucune conversation sélectionnée", { duration: 3000 });
+        return;
       }
-    });
+
+      if (!content.trim()) {
+        showToast("error", "❌ Erreur", "Le message ne peut pas être vide", { duration: 3000 });
+        return;
+      }
+
+      if (!adminProfile) {
+        showToast("error", "❌ Erreur", "Profil admin non chargé", { duration: 3000 });
+        return;
+      }
+
+      setLoading((prev) => ({ ...prev, envoi: true }));
+
+      try {
+        const messageData = {
+          destinataireEmail: currentConversation.contact.email,
+          destinataireUuid: currentConversation.contact.uuid,
+          expediteurEmail: adminProfile.email,
+          expediteurUuid: adminProfile.uuid,
+          expediteurNom: `${adminProfile.prenoms || ""} ${adminProfile.nom || ""}`.trim() || "Administrateur SONEC",
+          sujet: replyingTo ? `RE: ${replyingTo.sujet}` : `Message pour ${currentConversation.contact.prenoms}`,
+          contenu: replyingTo
+            ? `En réponse à: "${replyingTo.contenu.substring(0, 50)}${replyingTo.contenu.length > 50 ? "..." : ""}"\n\n${content}`
+            : content,
+          type: "NOTIFICATION",
+        };
+
+        // ✅ Utiliser PUBLIC_SEND pour éviter les problèmes d'authentification
+        const response = await api.post<any>(
+          API_ENDPOINTS.MESSAGERIE.PUBLIC_SEND,
+          messageData,
+        );
+
+        console.log("✅ Message envoyé avec succès, réponse:", response);
+
+        // ✅ Utiliser l'UUID réel de la réponse
+        const newMessageObj: Message = {
+          uuid: response.uuid || response.data?.uuid || `temp-${Date.now()}`,
+          sujet: messageData.sujet,
+          contenu: messageData.contenu,
+          expediteurNom: messageData.expediteurNom,
+          expediteurEmail: messageData.expediteurEmail,
+          expediteurUuid: messageData.expediteurUuid,
+          destinataireEmail: messageData.destinataireEmail,
+          destinataireUuid: messageData.destinataireUuid,
+          type: "NOTIFICATION",
+          estEnvoye: true,
+          envoyeLe: new Date().toISOString(),
+          estLu: false,
+          dateLecture: null,
+          status: "sent",
+        };
+
+        // Ajouter aux messages envoyés
+        setMessagesEnvoyes((prev) => [newMessageObj, ...prev]);
+
+        // Mettre à jour la conversation courante
+        const updatedConversation = {
+          ...currentConversation,
+          messages: [...currentConversation.messages, newMessageObj],
+          lastMessage: newMessageObj,
+        };
+
+        setCurrentConversation(updatedConversation);
+
+        // Mettre à jour la liste des conversations
+        setConversations((prev) =>
+          prev.map((conv) =>
+            conv.contact.email === currentConversation.contact.email
+              ? updatedConversation
+              : conv
+          )
+        );
+
+        setReplyingTo(null);
+
+        showToast(
+          "success",
+          "✅ Message envoyé avec succès !",
+          `Votre message a été envoyé à ${currentConversation.contact.prenoms}`,
+          {
+            duration: 4000,
+            destinataire: {
+              nom: `${currentConversation.contact.prenoms} ${currentConversation.contact.nom}`.trim(),
+              email: currentConversation.contact.email,
+            },
+          },
+        );
+
+        setTimeout(scrollToBottom, 100);
+      } catch (err: any) {
+        console.error("❌ Erreur envoi message:", err);
+
+        let errorMessage = "Erreur lors de l'envoi du message";
+        if (err.status === 500) {
+          errorMessage = "Erreur interne du serveur. Veuillez réessayer plus tard.";
+        } else if (err.status === 401) {
+          errorMessage = "Session expirée. Veuillez vous reconnecter.";
+        } else if (err.status === 403) {
+          errorMessage = "Vous n'avez pas la permission d'envoyer des messages.";
+        } else if (err.data?.message) {
+          errorMessage = err.data.message;
+        } else if (err.message) {
+          errorMessage = err.message;
+        }
+
+        showToast("error", "❌ Erreur d'envoi", errorMessage, { duration: 5000 });
+      } finally {
+        setLoading((prev) => ({ ...prev, envoi: false }));
+      }
+    },
+    [currentConversation, adminProfile, replyingTo, showToast, scrollToBottom],
+  );
+
+  const handleReply = (message: Message) => {
+    setReplyingTo(message);
   };
 
-  const handleRefresh = () => {
+  const handleCancelReply = () => {
+    setReplyingTo(null);
+  };
+
+  const handleRefresh = useCallback(async () => {
     if (adminProfile) {
-      fetchMessagesRecus(adminProfile.email, adminProfile.uuid);
-      fetchMessagesEnvoyes(
-        `${adminProfile.prenoms || ""} ${adminProfile.nom || ""}`.trim() ||
-          "Administrateur SONEC",
-        adminProfile.email,
-        adminProfile.uuid,
-      );
-
-      showToast("info", "🔄 Actualisation", "Vos messages ont été actualisés", {
-        duration: 2000,
-      });
+      setLoading((prev) => ({ ...prev, messages: true }));
+      try {
+        await fetchMessagesRecus(adminProfile.email, adminProfile.uuid);
+        await fetchMessagesEnvoyes(
+          `${adminProfile.prenoms || ""} ${adminProfile.nom || ""}`.trim() ||
+            "Administrateur SONEC",
+          adminProfile.email,
+          adminProfile.uuid,
+        );
+        await buildContactsAndConversations(adminProfile);
+        showToast("info", "🔄 Actualisation", "Vos messages ont été actualisés", {
+          duration: 2000,
+        });
+      } catch (err) {
+        console.error("❌ Erreur lors de l'actualisation:", err);
+      } finally {
+        setLoading((prev) => ({ ...prev, messages: false }));
+      }
     }
-  };
+  }, [adminProfile, fetchMessagesRecus, fetchMessagesEnvoyes, buildContactsAndConversations, showToast]);
 
-  // ============================================
-  // GROUPEMENT DES MESSAGES
-  // ============================================
-  const groupedMessages = useMemo(() => {
-    return messages.map((message, index) => ({
-      message,
-      showSeparator: index > 0 && index % 3 === 0,
-    }));
-  }, [messages]);
+  const handleDeleteConversation = useCallback(() => {
+    if (!currentConversation) return;
+    setCurrentConversation(null);
+    setShowContactInfo(false);
+    setShowMobileConversations(true);
+    showToast(
+      "info",
+      "🗑️ Conversation fermée",
+      "La conversation a été fermée",
+      { duration: 3000 },
+    );
+  }, [currentConversation, showToast]);
 
   // ============================================
   // RENDU
   // ============================================
   if (loading.initial) {
     return (
-      <div className="min-vh-100 d-flex align-items-center justify-content-center">
-        <div className="text-center">
-          <div className="spinner-border text-primary" role="status">
-            <span className="visually-hidden">Chargement...</span>
-          </div>
-          <p className="mt-3 text-muted">Chargement de votre messagerie...</p>
-        </div>
+      <div className="min-vh-100 d-flex align-items-center justify-content-center bg-light">
+        <LoadingSpinner
+          size="lg"
+          text="Chargement de votre messagerie..."
+          fullPage
+        />
       </div>
     );
   }
@@ -1610,59 +2513,37 @@ function MessagesContent() {
         {toasts.map((toast) => (
           <div
             key={toast.id}
-            className={`toast show mb-3 border-0 shadow-lg animate__animated animate__fadeInRight`}
+            className="toast show mb-3 border-0 shadow-lg animate__animated animate__fadeInRight"
             role="alert"
             style={{
               minWidth: "350px",
               maxWidth: "450px",
-              borderRadius: "16px",
+              borderRadius: "12px",
               overflow: "hidden",
               border: "none",
-              boxShadow:
-                "0 12px 28px rgba(0,0,0,0.12), 0 4px 10px rgba(0,0,0,0.08)",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
               background: "white",
             }}
           >
-            {/* Barre de couleur selon le type */}
-            <div
-              style={{
-                height: "6px",
-                width: "100%",
-                background:
-                  toast.type === "success"
-                    ? "linear-gradient(90deg, #10b981, #34d399)"
-                    : toast.type === "error"
-                      ? "linear-gradient(90deg, #ef4444, #f87171)"
-                      : toast.type === "warning"
-                        ? "linear-gradient(90deg, #f59e0b, #fbbf24)"
-                        : toast.type === "new-message"
-                          ? "linear-gradient(90deg, #3b82f6, #60a5fa)"
-                          : toast.type === "message-read"
-                            ? "linear-gradient(90deg, #8b5cf6, #a78bfa)"
-                            : "linear-gradient(90deg, #6b7280, #9ca3af)",
-              }}
-            />
-
             <div className="toast-body p-3">
-              <div className="d-flex">
-                {/* Icône */}
+              <div className="d-flex align-items-center gap-3">
                 <div
-                  className="rounded-circle d-flex align-items-center justify-content-center me-3 flex-shrink-0"
+                  className="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
                   style={{
-                    width: "48px",
-                    height: "48px",
-                    background:
+                    width: "40px",
+                    height: "40px",
+                    backgroundColor:
                       toast.type === "success"
-                        ? "rgba(16, 185, 129, 0.15)"
+                        ? "#DCF8C6"
                         : toast.type === "error"
-                          ? "rgba(239, 68, 68, 0.15)"
+                          ? "#FFEBEE"
                           : toast.type === "warning"
-                            ? "rgba(245, 158, 11, 0.15)"
+                            ? "#FFF3E0"
                             : toast.type === "new-message"
-                              ? "rgba(59, 130, 246, 0.15)"
+                              ? "#E3F2FD"
                               : toast.type === "message-read"
-                                ? "rgba(139, 92, 246, 0.15)"
-                                : "rgba(107, 114, 128, 0.15)",
+                                ? "#EDE7F6"
+                                : "#E8EAF6",
                   }}
                 >
                   <FontAwesomeIcon
@@ -1680,171 +2561,35 @@ function MessagesContent() {
                                 : faInfoCircle
                     }
                     style={{
-                      fontSize: "1.5rem",
+                      fontSize: "1.2rem",
                       color:
                         toast.type === "success"
-                          ? "#10b981"
+                          ? "#25D366"
                           : toast.type === "error"
-                            ? "#ef4444"
+                            ? "#dc3545"
                             : toast.type === "warning"
-                              ? "#f59e0b"
+                              ? "#f39c12"
                               : toast.type === "new-message"
-                                ? "#3b82f6"
+                                ? "#2196f3"
                                 : toast.type === "message-read"
                                   ? "#8b5cf6"
-                                  : "#6b7280",
+                                  : "#6c757d",
                     }}
                   />
                 </div>
-
-                {/* Contenu */}
                 <div className="flex-grow-1">
-                  <div className="d-flex justify-content-between align-items-start">
-                    <h6
-                      className="fw-bold mb-1"
-                      style={{ fontSize: "1rem", color: "#1f2937" }}
-                    >
-                      {toast.title}
-                    </h6>
-                    <button
-                      type="button"
-                      className="btn-close btn-sm"
-                      onClick={() => removeToast(toast.id)}
-                      aria-label="Fermer"
-                    ></button>
-                  </div>
-
-                  <p
-                    className="mb-1"
-                    style={{ fontSize: "0.9rem", color: "#4b5563" }}
-                  >
+                  <h6 className="fw-bold mb-1" style={{ fontSize: "0.9rem", color: "#1f2937" }}>
+                    {toast.title}
+                  </h6>
+                  <p className="mb-0" style={{ fontSize: "0.8rem", color: "#4b5563" }}>
                     {toast.message}
                   </p>
-
-                  {/* Informations supplémentaires pour l'envoi de message */}
-                  {toast.type === "success" && toast.destinataire && (
-                    <div
-                      className="mt-2 p-2 rounded-3"
-                      style={{
-                        background: "#f3f4f6",
-                        borderLeft: "4px solid #10b981",
-                      }}
-                    >
-                      <div className="d-flex align-items-center gap-2 mb-1">
-                        <FontAwesomeIcon
-                          icon={faUser}
-                          style={{ fontSize: "0.7rem", color: "#6b7280" }}
-                        />
-                        <small className="text-muted">Destinataire:</small>
-                        <small className="fw-semibold text-dark">
-                          {toast.destinataire.nom || toast.destinataire.email}
-                        </small>
-                      </div>
-                      {toast.details?.sujet && (
-                        <div className="d-flex align-items-center gap-2">
-                          <FontAwesomeIcon
-                            icon={faEnvelope}
-                            style={{ fontSize: "0.7rem", color: "#6b7280" }}
-                          />
-                          <small className="text-muted">Sujet:</small>
-                          <small
-                            className="text-dark text-truncate"
-                            style={{ maxWidth: "180px" }}
-                          >
-                            {toast.details.sujet}
-                          </small>
-                        </div>
-                      )}
-                      {toast.details?.date && (
-                        <div className="d-flex align-items-center gap-2 mt-1">
-                          <FontAwesomeIcon
-                            icon={faClock}
-                            style={{ fontSize: "0.7rem", color: "#6b7280" }}
-                          />
-                          <small className="text-muted">Envoyé le:</small>
-                          <small className="text-dark">
-                            {toast.details.date}
-                          </small>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Informations pour les nouveaux messages */}
-                  {toast.type === "new-message" && toast.expediteur && (
-                    <div
-                      className="mt-2 p-2 rounded-3"
-                      style={{
-                        background: "#eff6ff",
-                        borderLeft: "4px solid #3b82f6",
-                      }}
-                    >
-                      <div className="d-flex align-items-center gap-2 mb-1">
-                        <FontAwesomeIcon
-                          icon={faUser}
-                          style={{ fontSize: "0.7rem", color: "#3b82f6" }}
-                        />
-                        <small className="text-muted">Expéditeur:</small>
-                        <small className="fw-semibold text-primary">
-                          {toast.expediteur}
-                        </small>
-                      </div>
-                      {toast.details?.sujet && (
-                        <div className="d-flex align-items-center gap-2">
-                          <FontAwesomeIcon
-                            icon={faEnvelope}
-                            style={{ fontSize: "0.7rem", color: "#3b82f6" }}
-                          />
-                          <small className="text-muted">Sujet:</small>
-                          <small className="text-primary">
-                            {toast.details.sujet}
-                          </small>
-                        </div>
-                      )}
-                      {toast.messageId && (
-                        <button
-                          className="btn btn-sm btn-outline-primary w-100 mt-2"
-                          onClick={() => {
-                            const message = messages.find(
-                              (m) => m.uuid === toast.messageId,
-                            );
-                            if (message) {
-                              setSelectedMessage(message);
-                              setActiveTab("received");
-                              removeToast(toast.id);
-                            }
-                          }}
-                          style={{ fontSize: "0.8rem" }}
-                        >
-                          <FontAwesomeIcon icon={faEye} className="me-2" />
-                          Voir le message
-                        </button>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Informations pour la suppression */}
-                  {toast.type === "success" &&
-                    toast.message?.includes("supprimé") &&
-                    toast.details?.sujet && (
-                      <div
-                        className="mt-2 p-2 rounded-3"
-                        style={{
-                          background: "#f3f4f6",
-                          borderLeft: "4px solid #ef4444",
-                        }}
-                      >
-                        <small className="text-muted d-block text-truncate">
-                          Sujet: {toast.details.sujet}
-                        </small>
-                        {toast.details.date && (
-                          <small className="text-muted d-block">
-                            Date: {toast.details.date}
-                          </small>
-                        )}
-                      </div>
-                    )}
                 </div>
+                <button
+                  type="button"
+                  className="btn-close btn-sm"
+                  onClick={() => removeToast(toast.id)}
+                />
               </div>
             </div>
           </div>
@@ -1860,1733 +2605,326 @@ function MessagesContent() {
         >
           <div
             className="modal-dialog modal-dialog-centered"
-            style={{ maxWidth: "450px" }}
+            style={{ maxWidth: "400px" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div
-              className="modal-content border-0 shadow-lg"
-              style={{ borderRadius: "20px", overflow: "hidden" }}
-            >
-              {/* Barre de couleur rouge */}
-              <div
-                style={{
-                  height: "8px",
-                  width: "100%",
-                  background: "linear-gradient(90deg, #ef4444, #f87171)",
-                }}
-              />
-
+            <div className="modal-content border-0 shadow" style={{ borderRadius: "16px" }}>
               <div className="modal-body p-4 text-center">
                 <div
-                  className="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-4"
+                  className="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3"
                   style={{
-                    width: "80px",
-                    height: "80px",
-                    background: "rgba(239, 68, 68, 0.15)",
-                    color: "#ef4444",
+                    width: "60px",
+                    height: "60px",
+                    background: "#FFEBEE",
                   }}
                 >
-                  <FontAwesomeIcon
-                    icon={faExclamationTriangle}
-                    style={{ fontSize: "2.5rem" }}
-                  />
+                  <FontAwesomeIcon icon={faExclamationTriangle} style={{ fontSize: "1.8rem", color: "#dc3545" }} />
                 </div>
 
-                <h4 className="fw-bold mb-3" style={{ color: "#1f2937" }}>
-                  Confirmer la suppression
-                </h4>
-
-                <p className="text-muted mb-4" style={{ fontSize: "0.95rem" }}>
+                <h5 className="fw-bold mb-2">Confirmer la suppression</h5>
+                <p className="text-muted mb-4" style={{ fontSize: "0.9rem" }}>
                   Êtes-vous sûr de vouloir supprimer ce message ?
                 </p>
 
-                {/* Aperçu du message */}
-                <div
-                  className="p-3 mb-4 rounded-3 text-start"
-                  style={{
-                    background: "#f8fafc",
-                    border: "1px solid #e9ecef",
-                  }}
-                >
-                  <div className="d-flex align-items-center gap-2 mb-2">
-                    <FontAwesomeIcon
-                      icon={faEnvelope}
-                      style={{ fontSize: "0.9rem", color: "#6b7280" }}
-                    />
-                    <span
-                      className="fw-semibold text-dark"
-                      style={{ fontSize: "0.9rem" }}
-                    >
-                      {messageToDelete.sujet}
-                    </span>
-                  </div>
-
-                  <div className="d-flex align-items-center gap-2 mb-2">
-                    <FontAwesomeIcon
-                      icon={faUser}
-                      style={{ fontSize: "0.8rem", color: "#6b7280" }}
-                    />
-                    <small className="text-muted">
-                      De: {messageToDelete.expediteurNom} (
-                      {messageToDelete.expediteurEmail})
-                    </small>
-                  </div>
-
-                  <div className="d-flex align-items-center gap-2">
-                    <FontAwesomeIcon
-                      icon={faClock}
-                      style={{ fontSize: "0.8rem", color: "#6b7280" }}
-                    />
-                    <small className="text-muted">
-                      {new Date(messageToDelete.envoyeLe).toLocaleDateString(
-                        "fr-FR",
-                        {
-                          day: "2-digit",
-                          month: "2-digit",
-                          year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        },
-                      )}
-                    </small>
-                  </div>
-
-                  {messageToDelete.contenu && (
-                    <div
-                      className="mt-2 p-2 rounded-2"
-                      style={{
-                        background: "#fff",
-                        borderLeft: "3px solid #ef4444",
-                      }}
-                    >
-                      <small
-                        className="text-muted"
-                        style={{ fontSize: "0.8rem" }}
-                      >
-                        {messageToDelete.contenu.length > 100
-                          ? `${messageToDelete.contenu.substring(0, 100)}...`
-                          : messageToDelete.contenu}
-                      </small>
-                    </div>
-                  )}
-                </div>
-
-                <div className="d-flex gap-3">
+                <div className="d-flex gap-2">
                   <button
-                    className="btn btn-outline-secondary flex-grow-1 py-2"
+                    className="btn btn-light flex-grow-1 py-2"
                     onClick={closeDeleteModal}
-                    style={{
-                      borderRadius: "12px",
-                      fontSize: "0.95rem",
-                      fontWeight: "500",
-                      border: "2px solid #e9ecef",
-                    }}
+                    style={{ borderRadius: "24px" }}
                   >
                     Annuler
                   </button>
                   <button
                     className="btn btn-danger flex-grow-1 py-2"
                     onClick={confirmDeleteMessage}
-                    style={{
-                      borderRadius: "12px",
-                      fontSize: "0.95rem",
-                      fontWeight: "500",
-                      background: "linear-gradient(90deg, #ef4444, #dc2626)",
-                      border: "none",
-                    }}
+                    style={{ borderRadius: "24px", background: "#dc3545", border: "none" }}
                   >
                     <FontAwesomeIcon icon={faTrash} className="me-2" />
                     Supprimer
                   </button>
                 </div>
-
-                <small
-                  className="text-muted d-block mt-3"
-                  style={{ fontSize: "0.75rem" }}
-                >
-                  Cette action est irréversible.
-                </small>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      <div className="container-fluid px-3 py-3">
-        {/* Header avec titre et actions */}
-        <div className="d-flex justify-content-between align-items-center mb-4">
-          <div>
-            <h1
-              className="h2 fw-bold text-dark mb-1"
-              style={{ fontSize: "1.5rem" }}
-            >
-              <FontAwesomeIcon
-                icon={faEnvelope}
-                className="me-3 text-primary"
-              />
-              Messagerie Administrateur
-              {unreadCount > 0 && (
-                <span className="badge bg-danger ms-3 px-3 py-2">
-                  {unreadCount} nouveau(x)
-                </span>
-              )}
-            </h1>
-            <p className="text-muted mb-0" style={{ fontSize: "0.9rem" }}>
-              {contacts.length > 0
-                ? `${contacts.length} contact${contacts.length > 1 ? "s" : ""} avec qui vous avez échangé`
-                : "Commencez une conversation avec un contact"}
-            </p>
-            {adminProfile && (
-              <small className="text-success d-flex align-items-center gap-2 mt-1">
-                <FontAwesomeIcon icon={faUserShield} />
-                Connecté en tant que: {adminProfile.email}
-              </small>
-            )}
-          </div>
-          <div className="d-flex gap-3">
-            <button
-              className="btn btn-outline-primary d-flex align-items-center gap-2 position-relative"
-              onClick={() => {
-                setReplyToMessage(null);
-                setActiveTab("contacts");
-              }}
-              style={{ fontSize: "0.85rem" }}
-            >
-              <FontAwesomeIcon icon={faUserPen} />
-              Nouveau message
-            </button>
-            <button
-              className="btn btn-primary d-flex align-items-center gap-2"
-              onClick={handleRefresh}
-              style={{ fontSize: "0.85rem" }}
-            >
-              <FontAwesomeIcon icon={faHistory} />
-              Actualiser
-            </button>
-          </div>
-        </div>
-
-        {/* Cartes de statistiques améliorées */}
-        <div className="row g-3 mb-4">
-          <div className="col-xl-3 col-lg-6">
-            <StatsCard
-              title="Utilisateurs Totaux"
-              value={stats.totalUsers}
-              icon={faUsers}
-              color="primary"
-              subtitle="Agents, Vendeurs, Utilisateurs"
-              trend="up"
-              isLoading={
-                loading.agents || loading.vendeurs || loading.utilisateurs
-              }
-            />
-          </div>
-          <div className="col-xl-3 col-lg-6">
-            <StatsCard
-              title="Messages Reçus"
-              value={stats.totalMessages}
-              icon={faInbox}
-              color="info"
-              subtitle={`${stats.unreadMessages} non lus`}
-              trend={stats.unreadMessages > 0 ? "up" : "neutral"}
-              isLoading={loading.messages}
-            />
-          </div>
-          <div className="col-xl-3 col-lg-6">
-            <StatsCard
-              title="Messages Envoyés"
-              value={stats.sentMessages}
-              icon={faShareSquare}
-              color="success"
-              subtitle="Messages envoyés"
-              trend="up"
-            />
-          </div>
-          <div className="col-xl-3 col-lg-6">
-            <StatsCard
-              title="Contacts"
-              value={contacts.length}
-              icon={faCommentDots}
-              color="warning"
-              subtitle="Conversations actives"
-              trend="neutral"
-            />
-          </div>
-        </div>
-
-        {/* Messages d'erreur API */}
-        {apiError && (
+      <div className="container-fluid p-0 vh-100 bg-light">
+        <div className="d-flex h-100">
+          {/* PANEL GAUCHE - LISTE DES CONVERSATIONS - TOUJOURS AFFICHÉ */}
           <div
-            className="alert alert-danger alert-dismissible fade show mb-3"
-            role="alert"
+            className="d-flex flex-column border-end bg-white"
+            style={{
+              width: "350px",
+              minWidth: "350px",
+              maxWidth: "350px",
+            }}
           >
-            <div className="d-flex align-items-center">
-              <FontAwesomeIcon
-                icon={faExclamationCircle}
-                className="me-2 fs-4"
-              />
-              <div className="flex-grow-1">
-                <h6
-                  className="alert-heading mb-1"
-                  style={{ fontSize: "0.85rem" }}
+            {/* En-tête de la liste avec logo OSKAR */}
+            <div className="p-3 border-bottom" style={{ background: "#f0f2f5" }}>
+              <div className="d-flex align-items-center justify-content-between mb-3">
+                {/* 👇 LOGO OSKAR cliquable */}
+                <div 
+                  className="d-flex align-items-center gap-2" 
+                  style={{ cursor: "pointer" }}
+                  onClick={() => window.location.href = "http://localhost:3001/"}
                 >
-                  Erreur d'envoi
-                </h6>
-                <p className="mb-0" style={{ fontSize: "0.8rem" }}>
-                  {apiError}
-                </p>
+                  <div
+                    className="rounded d-flex align-items-center justify-content-center"
+                    style={{
+                      width: "32px",
+                      height: "32px",
+                      backgroundColor: colors.oskar.green,
+                    }}
+                  >
+                    <span
+                      className="text-white fw-bold"
+                      style={{ fontSize: "0.85rem" }}
+                    >
+                      O
+                    </span>
+                  </div>
+                  <span
+                    className="fw-bold"
+                    style={{
+                      color: colors.oskar.black,
+                      fontSize: "1rem",
+                    }}
+                  >
+                    OSKAR
+                  </span>
+                </div>
+                <div className="d-flex gap-2">
+                  <button
+                    className="btn btn-light btn-sm rounded-circle d-flex align-items-center justify-content-center"
+                    style={{ width: "40px", height: "40px" }}
+                    onClick={handleRefresh}
+                    disabled={loading.messages}
+                  >
+                    <FontAwesomeIcon icon={faHistory} spin={loading.messages} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Barre de recherche */}
+              <div className="position-relative">
+                <FontAwesomeIcon
+                  icon={faSearch}
+                  className="position-absolute top-50 translate-middle-y ms-3 text-muted"
+                  style={{ fontSize: "0.9rem" }}
+                />
+                <input
+                  type="text"
+                  className="form-control form-control-lg bg-light border-0 ps-5"
+                  placeholder="Rechercher une discussion..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  style={{
+                    borderRadius: "24px",
+                    fontSize: "0.9rem",
+                    height: "48px",
+                  }}
+                />
+              </div>
+
+              {/* Filtres rapides */}
+              <div className="d-flex gap-2 mt-3 overflow-auto pb-1" style={{ scrollbarWidth: "none" }}>
+                <button
+                  className={`btn btn-sm ${selectedType === "all" ? "btn-success" : "btn-light"}`}
+                  onClick={() => setSelectedType("all")}
+                  style={{ borderRadius: "20px", fontSize: "0.8rem", whiteSpace: "nowrap" }}
+                >
+                  Tous
+                </button>
+                <button
+                  className={`btn btn-sm ${selectedType === "super_admin" ? "btn-purple" : "btn-light"}`}
+                  onClick={() => setSelectedType("super_admin")}
+                  style={{ borderRadius: "20px", fontSize: "0.8rem", whiteSpace: "nowrap" }}
+                >
+                  <FontAwesomeIcon icon={faCrown} className="me-1" />
+                  Super Admins
+                </button>
+                <button
+                  className={`btn btn-sm ${selectedType === "admin" ? "btn-info" : "btn-light"}`}
+                  onClick={() => setSelectedType("admin")}
+                  style={{ borderRadius: "20px", fontSize: "0.8rem", whiteSpace: "nowrap" }}
+                >
+                  <FontAwesomeIcon icon={faShield} className="me-1" />
+                  Admins
+                </button>
+                <button
+                  className={`btn btn-sm ${selectedType === "agent" ? "btn-primary" : "btn-light"}`}
+                  onClick={() => setSelectedType("agent")}
+                  style={{ borderRadius: "20px", fontSize: "0.8rem", whiteSpace: "nowrap" }}
+                >
+                  <FontAwesomeIcon icon={faUserTie} className="me-1" />
+                  Agents
+                </button>
+                <button
+                  className={`btn btn-sm ${selectedType === "vendeur" ? "btn-warning" : "btn-light"}`}
+                  onClick={() => setSelectedType("vendeur")}
+                  style={{ borderRadius: "20px", fontSize: "0.8rem", whiteSpace: "nowrap" }}
+                >
+                  <FontAwesomeIcon icon={faStore} className="me-1" />
+                  Vendeurs
+                </button>
+                <button
+                  className={`btn btn-sm ${selectedType === "utilisateur" ? "btn-success" : "btn-light"}`}
+                  onClick={() => setSelectedType("utilisateur")}
+                  style={{ borderRadius: "20px", fontSize: "0.8rem", whiteSpace: "nowrap" }}
+                >
+                  <FontAwesomeIcon icon={faUser} className="me-1" />
+                  Utilisateurs
+                </button>
               </div>
             </div>
-            <button
-              type="button"
-              className="btn-close"
-              onClick={() => setApiError(null)}
-            ></button>
-          </div>
-        )}
 
-        {/* Onglets principaux améliorés */}
-        <div className="card border-0 shadow-lg mb-4 overflow-hidden">
-          <div className="card-header bg-white border-0 py-3 px-3">
-            <ul
-              className="nav nav-tabs nav-tabs-custom border-0 d-flex justify-content-between"
-              role="tablist"
-              style={{ gap: "0.5rem" }}
-            >
-              <li className="nav-item flex-grow-1" role="presentation">
-                <button
-                  className={`nav-link w-100 ${activeTab === "contacts" ? "active" : ""} d-flex align-items-center justify-content-center gap-2 py-2`}
-                  onClick={() => {
-                    setReplyToMessage(null);
-                    setActiveTab("contacts");
-                  }}
-                  style={{ fontSize: "0.85rem" }}
-                >
-                  <div className="d-flex flex-column align-items-center">
-                    <FontAwesomeIcon icon={faUsers} className="fs-5 mb-1" />
-                    <span className="fw-semibold">Mes contacts</span>
-                    {contacts.length > 0 && (
-                      <span
-                        className="badge bg-primary mt-1"
-                        style={{ fontSize: "0.65rem" }}
-                      >
-                        {contacts.length}
-                      </span>
-                    )}
-                  </div>
-                </button>
-              </li>
-              <li className="nav-item flex-grow-1" role="presentation">
-                <button
-                  className={`nav-link w-100 ${activeTab === "received" ? "active" : ""} d-flex align-items-center justify-content-center gap-2 py-2`}
-                  onClick={() => {
-                    setReplyToMessage(null);
-                    setActiveTab("received");
-                  }}
-                  style={{ fontSize: "0.85rem" }}
-                >
-                  <div className="d-flex flex-column align-items-center position-relative">
-                    <FontAwesomeIcon icon={faInbox} className="fs-5 mb-1" />
-                    <span className="fw-semibold">Messages reçus</span>
-                    {stats.unreadMessages > 0 && (
-                      <span
-                        className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
-                        style={{ fontSize: "0.65rem" }}
-                      >
-                        {stats.unreadMessages}
-                      </span>
-                    )}
-                  </div>
-                </button>
-              </li>
-              <li className="nav-item flex-grow-1" role="presentation">
-                <button
-                  className={`nav-link w-100 ${activeTab === "sent" ? "active" : ""} d-flex align-items-center justify-content-center gap-2 py-2`}
-                  onClick={() => {
-                    setReplyToMessage(null);
-                    setActiveTab("sent");
-                  }}
-                  style={{ fontSize: "0.85rem" }}
-                >
-                  <div className="d-flex flex-column align-items-center">
-                    <FontAwesomeIcon
-                      icon={faShareSquare}
-                      className="fs-5 mb-1"
+            {/* Liste des conversations */}
+            <div className="flex-grow-1 overflow-auto" style={{ background: "#ffffff" }}>
+              {loading.contacts ? (
+                <div className="text-center py-5">
+                  <LoadingSpinner size="sm" />
+                  <p className="text-muted mt-2">Chargement des conversations...</p>
+                </div>
+              ) : filteredContacts.length === 0 ? (
+                <div className="text-center py-5">
+                  <FontAwesomeIcon icon={faCommentDots} className="fs-1 text-muted mb-3 opacity-25" />
+                  <h6 className="fw-semibold mb-2">Aucune discussion</h6>
+                  <p className="small text-muted px-4">
+                    Commencez une conversation en sélectionnant un contact
+                  </p>
+                </div>
+              ) : (
+                filteredContacts.map((contact) => {
+                  const conversation = conversations.find(c => c.contact.email === contact.email);
+                  return (
+                    <ConversationItem
+                      key={contact.email}
+                      conversation={conversation || { contact, messages: [], lastMessage: undefined, unreadCount: 0 }}
+                      isActive={currentConversation?.contact.email === contact.email}
+                      onClick={() => loadConversation(contact)}
                     />
-                    <span className="fw-semibold">Messages envoyés</span>
-                  </div>
-                </button>
-              </li>
-            </ul>
+                  );
+                })
+              )}
+            </div>
           </div>
 
-          <div className="card-body p-3">
-            {/* ======================================== */}
-            {/* ONGLET: MES CONTACTS */}
-            {/* ======================================== */}
-            {activeTab === "contacts" && (
-              <div className="row g-3">
-                <div className="col-lg-8">
-                  <div className="card border-0 shadow-sm h-100">
-                    <div className="card-header bg-white border-0 py-3 px-3">
-                      <div className="d-flex justify-content-between align-items-center">
-                        <div>
-                          <h5
-                            className="mb-0 fw-bold text-dark"
-                            style={{ fontSize: "1rem" }}
-                          >
-                            <FontAwesomeIcon
-                              icon={faUsers}
-                              className="me-2 text-primary"
-                            />
-                            Liste des contacts
-                          </h5>
-                          <p
-                            className="text-muted mb-0 mt-1"
-                            style={{ fontSize: "0.8rem" }}
-                          >
-                            {filteredContacts.length > 0
-                              ? `${filteredContacts.length} contact(s) avec qui vous avez échangé`
-                              : "Vous n'avez pas encore échangé de messages"}
-                          </p>
-                        </div>
-                        <div className="d-flex align-items-center gap-3">
-                          <span
-                            className="badge bg-primary bg-opacity-10 text-primary px-3 py-2"
-                            style={{ fontSize: "0.8rem" }}
-                          >
-                            <FontAwesomeIcon
-                              icon={faUserCheck}
-                              className="me-2"
-                            />
-                            {filteredContacts.length} contact(s)
-                          </span>
-                        </div>
-                      </div>
+          {/* PANEL DROIT - CONVERSATION */}
+          <div className="flex-grow-1 d-flex flex-column" style={{ background: "#efeae2" }}>
+            {currentConversation ? (
+              <>
+                <ChatHeader
+                  contact={currentConversation.contact}
+                  onBack={() => setShowMobileConversations(true)}
+                  onInfo={() => setShowContactInfo(!showContactInfo)}
+                  typing={typingUsers.has(currentConversation.contact.uuid)}
+                />
 
-                      {/* Filtres améliorés */}
-                      <div className="row g-2 mt-3">
-                        <div className="col-lg-6">
-                          <div className="input-group input-group-sm shadow-sm">
-                            <span className="input-group-text bg-white border-end-0 ps-3">
-                              <FontAwesomeIcon
-                                icon={faSearch}
-                                className="text-muted"
-                              />
-                            </span>
-                            <input
-                              type="text"
-                              className="form-control border-start-0 ps-2 py-2"
-                              placeholder="Rechercher un contact..."
-                              value={searchTerm}
-                              onChange={(e) => setSearchTerm(e.target.value)}
-                              style={{ fontSize: "0.85rem" }}
-                            />
-                          </div>
-                        </div>
-                        <div className="col-lg-3">
-                          <div className="input-group input-group-sm shadow-sm">
-                            <label
-                              className="input-group-text bg-white border-end-0"
-                              style={{ fontSize: "0.85rem" }}
-                            >
-                              <FontAwesomeIcon
-                                icon={faUserTag}
-                                className="text-muted"
-                              />
-                            </label>
-                            <select
-                              className="form-select border-start-0 py-2"
-                              value={selectedType}
-                              onChange={(e) => setSelectedType(e.target.value)}
-                              style={{ fontSize: "0.85rem" }}
-                            >
-                              <option value="all">Tous les types</option>
-                              <option value="super_admin">Super Admins</option>
-                              <option value="admin">Admins</option>
-                              <option value="agent">Agents</option>
-                              <option value="vendeur">Vendeurs</option>
-                              <option value="utilisateur">Utilisateurs</option>
-                            </select>
-                          </div>
-                        </div>
-                        <div className="col-lg-3">
-                          <div className="input-group input-group-sm shadow-sm">
-                            <label
-                              className="input-group-text bg-white border-end-0"
-                              style={{ fontSize: "0.85rem" }}
-                            >
-                              <FontAwesomeIcon
-                                icon={faFilter}
-                                className="text-muted"
-                              />
-                            </label>
-                            <select
-                              className="form-select border-start-0 py-2"
-                              value={selectedStatus}
-                              onChange={(e) =>
-                                setSelectedStatus(e.target.value)
-                              }
-                              style={{ fontSize: "0.85rem" }}
-                            >
-                              <option value="all">Tous les statuts</option>
-                              <option value="super_admin">Super Admins</option>
-                              <option value="admin">Admins</option>
-                              <option value="active">Actifs</option>
-                              <option value="blocked">Bloqués</option>
-                              <option value="unverified">Non vérifiés</option>
-                            </select>
-                          </div>
-                        </div>
-                      </div>
+                {/* Messages */}
+                <div
+                  className="flex-grow-1 overflow-auto p-3"
+                  style={{
+                    background: "#efeae2",
+                    backgroundImage: "url('data:image/svg+xml,%3Csvg width=\"60\" height=\"60\" viewBox=\"0 0 60 60\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cg fill=\"none\" fill-rule=\"evenodd\"%3E%3Cg fill=\"%239C92AC\" fill-opacity=\"0.05\"%3E%3Cpath d=\"M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')",
+                  }}
+                >
+                  {currentConversation.messages.length === 0 ? (
+                    <div className="text-center py-5">
+                      <FontAwesomeIcon icon={faCommentDots} className="fs-1 text-muted mb-3 opacity-50" />
+                      <h6 className="fw-semibold mb-2 text-muted">Aucun message</h6>
+                      <p className="small text-muted">Envoyez votre premier message à {currentConversation.contact.prenoms} !</p>
                     </div>
-
-                    <div className="card-body p-0">
-                      {filteredContacts.length === 0 ? (
-                        <div className="text-center py-5">
-                          <FontAwesomeIcon
-                            icon={faUsers}
-                            className="fs-1 text-muted mb-3 opacity-25"
-                          />
-                          <h5
-                            className="fw-semibold mb-2"
-                            style={{ fontSize: "0.9rem" }}
-                          >
-                            Aucun contact trouvé
-                          </h5>
-                          <p className="mb-0" style={{ fontSize: "0.8rem" }}>
-                            {contacts.length === 0
-                              ? "Vous n'avez pas encore échangé de messages"
-                              : "Aucun contact ne correspond à vos filtres"}
-                          </p>
-                        </div>
-                      ) : (
-                        <div
-                          className="table-responsive"
-                          style={{ maxHeight: "500px", overflowY: "auto" }}
-                        >
-                          <table className="table table-hover align-middle mb-0">
-                            <thead
-                              className="table-light sticky-top"
-                              style={{ top: 0 }}
-                            >
-                              <tr>
-                                <th
-                                  className="py-2 px-3"
-                                  style={{ width: "50px", fontSize: "0.8rem" }}
-                                >
-                                  <div className="form-check">
-                                    <input
-                                      type="checkbox"
-                                      className="form-check-input"
-                                      checked={
-                                        selectedUsers.length ===
-                                          filteredContacts.length &&
-                                        filteredContacts.length > 0
-                                      }
-                                      onChange={handleSelectAll}
-                                      disabled={filteredContacts.length === 0}
-                                    />
-                                  </div>
-                                </th>
-                                <th
-                                  className="py-2 px-3"
-                                  style={{ width: "60px", fontSize: "0.8rem" }}
-                                >
-                                  <span className="text-muted fw-medium">
-                                    #
-                                  </span>
-                                </th>
-                                <th
-                                  className="py-2 px-3"
-                                  style={{ fontSize: "0.8rem" }}
-                                >
-                                  <span className="text-muted fw-medium">
-                                    Contact
-                                  </span>
-                                </th>
-                                <th
-                                  className="py-2 px-3"
-                                  style={{ width: "120px", fontSize: "0.8rem" }}
-                                >
-                                  <span className="text-muted fw-medium">
-                                    Type
-                                  </span>
-                                </th>
-                                <th
-                                  className="py-2 px-3"
-                                  style={{ width: "120px", fontSize: "0.8rem" }}
-                                >
-                                  <span className="text-muted fw-medium">
-                                    Statut
-                                  </span>
-                                </th>
-                                <th
-                                  className="py-2 px-3"
-                                  style={{ width: "150px", fontSize: "0.8rem" }}
-                                >
-                                  <span className="text-muted fw-medium">
-                                    Dernier message
-                                  </span>
-                                </th>
-                                <th
-                                  className="py-2 px-3 text-center"
-                                  style={{ width: "100px", fontSize: "0.8rem" }}
-                                >
-                                  <span className="text-muted fw-medium">
-                                    Actions
-                                  </span>
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {filteredContacts.map((contact, index) => (
-                                <tr
-                                  key={`${contact.userType}-${contact.uuid}`}
-                                  className={`align-middle ${
-                                    contact.unreadCount ? "table-warning" : ""
-                                  }`}
-                                >
-                                  <td className="py-2 px-3">
-                                    <div className="form-check">
-                                      <input
-                                        type="checkbox"
-                                        className="form-check-input"
-                                        checked={selectedUsers.includes(
-                                          contact.uuid,
-                                        )}
-                                        onChange={() =>
-                                          handleSelectUser(contact.uuid)
-                                        }
-                                      />
-                                    </div>
-                                  </td>
-                                  <td className="py-2 px-3">
-                                    <span
-                                      className="text-muted fw-semibold"
-                                      style={{ fontSize: "0.8rem" }}
-                                    >
-                                      {index + 1}
-                                    </span>
-                                  </td>
-                                  <td className="py-2 px-3">
-                                    <div className="d-flex align-items-center">
-                                      <div
-                                        className={`bg-${getUserTypeColor(contact.userType)} bg-opacity-10 text-${getUserTypeColor(contact.userType)} rounded-circle d-flex align-items-center justify-content-center me-2`}
-                                        style={{
-                                          width: "36px",
-                                          height: "36px",
-                                          minWidth: "36px",
-                                        }}
-                                      >
-                                        <FontAwesomeIcon
-                                          icon={getUserTypeIcon(
-                                            contact.userType,
-                                          )}
-                                          className="fs-5"
-                                        />
-                                      </div>
-                                      <div
-                                        className="flex-grow-1"
-                                        style={{ minWidth: 0 }}
-                                      >
-                                        <div
-                                          className="fw-bold text-dark text-truncate d-flex align-items-center"
-                                          style={{ fontSize: "0.85rem" }}
-                                        >
-                                          {contact.email}
-                                          {contact.unreadCount ? (
-                                            <span className="badge bg-danger ms-2">
-                                              {contact.unreadCount}
-                                            </span>
-                                          ) : null}
-                                        </div>
-                                        <div className="d-flex align-items-center gap-2 flex-wrap">
-                                          <small
-                                            className="text-muted text-truncate"
-                                            style={{
-                                              fontSize: "0.75rem",
-                                              maxWidth: "200px",
-                                            }}
-                                          >
-                                            {contact.prenoms} {contact.nom}
-                                          </small>
-                                          {contact.telephone && (
-                                            <>
-                                              <span
-                                                className="text-muted"
-                                                style={{ fontSize: "0.75rem" }}
-                                              >
-                                                •
-                                              </span>
-                                              <small
-                                                className="text-muted text-truncate"
-                                                style={{
-                                                  fontSize: "0.75rem",
-                                                  maxWidth: "120px",
-                                                }}
-                                              >
-                                                <FontAwesomeIcon
-                                                  icon={faPhone}
-                                                  className="me-1"
-                                                />
-                                                {contact.telephone}
-                                              </small>
-                                            </>
-                                          )}
-                                          {contact.userType === "vendeur" &&
-                                            contact.boutique?.nom && (
-                                              <>
-                                                <span
-                                                  className="text-muted"
-                                                  style={{
-                                                    fontSize: "0.75rem",
-                                                  }}
-                                                >
-                                                  •
-                                                </span>
-                                                <small
-                                                  className="text-muted text-truncate"
-                                                  style={{
-                                                    fontSize: "0.75rem",
-                                                    maxWidth: "150px",
-                                                  }}
-                                                >
-                                                  <FontAwesomeIcon
-                                                    icon={faStore}
-                                                    className="me-1"
-                                                  />
-                                                  {contact.boutique.nom}
-                                                </small>
-                                              </>
-                                            )}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </td>
-                                  <td className="py-2 px-3">
-                                    <span
-                                      className={`badge bg-${getUserTypeColor(contact.userType)} bg-opacity-10 text-${getUserTypeColor(contact.userType)} border border-${getUserTypeColor(contact.userType)} border-opacity-25 px-2 py-1 fw-medium`}
-                                      style={{ fontSize: "0.7rem" }}
-                                    >
-                                      {getUserTypeLabel(contact.userType)}
-                                    </span>
-                                  </td>
-                                  <td className="py-2 px-3">
-                                    <StatusBadge
-                                      est_bloque={contact.est_bloque}
-                                      est_verifie={contact.est_verifie}
-                                      is_deleted={contact.is_deleted}
-                                      is_super_admin={
-                                        contact.userType === "super_admin"
-                                      }
-                                      is_admin={contact.userType === "admin"}
-                                    />
-                                  </td>
-                                  <td className="py-2 px-3">
-                                    <div className="d-flex flex-column">
-                                      <small
-                                        className="text-muted"
-                                        style={{ fontSize: "0.7rem" }}
-                                      >
-                                        {formatLastMessageDate(
-                                          contact.lastMessageDate,
-                                        )}
-                                      </small>
-                                      {contact.lastMessage && (
-                                        <small
-                                          className="text-truncate"
-                                          style={{
-                                            fontSize: "0.75rem",
-                                            maxWidth: "150px",
-                                          }}
-                                        >
-                                          {contact.lastMessage.substring(0, 30)}
-                                          ...
-                                        </small>
-                                      )}
-                                    </div>
-                                  </td>
-                                  <td className="py-2 px-3 text-center">
-                                    <button
-                                      className="btn btn-sm btn-primary d-flex align-items-center justify-content-center gap-1 px-2 py-1 mx-auto"
-                                      title="Envoyer un message"
-                                      onClick={() =>
-                                        selectContactForMessage(contact)
-                                      }
-                                      style={{ fontSize: "0.75rem" }}
-                                    >
-                                      <FontAwesomeIcon
-                                        icon={faPaperPlane}
-                                        style={{ fontSize: "0.7rem" }}
-                                      />
-                                      <span className="d-none d-md-inline">
-                                        Message
-                                      </span>
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="col-lg-4">
-                  <div
-                    className="card border-0 shadow-sm h-100"
-                    style={{ top: "20px" }}
-                  >
-                    <div className="card-header bg-white border-0 py-3 px-3">
-                      <div className="d-flex align-items-center gap-3 mb-2">
-                        <div className="bg-primary bg-opacity-10 rounded-circle p-2">
-                          <FontAwesomeIcon
-                            icon={faPaperPlane}
-                            className="text-primary fs-4"
-                          />
-                        </div>
-                        <div>
-                          <h5
-                            className="mb-0 fw-bold text-dark"
-                            style={{ fontSize: "0.95rem" }}
-                          >
-                            {selectedContact
-                              ? replyToMessage
-                                ? `Réponse à ${selectedContact.prenoms}`
-                                : `Message à ${selectedContact.prenoms}`
-                              : "Nouveau message"}
-                          </h5>
-                          <p
-                            className="text-muted mb-0"
-                            style={{ fontSize: "0.8rem" }}
-                          >
-                            {selectedContact
-                              ? selectedContact.email
-                              : "Rédigez et envoyez un message"}
-                          </p>
-                          {adminProfile && (
-                            <small className="text-info d-flex align-items-center gap-1 mt-1">
-                              <FontAwesomeIcon icon={faUserShield} />
-                              Expéditeur: {adminProfile.email}
-                            </small>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="card-body">
-                      {successMessage && (
-                        <div
-                          className="alert alert-success alert-dismissible fade show mb-3"
-                          role="alert"
-                        >
-                          <div className="d-flex align-items-center">
-                            <FontAwesomeIcon
-                              icon={faCheckCircle}
-                              className="me-2 fs-4"
-                            />
-                            <div>
-                              <h6
-                                className="alert-heading mb-1"
-                                style={{ fontSize: "0.85rem" }}
-                              >
-                                Message envoyé !
-                              </h6>
-                              <p
-                                className="mb-0"
-                                style={{ fontSize: "0.8rem" }}
-                              >
-                                {successMessage}
-                              </p>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            className="btn-close"
-                            onClick={() => setSuccessMessage(null)}
-                          ></button>
-                        </div>
-                      )}
-
-                      {/* ✅ AFFICHAGE DU MESSAGE ORIGINAL EN LECTURE SEULE */}
-                      {replyToMessage && (
-                        <div className="mb-4">
-                          <div className="d-flex align-items-center mb-2">
-                            <FontAwesomeIcon
-                              icon={faReply}
-                              className="text-primary me-2"
-                            />
-                            <span
-                              className="fw-semibold text-dark"
-                              style={{ fontSize: "0.85rem" }}
-                            >
-                              Vous répondez à :
-                            </span>
-                          </div>
-                          <div
-                            className="bg-light border rounded p-3"
-                            style={{
-                              backgroundColor: "#f8f9fa",
-                              borderColor: "#dee2e6",
-                              fontSize: "0.85rem",
-                              maxHeight: "200px",
-                              overflowY: "auto",
-                            }}
-                          >
-                            <div className="d-flex justify-content-between align-items-start mb-2">
-                              <div>
-                                <span className="fw-bold text-dark">
-                                  {replyToMessage.expediteurNom}
-                                </span>
-                                <span className="text-muted ms-2">
-                                  &lt;{replyToMessage.expediteurEmail}&gt;
-                                </span>
-                              </div>
-                              <div className="d-flex align-items-center">
-                                {replyToMessage.estLu ? (
-                                  <span className="badge bg-success bg-opacity-10 text-success me-2">
-                                    <FontAwesomeIcon
-                                      icon={faCheckCircle}
-                                      className="me-1"
-                                    />
-                                    Lu
-                                  </span>
-                                ) : (
-                                  <span className="badge bg-warning bg-opacity-10 text-warning me-2">
-                                    <FontAwesomeIcon
-                                      icon={faClock}
-                                      className="me-1"
-                                    />
-                                    Non lu
-                                  </span>
-                                )}
-                                <small className="text-muted">
-                                  {new Date(
-                                    replyToMessage.envoyeLe,
-                                  ).toLocaleDateString("fr-FR", {
-                                    day: "2-digit",
-                                    month: "2-digit",
-                                    year: "numeric",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}
-                                </small>
-                              </div>
-                            </div>
-                            <div className="mt-2">
-                              <div className="fw-semibold mb-1 text-dark">
-                                {replyToMessage.sujet}
-                              </div>
-                              <div
-                                className="text-muted"
-                                style={{
-                                  whiteSpace: "pre-wrap",
-                                  wordBreak: "break-word",
-                                  backgroundColor: "#f1f3f5",
-                                  padding: "0.75rem",
-                                  borderRadius: "0.375rem",
-                                  borderLeft: "3px solid #0d6efd",
-                                }}
-                              >
-                                {replyToMessage.contenu}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="d-flex justify-content-end mt-2">
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-outline-secondary"
-                              onClick={handleCancelReply}
-                              style={{ fontSize: "0.75rem" }}
-                            >
-                              <FontAwesomeIcon
-                                icon={faTimes}
-                                className="me-1"
-                              />
-                              Annuler la réponse
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          handleSendMessage();
-                        }}
-                      >
-                        <div className="mb-3">
-                          <label
-                            className="form-label fw-semibold text-dark mb-2"
-                            style={{ fontSize: "0.85rem" }}
-                          >
-                            <FontAwesomeIcon
-                              icon={faUser}
-                              className="me-2 text-muted"
-                            />
-                            Destinataire <span className="text-danger">*</span>
-                          </label>
-                          <input
-                            type="email"
-                            className="form-control form-control-sm border-2 py-2"
-                            placeholder="contact@exemple.com"
-                            value={newMessage.destinataireEmail}
-                            onChange={(e) =>
-                              setNewMessage({
-                                ...newMessage,
-                                destinataireEmail: e.target.value,
-                              })
-                            }
-                            required
-                            style={{ fontSize: "0.85rem" }}
-                            readOnly={!!replyToMessage}
-                          />
-                          <small
-                            className="text-muted d-block mt-1"
-                            style={{ fontSize: "0.75rem" }}
-                          >
-                            <FontAwesomeIcon
-                              icon={faInfoCircle}
-                              className="me-1"
-                            />
-                            Sélectionnez un contact dans la liste
-                          </small>
-                        </div>
-
-                        <div className="mb-3">
-                          <label
-                            className="form-label fw-semibold text-dark mb-2"
-                            style={{ fontSize: "0.85rem" }}
-                          >
-                            <FontAwesomeIcon
-                              icon={faEdit}
-                              className="me-2 text-muted"
-                            />
-                            Sujet <span className="text-danger">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            className="form-control form-control-sm border-2 py-2"
-                            placeholder="Sujet du message"
-                            value={newMessage.sujet}
-                            onChange={(e) =>
-                              setNewMessage({
-                                ...newMessage,
-                                sujet: e.target.value,
-                              })
-                            }
-                            required
-                            style={{ fontSize: "0.85rem" }}
-                          />
-                        </div>
-
-                        <div className="mb-3">
-                          <label
-                            className="form-label fw-semibold text-dark mb-2"
-                            style={{ fontSize: "0.85rem" }}
-                          >
-                            <FontAwesomeIcon
-                              icon={faBell}
-                              className="me-2 text-muted"
-                            />
-                            Type de message
-                          </label>
-                          <select
-                            className="form-select form-select-sm border-2 py-2"
-                            value={newMessage.type}
-                            onChange={(e) =>
-                              setNewMessage({
-                                ...newMessage,
-                                type: e.target.value,
-                              })
-                            }
-                            style={{ fontSize: "0.85rem" }}
-                          >
-                            <option value="notification">Notification</option>
-                            <option value="alert">Alerte</option>
-                            <option value="info">Information</option>
-                            <option value="warning">Avertissement</option>
-                          </select>
-                        </div>
-
-                        <div className="mb-3">
-                          <label
-                            className="form-label fw-semibold text-dark mb-2"
-                            style={{ fontSize: "0.85rem" }}
-                          >
-                            <FontAwesomeIcon
-                              icon={faMessage}
-                              className="me-2 text-muted"
-                            />
-                            Message <span className="text-danger">*</span>
-                          </label>
-                          <textarea
-                            className="form-control border-2 py-2"
-                            rows={replyToMessage ? 4 : 6}
-                            placeholder="Écrivez votre message ici..."
-                            value={newMessage.contenu}
-                            onChange={(e) =>
-                              setNewMessage({
-                                ...newMessage,
-                                contenu: e.target.value,
-                              })
-                            }
-                            required
-                            style={{ fontSize: "0.85rem" }}
-                          />
-                        </div>
-
-                        <div className="d-grid">
-                          <button
-                            type="submit"
-                            className="btn btn-primary btn-sm d-flex align-items-center justify-content-center gap-3 py-2 fw-bold"
-                            disabled={loading.envoi}
-                            style={{ fontSize: "0.85rem" }}
-                          >
-                            {loading.envoi ? (
-                              <>
-                                <span className="spinner-border spinner-border-sm"></span>
-                                <span>Envoi en cours...</span>
-                              </>
-                            ) : (
-                              <>
-                                <FontAwesomeIcon
-                                  icon={faPaperPlane}
-                                  className="fs-5"
-                                />
-                                <span>
-                                  {replyToMessage
-                                    ? "Répondre"
-                                    : "Envoyer le message"}
-                                </span>
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      </form>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ======================================== */}
-            {/* ONGLET: MESSAGES REÇUS */}
-            {/* ======================================== */}
-            {activeTab === "received" && (
-              <div className="row g-3">
-                <div className="col-lg-8">
-                  <div className="card border-0 shadow-sm h-100">
-                    <div className="card-header bg-white border-0 py-3 px-3">
-                      <div className="d-flex justify-content-between align-items-center">
-                        <div>
-                          <h5
-                            className="mb-0 fw-bold text-dark"
-                            style={{ fontSize: "1rem" }}
-                          >
-                            <FontAwesomeIcon
-                              icon={faInbox}
-                              className="me-2 text-primary"
-                            />
-                            Messages reçus
-                          </h5>
-                          <p
-                            className="text-muted mb-0 mt-1"
-                            style={{ fontSize: "0.8rem" }}
-                          >
-                            {stats.unreadMessages > 0
-                              ? `${stats.unreadMessages} message(s) non lu(s)`
-                              : "Tous vos messages sont lus"}
-                          </p>
-                        </div>
-                        <div className="d-flex align-items-center gap-3">
-                          <span
-                            className="badge bg-primary bg-opacity-10 text-primary px-3 py-2"
-                            style={{ fontSize: "0.8rem" }}
-                          >
-                            {messages.length} message(s)
-                          </span>
-                          <button
-                            className="btn btn-outline-primary d-flex align-items-center gap-2"
-                            onClick={() =>
-                              adminProfile &&
-                              fetchMessagesRecus(
-                                adminProfile.email,
-                                adminProfile.uuid,
-                              )
-                            }
-                            style={{ fontSize: "0.85rem" }}
-                          >
-                            <FontAwesomeIcon icon={faHistory} />
-                            Actualiser
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="card-body p-0">
-                      <div
-                        className="list-group list-group-flush px-3 py-2"
-                        style={{ maxHeight: "500px", overflowY: "auto" }}
-                      >
-                        {messages.length === 0 ? (
-                          <div className="text-center py-4">
-                            <div className="text-muted py-3">
-                              <FontAwesomeIcon
-                                icon={faInbox}
-                                className="fs-1 mb-3 opacity-25"
-                              />
-                              <h5
-                                className="fw-semibold mb-2"
-                                style={{ fontSize: "0.9rem" }}
-                              >
-                                Aucun message reçu
-                              </h5>
-                              <p
-                                className="mb-0"
-                                style={{ fontSize: "0.8rem" }}
-                              >
-                                Vos messages apparaîtront ici
-                              </p>
-                            </div>
-                          </div>
-                        ) : (
-                          groupedMessages.map(({ message, showSeparator }) => (
-                            <MessageItem
-                              key={message.uuid}
-                              message={message}
-                              isSelected={
-                                selectedMessage?.uuid === message.uuid
-                              }
-                              onSelect={(msg) => {
-                                setSelectedMessage(msg);
-                                if (!msg.estLu) handleMarkAsRead(msg.uuid);
-                              }}
-                              onReply={() => handleReply(message)}
-                              onDelete={openDeleteModal}
-                              onMarkAsUnread={handleMarkAsUnread}
-                              showSeparator={showSeparator}
-                              isDeleting={deletingMessageId === message.uuid}
-                            />
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="col-lg-4">
-                  <div
-                    className="card border-0 shadow-sm h-100"
-                    style={{ top: "20px" }}
-                  >
-                    <div className="card-header bg-white border-0 py-3 px-3">
-                      <h5
-                        className="mb-0 fw-bold text-dark"
-                        style={{ fontSize: "0.95rem" }}
-                      >
-                        <FontAwesomeIcon
-                          icon={faEye}
-                          className="me-2 text-primary"
+                  ) : (
+                    <>
+                      {currentConversation.messages.map((message) => (
+                        <MessageBubble
+                          key={message.uuid}
+                          message={message}
+                          isOwn={message.expediteurEmail === adminProfile?.email}
+                          status={message.status}
+                          showAvatar={true}
+                          avatar={adminProfile?.avatar}
+                          senderName={currentConversation.contact.prenoms}
+                          onReply={() => handleReply(message)}
+                          onDelete={() => openDeleteModal(message)}
+                          onForward={() => {
+                            navigator.clipboard.writeText(message.contenu);
+                            showToast("success", "📋 Message copié", "Le message a été copié pour être transféré", { duration: 2000 });
+                          }}
+                          onCopy={() => {
+                            navigator.clipboard.writeText(message.contenu);
+                            showToast("success", "📋 Message copié", "Le message a été copié dans le presse-papiers", { duration: 2000 });
+                          }}
                         />
-                        Détails du message
-                      </h5>
-                      <p
-                        className="text-muted mb-0 mt-1"
-                        style={{ fontSize: "0.8rem" }}
-                      >
-                        Informations détaillées du message sélectionné
-                      </p>
-                    </div>
-                    <div className="card-body">
-                      {selectedMessage ? (
-                        <>
-                          <div className="mb-3">
-                            <div className="d-flex justify-content-between align-items-start mb-2">
-                              <h6
-                                className="fw-bold text-primary mb-2 flex-grow-1"
-                                style={{ fontSize: "0.9rem" }}
-                              >
-                                {selectedMessage.sujet}
-                              </h6>
-                              <div className="d-flex align-items-center gap-2">
-                                {selectedMessage.estLu ? (
-                                  <span
-                                    className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 d-inline-flex align-items-center gap-1 px-2 py-1"
-                                    title={`Lu le ${selectedMessage.dateLecture ? new Date(selectedMessage.dateLecture).toLocaleString("fr-FR") : ""}`}
-                                  >
-                                    <FontAwesomeIcon
-                                      icon={faCheckCircle}
-                                      className="fs-12"
-                                    />
-                                    <span className="fw-medium">Lu</span>
-                                  </span>
-                                ) : (
-                                  <span
-                                    className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 d-inline-flex align-items-center gap-1 px-2 py-1"
-                                    onClick={() =>
-                                      handleMarkAsRead(selectedMessage.uuid)
-                                    }
-                                    style={{ cursor: "pointer" }}
-                                  >
-                                    <FontAwesomeIcon
-                                      icon={faClock}
-                                      className="fs-12"
-                                    />
-                                    <span className="fw-medium">Non lu</span>
-                                  </span>
-                                )}
-                                <span
-                                  className={`badge bg-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : "primary"} bg-opacity-10 text-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : "primary"} border border-${selectedMessage.type.toUpperCase() === "ALERT" ? "danger" : selectedMessage.type.toUpperCase() === "WARNING" ? "warning" : "primary"} border-opacity-25 px-2 py-1`}
-                                  style={{ fontSize: "0.7rem" }}
-                                >
-                                  {selectedMessage.type.toUpperCase()}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="bg-light rounded-3 p-3 mb-2">
-                              <div className="d-flex align-items-center gap-3 mb-2">
-                                <div className="bg-primary bg-opacity-10 rounded-circle p-2">
-                                  <FontAwesomeIcon
-                                    icon={faUser}
-                                    className="text-primary fs-4"
-                                  />
-                                </div>
-                                <div>
-                                  <h6
-                                    className="fw-bold mb-1"
-                                    style={{ fontSize: "0.85rem" }}
-                                  >
-                                    {selectedMessage.expediteurNom}
-                                  </h6>
-                                  <p
-                                    className="text-muted mb-0"
-                                    style={{ fontSize: "0.8rem" }}
-                                  >
-                                    {selectedMessage.expediteurEmail}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="text-muted mb-2">
-                                <small style={{ fontSize: "0.75rem" }}>
-                                  <FontAwesomeIcon
-                                    icon={faClock}
-                                    className="me-1"
-                                  />
-                                  Envoyé le{" "}
-                                  {new Date(
-                                    selectedMessage.envoyeLe,
-                                  ).toLocaleDateString("fr-FR", {
-                                    weekday: "long",
-                                    day: "numeric",
-                                    month: "long",
-                                    year: "numeric",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}
-                                </small>
-                              </div>
-                              {selectedMessage.dateLecture &&
-                                selectedMessage.estLu && (
-                                  <div className="text-success">
-                                    <small style={{ fontSize: "0.75rem" }}>
-                                      <FontAwesomeIcon
-                                        icon={faCheckCircle}
-                                        className="me-1"
-                                      />
-                                      Lu le{" "}
-                                      {new Date(
-                                        selectedMessage.dateLecture,
-                                      ).toLocaleDateString("fr-FR", {
-                                        weekday: "long",
-                                        day: "numeric",
-                                        month: "long",
-                                        year: "numeric",
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                      })}
-                                    </small>
-                                  </div>
-                                )}
-                            </div>
-                          </div>
-
-                          <div className="mb-3">
-                            <h6
-                              className="fw-semibold mb-2 text-dark"
-                              style={{ fontSize: "0.85rem" }}
-                            >
-                              Contenu :
-                            </h6>
-                            <div
-                              className="p-3 bg-light rounded-3"
-                              style={{ fontSize: "0.8rem" }}
-                            >
-                              {selectedMessage.contenu
-                                .split("\n")
-                                .map((line, index) => (
-                                  <p
-                                    key={index}
-                                    className={index > 0 ? "mt-2" : ""}
-                                    style={{
-                                      lineHeight: "1.5",
-                                      fontSize: "0.8rem",
-                                    }}
-                                  >
-                                    {line}
-                                  </p>
-                                ))}
-                            </div>
-                          </div>
-
-                          <div className="d-grid gap-2">
-                            <button
-                              className="btn btn-primary d-flex align-items-center justify-content-center gap-3 py-2 fw-bold"
-                              onClick={() => {
-                                handleReply(selectedMessage);
-                                setSelectedMessage(null);
-                              }}
-                              style={{ fontSize: "0.85rem" }}
-                            >
-                              <FontAwesomeIcon
-                                icon={faReply}
-                                className="fs-5"
-                              />
-                              Répondre au message
-                            </button>
-
-                            {!selectedMessage.estLu ? (
-                              <button
-                                className="btn btn-outline-success d-flex align-items-center justify-content-center gap-3 py-2"
-                                onClick={() =>
-                                  handleMarkAsRead(selectedMessage.uuid)
-                                }
-                                style={{ fontSize: "0.85rem" }}
-                                disabled={
-                                  deletingMessageId === selectedMessage.uuid
-                                }
-                              >
-                                <FontAwesomeIcon icon={faCheckCircle} />
-                                Marquer comme lu
-                              </button>
-                            ) : (
-                              <button
-                                className="btn btn-outline-warning d-flex align-items-center justify-content-center gap-3 py-2"
-                                onClick={() =>
-                                  handleMarkAsUnread(selectedMessage.uuid)
-                                }
-                                style={{ fontSize: "0.85rem" }}
-                                disabled={
-                                  deletingMessageId === selectedMessage.uuid
-                                }
-                              >
-                                <FontAwesomeIcon icon={faClock} />
-                                Marquer comme non lu
-                              </button>
-                            )}
-
-                            <button
-                              className="btn btn-outline-danger d-flex align-items-center justify-content-center gap-3 py-2"
-                              onClick={() => openDeleteModal(selectedMessage)}
-                              style={{ fontSize: "0.85rem" }}
-                              disabled={
-                                deletingMessageId === selectedMessage.uuid
-                              }
-                            >
-                              {deletingMessageId === selectedMessage.uuid ? (
-                                <>
-                                  <span
-                                    className="spinner-border spinner-border-sm"
-                                    role="status"
-                                  />
-                                  <span>Suppression...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <FontAwesomeIcon icon={faTrash} />
-                                  <span>Supprimer</span>
-                                </>
-                              )}
-                            </button>
-
-                            <button
-                              className="btn btn-outline-secondary d-flex align-items-center justify-content-center gap-3 py-2"
-                              onClick={() => setSelectedMessage(null)}
-                              style={{ fontSize: "0.85rem" }}
-                            >
-                              <FontAwesomeIcon icon={faTimes} />
-                              Fermer
-                            </button>
-                          </div>
-                        </>
-                      ) : (
-                        <div className="text-center py-4">
-                          <div className="text-muted py-3">
-                            <FontAwesomeIcon
-                              icon={faMessage}
-                              className="fs-1 mb-3 opacity-25"
-                            />
-                            <h5
-                              className="fw-semibold mb-2"
-                              style={{ fontSize: "0.9rem" }}
-                            >
-                              Aucun message sélectionné
-                            </h5>
-                            <p className="mb-0" style={{ fontSize: "0.8rem" }}>
-                              Sélectionnez un message pour voir les détails
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                      ))}
+                      <div ref={messagesEndRef} />
+                    </>
+                  )}
                 </div>
-              </div>
-            )}
 
-            {/* ======================================== */}
-            {/* ONGLET: MESSAGES ENVOYÉS */}
-            {/* ======================================== */}
-            {activeTab === "sent" && (
-              <div className="row">
-                <div className="col-12">
-                  <div className="card border-0 shadow-sm">
-                    <div className="card-header bg-white border-0 py-3 px-3">
-                      <div className="d-flex justify-content-between align-items-center">
-                        <div>
-                          <h5
-                            className="mb-0 fw-bold text-dark"
-                            style={{ fontSize: "1rem" }}
-                          >
-                            <FontAwesomeIcon
-                              icon={faShareSquare}
-                              className="me-2 text-primary"
-                            />
-                            Messages envoyés
-                          </h5>
-                          <p
-                            className="text-muted mb-0 mt-1"
-                            style={{ fontSize: "0.8rem" }}
-                          >
-                            Historique de tous vos messages envoyés
-                          </p>
-                        </div>
-                        <div className="d-flex align-items-center gap-3">
-                          <span
-                            className="badge bg-success bg-opacity-10 text-success px-3 py-2"
-                            style={{ fontSize: "0.8rem" }}
-                          >
-                            {messagesEnvoyes.length} message(s)
-                          </span>
-                          <button
-                            className="btn btn-outline-primary d-flex align-items-center gap-2"
-                            onClick={() =>
-                              adminProfile &&
-                              fetchMessagesEnvoyes(
-                                `${adminProfile.prenoms || ""} ${adminProfile.nom || ""}`.trim() ||
-                                  "Administrateur SONEC",
-                                adminProfile.email,
-                                adminProfile.uuid,
-                              )
-                            }
-                            style={{ fontSize: "0.85rem" }}
-                          >
-                            <FontAwesomeIcon icon={faHistory} />
-                            Actualiser
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="card-body p-0">
-                      <div
-                        className="table-responsive"
-                        style={{ maxHeight: "500px", overflowY: "auto" }}
+                <ChatInput
+                  onSend={handleSendMessage}
+                  disabled={loading.envoi}
+                  replyingTo={replyingTo}
+                  onCancelReply={handleCancelReply}
+                />
+              </>
+            ) : (
+              /* Écran d'accueil quand aucune conversation n'est sélectionnée */
+              <div className="h-100 d-flex align-items-center justify-content-center" style={{ background: "#f0f2f5" }}>
+                <div className="text-center">
+                  <div
+                    className="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-4"
+                    style={{
+                      width: "120px",
+                      height: "120px",
+                      background: "#e9edef",
+                    }}
+                  >
+                    <FontAwesomeIcon icon={faCommentDots} style={{ fontSize: "3rem", color: "#8696a0" }} />
+                  </div>
+                  <h4 className="fw-bold mb-3" style={{ color: "#41525d" }}>Messagerie Administrateur</h4>
+                  <p className="text-muted mb-4" style={{ maxWidth: "400px", fontSize: "0.95rem" }}>
+                    Sélectionnez une discussion dans la liste pour commencer à échanger
+                  </p>
+                  <div className="d-flex justify-content-center gap-2 flex-wrap">
+                    <span className="badge bg-purple px-3 py-2">Super Admins</span>
+                    <span className="badge bg-info px-3 py-2">Admins</span>
+                    <span className="badge bg-primary px-3 py-2">Agents</span>
+                    <span className="badge bg-warning px-3 py-2">Vendeurs</span>
+                    <span className="badge bg-success px-3 py-2">Utilisateurs</span>
+                  </div>
+                  {/* 👇 LOGO OSKAR QUAND AUCUN CONTACT */}
+                  <div 
+                    className="d-flex align-items-center justify-content-center gap-2 mx-auto mt-4"
+                    style={{ cursor: "pointer", maxWidth: "fit-content" }}
+                    onClick={() => window.location.href = "http://localhost:3001/"}
+                  >
+                    <div
+                      className="rounded d-flex align-items-center justify-content-center"
+                      style={{
+                        width: "40px",
+                        height: "40px",
+                        backgroundColor: colors.oskar.green,
+                      }}
+                    >
+                      <span
+                        className="text-white fw-bold"
+                        style={{ fontSize: "1rem" }}
                       >
-                        <table className="table table-hover align-middle mb-0">
-                          <thead
-                            className="table-light sticky-top"
-                            style={{ top: 0 }}
-                          >
-                            <tr>
-                              <th
-                                className="py-2 px-3"
-                                style={{ fontSize: "0.8rem" }}
-                              >
-                                Destinataire
-                              </th>
-                              <th
-                                className="py-2 px-3"
-                                style={{ fontSize: "0.8rem" }}
-                              >
-                                Sujet
-                              </th>
-                              <th
-                                className="py-2 px-3"
-                                style={{ fontSize: "0.8rem" }}
-                              >
-                                Type
-                              </th>
-                              <th
-                                className="py-2 px-3"
-                                style={{ fontSize: "0.8rem" }}
-                              >
-                                Date d'envoi
-                              </th>
-                              <th
-                                className="py-2 px-3"
-                                style={{ fontSize: "0.8rem" }}
-                              >
-                                Statut de lecture
-                              </th>
-                              <th
-                                className="py-2 px-3 text-center"
-                                style={{ fontSize: "0.8rem" }}
-                              >
-                                Actions
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {messagesEnvoyes.length === 0 ? (
-                              <tr>
-                                <td colSpan={6} className="text-center py-4">
-                                  <div className="text-muted py-3">
-                                    <FontAwesomeIcon
-                                      icon={faShareSquare}
-                                      className="fs-1 mb-3 opacity-25"
-                                    />
-                                    <h5
-                                      className="fw-semibold mb-2"
-                                      style={{ fontSize: "0.9rem" }}
-                                    >
-                                      Aucun message envoyé
-                                    </h5>
-                                    <p
-                                      className="mb-0"
-                                      style={{ fontSize: "0.8rem" }}
-                                    >
-                                      Envoyez votre premier message depuis
-                                      l'onglet "Contacts"
-                                    </p>
-                                  </div>
-                                </td>
-                              </tr>
-                            ) : (
-                              messagesEnvoyes.map((message) => (
-                                <tr key={message.uuid}>
-                                  <td className="py-2 px-3">
-                                    <div
-                                      className="fw-bold text-dark"
-                                      style={{ fontSize: "0.85rem" }}
-                                    >
-                                      {message.destinataireEmail}
-                                    </div>
-                                    <small
-                                      className="text-muted"
-                                      style={{ fontSize: "0.75rem" }}
-                                    >
-                                      {message.expediteurEmail}
-                                    </small>
-                                  </td>
-                                  <td className="py-2 px-3">
-                                    <div
-                                      className="text-truncate"
-                                      style={{
-                                        maxWidth: "200px",
-                                        fontSize: "0.85rem",
-                                      }}
-                                      title={message.sujet}
-                                    >
-                                      {message.sujet}
-                                    </div>
-                                  </td>
-                                  <td className="py-2 px-3">
-                                    <span
-                                      className={`badge bg-${message.type === "ALERT" ? "danger" : message.type === "WARNING" ? "warning" : "primary"} bg-opacity-10 text-${message.type === "ALERT" ? "danger" : message.type === "WARNING" ? "warning" : "primary"} border border-${message.type === "ALERT" ? "danger" : message.type === "WARNING" ? "warning" : "primary"} border-opacity-25 px-2 py-1 fw-medium`}
-                                      style={{ fontSize: "0.7rem" }}
-                                    >
-                                      {message.type}
-                                    </span>
-                                  </td>
-                                  <td className="py-2 px-3">
-                                    <div className="d-flex flex-column">
-                                      <span
-                                        className="fw-medium"
-                                        style={{ fontSize: "0.85rem" }}
-                                      >
-                                        {formatDate(message.envoyeLe)}
-                                      </span>
-                                    </div>
-                                  </td>
-                                  <td className="py-2 px-3">
-                                    {message.estLu ? (
-                                      <span
-                                        className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 d-inline-flex align-items-center gap-2 px-2 py-1"
-                                        title={
-                                          message.dateLecture
-                                            ? `Lu le ${new Date(message.dateLecture).toLocaleString("fr-FR")}`
-                                            : ""
-                                        }
-                                      >
-                                        <FontAwesomeIcon
-                                          icon={faCheckCircle}
-                                          className="fs-12"
-                                        />
-                                        <span className="fw-medium">Lu</span>
-                                      </span>
-                                    ) : (
-                                      <span className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 d-inline-flex align-items-center gap-2 px-2 py-1">
-                                        <FontAwesomeIcon
-                                          icon={faClock}
-                                          className="fs-12"
-                                        />
-                                        <span className="fw-medium">
-                                          Non lu
-                                        </span>
-                                      </span>
-                                    )}
-                                  </td>
-                                  <td className="py-2 px-3 text-center">
-                                    <button
-                                      className="btn btn-sm btn-outline-primary d-flex align-items-center gap-2 px-2 py-1"
-                                      onClick={() => {
-                                        setReplyToMessage(null);
-                                        setNewMessage({
-                                          ...newMessage,
-                                          destinataireEmail:
-                                            message.destinataireEmail,
-                                          destinataireUuid:
-                                            message.destinataireUuid || "",
-                                          sujet: `RE: ${message.sujet}`,
-                                          contenu: "",
-                                          type: message.type.toLowerCase(),
-                                          expediteurNom: adminProfile
-                                            ? `${adminProfile.prenoms || ""} ${adminProfile.nom || ""}`.trim()
-                                            : "Administrateur SONEC",
-                                          expediteurEmail:
-                                            adminProfile?.email || "",
-                                          expediteurUuid:
-                                            adminProfile?.uuid || "",
-                                        });
-                                        setActiveTab("contacts");
-                                      }}
-                                      style={{ fontSize: "0.75rem" }}
-                                    >
-                                      <FontAwesomeIcon
-                                        icon={faReply}
-                                        style={{ fontSize: "0.7rem" }}
-                                      />
-                                      <span>Répondre</span>
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
+                        O
+                      </span>
                     </div>
+                    <span
+                      className="fw-bold"
+                      style={{
+                        color: colors.oskar.black,
+                        fontSize: "1.2rem",
+                      }}
+                    >
+                      OSKAR
+                    </span>
                   </div>
                 </div>
               </div>
@@ -3595,45 +2933,22 @@ function MessagesContent() {
         </div>
       </div>
 
-      {/* Messages d'information */}
-      {infoMessage && (
-        <div
-          className="position-fixed bottom-0 end-0 m-4"
-          style={{ zIndex: 1050 }}
-        >
-          <div
-            className="toast show border-0 shadow-lg"
-            role="alert"
-            style={{ minWidth: "300px" }}
-          >
-            <div className="toast-header bg-info bg-opacity-10 text-info border-bottom">
-              <FontAwesomeIcon icon={faInfoCircle} className="me-2" />
-              <strong className="me-auto" style={{ fontSize: "0.9rem" }}>
-                Information
-              </strong>
-              <button
-                type="button"
-                className="btn-close"
-                onClick={() => setInfoMessage(null)}
-              ></button>
-            </div>
-            <div className="toast-body" style={{ fontSize: "0.85rem" }}>
-              {infoMessage}
-            </div>
-          </div>
-        </div>
-      )}
-
       <style jsx>{`
         :root {
-          --bs-primary: #0d6efd;
-          --bs-primary-rgb: 13, 110, 253;
           --bs-purple: #6f42c1;
           --bs-purple-rgb: 111, 66, 193;
         }
 
         .bg-purple {
           background-color: var(--bs-purple) !important;
+        }
+
+        .btn-purple {
+          background-color: var(--bs-purple) !important;
+          color: white !important;
+        }
+        .btn-purple:hover {
+          background-color: #5936a0 !important;
         }
 
         .text-purple {
@@ -3648,187 +2963,75 @@ function MessagesContent() {
           background-color: rgba(var(--bs-purple-rgb), 0.1) !important;
         }
 
-        .nav-tabs-custom .nav-link {
-          border: none;
-          color: #6c757d;
-          padding: 0;
-          font-weight: 500;
-          position: relative;
-          background: transparent;
-          transition: all 0.3s ease;
-          font-size: 0.85rem;
+        /* Style WhatsApp */
+        .bg-success {
+          background-color: #25D366 !important;
+        }
+        .btn-success {
+          background-color: #25D366 !important;
+        }
+        .btn-success:hover {
+          background-color: #128C7E !important;
+        }
+        .text-success {
+          color: #25D366 !important;
+        }
+        .border-success {
+          border-color: #25D366 !important;
+        }
+        .badge.bg-success {
+          background-color: #25D366 !important;
         }
 
-        .nav-tabs-custom .nav-link.active {
-          color: var(--bs-primary);
-          background: rgba(var(--bs-primary-rgb), 0.1);
-          border-radius: 8px;
-        }
-
-        .nav-tabs-custom .nav-link.active::after {
-          content: "";
-          position: absolute;
-          bottom: -1px;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 30px;
-          height: 2px;
-          background-color: var(--bs-primary);
-          border-radius: 3px 3px 0 0;
-        }
-
-        .nav-tabs-custom .nav-link:hover:not(.active) {
-          color: var(--bs-primary);
-          background: rgba(0, 0, 0, 0.02);
-          border-radius: 8px;
-        }
-
-        .hover-bg-light:hover {
-          background-color: rgba(var(--bs-primary-rgb), 0.05) !important;
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-        }
-
-        .selected-message {
-          box-shadow: 0 0 0 2px rgba(var(--bs-primary-rgb), 0.2) !important;
-        }
-
-        .unread-message {
-          background-color: rgba(255, 193, 7, 0.05) !important;
-        }
-
-        .stats-card {
-          transition: all 0.3s ease;
-          border-radius: 12px;
-          overflow: hidden;
-        }
-
-        .stats-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08) !important;
-        }
-
-        .fs-10 {
-          font-size: 0.625rem;
-        }
-
-        .fs-11 {
-          font-size: 0.6875rem;
-        }
-
-        .fs-12 {
-          font-size: 0.75rem;
-        }
-
-        .fs-13 {
-          font-size: 0.8125rem;
-        }
-
-        .fs-14 {
-          font-size: 0.875rem;
-        }
-
-        .separator {
-          color: #6c757d;
-        }
-
-        .separator hr {
-          border-top: 1px dashed #dee2e6;
-        }
-
-        .form-check-input:checked {
-          background-color: var(--bs-primary);
-          border-color: var(--bs-primary);
-        }
-
-        .table > :not(caption) > * > * {
-          padding: 0.75rem 1rem;
-          vertical-align: middle;
-          border-bottom: 1px solid #f1f3f5;
-        }
-
-        .table > :not(caption) > * > *:last-child {
-          border-right: none;
-        }
-
-        .table-light {
-          background-color: #f8fafc;
-        }
-
-        .list-group-item-action:focus,
-        .list-group-item-action:hover {
-          background-color: rgba(var(--bs-primary-rgb), 0.05);
-        }
-
-        .line-clamp-2 {
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-        }
-
-        @keyframes slideIn {
-          from {
-            transform: translateX(100%);
-            opacity: 0;
-          }
-          to {
-            transform: translateX(0);
-            opacity: 1;
-          }
-        }
-
-        .toast {
-          animation: slideIn 0.3s ease;
-        }
-
-        .notifications-list {
-          max-height: 400px;
+        .conversations-list {
+          height: calc(100% - 120px);
           overflow-y: auto;
         }
 
-        .notifications-list::-webkit-scrollbar {
+        .conversations-list::-webkit-scrollbar {
           width: 6px;
         }
 
-        .notifications-list::-webkit-scrollbar-track {
-          background: #f1f1f1;
+        .conversations-list::-webkit-scrollbar-track {
+          background: transparent;
         }
 
-        .notifications-list::-webkit-scrollbar-thumb {
+        .conversations-list::-webkit-scrollbar-thumb {
           background: #c1c1c1;
           border-radius: 10px;
         }
 
-        .notifications-list::-webkit-scrollbar-thumb:hover {
+        .conversations-list::-webkit-scrollbar-thumb:hover {
           background: #a8a8a8;
         }
 
+        .hover-bg-light:hover {
+          background-color: rgba(0, 0, 0, 0.02);
+        }
+
+        .cursor-pointer {
+          cursor: pointer;
+        }
+
+        .min-width-0 {
+          min-width: 0;
+        }
+
         @media (max-width: 768px) {
-          .nav-tabs-custom .nav-link {
-            padding: 0.5rem;
-            font-size: 0.8rem;
-          }
-
-          .container-fluid {
-            padding-left: 1rem;
-            padding-right: 1rem;
-          }
-
-          h1 {
-            font-size: 1.25rem !important;
-          }
-
-          .card-header h5 {
-            font-size: 0.9rem !important;
+          [style*="width: 350px"] {
+            width: 100% !important;
+            max-width: 100% !important;
           }
         }
 
-        /* Animation pour les nouveaux messages */
-        @keyframes fadeIn {
+        .message-bubble {
+          animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
           from {
             opacity: 0;
-            transform: translateY(10px);
+            transform: translateY(20px);
           }
           to {
             opacity: 1;
@@ -3836,514 +3039,24 @@ function MessagesContent() {
           }
         }
 
-        .message-item {
-          animation: fadeIn 0.3s ease;
-        }
-
         /* Scrollbar personnalisée */
-        .table-responsive::-webkit-scrollbar {
+        .overflow-auto::-webkit-scrollbar {
           width: 6px;
-          height: 6px;
         }
 
-        .table-responsive::-webkit-scrollbar-track {
-          background: #f1f1f1;
-          border-radius: 10px;
+        .overflow-auto::-webkit-scrollbar-track {
+          background: transparent;
         }
 
-        .table-responsive::-webkit-scrollbar-thumb {
+        .overflow-auto::-webkit-scrollbar-thumb {
           background: #c1c1c1;
           border-radius: 10px;
         }
 
-        .table-responsive::-webkit-scrollbar-thumb:hover {
-          background: #a8a8a8;
-        }
-
-        .list-group-flush::-webkit-scrollbar {
-          width: 6px;
-        }
-
-        .list-group-flush::-webkit-scrollbar-track {
-          background: #f1f1f1;
-          border-radius: 10px;
-        }
-
-        .list-group-flush::-webkit-scrollbar-thumb {
-          background: #c1c1c1;
-          border-radius: 10px;
-        }
-
-        .list-group-flush::-webkit-scrollbar-thumb:hover {
+        .overflow-auto::-webkit-scrollbar-thumb:hover {
           background: #a8a8a8;
         }
       `}</style>
     </>
   );
 }
-
-// ============================================
-// COMPOSANT DE BADGE DE STATUT
-// ============================================
-const StatusBadge = ({
-  est_bloque,
-  est_verifie,
-  is_deleted,
-  is_super_admin,
-  is_admin,
-}: {
-  est_bloque: boolean;
-  est_verifie: boolean;
-  is_deleted?: boolean;
-  is_super_admin?: boolean;
-  is_admin?: boolean;
-}) => {
-  if (is_deleted) {
-    return (
-      <span className="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
-        <FontAwesomeIcon icon={faTrash} className="fs-12" />
-        <span className="fw-medium">Supprimé</span>
-      </span>
-    );
-  }
-
-  if (est_bloque) {
-    return (
-      <span className="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
-        <FontAwesomeIcon icon={faBan} className="fs-12" />
-        <span className="fw-medium">Bloqué</span>
-      </span>
-    );
-  }
-
-  if (!est_verifie) {
-    return (
-      <span className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
-        <FontAwesomeIcon icon={faUserSlash} className="fs-12" />
-        <span className="fw-medium">Non vérifié</span>
-      </span>
-    );
-  }
-
-  if (is_super_admin) {
-    return (
-      <span className="badge bg-purple bg-opacity-10 text-purple border border-purple border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
-        <FontAwesomeIcon icon={faUserShield} className="fs-12" />
-        <span className="fw-medium">Super Admin</span>
-      </span>
-    );
-  }
-
-  if (is_admin) {
-    return (
-      <span className="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
-        <FontAwesomeIcon icon={faUserShield} className="fs-12" />
-        <span className="fw-medium">Admin</span>
-      </span>
-    );
-  }
-
-  return (
-    <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 d-inline-flex align-items-center gap-1 px-3 py-2">
-      <FontAwesomeIcon icon={faUserCheck} className="fs-12" />
-      <span className="fw-medium">Actif</span>
-    </span>
-  );
-};
-
-// ============================================
-// COMPOSANT DE STATISTIQUES
-// ============================================
-const StatsCard = ({
-  title,
-  value,
-  icon,
-  color,
-  subtitle,
-  trend,
-  isLoading,
-}: {
-  title: string;
-  value: number;
-  icon: any;
-  color: string;
-  subtitle?: string;
-  trend?: "up" | "down" | "neutral";
-  isLoading?: boolean;
-}) => {
-  const getTrendIcon = () => {
-    switch (trend) {
-      case "up":
-        return (
-          <FontAwesomeIcon icon={faChevronUp} className="text-success fs-12" />
-        );
-      case "down":
-        return (
-          <FontAwesomeIcon icon={faChevronDown} className="text-danger fs-12" />
-        );
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <div className="card border-0 shadow-sm h-100 stats-card">
-      <div className="card-body p-3">
-        <div className="d-flex align-items-center">
-          <div
-            className={`bg-${color} bg-opacity-10 text-${color} rounded-3 p-2 me-3`}
-            style={{ borderRadius: "12px" }}
-          >
-            <FontAwesomeIcon icon={icon} className="fs-2" />
-          </div>
-          <div className="flex-grow-1">
-            <div className="d-flex align-items-center gap-2 mb-1">
-              <h3 className="mb-0 fw-bold" style={{ fontSize: "1.25rem" }}>
-                {isLoading ? (
-                  <span
-                    className="spinner-border spinner-border-sm me-2"
-                    role="status"
-                  >
-                    <span className="visually-hidden">Chargement...</span>
-                  </span>
-                ) : (
-                  value.toLocaleString()
-                )}
-              </h3>
-              {trend && getTrendIcon()}
-            </div>
-            <p
-              className="text-muted mb-1 fw-medium"
-              style={{ fontSize: "0.8rem" }}
-            >
-              {title}
-            </p>
-            {subtitle && (
-              <small
-                className="text-muted d-flex align-items-center gap-1"
-                style={{ fontSize: "0.7rem" }}
-              >
-                <FontAwesomeIcon icon={faInfoCircle} className="fs-11" />
-                {subtitle}
-              </small>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ============================================
-// COMPOSANT MESSAGE ITEM - AVEC FONCTION RÉPONDRE ET INDICATEUR DE LECTURE
-// ============================================
-const MessageItem = ({
-  message,
-  isSelected,
-  onSelect,
-  onReply,
-  onDelete,
-  onMarkAsUnread,
-  showSeparator = false,
-  isDeleting = false,
-}: {
-  message: Message;
-  isSelected: boolean;
-  onSelect: (message: Message) => void;
-  onReply?: (message: Message) => void;
-  onDelete?: (message: Message) => void;
-  onMarkAsUnread?: (messageId: string) => void;
-  showSeparator?: boolean;
-  isDeleting?: boolean;
-}) => {
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) {
-        return "Date inconnue";
-      }
-
-      const now = new Date();
-      const diffMs = now.getTime() - date.getTime();
-      const diffMins = Math.floor(diffMs / 60000);
-      const diffHours = Math.floor(diffMs / 3600000);
-      const diffDays = Math.floor(diffMs / 86400000);
-
-      if (diffMins < 1) {
-        return "à l'instant";
-      } else if (diffMins < 60) {
-        return `il y a ${diffMins} min`;
-      } else if (diffHours < 24) {
-        return `il y a ${diffHours} h`;
-      } else if (diffDays < 7) {
-        return `il y a ${diffDays} j`;
-      } else {
-        return date.toLocaleDateString("fr-FR", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-        });
-      }
-    } catch {
-      return "Date inconnue";
-    }
-  };
-
-  const getTypeColor = () => {
-    const type = (message.type || "").toUpperCase();
-    switch (type) {
-      case "ALERT":
-        return "danger";
-      case "WARNING":
-        return "warning";
-      case "INFO":
-        return "info";
-      case "NOTIFICATION":
-        return "primary";
-      default:
-        return "secondary";
-    }
-  };
-
-  const getTypeIcon = () => {
-    const type = (message.type || "").toUpperCase();
-    switch (type) {
-      case "ALERT":
-        return faBell;
-      case "WARNING":
-        return faExclamationCircle;
-      case "INFO":
-        return faInfoCircle;
-      case "NOTIFICATION":
-        return faEnvelopeCircleCheck;
-      default:
-        return faEnvelope;
-    }
-  };
-
-  return (
-    <>
-      {showSeparator && (
-        <div className="separator d-flex align-items-center my-3">
-          <hr className="flex-grow-1" />
-          <span className="px-3 text-muted fs-12 fw-medium">
-            <FontAwesomeIcon icon={faCalendarDays} className="me-2" />
-            Messages plus anciens
-          </span>
-          <hr className="flex-grow-1" />
-        </div>
-      )}
-
-      <div
-        className={`list-group-item list-group-item-action border-0 py-3 px-3 ${isSelected ? "bg-primary bg-opacity-10 selected-message" : "hover-bg-light"} ${!message.estLu ? "unread-message" : ""}`}
-        onClick={() => onSelect(message)}
-        style={{
-          cursor: "pointer",
-          borderLeft: isSelected
-            ? "4px solid var(--bs-primary)"
-            : !message.estLu
-              ? "4px solid var(--bs-warning)"
-              : "4px solid transparent",
-          transition: "all 0.2s ease",
-          borderRadius: "8px",
-          marginBottom: "4px",
-          opacity: isDeleting ? 0.5 : 1,
-        }}
-      >
-        <div className="d-flex justify-content-between align-items-start mb-2">
-          <div className="d-flex align-items-center gap-3">
-            <div
-              className={`bg-${getTypeColor()} bg-opacity-10 text-${getTypeColor()} rounded-circle d-flex align-items-center justify-content-center position-relative`}
-              style={{ width: "40px", height: "40px" }}
-            >
-              <FontAwesomeIcon
-                icon={getTypeIcon()}
-                className={`fs-5 ${message.estLu ? "opacity-75" : ""}`}
-              />
-              {message.estLu && (
-                <div
-                  className="position-absolute bottom-0 end-0 bg-success rounded-circle border border-2 border-white"
-                  style={{ width: "12px", height: "12px" }}
-                  title="Message lu"
-                />
-              )}
-            </div>
-            <div className="d-flex flex-column">
-              <div className="d-flex align-items-center gap-2 mb-1">
-                <h6
-                  className="mb-0 fw-bold text-dark"
-                  style={{ fontSize: "0.9rem" }}
-                >
-                  {message.expediteurNom}
-                </h6>
-                {!message.estLu && (
-                  <span className="badge bg-warning bg-opacity-25 text-warning px-2 py-1">
-                    <FontAwesomeIcon icon={faCircle} className="fs-10 me-1" />
-                    Non lu
-                  </span>
-                )}
-              </div>
-              <div className="d-flex align-items-center gap-2 flex-wrap">
-                <small className="text-muted" style={{ fontSize: "0.75rem" }}>
-                  <FontAwesomeIcon icon={faUser} className="me-1 fs-11" />
-                  {message.expediteurEmail}
-                </small>
-                <span className="text-muted" style={{ fontSize: "0.75rem" }}>
-                  •
-                </span>
-                <small className="text-muted" style={{ fontSize: "0.75rem" }}>
-                  À: {message.destinataireEmail}
-                </small>
-              </div>
-            </div>
-          </div>
-          <div className="d-flex flex-column align-items-end gap-2">
-            <div className="d-flex align-items-center gap-2">
-              {message.estLu && (
-                <span
-                  className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 d-inline-flex align-items-center gap-1 px-2 py-1"
-                  title={
-                    message.dateLecture
-                      ? `Lu le ${new Date(message.dateLecture).toLocaleString("fr-FR")}`
-                      : ""
-                  }
-                  style={{ fontSize: "0.65rem" }}
-                >
-                  <FontAwesomeIcon icon={faCheckCircle} className="fs-10" />
-                  <span>Lu</span>
-                </span>
-              )}
-              <small className="text-muted" style={{ fontSize: "0.75rem" }}>
-                <FontAwesomeIcon icon={faClock} className="me-1" />
-                {formatDate(message.envoyeLe)}
-              </small>
-              <span
-                className={`badge bg-${getTypeColor()} bg-opacity-10 text-${getTypeColor()} border border-${getTypeColor()} border-opacity-25 px-2 py-1 fw-medium`}
-                style={{ fontSize: "0.65rem" }}
-              >
-                {message.type.toUpperCase()}
-              </span>
-            </div>
-            {message.estEnvoye && (
-              <small
-                className="text-success fw-medium"
-                style={{ fontSize: "0.75rem" }}
-              >
-                <FontAwesomeIcon icon={faCheckCircle} className="me-1" />
-                Envoyé
-              </small>
-            )}
-          </div>
-        </div>
-
-        <h6 className="fw-bold mb-2 text-dark" style={{ fontSize: "0.9rem" }}>
-          {message.sujet}
-        </h6>
-
-        <p
-          className="mb-0 text-muted fs-14 line-clamp-2"
-          style={{
-            fontSize: "0.8rem",
-            maxWidth: "600px",
-            lineHeight: "1.4",
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
-            display: "-webkit-box",
-          }}
-        >
-          {message.contenu}
-        </p>
-
-        <div className="d-flex justify-content-between align-items-center mt-3">
-          <div className="d-flex gap-2">
-            <button
-              className="btn btn-sm btn-outline-primary d-flex align-items-center gap-1"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelect(message);
-              }}
-              style={{ fontSize: "0.8rem" }}
-              disabled={isDeleting}
-            >
-              <FontAwesomeIcon icon={faEye} style={{ fontSize: "0.8rem" }} />
-              <span>Voir</span>
-            </button>
-            <button
-              className="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (onReply) onReply(message);
-              }}
-              style={{ fontSize: "0.8rem" }}
-              disabled={isDeleting}
-            >
-              <FontAwesomeIcon icon={faReply} style={{ fontSize: "0.8rem" }} />
-              <span>Répondre</span>
-            </button>
-            {message.estLu && onMarkAsUnread && (
-              <button
-                className="btn btn-sm btn-outline-warning d-flex align-items-center gap-1"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onMarkAsUnread(message.uuid);
-                }}
-                style={{ fontSize: "0.8rem" }}
-                title="Marquer comme non lu"
-                disabled={isDeleting}
-              >
-                <FontAwesomeIcon
-                  icon={faClock}
-                  style={{ fontSize: "0.8rem" }}
-                />
-              </button>
-            )}
-            {onDelete && (
-              <button
-                className="btn btn-sm btn-outline-danger d-flex align-items-center gap-1"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(message);
-                }}
-                style={{ fontSize: "0.8rem" }}
-                disabled={isDeleting}
-                title="Supprimer"
-              >
-                {isDeleting ? (
-                  <span
-                    className="spinner-border spinner-border-sm"
-                    role="status"
-                  />
-                ) : (
-                  <FontAwesomeIcon
-                    icon={faTrash}
-                    style={{ fontSize: "0.8rem" }}
-                  />
-                )}
-              </button>
-            )}
-          </div>
-          {message.estEnvoye && !message.estLu && (
-            <span
-              className="badge bg-light text-dark border border-secondary-subtle px-2 py-1"
-              style={{ fontSize: "0.75rem" }}
-            >
-              <FontAwesomeIcon
-                icon={faClock}
-                className="me-1"
-                style={{ fontSize: "0.7rem" }}
-              />
-              En attente de lecture
-            </span>
-          )}
-          {message.dateLecture && message.estLu && (
-            <small className="text-success" style={{ fontSize: "0.7rem" }}>
-              <FontAwesomeIcon icon={faCheckCircle} className="me-1" />
-              Lu {formatDate(message.dateLecture)}
-            </small>
-          )}
-        </div>
-      </div>
-    </>
-  );
-};

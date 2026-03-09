@@ -9,6 +9,7 @@ import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { useAuth } from "@/app/(front-office)/auth/AuthContext";
 import { buildImageUrl } from "@/app/shared/utils/image-utils";
+import PublishAdModal from "@/app/(front-office)/publication-annonce/page";
 
 // Import des icônes FontAwesome
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -329,7 +330,7 @@ interface NoteStats {
 }
 
 // ============================================
-// COMPOSANT D'IMAGE SÉCURISÉ AMÉLIORÉ AVEC FALLBACK EXTERNE
+// COMPOSANT D'IMAGE SÉCURISÉ AMÉLIORÉ - CORRIGÉ
 // ============================================
 const SecureImage = ({
   src,
@@ -377,12 +378,12 @@ const SecureImage = ({
   }, [src, fallbackSrc]);
 
   const handleError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-    console.error(`Erreur chargement image: ${currentSrc}`);
-
-    // ✅ CORRECTION: Ignorer les erreurs pour les images par défaut
-    if (currentSrc === fallbackSrc || currentSrc.includes("default") || currentSrc.includes("placeholder")) {
+    // ✅ CORRECTION: Ne pas logger les erreurs pour les images par défaut
+    if (currentSrc === fallbackSrc || currentSrc.includes("placeholder") || currentSrc.includes("ui-avatars")) {
       return;
     }
+
+    console.error(`Erreur chargement image: ${currentSrc}`);
 
     if (!hasError) {
       setHasError(true);
@@ -416,8 +417,8 @@ const SecureImage = ({
         }
       }
 
-      // Si tous les essais échouent, utiliser une URL externe comme fallback
-      setCurrentSrc("https://via.placeholder.com/800x600/9c27b0/ffffff?text=Image+non+disponible");
+      // Si tous les essais échouent, utiliser le fallback
+      setCurrentSrc(fallbackSrc);
     }
 
     if (onError) {
@@ -460,6 +461,231 @@ const SecureImage = ({
           ...style,
         }}
       />
+    </div>
+  );
+};
+
+// ============================================
+// COMPOSANT MODAL DE CONTACT AMÉLIORÉ
+// ============================================
+const ContactModal = ({
+  show,
+  onHide,
+  createur,
+  donNom,
+  onCopySuccess,
+}: {
+  show: boolean;
+  onHide: () => void;
+  createur: CreateurInfo | null;
+  donNom: string;
+  onCopySuccess: (message: string) => void;
+}) => {
+  const [copied, setCopied] = useState(false);
+
+  if (!show || !createur) return null;
+
+  const handleCopyPhone = () => {
+    if (createur.telephone) {
+      navigator.clipboard.writeText(createur.telephone)
+        .then(() => {
+          setCopied(true);
+          onCopySuccess("Numéro de téléphone copié !");
+          setTimeout(() => setCopied(false), 2000);
+        })
+        .catch(() => {
+          onCopySuccess("Erreur lors de la copie");
+        });
+    }
+  };
+
+  const handleCopyEmail = () => {
+    if (createur.email) {
+      navigator.clipboard.writeText(createur.email)
+        .then(() => {
+          setCopied(true);
+          onCopySuccess("Adresse email copiée !");
+          setTimeout(() => setCopied(false), 2000);
+        })
+        .catch(() => {
+          onCopySuccess("Erreur lors de la copie");
+        });
+    }
+  };
+
+  return (
+    <div
+      className="modal fade show d-block"
+      style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 9999 }}
+      onClick={onHide}
+    >
+      <div className="modal-dialog modal-dialog-centered" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-content border-0 shadow-lg rounded-4">
+          <div className="modal-header border-0 pb-0">
+            <h5 className="modal-title fw-bold">
+              <FontAwesomeIcon icon={faUser} className="me-2 text-success" />
+              Contacter le donateur
+            </h5>
+            <button
+              type="button"
+              className="btn-close"
+              onClick={onHide}
+              aria-label="Fermer"
+            ></button>
+          </div>
+          <div className="modal-body">
+            <div className="text-center mb-4">
+              <div className="mb-3">
+                {createur.avatar ? (
+                  <SecureImage
+                    src={createur.avatar}
+                    alt={`${createur.prenoms} ${createur.nom}`}
+                    fallbackSrc="/images/default-avatar.png"
+                    className="rounded-circle mx-auto border border-3 border-success"
+                    style={{
+                      width: "100px",
+                      height: "100px",
+                      objectFit: "cover",
+                    }}
+                  />
+                ) : (
+                  <div
+                    className="bg-light rounded-circle mx-auto d-flex align-items-center justify-content-center border border-3 border-success"
+                    style={{ width: "100px", height: "100px" }}
+                  >
+                    <FontAwesomeIcon icon={faUserCircle} className="fa-3x text-muted" />
+                  </div>
+                )}
+              </div>
+              <h5 className="fw-bold mb-1">
+                {createur.prenoms} {createur.nom}
+              </h5>
+              <p className="text-muted small mb-3">
+                <FontAwesomeIcon icon={faTag} className="me-1" />
+                Donateur vérifié
+              </p>
+              <div className="bg-light rounded-4 p-3 mb-4">
+                <p className="fw-semibold mb-2">À propos du don :</p>
+                <p className="text-muted small mb-0">
+                  <FontAwesomeIcon icon={faGift} className="me-1 text-success" />
+                  {donNom}
+                </p>
+              </div>
+            </div>
+
+            {/* Informations de contact avec bouton de copie */}
+            {createur.telephone && (
+              <div className="mb-3 p-3 bg-light rounded-4">
+                <div className="d-flex justify-content-between align-items-center">
+                  <div>
+                    <small className="text-muted d-block">Téléphone</small>
+                    <span className="fw-semibold">{createur.telephone}</span>
+                  </div>
+                  <button
+                    onClick={handleCopyPhone}
+                    className="btn btn-outline-success btn-sm rounded-circle p-2"
+                    style={{ width: "40px", height: "40px" }}
+                    title="Copier le numéro"
+                  >
+                    <FontAwesomeIcon icon={copied ? faCheck : faCopy} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {createur.email && (
+              <div className="mb-3 p-3 bg-light rounded-4">
+                <div className="d-flex justify-content-between align-items-center">
+                  <div>
+                    <small className="text-muted d-block">Email</small>
+                    <span className="fw-semibold text-truncate" style={{ maxWidth: "200px" }}>
+                      {createur.email}
+                    </span>
+                  </div>
+                  <button
+                    onClick={handleCopyEmail}
+                    className="btn btn-outline-primary btn-sm rounded-circle p-2"
+                    style={{ width: "40px", height: "40px" }}
+                    title="Copier l'email"
+                  >
+                    <FontAwesomeIcon icon={copied ? faCheck : faCopy} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Actions rapides */}
+            <div className="row g-3 mt-3">
+              {createur.telephone && (
+                <div className="col-6">
+                  <a
+                    href={`tel:${createur.telephone}`}
+                    className="btn btn-outline-success w-100 py-3 d-flex align-items-center justify-content-center gap-2"
+                  >
+                    <FontAwesomeIcon icon={faPhone} />
+                    <span className="fw-semibold">Appeler</span>
+                  </a>
+                </div>
+              )}
+              {createur.email && (
+                <div className="col-6">
+                  <a
+                    href={`mailto:${createur.email}?subject=Question concernant votre don : ${donNom}`}
+                    className="btn btn-outline-primary w-100 py-3 d-flex align-items-center justify-content-center gap-2"
+                  >
+                    <FontAwesomeIcon icon={faEnvelope} />
+                    <span className="fw-semibold">Email</span>
+                  </a>
+                </div>
+              )}
+            </div>
+
+            {createur.whatsapp_url && (
+              <div className="mt-3">
+                <a
+                  href={createur.whatsapp_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-outline-success w-100 py-3 d-flex align-items-center justify-content-center gap-2"
+                  style={{ borderColor: "#25D366", color: "#25D366" }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "#25D366";
+                    e.currentTarget.style.color = "white";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "transparent";
+                    e.currentTarget.style.color = "#25D366";
+                  }}
+                >
+                  <FontAwesomeIcon icon={faWhatsapp} />
+                  <span className="fw-semibold">WhatsApp</span>
+                </a>
+              </div>
+            )}
+
+            <div className="mt-4 p-3 bg-info bg-opacity-10 rounded-4">
+              <div className="d-flex gap-2">
+                <FontAwesomeIcon icon={faShieldAlt} className="text-info mt-1" />
+                <div>
+                  <p className="small fw-semibold mb-1">Conseil de sécurité</p>
+                  <p className="small text-muted mb-0">
+                    Préférez les rencontres dans des lieux publics et vérifiez l'article avant de l'accepter.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="modal-footer border-0 pt-0">
+            <button
+              type="button"
+              className="btn btn-light w-100 py-3"
+              onClick={onHide}
+            >
+              Fermer
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
@@ -524,14 +750,18 @@ const formatNumber = (value: number | null | undefined): string => {
 };
 
 // ============================================
-// FONCTIONS POUR LES IMAGES PAR DÉFAUT
+// FONCTIONS POUR LES IMAGES PAR DÉFAUT DU PROJET
 // ============================================
 const getDefaultAvatarUrl = (): string => {
-  return "https://ui-avatars.com/api/?name=U&background=9c27b0&color=fff&size=256";
+  return "/images/default-avatar.png";
 };
 
 const getDefaultDonImage = (): string => {
-  return "https://via.placeholder.com/800x600/9c27b0/ffffff?text=Don+OSKAR";
+  return "/images/default-don.jpg";
+};
+
+const getDefaultPlaceholderImage = (): string => {
+  return "/images/placeholder.jpg";
 };
 
 // ============================================
@@ -576,6 +806,10 @@ export default function DonDetailPage() {
     type: "success" | "error" | "info";
     message: string;
   } | null>(null);
+  const [showContactModal, setShowContactModal] = useState(false);
+  
+  // ✅ État pour la modal de publication
+  const [showPublishModal, setShowPublishModal] = useState(false);
 
   const [selectedThumbnail, setSelectedThumbnail] = useState(0);
 
@@ -1138,65 +1372,36 @@ export default function DonDetailPage() {
     action();
   };
 
-  const handleContactWhatsApp = () => {
-    requireAuth(() => {
-      if (!createur) return;
-
-      let phoneNumber = createur.telephone || createur.whatsapp_url || "";
-      phoneNumber = phoneNumber.replace(/\D/g, "");
-
-      if (phoneNumber.startsWith("225")) {
-        phoneNumber = phoneNumber.substring(3);
-      }
-
-      if (phoneNumber && !phoneNumber.startsWith("+")) {
-        phoneNumber = `+225${phoneNumber}`;
-      }
-
-      const message = `Bonjour ${createur.prenoms}, je suis intéressé(e) par votre don "${don?.nom}" sur OSKAR. Pourrions-nous discuter ?`;
-      const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
-
-      window.open(whatsappUrl, "_blank", "noopener,noreferrer");
-    });
+  // ✅ Gestionnaire pour ouvrir la modale de publication
+  const handleOpenPublishModal = () => {
+    if (!isLoggedIn) {
+      openLoginModal();
+    } else {
+      setShowPublishModal(true);
+    }
   };
 
-  const handleContactFacebook = () => {
+  // ✅ Gestionnaire pour "Je suis intéressé(e)"
+  const handleInterest = () => {
     requireAuth(() => {
-      if (!createur) return;
+      if (!createur || !don) return;
 
-      if (createur.facebook_url) {
-        window.open(createur.facebook_url, "_blank", "noopener,noreferrer");
+      // Détection du type d'appareil
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+        navigator.userAgent
+      );
+
+      if (isMobile) {
+        // Sur mobile : appel téléphonique direct
+        if (createur.telephone) {
+          window.location.href = `tel:${createur.telephone}`;
+        } else {
+          showToast("error", "Le donateur n'a pas de numéro de téléphone renseigné.");
+        }
       } else {
-        const searchQuery = encodeURIComponent(
-          `${createur.prenoms} ${createur.nom} OSKAR`,
-        );
-        window.open(
-          `https://www.facebook.com/search/top?q=${searchQuery}`,
-          "_blank",
-          "noopener,noreferrer",
-        );
+        // Sur ordinateur : afficher le modal
+        setShowContactModal(true);
       }
-    });
-  };
-
-  const handleCopyContactInfo = () => {
-    requireAuth(() => {
-      if (!createur) return;
-
-      const contactInfo =
-        `Donateur: ${createur.prenoms} ${createur.nom}\n` +
-        `Téléphone: ${createur.telephone || "Non disponible"}\n` +
-        `Email: ${createur.email || "Non disponible"}`;
-
-      navigator.clipboard
-        .writeText(contactInfo)
-        .then(() => {
-          showToast("success", "Informations de contact copiées !");
-        })
-        .catch((err) => {
-          console.error("Erreur lors de la copie:", err);
-          showToast("error", "Impossible de copier les informations.");
-        });
     });
   };
 
@@ -1236,6 +1441,47 @@ export default function DonDetailPage() {
       });
 
       router.push(`${dashboardPath}/messages?${params.toString()}`);
+    });
+  };
+
+  const handleContactWhatsApp = () => {
+    requireAuth(() => {
+      if (!createur) return;
+
+      let phoneNumber = createur.telephone || createur.whatsapp_url || "";
+      phoneNumber = phoneNumber.replace(/\D/g, "");
+
+      if (phoneNumber.startsWith("225")) {
+        phoneNumber = phoneNumber.substring(3);
+      }
+
+      if (phoneNumber && !phoneNumber.startsWith("+")) {
+        phoneNumber = `+225${phoneNumber}`;
+      }
+
+      const message = `Bonjour ${createur.prenoms}, je suis intéressé(e) par votre don "${don?.nom}" sur OSKAR. Pourrions-nous discuter ?`;
+      const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+
+      window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+    });
+  };
+
+  const handleContactFacebook = () => {
+    requireAuth(() => {
+      if (!createur) return;
+
+      if (createur.facebook_url) {
+        window.open(createur.facebook_url, "_blank", "noopener,noreferrer");
+      } else {
+        const searchQuery = encodeURIComponent(
+          `${createur.prenoms} ${createur.nom} OSKAR`,
+        );
+        window.open(
+          `https://www.facebook.com/search/top?q=${searchQuery}`,
+          "_blank",
+          "noopener,noreferrer",
+        );
+      }
     });
   };
 
@@ -1400,10 +1646,6 @@ export default function DonDetailPage() {
     }
   };
 
-  const handleInterest = () => {
-    handleContactDonateur();
-  };
-
   const handleReportDon = () => {
     requireAuth(() => {
       if (window.confirm("Signaler ce don comme inapproprié ?")) {
@@ -1527,6 +1769,15 @@ export default function DonDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Modal de contact */}
+      <ContactModal
+        show={showContactModal}
+        onHide={() => setShowContactModal(false)}
+        createur={createur}
+        donNom={don.nom}
+        onCopySuccess={(message) => showToast("success", message)}
+      />
 
       {/* Breadcrumb */}
       <section className="bg-white border-bottom py-3">
@@ -1743,7 +1994,7 @@ export default function DonDetailPage() {
 
             {/* Localisation */}
             <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
-      
+
               <div className="mt-4 bg-info bg-opacity-10 border border-info rounded-4 p-4">
                 <div className="d-flex gap-3">
                   <FontAwesomeIcon
@@ -2222,94 +2473,6 @@ export default function DonDetailPage() {
                 </button>
               </div>
 
-              {/* Informations du donateur */}
-              {createur && (
-                <div className="bg-info bg-opacity-10 rounded-4 p-4 mb-4">
-                  <div className="d-flex align-items-center gap-3 mb-3">
-                    <div className="bg-success rounded-circle p-3">
-                      <FontAwesomeIcon
-                        icon={faShieldAlt}
-                        className="text-white"
-                      />
-                    </div>
-                    <div>
-                      <p className="fw-semibold mb-1 small">Donateur vérifié</p>
-                      <p className="text-muted small mb-0">
-                        Identité vérifiée par OSKAR
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="d-flex align-items-center gap-3 mt-3">
-                    {createur.avatar ? (
-                      <SecureImage
-                        src={createur.avatar}
-                        alt={`${createur.prenoms} ${createur.nom}`}
-                        fallbackSrc={getDefaultAvatarUrl()}
-                        className="rounded-3"
-                        style={{
-                          width: "60px",
-                          height: "60px",
-                          objectFit: "cover",
-                        }}
-                      />
-                    ) : (
-                      <div
-                        className="bg-white rounded-3 d-flex align-items-center justify-content-center"
-                        style={{
-                          width: "60px",
-                          height: "60px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <FontAwesomeIcon
-                          icon={faUserCircle}
-                          className="fa-2x text-muted"
-                        />
-                      </div>
-                    )}
-                    <div>
-                      <p className="fw-semibold mb-1 small">
-                        <Link
-                          href={`/utilisateurs/${createur.uuid}`}
-                          className="text-decoration-none text-dark"
-                        >
-                          {createur.prenoms} {createur.nom}
-                        </Link>
-                      </p>
-                      <p className="text-muted small mb-0">
-                        {createur.userType === "utilisateur"
-                          ? "Utilisateur"
-                          : "Vendeur"}
-                      </p>
-                    </div>
-                  </div>
-
-                  {createur.est_verifie && (
-                    <div className="d-flex align-items-center mt-3 text-success">
-                      <FontAwesomeIcon icon={faCheckCircle} className="me-2" />
-                      <span className="small">Donateur vérifié</span>
-                    </div>
-                  )}
-
-                  <div className="border-top mt-3 pt-3">
-                    <p className="fw-semibold small mb-2">Contact donateur</p>
-                    {createur.email && (
-                      <div className="d-flex align-items-center text-muted small mb-2">
-                        <FontAwesomeIcon icon={faEnvelope} className="me-2" />
-                        <span className="text-truncate">{createur.email}</span>
-                      </div>
-                    )}
-                    {createur.telephone && (
-                      <div className="d-flex align-items-center text-muted small">
-                        <FontAwesomeIcon icon={faPhone} className="me-2" />
-                        <span>{createur.telephone}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
               {/* Informations don */}
               <div className="small">
                 <div className="d-flex justify-content-between mb-2">
@@ -2351,76 +2514,6 @@ export default function DonDetailPage() {
                 </button>
               </div>
             </div>
-
-            {/* Carte donateur détaillée */}
-            {createur && (
-              <div className="card border-0 shadow-lg rounded-4 p-4 mt-4">
-                <h5 className="fw-bold mb-4">Informations sur le donateur</h5>
-                <div className="d-flex align-items-center gap-3 mb-4">
-                  <SecureImage
-                    src={createur.avatar}
-                    alt={`${createur.prenoms} ${createur.nom}`}
-                    fallbackSrc={getDefaultAvatarUrl()}
-                    className="rounded-circle"
-                    style={{
-                      width: "64px",
-                      height: "64px",
-                      objectFit: "cover",
-                    }}
-                  />
-                  <div>
-                    <p className="fw-bold mb-1">
-                      {createur.prenoms} {createur.nom}
-                    </p>
-                    <div className="d-flex align-items-center gap-1 text-warning small mb-1">
-                      {renderStars(don.note_moyenne)}
-                      <span className="text-muted ms-1">
-                        ({don.note_moyenne.toFixed(1)})
-                      </span>
-                    </div>
-                    <p className="small text-muted mb-0">
-                      <FontAwesomeIcon icon={faCalendarAlt} className="me-1" />
-                      Membre depuis {formatMemberSince(createur.created_at)}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="small mb-4">
-                  <div className="d-flex justify-content-between py-2 border-bottom">
-                    <span className="text-muted">Dons actifs</span>
-                    <span className="fw-semibold">
-                      {createur.nombre_annonces || donsSimilaires.length}
-                    </span>
-                  </div>
-                  <div className="d-flex justify-content-between py-2 border-bottom">
-                    <span className="text-muted">Dons réalisés</span>
-                    <span className="fw-semibold">
-                      {createur.nombre_ventes || don.nombre_avis}
-                    </span>
-                  </div>
-                  <div className="d-flex justify-content-between py-2 border-bottom">
-                    <span className="text-muted">Taux de réponse</span>
-                    <span className="text-success fw-semibold">
-                      {createur.taux_reponse || 98}%
-                    </span>
-                  </div>
-                  <div className="d-flex justify-content-between py-2">
-                    <span className="text-muted">Temps de réponse</span>
-                    <span className="fw-semibold">
-                      {createur.temps_reponse || "Moins de 2 heures"}
-                    </span>
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleVisitUtilisateur}
-                  className="btn btn-outline-success w-100 py-3 fw-semibold"
-                >
-                  <FontAwesomeIcon icon={faUser} className="me-2" />
-                  Voir tous les dons du donateur
-                </button>
-              </div>
-            )}
 
             {/* Retrait */}
             <div className="card border-0 shadow-lg rounded-4 p-4 mt-4 border-success">
@@ -2720,7 +2813,7 @@ export default function DonDetailPage() {
         </div>
       </section>
 
-      {/* CTA */}
+      {/* CTA - MODIFIÉ POUR OUVRIR LA MODALE */}
       <section className="bg-success text-white py-5">
         <div className="container text-center">
           <h2 className="display-5 fw-bold mb-3">
@@ -2730,15 +2823,29 @@ export default function DonDetailPage() {
             Rejoignez des milliers de donateurs et partagez avec votre
             communauté
           </p>
-          <Link
-            href="/publication-annonce?type=don"
+          
+          {/* REMPLACÉ LE LINK PAR UN BOUTON AVEC ONCLICK */}
+          <button
+            onClick={handleOpenPublishModal}
             className="btn btn-light btn-lg px-5 py-4 fw-bold text-success"
+            style={{ border: "none", cursor: "pointer" }}
           >
             <FontAwesomeIcon icon={faPlus} className="me-2" />
             Publiez votre don maintenant
-          </Link>
+          </button>
         </div>
       </section>
+
+      {/* MODAL DE PUBLICATION - AJOUTÉ À LA FIN */}
+      <PublishAdModal
+        visible={showPublishModal}
+        onHide={() => setShowPublishModal(false)}
+        isLoggedIn={isLoggedIn}
+        onLoginRequired={() => {
+          setShowPublishModal(false);
+          openLoginModal();
+        }}
+      />
 
       <style jsx>{`
         .hover-bg-warning:hover {

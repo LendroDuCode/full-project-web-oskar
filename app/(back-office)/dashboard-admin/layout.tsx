@@ -1,6 +1,6 @@
-// app/(back-office)/dashboard-admin/layout.tsx
 "use client";
 
+import { usePathname } from "next/navigation";
 import DashboardHeader from "./components/DashboardHeader";
 import SidebarSuperAdmin from "./components/SidebarSuperAdmin";
 
@@ -9,6 +9,21 @@ export default function DashboardAdminLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+  
+  // Vérifier si on est sur la page de messagerie
+  const isMessageriePage = pathname?.includes('/dashboard-admin/messages');
+
+  // Si c'est la page de messagerie, afficher seulement le contenu (sans header ni sidebar)
+  if (isMessageriePage) {
+    return (
+      <div className="min-vh-100 bg-light">
+        {children}
+      </div>
+    );
+  }
+
+  // Sinon, afficher le layout complet avec header et sidebar
   return (
     <div className="d-flex min-vh-100">
       <SidebarSuperAdmin />

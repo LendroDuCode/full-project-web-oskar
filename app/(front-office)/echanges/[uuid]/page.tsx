@@ -9,6 +9,7 @@ import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { API_CONFIG } from "@/config/env";
 import { useAuth } from "@/app/(front-office)/auth/AuthContext";
+import PublishAdModal from "@/app/(front-office)/publication-annonce/page";
 
 // Import des icônes FontAwesome
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -70,6 +71,8 @@ import {
   faExchangeAlt,
   faHandHoldingHeart,
   faReply,
+  faMobile,
+  faLaptop,
 } from "@fortawesome/free-solid-svg-icons";
 import { faHeart as FaHeartRegular } from "@fortawesome/free-regular-svg-icons";
 
@@ -484,6 +487,13 @@ const formatRating = (value: number | null | undefined): string => {
 };
 
 // ============================================
+// FALLBACK IMAGES
+// ============================================
+const DEFAULT_PRODUCT_IMAGE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 24 24' fill='none' stroke='%23cccccc' stroke-width='1' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='2' y='2' width='20' height='20' rx='2.18' ry='2.18'%3E%3C/rect%3E%3Cline x1='7' y1='2' x2='7' y2='22'%3E%3C/line%3E%3Cline x1='17' y1='2' x2='17' y2='22'%3E%3C/line%3E%3Cline x1='2' y1='12' x2='22' y2='12'%3E%3C/line%3E%3Cline x1='2' y1='7' x2='7' y2='7'%3E%3C/line%3E%3Cline x1='2' y1='17' x2='7' y2='17'%3E%3C/line%3E%3Cline x1='17' y1='17' x2='22' y2='17'%3E%3C/line%3E%3Cline x1='17' y1='7' x2='22' y2='7'%3E%3C/line%3E%3C/svg%3E";
+
+const DEFAULT_AVATAR_IMAGE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23cccccc' stroke-width='1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'%3E%3C/path%3E%3Ccircle cx='12' cy='7' r='4'%3E%3C/circle%3E%3C/svg%3E";
+
+// ============================================
 // COMPOSANT D'IMAGE SÉCURISÉ
 // ============================================
 const SecureImage = ({
@@ -653,6 +663,24 @@ export default function EchangeDetailPage() {
   const [selectedThumbnail, setSelectedThumbnail] = useState(0);
   const [contactVisible, setContactVisible] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
+  
+  // ✅ État pour la modal d'appel
+  const [showCallModal, setShowCallModal] = useState(false);
+  // ✅ État pour la modal de publication
+  const [showPublishModal, setShowPublishModal] = useState(false);
+  // ✅ Détection du type d'appareil
+  const [isMobile, setIsMobile] = useState(false);
+
+  // ✅ Détecter si c'est un appareil mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+      const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
+      setIsMobile(mobileRegex.test(userAgent));
+    };
+    
+    checkMobile();
+  }, []);
 
   // Timer pour le toast
   useEffect(() => {
@@ -697,11 +725,11 @@ export default function EchangeDetailPage() {
   // FONCTIONS UTILITAIRES
   // ============================================
   const getDefaultAvatarUrl = (): string => {
-    return `${API_CONFIG.BASE_URL || "https://oskar-api.mysonec.pro"}/images/default-avatar.png`;
+    return DEFAULT_AVATAR_IMAGE;
   };
 
   const getDefaultEchangeImage = (): string => {
-    return `${API_CONFIG.BASE_URL || "https://oskar-api.mysonec.pro"}/images/default-echange.png`;
+    return DEFAULT_PRODUCT_IMAGE;
   };
 
   const normalizeImageUrl = (
@@ -1101,7 +1129,7 @@ export default function EchangeDetailPage() {
         setCreateur(createurData);
       }
 
-      const imageUrls: string[] = [echangeData.image];
+      const imageUrls: string[] = [echangeData.image || DEFAULT_PRODUCT_IMAGE];
 
       response.similaires.slice(0, 4).forEach((similaire) => {
         const imgUrl = normalizeImageUrl(similaire.image, similaire.image_key);
@@ -1111,7 +1139,7 @@ export default function EchangeDetailPage() {
       });
 
       while (imageUrls.length < 5) {
-        imageUrls.push(getDefaultEchangeImage());
+        imageUrls.push(DEFAULT_PRODUCT_IMAGE);
       }
 
       setImages(imageUrls.slice(0, 5));
@@ -1241,6 +1269,35 @@ export default function EchangeDetailPage() {
     action();
   };
 
+  // ✅ Gestionnaire pour ouvrir la modale de publication
+  const handleOpenPublishModal = () => {
+    if (!isLoggedIn) {
+      openLoginModal();
+    } else {
+      setShowPublishModal(true);
+    }
+  };
+
+  // ✅ NOUVELLE FONCTION : Appel téléphonique direct
+  const handleCallCreateur = () => {
+    requireAuth(() => {
+      if (!createur || !createur.telephone) {
+        showToast("error", "Numéro de téléphone non disponible");
+        return;
+      }
+
+      const phoneNumber = createur.telephone.replace(/\s/g, "");
+
+      if (isMobile) {
+        // Sur mobile : appel direct
+        window.location.href = `tel:${phoneNumber}`;
+      } else {
+        // Sur desktop : ouvrir la modal
+        setShowCallModal(true);
+      }
+    });
+  };
+
   // 🔥 FONCTION WHATSAPP CORRIGÉE - PLUS JAMAIS GRISÉE
   const handleContactWhatsApp = () => {
     requireAuth(() => {
@@ -1295,19 +1352,17 @@ export default function EchangeDetailPage() {
     requireAuth(() => {
       if (!createur) return;
 
-      const contactInfo =
-        `Créateur de l'échange: ${createur.prenoms} ${createur.nom}\n` +
-        `Téléphone: ${createur.telephone || "Non disponible"}\n` +
-        `Email: ${createur.email || "Non disponible"}`;
+      const contactInfo = `${createur.telephone || "Numéro non disponible"}`;
 
       navigator.clipboard
         .writeText(contactInfo)
         .then(() => {
-          showToast("success", "Informations de contact copiées !");
+          showToast("success", "Numéro de téléphone copié !");
+          setShowCallModal(false);
         })
         .catch((err) => {
           console.error("Erreur lors de la copie:", err);
-          showToast("error", "Impossible de copier les informations.");
+          showToast("error", "Impossible de copier le numéro.");
         });
     });
   };
@@ -1526,9 +1581,7 @@ export default function EchangeDetailPage() {
   };
 
   const handleInterest = () => {
-    requireAuth(() => {
-      handleContactCreateur();
-    });
+    handleCallCreateur(); // ✅ MAINTENANT : Appelle la fonction d'appel
   };
 
   const handleReplyToComment = (commentUuid: string) => {
@@ -1654,6 +1707,90 @@ export default function EchangeDetailPage() {
         </div>
       )}
 
+      {/* ✅ MODAL D'APPEL POUR ORDINATEUR */}
+      {showCallModal && createur && (
+        <div
+          className="modal fade show d-block"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+          onClick={() => setShowCallModal(false)}
+        >
+          <div className="modal-dialog modal-dialog-centered" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-content border-0 shadow-lg">
+              <div className="modal-header border-0 pb-0">
+                <h5 className="modal-title fw-bold">
+                  <FontAwesomeIcon icon={faPhone} className="text-success me-2" />
+                  Contacter le créateur
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setShowCallModal(false)}
+                ></button>
+              </div>
+              <div className="modal-body text-center py-4">
+                <div className="mb-4">
+                  <div className="bg-light rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3" style={{ width: "80px", height: "80px" }}>
+                    {createur.avatar ? (
+                      <SecureImage
+                        src={createur.avatar}
+                        alt={`${createur.prenoms} ${createur.nom}`}
+                        fallbackSrc={DEFAULT_AVATAR_IMAGE}
+                        className="rounded-circle w-100 h-100 object-fit-cover"
+                      />
+                    ) : (
+                      <FontAwesomeIcon icon={faUserCircle} className="fa-3x text-muted" />
+                    )}
+                  </div>
+                  <h6 className="fw-bold mb-1">{createur.prenoms} {createur.nom}</h6>
+                  <p className="text-muted small mb-3">{createur.userType === "vendeur" ? "Vendeur" : "Utilisateur"}</p>
+                  
+                  <div className="bg-light p-3 rounded-3 mb-3">
+                    <div className="d-flex align-items-center justify-content-center gap-2">
+                      <FontAwesomeIcon icon={faPhone} className="text-success" />
+                      <span className="fw-semibold fs-5">{createur.telephone || "Non disponible"}</span>
+                    </div>
+                  </div>
+
+                  <p className="text-muted small">
+                    <FontAwesomeIcon icon={faLaptop} className="me-1" />
+                    Vous êtes sur un ordinateur. Pour appeler directement, utilisez votre téléphone ou copiez le numéro.
+                  </p>
+                </div>
+
+                <div className="d-flex gap-3 justify-content-center">
+                  <button
+                    className="btn btn-outline-success px-4 py-2"
+                    onClick={handleCopyContactInfo}
+                  >
+                    <FontAwesomeIcon icon={faCopy} className="me-2" />
+                    Copier le numéro
+                  </button>
+                  <button
+                    className="btn btn-success px-4 py-2"
+                    onClick={() => {
+                      if (createur.telephone) {
+                        window.open(`https://wa.me/${createur.telephone.replace(/\D/g, '')}`, '_blank');
+                      }
+                    }}
+                  >
+                    <FontAwesomeIcon icon={faWhatsapp} className="me-2" />
+                    WhatsApp
+                  </button>
+                </div>
+              </div>
+              <div className="modal-footer border-0 pt-0 justify-content-center">
+                <button
+                  className="btn btn-link text-muted text-decoration-none"
+                  onClick={() => setShowCallModal(false)}
+                >
+                  Fermer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Breadcrumb */}
       <section className="bg-white border-bottom py-3">
         <div className="container">
@@ -1706,7 +1843,7 @@ export default function EchangeDetailPage() {
                 <SecureImage
                   src={imagePrincipale}
                   alt={echange.nomElementEchange}
-                  fallbackSrc={getDefaultEchangeImage()}
+                  fallbackSrc={DEFAULT_PRODUCT_IMAGE}
                   className="w-100 h-100 object-cover"
                 />
                 <button
@@ -1773,7 +1910,7 @@ export default function EchangeDetailPage() {
                       <SecureImage
                         src={img}
                         alt={`${echange.nomElementEchange} - vue ${index + 1}`}
-                        fallbackSrc={getDefaultEchangeImage()}
+                        fallbackSrc={DEFAULT_PRODUCT_IMAGE}
                         className="w-100 h-100 object-cover"
                       />
                     </div>
@@ -1877,8 +2014,6 @@ export default function EchangeDetailPage() {
 
             {/* Localisation */}
             <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
-              
-              
               <div className="mt-4 bg-info bg-opacity-10 border border-info rounded-4 p-4">
                 <div className="d-flex gap-3">
                   <FontAwesomeIcon
@@ -2074,7 +2209,7 @@ export default function EchangeDetailPage() {
                                 <SecureImage
                                   src={comment.utilisateur_photo}
                                   alt={comment.utilisateur_nom}
-                                  fallbackSrc={getDefaultAvatarUrl()}
+                                  fallbackSrc={DEFAULT_AVATAR_IMAGE}
                                   className="rounded-circle"
                                   style={{
                                     width: "56px",
@@ -2228,7 +2363,7 @@ export default function EchangeDetailPage() {
                                 <SecureImage
                                   src={item.image}
                                   alt={item.nomElementEchange}
-                                  fallbackSrc={getDefaultEchangeImage()}
+                                  fallbackSrc={DEFAULT_PRODUCT_IMAGE}
                                   className="w-100 h-100 object-cover rounded-start"
                                 />
                                 <div className="position-absolute top-0 start-0 m-1 bg-primary text-white px-2 py-1 rounded-pill small">
@@ -2318,14 +2453,17 @@ export default function EchangeDetailPage() {
               </div>
 
               <div className="d-grid gap-3 mb-4">
+                {/* ✅ BOUTON INTÉRESSÉ - ADAPTÉ SELON L'APPAREIL */}
                 <button
                   onClick={handleInterest}
                   className="btn btn-warning btn-lg fw-bold text-white py-4"
                   disabled={!echange.disponible}
                 >
-                  <FontAwesomeIcon icon={faHandHoldingHeart} className="me-2" />
+                  <FontAwesomeIcon icon={isMobile ? faPhone : faLaptop} className="me-2" />
                   {echange.disponible
-                    ? "Je suis intéressé(e)"
+                    ? isMobile
+                      ? "Appeler le créateur"
+                      : "Voir le contact"
                     : "Non disponible"}
                 </button>
                 <button
@@ -2357,94 +2495,6 @@ export default function EchangeDetailPage() {
                   {favori ? "Retirer des favoris" : "Ajouter aux favoris"}
                 </button>
               </div>
-
-              {/* Informations du créateur */}
-              {createur && (
-                <div className="bg-info bg-opacity-10 rounded-4 p-4 mb-4">
-                  <div className="d-flex align-items-center gap-3 mb-3">
-                    <div className="bg-warning rounded-circle p-3">
-                      <FontAwesomeIcon
-                        icon={faShieldAlt}
-                        className="text-white"
-                      />
-                    </div>
-                    <div>
-                      <p className="fw-semibold mb-1 small">Créateur vérifié</p>
-                      <p className="text-muted small mb-0">
-                        Identité vérifiée par OSKAR
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="d-flex align-items-center gap-3 mt-3">
-                    {createur.avatar ? (
-                      <SecureImage
-                        src={createur.avatar}
-                        alt={`${createur.prenoms} ${createur.nom}`}
-                        fallbackSrc={getDefaultAvatarUrl()}
-                        className="rounded-3"
-                        style={{
-                          width: "60px",
-                          height: "60px",
-                          objectFit: "cover",
-                        }}
-                      />
-                    ) : (
-                      <div
-                        className="bg-white rounded-3 d-flex align-items-center justify-content-center"
-                        style={{
-                          width: "60px",
-                          height: "60px",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <FontAwesomeIcon
-                          icon={faUserCircle}
-                          className="fa-2x text-muted"
-                        />
-                      </div>
-                    )}
-                    <div>
-                      <p className="fw-semibold mb-1 small">
-                        <Link
-                          href={`/utilisateurs/${createur.uuid}`}
-                          className="text-decoration-none text-dark"
-                        >
-                          {createur.prenoms} {createur.nom}
-                        </Link>
-                      </p>
-                      <p className="text-muted small mb-0">
-                        {createur.userType === "utilisateur"
-                          ? "Utilisateur"
-                          : "Vendeur"}
-                      </p>
-                    </div>
-                  </div>
-
-                  {createur.est_verifie && (
-                    <div className="d-flex align-items-center mt-3 text-success">
-                      <FontAwesomeIcon icon={faCheckCircle} className="me-2" />
-                      <span className="small">Créateur vérifié</span>
-                    </div>
-                  )}
-
-                  <div className="border-top mt-3 pt-3">
-                    <p className="fw-semibold small mb-2">Contact créateur</p>
-                    {createur.email && (
-                      <div className="d-flex align-items-center text-muted small mb-2">
-                        <FontAwesomeIcon icon={faEnvelope} className="me-2" />
-                        <span className="text-truncate">{createur.email}</span>
-                      </div>
-                    )}
-                    {createur.telephone && (
-                      <div className="d-flex align-items-center text-muted small">
-                        <FontAwesomeIcon icon={faPhone} className="me-2" />
-                        <span>{createur.telephone}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
 
               {/* Informations échange */}
               <div className="small">
@@ -2501,7 +2551,7 @@ export default function EchangeDetailPage() {
                   <SecureImage
                     src={createur.avatar}
                     alt={`${createur.prenoms} ${createur.nom}`}
-                    fallbackSrc={getDefaultAvatarUrl()}
+                    fallbackSrc={DEFAULT_AVATAR_IMAGE}
                     className="rounded-circle"
                     style={{
                       width: "64px",
@@ -2648,7 +2698,7 @@ export default function EchangeDetailPage() {
                         <SecureImage
                           src={item.image}
                           alt={item.nomElementEchange}
-                          fallbackSrc={getDefaultEchangeImage()}
+                          fallbackSrc={DEFAULT_PRODUCT_IMAGE}
                           className="w-100 h-100 object-cover"
                         />
                         <div className="position-absolute top-0 start-0 m-2 bg-primary text-white px-2 py-1 rounded-pill small">
@@ -2678,7 +2728,7 @@ export default function EchangeDetailPage() {
                               <SecureImage
                                 src={item.createur.avatar}
                                 alt={item.createur?.prenoms || "Créateur"}
-                                fallbackSrc={getDefaultAvatarUrl()}
+                                fallbackSrc={DEFAULT_AVATAR_IMAGE}
                                 className="rounded-circle me-2"
                                 style={{
                                   width: "30px",
@@ -2821,7 +2871,7 @@ export default function EchangeDetailPage() {
         </div>
       </section>
 
-      {/* CTA */}
+      {/* CTA - MODIFIÉ POUR OUVRIR LA MODALE */}
       <section className="bg-success text-white py-5">
         <div className="container text-center">
           <h2 className="display-5 fw-bold mb-3">
@@ -2831,15 +2881,29 @@ export default function EchangeDetailPage() {
             Rejoignez des milliers d'utilisateurs et proposez vos échanges dans
             votre communauté
           </p>
-          <Link
-            href="/publication-annonce?type=echange"
+          
+          {/* REMPLACÉ LE LINK PAR UN BOUTON AVEC ONCLICK */}
+          <button
+            onClick={handleOpenPublishModal}
             className="btn btn-light btn-lg px-5 py-4 fw-bold text-success"
+            style={{ border: "none", cursor: "pointer" }}
           >
             <FontAwesomeIcon icon={faPlus} className="me-2" />
             Publiez votre échange maintenant
-          </Link>
+          </button>
         </div>
       </section>
+
+      {/* MODAL DE PUBLICATION - AJOUTÉ À LA FIN */}
+      <PublishAdModal
+        visible={showPublishModal}
+        onHide={() => setShowPublishModal(false)}
+        isLoggedIn={isLoggedIn}
+        onLoginRequired={() => {
+          setShowPublishModal(false);
+          openLoginModal();
+        }}
+      />
 
       <style jsx>{`
         .hover-bg-warning:hover {

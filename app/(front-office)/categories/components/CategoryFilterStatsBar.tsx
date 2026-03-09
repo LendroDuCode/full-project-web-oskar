@@ -1,4 +1,3 @@
-// app/(front-office)/categories/components/CategoryFilterStatsBar.tsx
 "use client";
 
 import colors from "@/app/shared/constants/colors";
@@ -41,42 +40,42 @@ const CategoryFilterStatsBar: React.FC<CategoryFilterStatsBarProps> = ({
   const filterTypes: FilterType[] = [
     {
       id: "all",
-      label: `Tous (${totalItems})`,
-      icon: "fa-tag",
-      iconColor: "white",
+      label: `Tous`,
+      icon: "fa-layer-group",
+      iconColor: colors.oskar.green,
+      count: totalItems,
     },
     {
       id: "don",
-      label: `Dons (${stats.dons})`,
+      label: `Dons`,
       icon: "fa-gift",
-      iconColor: "#9C27B0",
-      borderColor: "#9C27B0",
+      iconColor: "#8b5cf6",
+      count: stats.dons,
     },
     {
       id: "echange",
-      label: `Échanges (${stats.echanges})`,
+      label: `Échanges`,
       icon: "fa-arrows-rotate",
-      iconColor: "#2196F3",
-      borderColor: "#2196F3",
+      iconColor: "#3b82f6",
+      count: stats.echanges,
     },
     {
       id: "produit",
-      label: `Ventes (${stats.produits})`,
-      icon: "fa-dollar-sign",
-      iconColor: colors.oskar.green,
-      borderColor: colors.oskar.green,
+      label: `Ventes`,
+      icon: "fa-basket-shopping", // Changé de fa-dollar-sign à fa-basket-shopping
+      iconColor: colors.oskar.green, // Changé de #f59e0b à colors.oskar.green
+      count: stats.produits,
     },
   ];
 
   const sortOptions = [
-    { value: "recent", label: "Plus récent" },
-    { value: "price-asc", label: "Prix croissant" },
-    { value: "price-desc", label: "Prix décroissant" },
+    { value: "recent", label: "Plus récents", icon: "fa-clock" },
+    { value: "price-asc", label: "Prix croissant", icon: "fa-arrow-up-wide-short" },
+    { value: "price-desc", label: "Prix décroissant", icon: "fa-arrow-down-wide-short" },
   ];
 
   const handleFilterClick = (filterId: string) => {
     onFilterChange(filterId);
-    // Émettre un événement pour que CategoryListGrid se mette à jour
     if (typeof window !== "undefined") {
       const event = new CustomEvent("category-filter-changed", {
         detail: { filterType: filterId },
@@ -92,7 +91,6 @@ const CategoryFilterStatsBar: React.FC<CategoryFilterStatsBarProps> = ({
   const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value;
     onSortChange(value);
-    // Émettre un événement pour que CategoryListGrid se mette à jour
     if (typeof window !== "undefined") {
       const event = new CustomEvent("category-sort-changed", {
         detail: { sortOption: value },
@@ -102,203 +100,147 @@ const CategoryFilterStatsBar: React.FC<CategoryFilterStatsBarProps> = ({
   };
 
   return (
-    <section
-      className="bg-white border-bottom py-2"
-      style={{ borderColor: colors.oskar.lightGrey }}
-    >
-      <div className="container-fluid px-0">
-        <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-2">
-          {/* Partie gauche : Compteur et filtres */}
-          <div className="d-flex flex-wrap align-items-center gap-3">
-            {/* Compteur d'annonces */}
-            <span
-              className="fw-semibold"
-              style={{ color: colors.oskar.black, fontSize: "0.95rem" }}
+    <div className="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3">
+      {/* Partie gauche : Filtres */}
+      <div className="d-flex flex-wrap align-items-center gap-2">
+        {filterTypes.map((filter) => {
+          const isActive = activeFilter === filter.id;
+          const isDisabled = filter.id !== "all" && filter.count === 0;
+
+          return (
+            <button
+              key={filter.id}
+              onClick={() => !isDisabled && handleFilterClick(filter.id)}
+              disabled={isDisabled}
+              className="btn d-flex align-items-center gap-2 px-3 py-2 rounded-3"
+              style={{
+                backgroundColor: isActive ? filter.iconColor : "white",
+                color: isActive ? "white" : (isDisabled ? "#ccc" : colors.oskar.grey),
+                border: `2px solid ${isActive ? filter.iconColor : "#e5e7eb"}`,
+                fontSize: "0.9rem",
+                fontWeight: 500,
+                transition: "all 0.2s",
+                cursor: isDisabled ? "not-allowed" : "pointer",
+                opacity: isDisabled ? 0.6 : 1,
+              }}
             >
-              {totalItems.toLocaleString("fr-FR")} annonce{totalItems > 1 ? 's' : ''}
-            </span>
+              <i className={`fas ${filter.icon}`} style={{ fontSize: "0.9rem" }} />
+              <span>{filter.label}</span>
+              {filter.count !== undefined && filter.count > 0 && (
+                <span 
+                  className="badge rounded-pill ms-1"
+                  style={{
+                    backgroundColor: isActive ? "rgba(255,255,255,0.2)" : filter.iconColor + "20",
+                    color: isActive ? "white" : filter.iconColor,
+                    padding: "4px 8px",
+                  }}
+                >
+                  {filter.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
-            {/* Boutons de filtre */}
-            <div className="d-flex flex-wrap align-items-center gap-2">
-              {filterTypes.map((filter) => {
-                const isActive = activeFilter === filter.id;
-                const isDisabled = filter.id !== "all" && 
-                  ((filter.id === "don" && stats.dons === 0) ||
-                   (filter.id === "echange" && stats.echanges === 0) ||
-                   (filter.id === "produit" && stats.produits === 0));
+      {/* Partie droite : Vue et tri */}
+      <div className="d-flex flex-wrap align-items-center gap-2">
+        {/* Boutons de vue */}
+        <div className="d-flex gap-1 bg-light p-1 rounded-3">
+          <button
+            onClick={() => handleViewModeClick("grid")}
+            className="btn p-2 d-flex align-items-center justify-content-center rounded-2"
+            style={{
+              backgroundColor: viewMode === "grid" ? "white" : "transparent",
+              color: viewMode === "grid" ? colors.oskar.green : colors.oskar.grey,
+              border: "none",
+              width: "36px",
+              height: "36px",
+              boxShadow: viewMode === "grid" ? "0 2px 4px rgba(0,0,0,0.05)" : "none",
+              transition: "all 0.2s",
+            }}
+          >
+            <i className="fa-solid fa-grip" style={{ fontSize: "1rem" }} />
+          </button>
 
-                return (
-                  <button
-                    key={filter.id}
-                    onClick={() => !isDisabled && handleFilterClick(filter.id)}
-                    disabled={isDisabled}
-                    className="btn d-flex align-items-center gap-2 flex-shrink-0"
-                    style={{
-                      backgroundColor: isActive ? colors.oskar.green : "white",
-                      color: isActive ? "white" : (isDisabled ? "#ccc" : colors.oskar.grey),
-                      border: `2px solid ${
-                        isActive 
-                          ? colors.oskar.green 
-                          : isDisabled 
-                            ? "#eee" 
-                            : colors.oskar.lightGrey
-                      }`,
-                      borderRadius: "8px",
-                      padding: "4px 12px",
-                      fontSize: "0.85rem",
-                      fontWeight: 500,
-                      transition: "all 0.2s",
-                      cursor: isDisabled ? "not-allowed" : "pointer",
-                      whiteSpace: "nowrap",
-                      opacity: isDisabled ? 0.6 : 1,
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isActive && !isDisabled) {
-                        e.currentTarget.style.borderColor =
-                          filter.borderColor || colors.oskar.green;
-                        e.currentTarget.style.backgroundColor =
-                          colors.oskar.lightGrey + "50";
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isActive && !isDisabled) {
-                        e.currentTarget.style.borderColor =
-                          colors.oskar.lightGrey;
-                        e.currentTarget.style.backgroundColor = "white";
-                      }
-                    }}
-                  >
-                    <i
-                      className={`fa-solid ${filter.icon}`}
-                      style={{
-                        color: isActive
-                          ? "white"
-                          : (isDisabled ? "#ccc" : filter.iconColor || colors.oskar.grey),
-                        fontSize: "0.85rem",
-                      }}
-                    />
-                    <span>{filter.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <button
+            onClick={() => handleViewModeClick("list")}
+            className="btn p-2 d-flex align-items-center justify-content-center rounded-2"
+            style={{
+              backgroundColor: viewMode === "list" ? "white" : "transparent",
+              color: viewMode === "list" ? colors.oskar.green : colors.oskar.grey,
+              border: "none",
+              width: "36px",
+              height: "36px",
+              boxShadow: viewMode === "list" ? "0 2px 4px rgba(0,0,0,0.05)" : "none",
+              transition: "all 0.2s",
+            }}
+          >
+            <i className="fa-solid fa-list" style={{ fontSize: "1rem" }} />
+          </button>
+        </div>
 
-          {/* Partie droite : Vue et tri */}
-          <div className="d-flex flex-wrap align-items-center gap-2">
-            {/* Boutons de vue */}
-            <div className="d-flex gap-1">
-              <button
-                onClick={() => handleViewModeClick("grid")}
-                className="btn p-1 d-flex align-items-center justify-content-center"
-                style={{
-                  backgroundColor:
-                    viewMode === "grid" ? colors.oskar.green : "white",
-                  color: viewMode === "grid" ? "white" : colors.oskar.grey,
-                  border: `2px solid ${
-                    viewMode === "grid" ? colors.oskar.green : colors.oskar.lightGrey
-                  }`,
-                  borderRadius: "8px",
-                  width: "32px",
-                  height: "32px",
-                  transition: "all 0.2s",
-                  cursor: "pointer",
-                }}
-                onMouseEnter={(e) => {
-                  if (viewMode !== "grid") {
-                    e.currentTarget.style.backgroundColor =
-                      colors.oskar.lightGrey + "50";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (viewMode !== "grid") {
-                    e.currentTarget.style.backgroundColor = "white";
-                  }
-                }}
-              >
-                <i className="fa-solid fa-grip" style={{ fontSize: "0.9rem" }} />
-              </button>
-
-              <button
-                onClick={() => handleViewModeClick("list")}
-                className="btn p-1 d-flex align-items-center justify-content-center"
-                style={{
-                  backgroundColor:
-                    viewMode === "list" ? colors.oskar.green : "white",
-                  color: viewMode === "list" ? "white" : colors.oskar.grey,
-                  border: `2px solid ${
-                    viewMode === "list" ? colors.oskar.green : colors.oskar.lightGrey
-                  }`,
-                  borderRadius: "8px",
-                  width: "32px",
-                  height: "32px",
-                  transition: "all 0.2s",
-                  cursor: "pointer",
-                }}
-                onMouseEnter={(e) => {
-                  if (viewMode !== "list") {
-                    e.currentTarget.style.backgroundColor =
-                      colors.oskar.lightGrey + "50";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (viewMode !== "list") {
-                    e.currentTarget.style.backgroundColor = "white";
-                  }
-                }}
-              >
-                <i className="fa-solid fa-list" style={{ fontSize: "0.9rem" }} />
-              </button>
-            </div>
-
-            {/* Sélecteur de tri */}
-            <div className="position-relative" style={{ minWidth: "160px" }}>
-              <select
-                value={sortOption}
-                onChange={handleSortChange}
-                className="form-select"
-                style={{
-                  border: `2px solid ${colors.oskar.lightGrey}`,
-                  borderRadius: "8px",
-                  color: colors.oskar.black,
-                  fontSize: "0.85rem",
-                  padding: "4px 28px 4px 12px",
-                  appearance: "none",
-                  WebkitAppearance: "none",
-                  MozAppearance: "none",
-                  cursor: "pointer",
-                  transition: "border-color 0.2s",
-                  backgroundColor: "white",
-                  height: "32px",
-                  backgroundImage: "none",
-                }}
-                onFocus={(e) =>
-                  (e.currentTarget.style.borderColor = colors.oskar.green)
-                }
-                onBlur={(e) =>
-                  (e.currentTarget.style.borderColor = colors.oskar.lightGrey)
-                }
-              >
-                <option value="recent">Trier : Plus récent</option>
-                <option value="price-asc">Prix : Croissant</option>
-                <option value="price-desc">Prix : Décroissant</option>
-              </select>
-
-              <i
-                className="fa-solid fa-chevron-down position-absolute top-50 end-0 translate-middle-y"
-                style={{
-                  color: colors.oskar.grey,
-                  fontSize: "0.7rem",
-                  pointerEvents: "none",
-                  right: "10px",
-                  zIndex: 2,
-                }}
-              />
-            </div>
+        {/* Sélecteur de tri - CORRIGÉ pour enlever le double icône */}
+        <div className="position-relative">
+          <select
+            value={sortOption}
+            onChange={handleSortChange}
+            className="form-select ps-4 pe-5 py-2 rounded-3 border-0 bg-light"
+            style={{
+              fontSize: "0.9rem",
+              minWidth: "180px",
+              cursor: "pointer",
+              appearance: "none",
+              WebkitAppearance: "none",
+              MozAppearance: "none",
+              backgroundImage: "none", // Supprime l'icône par défaut du navigateur
+            }}
+          >
+            {sortOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          
+          {/* Un seul icône personnalisé */}
+          <div className="position-absolute top-50 end-0 translate-middle-y pe-3 pointer-events-none">
+            <i className="fas fa-chevron-down" style={{ color: colors.oskar.grey, fontSize: "0.8rem" }} />
           </div>
         </div>
       </div>
-    </section>
+
+      <style jsx>{`
+        .btn:focus {
+          box-shadow: none;
+        }
+        
+        .pointer-events-none {
+          pointer-events: none;
+        }
+        
+        .form-select:focus {
+          box-shadow: 0 0 0 0.2rem rgba(16, 185, 129, 0.25);
+          border-color: ${colors.oskar.green};
+        }
+        
+        /* Supprime complètement l'icône par défaut du select */
+        .form-select {
+          background-image: none !important;
+        }
+        
+        @media (max-width: 768px) {
+          .btn {
+            padding: 6px 12px;
+            font-size: 0.8rem;
+          }
+          
+          .form-select {
+            min-width: 150px;
+          }
+        }
+      `}</style>
+    </div>
   );
 };
 

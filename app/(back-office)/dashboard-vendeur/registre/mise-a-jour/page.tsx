@@ -31,8 +31,8 @@ import { API_ENDPOINTS } from "@/config/api-endpoints";
 // ============================================
 
 interface RegistreCommerce {
-  url: string;
-  key: string;
+  url: string;           // Format: "registres-commerce%2F1773068608380-449337069-..."
+  key: string;           // Format: "registres-commerce/1773068608380-449337069-..."
   original_name: string;
   size: number;
   mimetype: string;
@@ -92,6 +92,22 @@ const getFileIcon = (mimetype: string) => {
 };
 
 // ============================================
+// FONCTION: Construire l'URL complète pour l'affichage
+// ============================================
+const getFileUrl = (url: string | null | undefined): string | null => {
+  if (!url) return null;
+  
+  // Si c'est déjà une URL complète, la retourner
+  if (url.startsWith('http')) {
+    return url;
+  }
+  
+  // Sinon, construire l'URL vers le nouveau endpoint files
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3005';
+  return `${API_URL}/api/files/${url}`;
+};
+
+// ============================================
 // COMPOSANT PRINCIPAL
 // ============================================
 
@@ -107,6 +123,7 @@ export default function RegistreCommercePage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [activeTab, setActiveTab] = useState<"consultation" | "upload" | "historique">("consultation");
+  const [displayUrl, setDisplayUrl] = useState<string | null>(null);
   
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -117,6 +134,15 @@ export default function RegistreCommercePage() {
     fetchCurrentRegistre();
     fetchUploadHistory();
   }, []);
+
+  // Mettre à jour l'URL d'affichage quand le registre change
+  useEffect(() => {
+    if (currentRegistre?.url) {
+      setDisplayUrl(getFileUrl(currentRegistre.url));
+    } else {
+      setDisplayUrl(null);
+    }
+  }, [currentRegistre]);
 
   // Nettoyer les previews
   useEffect(() => {
@@ -134,10 +160,32 @@ export default function RegistreCommercePage() {
   const fetchCurrentRegistre = async () => {
     try {
       setLoading(true);
-      // Simuler la récupération du registre actuel
-      // À remplacer par votre vrai endpoint API
+      
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3005';
+      const response = await fetch(`${API_URL}/auth/vendeur/profile`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.data?.registre_commerce) {
+          const registreData = {
+            url: data.data.registre_commerce,
+            key: data.data.registre_commerce_key || data.data.registre_commerce.replace(/%2F/g, '/'),
+            original_name: data.data.registre_commerce_original_name || 'Registre de commerce',
+            size: data.data.registre_commerce_size || 0,
+            mimetype: data.data.registre_commerce_mimetype || 'application/pdf',
+            uploaded_at: data.data.registre_commerce_uploaded_at
+          };
+          setCurrentRegistre(registreData);
+        }
+      }
+      
+      // Fallback sur localStorage pour le développement
       const mockRegistre = localStorage.getItem("currentRegistre");
-      if (mockRegistre) {
+      if (mockRegistre && !currentRegistre) {
         setCurrentRegistre(JSON.parse(mockRegistre));
       }
     } catch (err) {
@@ -149,8 +197,6 @@ export default function RegistreCommercePage() {
 
   const fetchUploadHistory = async () => {
     try {
-      // Simuler l'historique des uploads
-      // À remplacer par votre vrai endpoint API
       const mockHistory = localStorage.getItem("uploadHistory");
       if (mockHistory) {
         setUploadHistory(JSON.parse(mockHistory));
@@ -510,16 +556,34 @@ export default function RegistreCommercePage() {
                           justifyContent: "center",
                           cursor: "pointer",
                         }}
-                        onClick={() => window.open(currentRegistre.url, "_blank")}
+                        onClick={() => displayUrl && window.open(displayUrl, "_blank")}
                       >
-                        {currentRegistre.mimetype.startsWith("image/") ? (
+                        {currentRegistre.mimetype.startsWith("image/") && displayUrl ? (
                           <img
-                            src={currentRegistre.url}
+                            src={displayUrl}
                             alt="Registre de commerce"
                             className="img-fluid"
                             style={{
                               maxHeight: "500px",
                               objectFit: "contain",
+                            }}
+                            onError={(e) => {
+                              console.error("Erreur chargement image:", displayUrl);
+                              e.currentTarget.style.display = 'none';
+                              // Afficher un placeholder
+                              const parent = e.currentTarget.parentElement;
+                              if (parent) {
+                                const placeholder = document.createElement('div');
+                                placeholder.className = 'text-center p-5';
+                                placeholder.innerHTML = `
+                                  <div class="rounded-circle mx-auto mb-3" style="width:80px;height:80px;background-color:${colors.oskar.green}20;color:${colors.oskar.green};font-size:2rem;display:flex;align-items:center;justify-content:center">
+                                    <i class="fas fa-file-pdf"></i>
+                                  </div>
+                                  <h5 class="fw-semibold mb-2">Image non disponible</h5>
+                                  <p class="text-muted small mb-3">Cliquez pour télécharger le fichier</p>
+                                `;
+                                parent.appendChild(placeholder);
+                              }
                             }}
                           />
                         ) : (
@@ -572,52 +636,56 @@ export default function RegistreCommercePage() {
                           </div>
 
                           <div className="d-grid gap-2 mt-3">
-                            <a
-                              href={currentRegistre.url}
-                              download={currentRegistre.original_name}
-                              className="btn d-flex align-items-center justify-content-center gap-2 py-3"
-                              style={{
-                                backgroundColor: colors.oskar.green,
-                                color: "white",
-                                border: "none",
-                                borderRadius: "10px",
-                                transition: "all 0.2s ease",
-                                fontWeight: "500",
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.backgroundColor = colors.oskar.greenHover;
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.backgroundColor = colors.oskar.green;
-                              }}
-                            >
-                              <FontAwesomeIcon icon={faDownload} />
-                              <span>Télécharger</span>
-                            </a>
+                            {displayUrl && (
+                              <>
+                                <a
+                                  href={displayUrl}
+                                  download={currentRegistre.original_name}
+                                  className="btn d-flex align-items-center justify-content-center gap-2 py-3"
+                                  style={{
+                                    backgroundColor: colors.oskar.green,
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: "10px",
+                                    transition: "all 0.2s ease",
+                                    fontWeight: "500",
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = colors.oskar.greenHover;
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = colors.oskar.green;
+                                  }}
+                                >
+                                  <FontAwesomeIcon icon={faDownload} />
+                                  <span>Télécharger</span>
+                                </a>
 
-                            <a
-                              href={currentRegistre.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="btn d-flex align-items-center justify-content-center gap-2 py-3"
-                              style={{
-                                backgroundColor: colors.oskar.blue + "10",
-                                color: colors.oskar.blue,
-                                border: `1px solid ${colors.oskar.blue}30`,
-                                borderRadius: "10px",
-                                transition: "all 0.2s ease",
-                                fontWeight: "500",
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.backgroundColor = colors.oskar.blue + "20";
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.backgroundColor = colors.oskar.blue + "10";
-                              }}
-                            >
-                              <FontAwesomeIcon icon={faEye} />
-                              <span>Ouvrir</span>
-                            </a>
+                                <a
+                                  href={displayUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="btn d-flex align-items-center justify-content-center gap-2 py-3"
+                                  style={{
+                                    backgroundColor: colors.oskar.blue + "10",
+                                    color: colors.oskar.blue,
+                                    border: `1px solid ${colors.oskar.blue}30`,
+                                    borderRadius: "10px",
+                                    transition: "all 0.2s ease",
+                                    fontWeight: "500",
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = colors.oskar.blue + "20";
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = colors.oskar.blue + "10";
+                                  }}
+                                >
+                                  <FontAwesomeIcon icon={faEye} />
+                                  <span>Ouvrir</span>
+                                </a>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -936,7 +1004,7 @@ export default function RegistreCommercePage() {
                             <td className="px-4 py-3 text-end">
                               {item.status === "succès" && item.url && (
                                 <a
-                                  href={item.url}
+                                  href={getFileUrl(item.url) || '#'}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="btn btn-sm d-inline-flex align-items-center gap-2"
@@ -1005,4 +1073,4 @@ export default function RegistreCommercePage() {
       `}</style>
     </div>
   );
-}       
+}

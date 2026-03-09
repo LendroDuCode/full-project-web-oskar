@@ -149,18 +149,18 @@ export default function SidebarModPanel({
         },
       ],
     },
-    {
-      id: "types",
-      label: "Types de Boutiques",
-      icon: "fa-shop",
-      submenu: [
-        {
-          label: "Liste des types",
-          href: "/dashboard-agent/types-boutiques",
-          icon: "fa-list text-info",
-        },
-      ],
-    },
+    // {
+    //   id: "types",
+    //   label: "Types de Boutiques",
+    //   icon: "fa-shop",
+    //   submenu: [
+    //     {
+    //       label: "Liste des types",
+    //       href: "/dashboard-agent/types-boutiques",
+    //       icon: "fa-list text-info",
+    //     },
+    //   ],
+    // },
     /*
     {
       id: "history",
@@ -185,68 +185,68 @@ export default function SidebarModPanel({
       ],
     },
     */
-    {
-      id: "roles",
-      label: "Gestion des Rôles",
-      icon: "fa-user-tag",
-      submenu: [
-        {
-          label: "Liste des rôles",
-          href: "/dashboard-agent/roles/liste",
-          icon: "fa-list text-info",
-        },
-      ],
-    },
-    {
-      id: "civilites",
-      label: "Civilités",
-      icon: "fa-user-tie",
-      submenu: [
-        {
-          label: "Liste des civilités",
-          href: "/dashboard-agent/civilites/liste",
-          icon: "fa-list text-info",
-        },
-      ],
-    },
-    {
-      id: "marital",
-      label: "Statuts Matrimoniaux",
-      icon: "fa-heart",
-      submenu: [
-        {
-          label: "Liste des statuts",
-          href: "/dashboard-agent/statuts-matrimoniaux",
-          icon: "fa-list text-info",
-        },
-      ],
-    },
-    {
-      id: "locations",
-      label: "Villes & Pays",
-      icon: "fa-earth-africa",
-      submenu: [
-        {
-          label: "Liste des pays",
-          href: "/dashboard-agent/pays",
-          icon: "fa-globe text-primary",
-        },
-        {
-          label: "Liste des villes",
-          href: "/dashboard-agent/villes",
-          icon: "fa-city text-info",
-        },
-      ],
-    },
+    // {
+    //   id: "roles",
+    //   label: "Gestion des Rôles",
+    //   icon: "fa-user-tag",
+    //   submenu: [
+    //     {
+    //       label: "Liste des rôles",
+    //       href: "/dashboard-agent/roles/liste",
+    //       icon: "fa-list text-info",
+    //     },
+    //   ],
+    // },
+    // {
+    //   id: "civilites",
+    //   label: "Civilités",
+    //   icon: "fa-user-tie",
+    //   submenu: [
+    //     {
+    //       label: "Liste des civilités",
+    //       href: "/dashboard-agent/civilites/liste",
+    //       icon: "fa-list text-info",
+    //     },
+    //   ],
+    // },
+    // {
+    //   id: "marital",
+    //   label: "Statuts Matrimoniaux",
+    //   icon: "fa-heart",
+    //   submenu: [
+    //     {
+    //       label: "Liste des statuts",
+    //       href: "/dashboard-agent/statuts-matrimoniaux",
+    //       icon: "fa-list text-info",
+    //     },
+    //   ],
+    // },
+    // {
+    //   id: "locations",
+    //   label: "Villes & Pays",
+    //   icon: "fa-earth-africa",
+    //   submenu: [
+    //     {
+    //       label: "Liste des pays",
+    //       href: "/dashboard-agent/pays",
+    //       icon: "fa-globe text-primary",
+    //     },
+    //     {
+    //       label: "Liste des villes",
+    //       href: "/dashboard-agent/villes",
+    //       icon: "fa-city text-info",
+    //     },
+    //   ],
+    // },
   ];
 
   const settingsItems = [
-    {
-      id: "settings",
-      label: "Paramètres",
-      icon: "fa-gear",
-      href: "/dashboard-agent/parametres",
-    },
+    // {
+    //   id: "settings",
+    //   label: "Paramètres",
+    //   icon: "fa-gear",
+    //   href: "/dashboard-agent/parametres",
+    // },
     {
       id: "profile",
       label: "Mon Profil",
@@ -261,8 +261,8 @@ export default function SidebarModPanel({
     },
     {
       id: "logout",
-      label: "Déconnexion",
-      icon: "fa-right-from-bracket",
+      //label: "Déconnexion",
+     // icon: "fa-right-from-bracket",
       href: "/logout",
     },
   ];

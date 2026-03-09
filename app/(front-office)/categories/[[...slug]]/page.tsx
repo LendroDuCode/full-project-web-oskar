@@ -86,41 +86,47 @@ const CategoryPage: FC<PageProps> = ({ params }) => {
 
         setCategories(cats);
 
-        // 2. Charger les items de la catégorie
-        if (!isSubCategory) {
-          // Trouver la catégorie par slug (avec ou sans timestamp)
-          const mainCategory =
-            cats.find(
-              (c: Category) =>
-                c?.slug === currentSlug ||
-                c?.slug?.replace(/-\d+$/, "") === cleanCurrentSlug,
-            ) ||
-            DEFAULT_CATEGORIES.find(
-              (c) =>
-                c?.slug === currentSlug ||
-                c?.slug?.replace(/-\d+$/, "") === cleanCurrentSlug,
-            );
+        // 2. Trouver la catégorie par slug
+        const mainCategory = cats.find(
+          (c: Category) =>
+            c?.slug === currentSlug ||
+            c?.slug?.replace(/-\d+$/, "") === cleanCurrentSlug ||
+            c?.libelle?.toLowerCase() === cleanCurrentSlug?.toLowerCase()
+        ) || DEFAULT_CATEGORIES.find(
+          (c) =>
+            c?.slug === currentSlug ||
+            c?.slug?.replace(/-\d+$/, "") === cleanCurrentSlug ||
+            c?.libelle?.toLowerCase() === cleanCurrentSlug?.toLowerCase()
+        );
 
-          if (mainCategory) {
-            try {
-              // Utiliser le libelle pour l'API
-              const encodedLibelle = encodeURIComponent(mainCategory.libelle);
-              const endpoint = `/categories/libelle/${encodedLibelle}/with-items`;
-              const itemsResponse = await api.get(endpoint);
-
-              // L'API retourne un tableau, prendre le premier élément qui correspond
-              const data = Array.isArray(itemsResponse)
-                ? itemsResponse.find(
-                    (item: any) =>
-                      item.categorie?.libelle === mainCategory.libelle,
-                  ) || itemsResponse[0]
-                : itemsResponse;
-
-              setCategoryData(data);
-            } catch (error) {
-              console.error(`🔴 Error fetching items:`, error);
-              setCategoryData(null);
-            }
+        if (mainCategory) {
+          // Essayer de charger les statistiques de la catégorie
+          try {
+            // Utiliser l'endpoint standard pour récupérer les infos de la catégorie
+            const categoryInfo = await api.get(API_ENDPOINTS.CATEGORIES.DETAIL(mainCategory.uuid));
+            
+            // Construire les stats à partir des données disponibles
+            const stats = {
+              totalDons: categoryInfo.stats?.dons || 0,
+              totalEchanges: categoryInfo.stats?.echanges || 0,
+              totalProduits: categoryInfo.stats?.produits || 0,
+              totalItems: (categoryInfo.stats?.dons || 0) + 
+                         (categoryInfo.stats?.echanges || 0) + 
+                         (categoryInfo.stats?.produits || 0),
+            };
+            
+            setCategoryData({ stats, category: categoryInfo });
+          } catch (error) {
+            console.warn("⚠️ Impossible de charger les stats détaillées, utilisation des valeurs par défaut");
+            setCategoryData({
+              stats: {
+                totalDons: 0,
+                totalEchanges: 0,
+                totalProduits: 0,
+                totalItems: 0,
+              },
+              category: mainCategory
+            });
           }
         }
       } catch (error) {
@@ -170,14 +176,17 @@ function handleMainCategory(
   // Trouver la catégorie
   let mainCategory = categories.find(
     (c: Category) =>
-      c?.slug === currentSlug || c?.slug?.replace(/-\d+$/, "") === currentSlug,
+      c?.slug === currentSlug || 
+      c?.slug?.replace(/-\d+$/, "") === currentSlug ||
+      c?.libelle?.toLowerCase() === currentSlug?.toLowerCase()
   );
 
   if (!mainCategory) {
     mainCategory = DEFAULT_CATEGORIES.find(
       (c) =>
         c?.slug === currentSlug ||
-        c?.slug?.replace(/-\d+$/, "") === currentSlug,
+        c?.slug?.replace(/-\d+$/, "") === currentSlug ||
+        c?.libelle?.toLowerCase() === currentSlug?.toLowerCase()
     );
 
     if (!mainCategory) {
@@ -201,7 +210,6 @@ function handleMainCategory(
     totalItems: 0,
   };
 
-  // Utiliser le composant CategoryContent avec le même design que la HomePage
   return (
     <CategoryContent
       category={{
@@ -213,7 +221,7 @@ function handleMainCategory(
       }}
       stats={stats}
       subCategories={
-        subCategories.length > 0 ? subCategories : mainCategory.enfants
+        subCategories.length > 0 ? subCategories : mainCategory.enfants || []
       }
     />
   );
@@ -230,13 +238,17 @@ function handleSubCategory(
   // Trouver la catégorie parente
   let parentCategory = categories.find(
     (c: Category) =>
-      c?.slug === parentSlug || c?.slug?.replace(/-\d+$/, "") === parentSlug,
+      c?.slug === parentSlug || 
+      c?.slug?.replace(/-\d+$/, "") === parentSlug ||
+      c?.libelle?.toLowerCase() === parentSlug?.toLowerCase()
   );
 
   if (!parentCategory) {
     parentCategory = DEFAULT_CATEGORIES.find(
       (c) =>
-        c?.slug === parentSlug || c?.slug?.replace(/-\d+$/, "") === parentSlug,
+        c?.slug === parentSlug ||
+        c?.slug?.replace(/-\d+$/, "") === parentSlug ||
+        c?.libelle?.toLowerCase() === parentSlug?.toLowerCase()
     );
 
     if (!parentCategory) {
@@ -248,7 +260,9 @@ function handleSubCategory(
   // Trouver la sous-catégorie
   let subCategory = parentCategory.enfants?.find(
     (c) =>
-      c?.slug === currentSlug || c?.slug?.replace(/-\d+$/, "") === currentSlug,
+      c?.slug === currentSlug || 
+      c?.slug?.replace(/-\d+$/, "") === currentSlug ||
+      c?.libelle?.toLowerCase() === currentSlug?.toLowerCase()
   );
 
   if (!subCategory) {
@@ -259,10 +273,11 @@ function handleSubCategory(
   // Créer un objet catégorie pour la sous-catégorie
   const subCategoryObj = {
     ...subCategory,
-    description: `Annonces de ${subCategory.libelle} dans la catégorie ${parentCategory.libelle}`,
+    uuid: subCategory.uuid || `sub-${Date.now()}`,
+    description: subCategory.description || `Annonces de ${subCategory.libelle} dans la catégorie ${parentCategory.libelle}`,
   };
 
-  // Stats pour sous-catégorie (à implémenter si votre API les fournit)
+  // Stats pour sous-catégorie
   const stats = {
     totalDons: 0,
     totalEchanges: 0,
@@ -275,6 +290,7 @@ function handleSubCategory(
       category={subCategoryObj}
       stats={stats}
       subCategories={[]}
+      isSubCategory={true}
     />
   );
 }
@@ -295,7 +311,7 @@ function renderAllCategoriesPage() {
       </div>
 
       {/* Grille avec cartes centrées */}
-      <div className="row row-cols-2 row-cols-md-4 row-cols-lg-6 g-4 justify-content-center">
+      <div className="row row-cols-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-5 g-4 justify-content-center">
         {mainCategories.map((category) => {
           const config =
             CATEGORY_CONFIG[category.type as keyof typeof CATEGORY_CONFIG] ||
@@ -303,36 +319,34 @@ function renderAllCategoriesPage() {
           const subCount = category.enfants?.length || 0;
 
           return (
-            <div key={category.uuid} className="col d-flex justify-content-center">
+            <div key={category.uuid} className="col">
               <Link
                 href={`/categories/${category.slug}`}
-                className="text-decoration-none w-100"
-                style={{ maxWidth: "200px" }}
+                className="text-decoration-none"
               >
-                <div className="card border-0 shadow-sm h-100 category-card">
-                  <div className="card-body text-center p-3 p-xl-4">
+                <div className="card border-0 shadow-sm h-100 category-card overflow-hidden">
+                  <div className="card-body text-center p-4">
                     <div
-                      className="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3"
+                      className="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3 icon-container"
                       style={{
-                        width: "70px",
-                        height: "70px",
+                        width: "80px",
+                        height: "80px",
                         backgroundColor: `${config.color}15`,
                         color: config.color,
-                        transition: "all 0.3s ease",
                       }}
                     >
                       <i className={`fas ${config.icon} fa-2x`}></i>
                     </div>
-                    <h6 className="fw-bold mb-2 text-dark category-title">
+                    <h5 className="fw-bold mb-2 text-dark category-title">
                       {category.libelle}
-                    </h6>
+                    </h5>
                     {subCount > 0 && (
                       <span
-                        className="badge"
+                        className="badge rounded-pill px-3 py-2"
                         style={{
                           backgroundColor: `${config.color}20`,
                           color: config.color,
-                          fontSize: "0.75rem",
+                          fontSize: "0.8rem",
                         }}
                       >
                         <i className="fas fa-tag me-1"></i>
@@ -347,59 +361,49 @@ function renderAllCategoriesPage() {
         })}
       </div>
 
-      <style>{`
+      <style jsx>{`
         .category-card {
           transition: all 0.3s ease;
           cursor: pointer;
           border-radius: 16px;
-          width: 100%;
+          height: 100%;
         }
         
         .category-card:hover {
           transform: translateY(-8px);
-          box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.1) !important;
+          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
         }
         
-        .category-card:hover .rounded-circle {
+        .category-card:hover .icon-container {
           transform: scale(1.1);
           background-color: ${colors.oskar.green} !important;
           color: white !important;
+          transition: all 0.3s ease;
         }
         
         .category-title {
-          font-size: 0.9rem;
+          font-size: 1rem;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
         
-        /* Ajustements responsives */
-        @media (min-width: 768px) {
+        .icon-container {
+          transition: all 0.3s ease;
+        }
+        
+        @media (max-width: 768px) {
           .category-title {
-            font-size: 1rem;
+            font-size: 0.9rem;
           }
           
-          .rounded-circle {
-            width: 80px !important;
-            height: 80px !important;
+          .icon-container {
+            width: 60px !important;
+            height: 60px !important;
           }
-        }
-        
-        /* Centrage parfait des colonnes */
-        .row {
-          justify-content: center;
-        }
-        
-        .col {
-          display: flex;
-          justify-content: center;
-        }
-        
-        /* Largeur maximale pour les petites cartes */
-        @media (max-width: 575.98px) {
-          .col {
-            flex: 0 0 auto;
-            width: 45%;
+          
+          .icon-container i {
+            font-size: 1.5rem !important;
           }
         }
       `}</style>

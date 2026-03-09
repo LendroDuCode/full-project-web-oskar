@@ -10,6 +10,8 @@ import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { API_CONFIG } from "@/config/env";
 import { useAuth } from "@/app/(front-office)/auth/AuthContext";
 import { buildImageUrl } from "@/app/shared/utils/image-utils";
+import PublishAdModal from "@/app/(front-office)/publication-annonce/page";
+import { UserInfo } from "../../publication-annonce/components/constantes/types";
 
 // Import des icônes FontAwesome
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -70,6 +72,8 @@ import {
   faGift,
   faExchangeAlt,
   faReply,
+  faMobile,
+  faLaptop,
 } from "@fortawesome/free-solid-svg-icons";
 import { faHeart as faHeartRegularIcon } from "@fortawesome/free-regular-svg-icons";
 
@@ -389,6 +393,13 @@ interface NoteStats {
 }
 
 // ============================================
+// FALLBACK IMAGES
+// ============================================
+const DEFAULT_PRODUCT_IMAGE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 24 24' fill='none' stroke='%23cccccc' stroke-width='1' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='2' y='2' width='20' height='20' rx='2.18' ry='2.18'%3E%3C/rect%3E%3Cline x1='7' y1='2' x2='7' y2='22'%3E%3C/line%3E%3Cline x1='17' y1='2' x2='17' y2='22'%3E%3C/line%3E%3Cline x1='2' y1='12' x2='22' y2='12'%3E%3C/line%3E%3Cline x1='2' y1='7' x2='7' y2='7'%3E%3C/line%3E%3Cline x1='2' y1='17' x2='7' y2='17'%3E%3C/line%3E%3Cline x1='17' y1='17' x2='22' y2='17'%3E%3C/line%3E%3Cline x1='17' y1='7' x2='22' y2='7'%3E%3C/line%3E%3C/svg%3E";
+
+const DEFAULT_AVATAR_IMAGE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23cccccc' stroke-width='1' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'%3E%3C/path%3E%3Ccircle cx='12' cy='7' r='4'%3E%3C/circle%3E%3C/svg%3E";
+
+// ============================================
 // COMPOSANT D'IMAGE SÉCURISÉ AMÉLIORÉ
 // ============================================
 const SecureImage = ({
@@ -436,11 +447,12 @@ const SecureImage = ({
   }, [src, fallbackSrc]);
 
   const handleError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-    console.error(`Erreur chargement image: ${currentSrc}`);
-
-    if (currentSrc === fallbackSrc || currentSrc.includes("default")) {
+    // ✅ NE PAS LOGGER L'ERREUR POUR LES IMAGES PAR DÉFAUT
+    if (currentSrc === fallbackSrc || currentSrc.includes("data:image")) {
       return;
     }
+
+    console.error(`Erreur chargement image: ${currentSrc}`);
 
     if (!hasError) {
       setHasError(true);
@@ -569,8 +581,26 @@ export default function ProduitDetailPage() {
   const [contactVisible, setContactVisible] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [favoriInitialized, setFavoriInitialized] = useState(false);
+  
+  // ✅ État pour la modal d'appel
+  const [showCallModal, setShowCallModal] = useState(false);
+  // ✅ État pour la modal de publication
+  const [showPublishModal, setShowPublishModal] = useState(false);
+  // ✅ Détection du type d'appareil
+  const [isMobile, setIsMobile] = useState(false);
 
   const initialLoadDone = useRef(false);
+
+  // ✅ Détecter si c'est un appareil mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+      const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
+      setIsMobile(mobileRegex.test(userAgent));
+    };
+    
+    checkMobile();
+  }, []);
 
   // Timer pour le toast
   useEffect(() => {
@@ -615,11 +645,11 @@ export default function ProduitDetailPage() {
   // FONCTIONS UTILITAIRES
   // ============================================
   const getDefaultAvatarUrl = (): string => {
-    return `${API_CONFIG.BASE_URL || "https://oskar-api.mysonec.pro"}/images/default-avatar.png`;
+    return DEFAULT_AVATAR_IMAGE;
   };
 
   const getDefaultProductImage = (): string => {
-    return `${API_CONFIG.BASE_URL || "https://oskar-api.mysonec.pro"}/images/default-product.png`;
+    return DEFAULT_PRODUCT_IMAGE;
   };
 
   const safeToFixed = (
@@ -1136,7 +1166,7 @@ export default function ProduitDetailPage() {
         setBoutique(boutiqueData);
       }
 
-      const imageUrls: string[] = [produitData.image];
+      const imageUrls: string[] = [produitData.image || DEFAULT_PRODUCT_IMAGE];
 
       response.similaires.slice(0, 4).forEach((similaire) => {
         if (similaire.image) {
@@ -1148,7 +1178,7 @@ export default function ProduitDetailPage() {
       });
 
       while (imageUrls.length < 5) {
-        imageUrls.push(getDefaultProductImage());
+        imageUrls.push(DEFAULT_PRODUCT_IMAGE);
       }
 
       setImages(imageUrls.slice(0, 5));
@@ -1288,6 +1318,26 @@ export default function ProduitDetailPage() {
     action();
   };
 
+  // ✅ Appel téléphonique avec détection mobile/desktop
+  const handleCallVendeur = () => {
+    requireAuth(() => {
+      if (!createur || !createur.telephone) {
+        showToast("error", "Numéro de téléphone non disponible");
+        return;
+      }
+
+      const phoneNumber = createur.telephone.replace(/\s/g, "");
+
+      if (isMobile) {
+        // Sur mobile : appel direct
+        window.location.href = `tel:${phoneNumber}`;
+      } else {
+        // Sur desktop : ouvrir la modal
+        setShowCallModal(true);
+      }
+    });
+  };
+
   const handleContactWhatsApp = () => {
     requireAuth(() => {
       if (!createur) return;
@@ -1333,24 +1383,23 @@ export default function ProduitDetailPage() {
     requireAuth(() => {
       if (!createur) return;
 
-      const contactInfo =
-        `Créateur du produit: ${createur.prenoms} ${createur.nom}\n` +
-        `Téléphone: ${createur.telephone || "Non disponible"}\n` +
-        `Email: ${createur.email || "Non disponible"}`;
+      const contactInfo = `${createur.telephone || "Numéro non disponible"}`;
 
       navigator.clipboard
         .writeText(contactInfo)
         .then(() => {
-          showToast("success", "Informations de contact copiées !");
+          showToast("success", "Numéro de téléphone copié !");
+          setShowCallModal(false);
         })
         .catch((err) => {
           console.error("Erreur lors de la copie:", err);
-          showToast("error", "Impossible de copier les informations.");
+          showToast("error", "Impossible de copier le numéro.");
         });
     });
   };
 
-  const handleContactVendeur = () => {
+  // ✅ Envoyer un message via la messagerie
+  const handleSendMessage = () => {
     requireAuth(() => {
       if (!createur) {
         showToast("error", "Informations du vendeur non disponibles");
@@ -1572,6 +1621,15 @@ export default function ProduitDetailPage() {
     });
   };
 
+  // ✅ Gestionnaire pour ouvrir la modale de publication
+  const handleOpenPublishModal = () => {
+    if (!isLoggedIn) {
+      openLoginModal();
+    } else {
+      setShowPublishModal(true);
+    }
+  };
+
   // ============================================
   // RENDU
   // ============================================
@@ -1690,6 +1748,90 @@ export default function ProduitDetailPage() {
         </div>
       )}
 
+      {/* Modal d'appel pour ordinateur */}
+      {showCallModal && createur && (
+        <div
+          className="modal fade show d-block"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+          onClick={() => setShowCallModal(false)}
+        >
+          <div className="modal-dialog modal-dialog-centered" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-content border-0 shadow-lg">
+              <div className="modal-header border-0 pb-0">
+                <h5 className="modal-title fw-bold">
+                  <FontAwesomeIcon icon={faPhone} className="text-success me-2" />
+                  Contacter le vendeur
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setShowCallModal(false)}
+                ></button>
+              </div>
+              <div className="modal-body text-center py-4">
+                <div className="mb-4">
+                  <div className="bg-light rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3" style={{ width: "80px", height: "80px" }}>
+                    {createur.avatar ? (
+                      <SecureImage
+                        src={createur.avatar}
+                        alt={`${createur.prenoms} ${createur.nom}`}
+                        fallbackSrc={DEFAULT_AVATAR_IMAGE}
+                        className="rounded-circle w-100 h-100 object-fit-cover"
+                      />
+                    ) : (
+                      <FontAwesomeIcon icon={faUserCircle} className="fa-3x text-muted" />
+                    )}
+                  </div>
+                  <h6 className="fw-bold mb-1">{createur.prenoms} {createur.nom}</h6>
+                  <p className="text-muted small mb-3">{createur.userType === "vendeur" ? "Vendeur" : "Utilisateur"}</p>
+                  
+                  <div className="bg-light p-3 rounded-3 mb-3">
+                    <div className="d-flex align-items-center justify-content-center gap-2">
+                      <FontAwesomeIcon icon={faPhone} className="text-success" />
+                      <span className="fw-semibold fs-5">{createur.telephone || "Non disponible"}</span>
+                    </div>
+                  </div>
+
+                  <p className="text-muted small">
+                    <FontAwesomeIcon icon={faLaptop} className="me-1" />
+                    Vous êtes sur un ordinateur. Pour appeler directement, utilisez votre téléphone ou copiez le numéro.
+                  </p>
+                </div>
+
+                <div className="d-flex gap-3 justify-content-center">
+                  <button
+                    className="btn btn-outline-success px-4 py-2"
+                    onClick={handleCopyContactInfo}
+                  >
+                    <FontAwesomeIcon icon={faCopy} className="me-2" />
+                    Copier le numéro
+                  </button>
+                  <button
+                    className="btn btn-success px-4 py-2"
+                    onClick={() => {
+                      if (createur.telephone) {
+                        window.open(`https://wa.me/${createur.telephone.replace(/\D/g, '')}`, '_blank');
+                      }
+                    }}
+                  >
+                    <FontAwesomeIcon icon={faWhatsapp} className="me-2" />
+                    WhatsApp
+                  </button>
+                </div>
+              </div>
+              <div className="modal-footer border-0 pt-0 justify-content-center">
+                <button
+                  className="btn btn-link text-muted text-decoration-none"
+                  onClick={() => setShowCallModal(false)}
+                >
+                  Fermer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Breadcrumb */}
       <section className="bg-white border-bottom py-3">
         <div className="container">
@@ -1735,7 +1877,7 @@ export default function ProduitDetailPage() {
                 <SecureImage
                   src={imagePrincipale}
                   alt={produit.libelle}
-                  fallbackSrc={getDefaultProductImage()}
+                  fallbackSrc={DEFAULT_PRODUCT_IMAGE}
                   className="w-100 h-100 object-cover"
                 />
 
@@ -1809,7 +1951,7 @@ export default function ProduitDetailPage() {
                       <SecureImage
                         src={img}
                         alt={`${produit.libelle} - vue ${index + 1}`}
-                        fallbackSrc={getDefaultProductImage()}
+                        fallbackSrc={DEFAULT_PRODUCT_IMAGE}
                         className="w-100 h-100 object-cover"
                       />
                     </div>
@@ -1897,55 +2039,6 @@ export default function ProduitDetailPage() {
               </div>
             </div>
 
-            {/* Localisation */}
-            <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
-              <h2 className="h2 fw-bold mb-4">Localisation</h2>
-              <div className="mb-4">
-                <div className="d-flex gap-3 mb-4">
-                  <FontAwesomeIcon
-                    icon={faLocationDot}
-                    className="text-warning fs-4 mt-1"
-                  />
-                  <div>
-                    <p className="fw-semibold h5 mb-1">Cocody, Abidjan</p>
-                    <p className="text-muted">
-                      Près de Riviera Golf, proche de la route principale
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div
-                className="bg-light rounded-4 d-flex align-items-center justify-content-center"
-                style={{ height: "320px" }}
-              >
-                <div className="text-center">
-                  <FontAwesomeIcon
-                    icon={faMapLocationDot}
-                    className="fa-4x text-muted mb-4"
-                  />
-                  <p className="text-muted">
-                    Carte interactive montrant l'emplacement approximatif
-                  </p>
-                </div>
-              </div>
-              <div className="mt-4 bg-info bg-opacity-10 border border-info rounded-4 p-4">
-                <div className="d-flex gap-3">
-                  <FontAwesomeIcon
-                    icon={faShieldAlt}
-                    className="text-info fs-4"
-                  />
-                  <div>
-                    <p className="fw-semibold mb-2">Conseil de Sécurité</p>
-                    <p className="text-muted small">
-                      Pour votre sécurité, rencontrez-vous dans des lieux
-                      publics pendant la journée. Venez avec un ami si possible
-                      et ne partagez jamais d'informations personnelles
-                      sensibles.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
 
             {/* Avis et évaluations - SECTION AMÉLIORÉE */}
             <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
@@ -2123,7 +2216,7 @@ export default function ProduitDetailPage() {
                                 <SecureImage
                                   src={comment.utilisateur_photo}
                                   alt={comment.utilisateur_nom}
-                                  fallbackSrc={getDefaultAvatarUrl()}
+                                  fallbackSrc={DEFAULT_AVATAR_IMAGE}
                                   className="rounded-circle"
                                   style={{
                                     width: "56px",
@@ -2283,7 +2376,7 @@ export default function ProduitDetailPage() {
                                 <SecureImage
                                   src={item.image}
                                   alt={item.libelle}
-                                  fallbackSrc={getDefaultProductImage()}
+                                  fallbackSrc={DEFAULT_PRODUCT_IMAGE}
                                   className="w-100 h-100 object-cover rounded-start"
                                 />
                                 <div className="position-absolute top-0 start-0 m-1 bg-success text-white px-2 py-1 rounded-pill small">
@@ -2361,13 +2454,16 @@ export default function ProduitDetailPage() {
               </div>
 
               <div className="d-grid gap-3 mb-4">
+                {/* ✅ BOUTON APPEL - ADAPTÉ SELON L'APPAREIL */}
                 <button
-                  onClick={handleContactVendeur}
-                  className="btn btn-warning btn-lg fw-bold text-white py-4"
+                  onClick={handleCallVendeur}
+                  className="btn btn-success btn-lg fw-bold text-white py-4"
+                  style={{ backgroundColor: "#28a745" }}
                 >
-                  <FontAwesomeIcon icon={faPhone} className="me-2" />
-                  Contacter le vendeur
+                  <FontAwesomeIcon icon={isMobile ? faPhone : faLaptop} className="me-2" />
+                  {isMobile ? "Appeler le vendeur" : "Voir le contact"}
                 </button>
+                
                 <button
                   onClick={handleContactWhatsApp}
                   className="btn btn-success btn-lg fw-bold py-4"
@@ -2375,8 +2471,10 @@ export default function ProduitDetailPage() {
                   <FontAwesomeIcon icon={faWhatsapp} className="me-2" />
                   WhatsApp
                 </button>
+                
+                {/* ✅ MODIFIÉ : Bouton pour envoyer un message */}
                 <button
-                  onClick={handleContactVendeur}
+                  onClick={handleSendMessage}
                   className="btn btn-outline-warning btn-lg fw-bold py-4"
                 >
                   <FontAwesomeIcon icon={faEnvelope} className="me-2" />
@@ -2400,7 +2498,7 @@ export default function ProduitDetailPage() {
                 </div>
               )}
 
-              {/* ✅ Informations de la boutique et du créateur - CORRIGÉ */}
+              {/* ✅ Informations de la boutique et du créateur */}
               <div className="bg-info bg-opacity-10 rounded-4 p-4 mb-4">
                 <div className="d-flex align-items-center gap-3 mb-3">
                   <div className="bg-warning rounded-circle p-3">
@@ -2424,7 +2522,7 @@ export default function ProduitDetailPage() {
                       <SecureImage
                         src={boutique.logo}
                         alt={boutique.nom}
-                        fallbackSrc={getDefaultAvatarUrl()}
+                        fallbackSrc={DEFAULT_AVATAR_IMAGE}
                         className="rounded-3 cursor-pointer"
                         style={{
                           width: "60px",
@@ -2473,7 +2571,7 @@ export default function ProduitDetailPage() {
                       <SecureImage
                         src={createur.avatar}
                         alt={`${createur.prenoms} ${createur.nom}`}
-                        fallbackSrc={getDefaultAvatarUrl()}
+                        fallbackSrc={DEFAULT_AVATAR_IMAGE}
                         className="rounded-circle cursor-pointer"
                         style={{
                           width: "50px",
@@ -2510,24 +2608,6 @@ export default function ProduitDetailPage() {
                   <div className="d-flex align-items-center mt-3 text-success">
                     <FontAwesomeIcon icon={faCheckCircle} className="me-2" />
                     <span className="small">Vendeur vérifié</span>
-                  </div>
-                )}
-
-                {createur && (
-                  <div className="border-top mt-3 pt-3">
-                    <p className="fw-semibold small mb-2">Contact créateur</p>
-                    {createur.email && (
-                      <div className="d-flex align-items-center text-muted small mb-2">
-                        <FontAwesomeIcon icon={faEnvelope} className="me-2" />
-                        <span className="text-truncate">{createur.email}</span>
-                      </div>
-                    )}
-                    {createur.telephone && (
-                      <div className="d-flex align-items-center text-muted small">
-                        <FontAwesomeIcon icon={faPhone} className="me-2" />
-                        <span>{createur.telephone}</span>
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
@@ -2581,7 +2661,7 @@ export default function ProduitDetailPage() {
                     <SecureImage
                       src={createur.avatar}
                       alt={`${createur.prenoms} ${createur.nom}`}
-                      fallbackSrc={getDefaultAvatarUrl()}
+                      fallbackSrc={DEFAULT_AVATAR_IMAGE}
                       className="rounded-circle"
                       style={{
                         width: "64px",
@@ -2738,7 +2818,7 @@ export default function ProduitDetailPage() {
                         <SecureImage
                           src={item.image}
                           alt={item.libelle}
-                          fallbackSrc={getDefaultProductImage()}
+                          fallbackSrc={DEFAULT_PRODUCT_IMAGE}
                           className="w-100 h-100 object-cover"
                         />
                         <div className="position-absolute top-0 start-0 m-2 bg-success text-white px-2 py-1 rounded-pill small">
@@ -2765,7 +2845,7 @@ export default function ProduitDetailPage() {
                               <SecureImage
                                 src={item.createur.avatar}
                                 alt={item.createur?.prenoms || "Vendeur"}
-                                fallbackSrc={getDefaultAvatarUrl()}
+                                fallbackSrc={DEFAULT_AVATAR_IMAGE}
                                 className="rounded-circle me-2"
                                 style={{
                                   width: "30px",
@@ -2912,7 +2992,7 @@ export default function ProduitDetailPage() {
         </div>
       </section>
 
-      {/* CTA */}
+      {/* CTA - MODIFIÉ POUR OUVRIR LA MODALE */}
       <section className="bg-success text-white py-5">
         <div className="container text-center">
           <h2 className="display-5 fw-bold mb-3">
@@ -2922,15 +3002,29 @@ export default function ProduitDetailPage() {
             Rejoignez des milliers de vendeurs et touchez des acheteurs dans
             votre communauté
           </p>
-          <Link
-            href="/publication-annonce"
+          
+          {/* REMPLACÉ LE LINK PAR UN BOUTON AVEC ONCLICK */}
+          <button
+            onClick={handleOpenPublishModal}
             className="btn btn-light btn-lg px-5 py-4 fw-bold text-success"
+            style={{ border: "none", cursor: "pointer" }}
           >
             <FontAwesomeIcon icon={faPlus} className="me-2" />
             Publiez votre annonce maintenant
-          </Link>
+          </button>
         </div>
       </section>
+
+      {/* MODAL DE PUBLICATION - AJOUTÉ À LA FIN */}
+      <PublishAdModal
+        visible={showPublishModal}
+        onHide={() => setShowPublishModal(false)}
+        isLoggedIn={isLoggedIn}
+        onLoginRequired={() => {
+          setShowPublishModal(false);
+          openLoginModal();
+        }}
+      />
 
       <style jsx>{`
         .hover-bg-warning:hover {
