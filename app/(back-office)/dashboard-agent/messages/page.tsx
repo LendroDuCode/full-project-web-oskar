@@ -81,7 +81,7 @@ import {
   faEllipsisH,
   faForward,
   faCopy,
-  faHome, // 👈 Ajout de l'icône home
+  faHome,
 } from "@fortawesome/free-solid-svg-icons";
 
 // Import des services et hooks
@@ -1272,6 +1272,11 @@ function MessagesContent() {
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
   const isMounted = useRef(true);
 
+  // ✅ Fonction pour naviguer vers l'accueil (CORRIGÉE)
+  const navigateToHome = useCallback(() => {
+    router.push('/');
+  }, [router]);
+
   // Scroll vers le bas des messages
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -1330,7 +1335,7 @@ function MessagesContent() {
   }, []);
 
   // ============================================
-  // FONCTIONS DE MARQUAGE COMME LU/NON LU - VERSION CORRIGÉE
+  // FONCTIONS DE MARQUAGE COMME LU/NON LU
   // ============================================
   const handleMarkAsRead = useCallback(
     async (messageId: string) => {
@@ -1392,7 +1397,6 @@ function MessagesContent() {
         );
       } catch (err: any) {
         console.error("❌ Erreur lors du marquage comme lu:", err);
-        // Ne pas afficher de toast d'erreur
       }
     },
     [currentConversation, showToast],
@@ -1453,7 +1457,6 @@ function MessagesContent() {
         );
       } catch (err: any) {
         console.error("❌ Erreur lors du marquage comme non lu:", err);
-        // Ne pas afficher de toast d'erreur
       }
     },
     [currentConversation, showToast],
@@ -2462,7 +2465,7 @@ function MessagesContent() {
 
       <div className="container-fluid p-0 vh-100 bg-light">
         <div className="d-flex h-100">
-          {/* PANEL GAUCHE - LISTE DES CONVERSATIONS - TOUJOURS AFFICHÉ */}
+          {/* PANEL GAUCHE - LISTE DES CONVERSATIONS */}
           <div
             className="d-flex flex-column border-end bg-white"
             style={{
@@ -2471,84 +2474,80 @@ function MessagesContent() {
               maxWidth: "350px",
             }}
           >
-            {/* En-tête de la liste avec logo OSKAR */}
-<div className="p-3 border-bottom" style={{ background: "#f0f2f5" }}>
-  <div className="d-flex align-items-center justify-content-between mb-3">
-    {/* 👇 LOGO OSKAR cliquable - Version corrigée */}
-    <div 
-      className="d-flex align-items-center gap-2" 
-      style={{ cursor: "pointer" }}
-      onClick={() => {
-        // Utiliser l'origine actuelle pour rester sur le même domaine
-        const baseUrl = window.location.origin;
-        window.location.href = baseUrl;
-      }}
-    >
-      <div
-        className="rounded d-flex align-items-center justify-content-center"
-        style={{
-          width: "32px",
-          height: "32px",
-          backgroundColor: colors.oskar.green,
-        }}
-      >
-        <span
-          className="text-white fw-bold"
-          style={{ fontSize: "0.85rem" }}
-        >
-          O
-        </span>
-      </div>
-      <span
-        className="fw-bold"
-        style={{
-          color: colors.oskar.black,
-          fontSize: "1rem",
-        }}
-      >
-        OSKAR
-      </span>
-    </div>
-    <div className="d-flex gap-2">
-      <button
-        className="btn btn-light btn-sm rounded-circle d-flex align-items-center justify-content-center"
-        style={{ width: "40px", height: "40px" }}
-        onClick={handleRefresh}
-        title="Actualiser"
-      >
-        <FontAwesomeIcon icon={faHistory} style={{ fontSize: "1rem" }} />
-      </button>
-    </div>
-  </div>
+            {/* En-tête de la liste avec logo OSKAR - CORRIGÉ */}
+            <div className="p-3 border-bottom" style={{ background: "#f0f2f5" }}>
+              <div className="d-flex align-items-center justify-content-between mb-3">
+                {/* 👇 LOGO OSKAR cliquable - Version corrigée */}
+                <div 
+                  className="d-flex align-items-center gap-2" 
+                  style={{ cursor: "pointer" }}
+                  onClick={navigateToHome}
+                >
+                  <div
+                    className="rounded d-flex align-items-center justify-content-center"
+                    style={{
+                      width: "32px",
+                      height: "32px",
+                      backgroundColor: colors.oskar.green,
+                    }}
+                  >
+                    <span
+                      className="text-white fw-bold"
+                      style={{ fontSize: "0.85rem" }}
+                    >
+                      O
+                    </span>
+                  </div>
+                  <span
+                    className="fw-bold"
+                    style={{
+                      color: colors.oskar.black,
+                      fontSize: "1rem",
+                    }}
+                  >
+                    OSKAR
+                  </span>
+                </div>
+                <div className="d-flex gap-2">
+                  <button
+                    className="btn btn-light btn-sm rounded-circle d-flex align-items-center justify-content-center"
+                    style={{ width: "40px", height: "40px" }}
+                    onClick={handleRefresh}
+                    title="Actualiser"
+                  >
+                    <FontAwesomeIcon icon={faHistory} style={{ fontSize: "1rem" }} />
+                  </button>
+                </div>
+              </div>
 
-  {/* Barre de recherche */}
-  <div className="position-relative">
-    <FontAwesomeIcon
-      icon={faSearch}
-      className="position-absolute top-50 translate-middle-y ms-3 text-muted"
-      style={{ fontSize: "0.9rem" }}
-    />
-    <input
-      type="text"
-      className="form-control form-control-lg bg-light border-0 ps-5"
-      placeholder="Rechercher une discussion..."
-      value={searchTerm}
-      onChange={(e) => setSearchTerm(e.target.value)}
-      style={{
-        borderRadius: "24px",
-        fontSize: "0.9rem",
-        height: "48px",
-      }}
-    />
-  </div>
+              {/* Barre de recherche */}
+              <div className="position-relative">
+                <FontAwesomeIcon
+                  icon={faSearch}
+                  className="position-absolute top-50 translate-middle-y ms-3 text-muted"
+                  style={{ fontSize: "0.9rem" }}
+                />
+                <input
+                  type="text"
+                  className="form-control form-control-lg bg-light border-0 ps-5"
+                  placeholder="Rechercher une discussion..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  style={{
+                    borderRadius: "24px",
+                    fontSize: "0.9rem",
+                    height: "48px",
+                  }}
+                />
+              </div>
 
-  {/* Filtre "Tous" uniquement - affiché de façon statique pour information */}
-  <div className="mt-3">
-    <span className="badge bg-success" style={{ borderRadius: "20px", fontSize: "0.8rem", padding: "6px 12px" }}>
-      Tous les contacts
-    </span>
-  </div>
-</div>
+              {/* Filtre "Tous" uniquement - affiché de façon statique pour information */}
+              <div className="mt-3">
+                <span className="badge bg-success" style={{ borderRadius: "20px", fontSize: "0.8rem", padding: "6px 12px" }}>
+                  Tous les contacts
+                </span>
+              </div>
+            </div>
 
             {/* Liste des conversations */}
             <div className="flex-grow-1 overflow-auto" style={{ background: "#ffffff" }}>
@@ -2666,11 +2665,11 @@ function MessagesContent() {
                     <span className="badge bg-warning px-3 py-2">Vendeurs</span>
                     <span className="badge bg-success px-3 py-2">Utilisateurs</span>
                   </div>
-                  {/* 👇 LOGO OSKAR QUAND AUCUN CONTACT */}
+                  {/* 👇 LOGO OSKAR QUAND AUCUN CONTACT - CORRIGÉ */}
                   <div 
                     className="d-flex align-items-center justify-content-center gap-2 mx-auto mt-4"
                     style={{ cursor: "pointer", maxWidth: "fit-content" }}
-                    onClick={() => window.location.href = "http://localhost:3001/"}
+                    onClick={navigateToHome}
                   >
                     <div
                       className="rounded d-flex align-items-center justify-content-center"
