@@ -2660,124 +2660,40 @@ function MessagesContent() {
               maxWidth: "350px",
             }}
           >
-            {/* En-tête de la liste avec logo OSKAR */}
-            <div className="p-3 border-bottom" style={{ background: "#f0f2f5" }}>
-              <div className="d-flex align-items-center justify-content-between mb-3">
-                {/* 👇 LOGO OSKAR cliquable */}
-                <div 
-                  className="d-flex align-items-center gap-2" 
-                  style={{ cursor: "pointer" }}
-                  onClick={() => window.location.href = "http://localhost:3001/"}
-                >
-                  <div
-                    className="rounded d-flex align-items-center justify-content-center"
-                    style={{
-                      width: "32px",
-                      height: "32px",
-                      backgroundColor: colors.oskar.green,
-                    }}
-                  >
-                    <span
-                      className="text-white fw-bold"
-                      style={{ fontSize: "0.85rem" }}
-                    >
-                      O
-                    </span>
-                  </div>
-                  <span
-                    className="fw-bold"
-                    style={{
-                      color: colors.oskar.black,
-                      fontSize: "1rem",
-                    }}
-                  >
-                    OSKAR
-                  </span>
-                </div>
-                <div className="d-flex gap-2">
-                  <button
-                    className="btn btn-light btn-sm rounded-circle d-flex align-items-center justify-content-center"
-                    style={{ width: "40px", height: "40px" }}
-                    onClick={handleRefresh}
-                    disabled={loading.messages}
-                  >
-                    <FontAwesomeIcon icon={faHistory} spin={loading.messages} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Barre de recherche */}
-              <div className="position-relative">
-                <FontAwesomeIcon
-                  icon={faSearch}
-                  className="position-absolute top-50 translate-middle-y ms-3 text-muted"
-                  style={{ fontSize: "0.9rem" }}
-                />
-                <input
-                  type="text"
-                  className="form-control form-control-lg bg-light border-0 ps-5"
-                  placeholder="Rechercher une discussion..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  style={{
-                    borderRadius: "24px",
-                    fontSize: "0.9rem",
-                    height: "48px",
-                  }}
-                />
-              </div>
-
-              {/* Filtres rapides */}
-              <div className="d-flex gap-2 mt-3 overflow-auto pb-1" style={{ scrollbarWidth: "none" }}>
-                <button
-                  className={`btn btn-sm ${selectedType === "all" ? "btn-success" : "btn-light"}`}
-                  onClick={() => setSelectedType("all")}
-                  style={{ borderRadius: "20px", fontSize: "0.8rem", whiteSpace: "nowrap" }}
-                >
-                  Tous
-                </button>
-                <button
-                  className={`btn btn-sm ${selectedType === "super_admin" ? "btn-purple" : "btn-light"}`}
-                  onClick={() => setSelectedType("super_admin")}
-                  style={{ borderRadius: "20px", fontSize: "0.8rem", whiteSpace: "nowrap" }}
-                >
-                  <FontAwesomeIcon icon={faCrown} className="me-1" />
-                  Super Admins
-                </button>
-                <button
-                  className={`btn btn-sm ${selectedType === "admin" ? "btn-info" : "btn-light"}`}
-                  onClick={() => setSelectedType("admin")}
-                  style={{ borderRadius: "20px", fontSize: "0.8rem", whiteSpace: "nowrap" }}
-                >
-                  <FontAwesomeIcon icon={faShield} className="me-1" />
-                  Admins
-                </button>
-                <button
-                  className={`btn btn-sm ${selectedType === "agent" ? "btn-primary" : "btn-light"}`}
-                  onClick={() => setSelectedType("agent")}
-                  style={{ borderRadius: "20px", fontSize: "0.8rem", whiteSpace: "nowrap" }}
-                >
-                  <FontAwesomeIcon icon={faUserTie} className="me-1" />
-                  Agents
-                </button>
-                <button
-                  className={`btn btn-sm ${selectedType === "vendeur" ? "btn-warning" : "btn-light"}`}
-                  onClick={() => setSelectedType("vendeur")}
-                  style={{ borderRadius: "20px", fontSize: "0.8rem", whiteSpace: "nowrap" }}
-                >
-                  <FontAwesomeIcon icon={faStore} className="me-1" />
-                  Vendeurs
-                </button>
-                <button
-                  className={`btn btn-sm ${selectedType === "utilisateur" ? "btn-success" : "btn-light"}`}
-                  onClick={() => setSelectedType("utilisateur")}
-                  style={{ borderRadius: "20px", fontSize: "0.8rem", whiteSpace: "nowrap" }}
-                >
-                  <FontAwesomeIcon icon={faUser} className="me-1" />
-                  Utilisateurs
-                </button>
-              </div>
-            </div>
+            {/* 👇 LOGO OSKAR QUAND AUCUN CONTACT */}
+<div 
+  className="d-flex align-items-center justify-content-center gap-2 mx-auto"
+  style={{ cursor: "pointer", maxWidth: "fit-content" }}
+  onClick={() => {
+    const baseUrl = window.location.origin;
+    window.location.href = baseUrl;
+  }}
+>
+  <div
+    className="rounded d-flex align-items-center justify-content-center"
+    style={{
+      width: "40px",
+      height: "40px",
+      backgroundColor: colors.oskar.green,
+    }}
+  >
+    <span
+      className="text-white fw-bold"
+      style={{ fontSize: "1rem" }}
+    >
+      O
+    </span>
+  </div>
+  <span
+    className="fw-bold"
+    style={{
+      color: colors.oskar.black,
+      fontSize: "1.2rem",
+    }}
+  >
+    OSKAR
+  </span>
+</div>
 
             {/* Liste des conversations */}
             <div className="flex-grow-1 overflow-auto" style={{ background: "#ffffff" }}>
