@@ -1810,39 +1810,83 @@ function MessagesContent() {
               maxWidth: "350px",
             }}
           >
-            {/* 👇 LOGO OSKAR QUAND AUCUN CONTACT */}
-<div 
-  className="d-flex align-items-center justify-content-center gap-2 mx-auto"
-  style={{ cursor: "pointer", maxWidth: "fit-content" }}
-  onClick={() => {
-    const baseUrl = window.location.origin;
-    window.location.href = baseUrl;
-  }}
->
-  <div
-    className="rounded d-flex align-items-center justify-content-center"
-    style={{
-      width: "40px",
-      height: "40px",
-      backgroundColor: colors.oskar.green,
-    }}
-  >
-    <span
-      className="text-white fw-bold"
-      style={{ fontSize: "1rem" }}
+            {/* En-tête de la liste avec logo OSKAR */}
+<div className="p-3 border-bottom" style={{ background: "#f0f2f5" }}>
+  <div className="d-flex align-items-center justify-content-between mb-3">
+    {/* 👇 LOGO OSKAR cliquable - Version corrigée */}
+    <div 
+      className="d-flex align-items-center gap-2" 
+      style={{ cursor: "pointer" }}
+      onClick={() => {
+        // Utiliser l'origine actuelle pour rester sur le même domaine
+        const baseUrl = window.location.origin;
+        window.location.href = baseUrl;
+      }}
     >
-      O
+      <div
+        className="rounded d-flex align-items-center justify-content-center"
+        style={{
+          width: "32px",
+          height: "32px",
+          backgroundColor: colors.oskar.green,
+        }}
+      >
+        <span
+          className="text-white fw-bold"
+          style={{ fontSize: "0.85rem" }}
+        >
+          O
+        </span>
+      </div>
+      <span
+        className="fw-bold"
+        style={{
+          color: colors.oskar.black,
+          fontSize: "1rem",
+        }}
+      >
+        OSKAR
+      </span>
+    </div>
+    <div className="d-flex gap-2">
+      <button
+        className="btn btn-light btn-sm rounded-circle d-flex align-items-center justify-content-center"
+        style={{ width: "40px", height: "40px" }}
+        onClick={handleRefresh}
+        title="Actualiser"
+      >
+        <FontAwesomeIcon icon={faHistory} style={{ fontSize: "1rem" }} />
+      </button>
+    </div>
+  </div>
+
+  {/* Barre de recherche */}
+  <div className="position-relative">
+    <FontAwesomeIcon
+      icon={faSearch}
+      className="position-absolute top-50 translate-middle-y ms-3 text-muted"
+      style={{ fontSize: "0.9rem" }}
+    />
+    <input
+      type="text"
+      className="form-control form-control-lg bg-light border-0 ps-5"
+      placeholder="Rechercher une discussion..."
+      value={searchTerm}
+      onChange={(e) => setSearchTerm(e.target.value)}
+      style={{
+        borderRadius: "24px",
+        fontSize: "0.9rem",
+        height: "48px",
+      }}
+    />
+  </div>
+
+  {/* Filtre "Tous" uniquement - affiché de façon statique pour information */}
+  <div className="mt-3">
+    <span className="badge bg-success" style={{ borderRadius: "20px", fontSize: "0.8rem", padding: "6px 12px" }}>
+      Tous les contacts
     </span>
   </div>
-  <span
-    className="fw-bold"
-    style={{
-      color: colors.oskar.black,
-      fontSize: "1.2rem",
-    }}
-  >
-    OSKAR
-  </span>
 </div>
 
             {/* Liste des contacts */}
