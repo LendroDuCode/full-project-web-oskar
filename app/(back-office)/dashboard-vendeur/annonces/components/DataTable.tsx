@@ -24,6 +24,8 @@ import {
   faChevronDown,
   faChevronUp,
   faListCheck,
+  faClock,
+  faBan,
 } from "@fortawesome/free-solid-svg-icons";
 import colors from "@/app/shared/constants/colors";
 import {
@@ -77,7 +79,7 @@ interface AnnonceItem {
   image: string;
   image_key?: string;
   type: "produit" | "don" | "echange";
-  status: string;
+  status: string; // Statut provenant de l'API
   date: string;
   price?: number | string | null;
   quantity?: number;
@@ -177,48 +179,98 @@ export default function DataTable({
     return configs[type as keyof typeof configs] || configs.produit;
   };
 
+  // ✅ FONCTION CORRIGÉE POUR LES STATUTS PROVENANT DE L'API
   const getStatusConfig = (item: AnnonceItem) => {
-    let status = item.status;
-    let color = colors.oskar.grey;
-    let icon = null;
-    let label = "Inconnu";
-
-    // Gestion prioritaire des états bloqué/publie
-    if (item.estBloque) {
-      status = "bloque";
-      color = colors.status.blocked;
-      icon = faLock;
-      label = "Bloqué";
-    } else if (item.estPublie) {
-      if (status === "publie" || status === "disponible") {
-        color = colors.status.published;
-        icon = faGlobe;
-        label = "Publié";
-      } else if (status === "en-attente" || status === "en_attente") {
-        color = colors.status.pending;
-        label = "En attente";
-      } else if (status === "valide") {
-        color = colors.status.validated;
-        icon = faCheck;
-        label = "Validé";
-      } else if (status === "refuse") {
-        color = colors.oskar.red;
-        icon = faXmark;
-        label = "Refusé";
-      } else {
-        color = colors.oskar.grey;
-        label = getStatusLabel(status) || "Inconnu";
-      }
-    } else {
-      // Non publié
-      color = colors.oskar.warning;
-      label = "Non publié";
+    // ✅ PRIORITÉ 1: Vérifier estBloque (true explicite)
+    if (item.estBloque === true) {
+      return {
+        label: "Bloqué",
+        color: colors.status.blocked,
+        icon: faBan,
+      };
     }
 
+    // ✅ PRIORITÉ 2: Vérifier le statut "Bloqué" dans le texte
+    const statusLower = item.status?.toLowerCase() || "";
+    if (statusLower.includes("bloque") || statusLower.includes("bloqué")) {
+      return {
+        label: "Bloqué",
+        color: colors.status.blocked,
+        icon: faBan,
+      };
+    }
+
+    // ✅ PRIORITÉ 3: Vérifier estPublie (true explicite)
+    if (item.estPublie === true) {
+      return {
+        label: "Publié",
+        color: colors.status.published,
+        icon: faGlobe,
+      };
+    }
+
+    // ✅ PRIORITÉ 4: Vérifier le statut "Publié" dans le texte
+    if (statusLower.includes("publie") || statusLower.includes("publié")) {
+      return {
+        label: "Publié",
+        color: colors.status.published,
+        icon: faGlobe,
+      };
+    }
+
+    // ✅ PRIORITÉ 5: Vérifier le statut "En attente" dans le texte
+    if (statusLower.includes("en-attente") || 
+        statusLower.includes("en_attente") || 
+        statusLower.includes("en attente") ||
+        statusLower.includes("attente")) {
+      return {
+        label: "En attente",
+        color: colors.status.pending,
+        icon: faClock,
+      };
+    }
+
+    // ✅ PRIORITÉ 6: Vérifier le statut "Validé" dans le texte
+    if (statusLower.includes("valide") || statusLower.includes("validé")) {
+      return {
+        label: "Validé",
+        color: colors.status.validated,
+        icon: faCheck,
+      };
+    }
+
+    // ✅ PRIORITÉ 7: Vérifier le statut "Refusé" dans le texte
+    if (statusLower.includes("refuse") || statusLower.includes("refusé")) {
+      return {
+        label: "Refusé",
+        color: colors.oskar.red,
+        icon: faXmark,
+      };
+    }
+
+    // ✅ PRIORITÉ 8: Vérifier le statut "Disponible" dans le texte
+    if (statusLower.includes("disponible")) {
+      return {
+        label: "Disponible",
+        color: colors.oskar.green,
+        icon: faCheck,
+      };
+    }
+
+    // ✅ PRIORITÉ 9: Si estPublie est explicitement false
+    if (item.estPublie === false) {
+      return {
+        label: "Non publié",
+        color: colors.oskar.warning,
+        icon: faClock,
+      };
+    }
+
+    // ✅ PRIORITÉ 10: Valeur par défaut
     return {
-      label,
-      color,
-      icon,
+      label: statusLower || "Inconnu",
+      color: colors.oskar.grey,
+      icon: null,
     };
   };
 

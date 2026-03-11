@@ -1,8 +1,7 @@
-// app/(front-office)/categories/[[...slug]]/page.tsx
 "use client";
 
 import { FC, useEffect, useState, use } from "react";
-import { notFound } from "next/navigation";
+import { notFound, useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import colors from "@/app/shared/constants/colors";
@@ -35,11 +34,18 @@ interface Category {
 
 const CategoryPage: FC<PageProps> = ({ params }) => {
   const resolvedParams = use(params);
+  const router = useRouter();
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoryData, setCategoryData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [currentFilterType, setCurrentFilterType] = useState<"all" | "don" | "echange" | "produit">("all");
 
   const slug = resolvedParams?.slug;
+
+  // Nettoyer le slug (enlever le timestamp)
+  const cleanSlug = (dirtySlug: string): string => {
+    return dirtySlug.replace(/-\d+$/, "");
+  };
 
   // ============================================
   // CAS 1: PAS DE SLUG - PAGE D'ACCUEIL DES CATÉGORIES
@@ -55,13 +61,28 @@ const CategoryPage: FC<PageProps> = ({ params }) => {
   const parentSlug = isSubCategory ? slug[0] : null;
   const currentSlug = isSubCategory ? slug[1] : slug[0];
 
-  // Nettoyer le slug (enlever le timestamp)
-  const cleanSlug = (dirtySlug: string): string => {
-    return dirtySlug.replace(/-\d+$/, "");
-  };
-
   const cleanCurrentSlug = cleanSlug(currentSlug);
   const cleanParentSlug = parentSlug ? cleanSlug(parentSlug) : null;
+
+  // ============================================
+  // FONCTION POUR METTRE À JOUR LE FILTRE
+  // ============================================
+  const handleFilterChange = (filterType: "all" | "don" | "echange" | "produit") => {
+    setCurrentFilterType(filterType);
+    
+    // Mettre à jour l'URL sans recharger la page
+    const currentPath = `/categories/${slug.join('/')}`;
+    const newUrl = `${currentPath}?type=${filterType}`;
+    router.push(newUrl, { scroll: false });
+    
+    // Déclencher un événement personnalisé pour que CategoryListGrid réagisse
+    if (typeof window !== "undefined") {
+      const event = new CustomEvent("category-filter-changed", {
+        detail: { type: filterType }
+      });
+      window.dispatchEvent(event);
+    }
+  };
 
   // ============================================
   // CHARGEMENT DES DONNÉES
@@ -70,6 +91,13 @@ const CategoryPage: FC<PageProps> = ({ params }) => {
     const fetchData = async () => {
       try {
         setLoading(true);
+
+        // Lire le paramètre type de l'URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const typeParam = urlParams.get('type') as "all" | "don" | "echange" | "produit" | null;
+        if (typeParam && ['all', 'don', 'echange', 'produit'].includes(typeParam)) {
+          setCurrentFilterType(typeParam);
+        }
 
         // 1. Charger les catégories
         let cats: Category[] = [];
@@ -100,33 +128,69 @@ const CategoryPage: FC<PageProps> = ({ params }) => {
         );
 
         if (mainCategory) {
-          // Essayer de charger les statistiques de la catégorie
-          try {
-            // Utiliser l'endpoint standard pour récupérer les infos de la catégorie
-            const categoryInfo = await api.get(API_ENDPOINTS.CATEGORIES.DETAIL(mainCategory.uuid));
-            
-            // Construire les stats à partir des données disponibles
-            const stats = {
-              totalDons: categoryInfo.stats?.dons || 0,
-              totalEchanges: categoryInfo.stats?.echanges || 0,
-              totalProduits: categoryInfo.stats?.produits || 0,
-              totalItems: (categoryInfo.stats?.dons || 0) + 
-                         (categoryInfo.stats?.echanges || 0) + 
-                         (categoryInfo.stats?.produits || 0),
-            };
-            
-            setCategoryData({ stats, category: categoryInfo });
-          } catch (error) {
-            console.warn("⚠️ Impossible de charger les stats détaillées, utilisation des valeurs par défaut");
-            setCategoryData({
-              stats: {
-                totalDons: 0,
-                totalEchanges: 0,
-                totalProduits: 0,
-                totalItems: 0,
-              },
-              category: mainCategory
-            });
+          // Pour les sous-catégories, utiliser l'API spécifique
+          if (isSubCategory && cleanParentSlug) {
+            try {
+              // Utiliser l'API pour récupérer les éléments de la sous-catégorie
+              const response = await api.get(
+                `/categories/${cleanParentSlug}/sous-categories/${cleanCurrentSlug}/elements-simples?limit=100`
+              );
+              
+              if (response.success && response.data) {
+                // Calculer les stats à partir des données réelles
+                const data = response.data;
+                setCategoryData({
+                  stats: {
+                    totalDons: data.stats?.totalDons || 0,
+                    totalEchanges: data.stats?.totalEchanges || 0,
+                    totalProduits: data.stats?.totalProduits || 0,
+                    totalItems: data.stats?.totalElements || 0,
+                  },
+                  category: mainCategory,
+                  parent: data.parent,
+                  sousCategorie: data.sousCategorie,
+                  elements: data.elements
+                });
+              }
+            } catch (error) {
+              console.warn("⚠️ Impossible de charger les données de la sous-catégorie");
+              setCategoryData({
+                stats: {
+                  totalDons: 0,
+                  totalEchanges: 0,
+                  totalProduits: 0,
+                  totalItems: 0,
+                },
+                category: mainCategory
+              });
+            }
+          } else {
+            // Pour les catégories principales, utiliser l'API standard
+            try {
+              const categoryInfo = await api.get(API_ENDPOINTS.CATEGORIES.DETAIL(mainCategory.uuid));
+              
+              const stats = {
+                totalDons: categoryInfo.stats?.dons || 0,
+                totalEchanges: categoryInfo.stats?.echanges || 0,
+                totalProduits: categoryInfo.stats?.produits || 0,
+                totalItems: (categoryInfo.stats?.dons || 0) + 
+                           (categoryInfo.stats?.echanges || 0) + 
+                           (categoryInfo.stats?.produits || 0),
+              };
+              
+              setCategoryData({ stats, category: categoryInfo });
+            } catch (error) {
+              console.warn("⚠️ Impossible de charger les stats détaillées");
+              setCategoryData({
+                stats: {
+                  totalDons: 0,
+                  totalEchanges: 0,
+                  totalProduits: 0,
+                  totalItems: 0,
+                },
+                category: mainCategory
+              });
+            }
           }
         }
       } catch (error) {
@@ -137,7 +201,7 @@ const CategoryPage: FC<PageProps> = ({ params }) => {
     };
 
     fetchData();
-  }, [currentSlug, isSubCategory, cleanCurrentSlug]);
+  }, [currentSlug, isSubCategory, cleanCurrentSlug, cleanParentSlug]);
 
   if (loading) {
     return (
@@ -156,13 +220,26 @@ const CategoryPage: FC<PageProps> = ({ params }) => {
   // SOUS-CATÉGORIE
   // ============================================
   if (isSubCategory && cleanParentSlug) {
-    return handleSubCategory(categories, cleanParentSlug, cleanCurrentSlug);
+    return handleSubCategory(
+      categories, 
+      cleanParentSlug, 
+      cleanCurrentSlug, 
+      categoryData,
+      currentFilterType,
+      handleFilterChange
+    );
   }
 
   // ============================================
   // CATÉGORIE PRINCIPALE
   // ============================================
-  return handleMainCategory(categories, cleanCurrentSlug, categoryData);
+  return handleMainCategory(
+    categories, 
+    cleanCurrentSlug, 
+    categoryData,
+    currentFilterType,
+    handleFilterChange
+  );
 };
 
 // ============================================
@@ -172,6 +249,8 @@ function handleMainCategory(
   categories: Category[],
   currentSlug: string,
   categoryData: any,
+  currentFilterType: "all" | "don" | "echange" | "produit",
+  onFilterChange: (type: "all" | "don" | "echange" | "produit") => void
 ) {
   // Trouver la catégorie
   let mainCategory = categories.find(
@@ -223,6 +302,8 @@ function handleMainCategory(
       subCategories={
         subCategories.length > 0 ? subCategories : mainCategory.enfants || []
       }
+      currentFilterType={currentFilterType}
+      onFilterChange={onFilterChange}
     />
   );
 }
@@ -234,6 +315,9 @@ function handleSubCategory(
   categories: Category[],
   parentSlug: string,
   currentSlug: string,
+  categoryData: any,
+  currentFilterType: "all" | "don" | "echange" | "produit",
+  onFilterChange: (type: "all" | "don" | "echange" | "produit") => void
 ) {
   // Trouver la catégorie parente
   let parentCategory = categories.find(
@@ -277,8 +361,7 @@ function handleSubCategory(
     description: subCategory.description || `Annonces de ${subCategory.libelle} dans la catégorie ${parentCategory.libelle}`,
   };
 
-  // Stats pour sous-catégorie
-  const stats = {
+  const stats = categoryData?.stats || {
     totalDons: 0,
     totalEchanges: 0,
     totalProduits: 0,
@@ -291,6 +374,13 @@ function handleSubCategory(
       stats={stats}
       subCategories={[]}
       isSubCategory={true}
+      parentCategory={{
+        libelle: parentCategory.libelle,
+        slug: parentCategory.slug,
+        uuid: parentCategory.uuid
+      }}
+      currentFilterType={currentFilterType}
+      onFilterChange={onFilterChange}
     />
   );
 }

@@ -19,10 +19,11 @@ interface AnnonceData {
   date: string;
   price?: number | string | null;
   quantity?: number;
-  estPublie?: boolean; // Rendre optionnel pour correspondre à AnnonceItem
-  estBloque?: boolean; // Rendre optionnel pour correspondre à AnnonceItem
+  estPublie?: boolean;
+  estBloque?: boolean;
   category?: string;
   originalData?: any;
+  createurUuid?: string;
 }
 
 export default function AnnoncesPage() {
@@ -35,6 +36,8 @@ export default function AnnoncesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [isFetchingBlocked, setIsFetchingBlocked] = useState(false);
+  const [userUuid, setUserUuid] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   // États pour la modal de détails
   const [selectedAnnonce, setSelectedAnnonce] = useState<AnnonceData | null>(
@@ -44,50 +47,87 @@ export default function AnnoncesPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [fullDetails, setFullDetails] = useState<any>(null);
 
+  // ✅ Récupérer l'UUID de l'utilisateur connecté
+  useEffect(() => {
+    const getUserInfo = () => {
+      try {
+        const userStr = localStorage.getItem("oskar_user");
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          if (user.uuid) setUserUuid(user.uuid);
+          if (user.email) setUserEmail(user.email);
+          console.log("👤 Utilisateur connecté:", { uuid: user.uuid, email: user.email });
+        }
+      } catch (err) {
+        console.error("❌ Erreur lors de la récupération de l'utilisateur:", err);
+      }
+    };
+    getUserInfo();
+  }, []);
+
   // ✅ Fonction pour extraire les items (gère tous les formats)
   const extractItems = (response: any): any[] => {
     if (!response) return [];
-    
-    // Si c'est déjà un tableau
     if (Array.isArray(response)) return response;
-    
-    // Format: { status: "success", data: { produits: [...] } }
-    if (response.data?.produits && Array.isArray(response.data.produits)) 
-      return response.data.produits;
-    
-    // Format: { data: { dons: [...] } }
-    if (response.data?.dons && Array.isArray(response.data.dons)) 
-      return response.data.dons;
-    
-    // Format: { data: { echanges: [...] } }
-    if (response.data?.echanges && Array.isArray(response.data.echanges)) 
-      return response.data.echanges;
-    
-    // Format: { data: [...] }
-    if (response.data && Array.isArray(response.data)) 
-      return response.data;
-    
-    // Format: { produits: [...] }
-    if (response.produits && Array.isArray(response.produits)) 
-      return response.produits;
-    
-    // Format: { dons: [...] }
-    if (response.dons && Array.isArray(response.dons)) 
-      return response.dons;
-    
-    // Format: { echanges: [...] }
-    if (response.echanges && Array.isArray(response.echanges)) 
-      return response.echanges;
-    
+    if (response.data && Array.isArray(response.data)) return response.data;
+    if (response.data?.produits && Array.isArray(response.data.produits)) return response.data.produits;
+    if (response.data?.dons && Array.isArray(response.data.dons)) return response.data.dons;
+    if (response.data?.echanges && Array.isArray(response.data.echanges)) return response.data.echanges;
+    if (response.produits && Array.isArray(response.produits)) return response.produits;
+    if (response.dons && Array.isArray(response.dons)) return response.dons;
+    if (response.echanges && Array.isArray(response.echanges)) return response.echanges;
     return [];
   };
 
+  // ✅ Vérifier si une annonce appartient à l'utilisateur connecté
+  const isOwnAnnonce = (item: any, type: string): boolean => {
+    if (!userUuid && !userEmail) return true;
+
+    switch (type) {
+      case "produit":
+        if (item.utilisateurUuid && item.utilisateurUuid === userUuid) return true;
+        if (item.utilisateur?.uuid && item.utilisateur.uuid === userUuid) return true;
+        if (item.createur?.uuid && item.createur.uuid === userUuid) return true;
+        if (item.createurDetails?.uuid && item.createurDetails.uuid === userUuid) return true;
+        if (item.utilisateur?.email && item.utilisateur.email === userEmail) return true;
+        if (item.createur?.email && item.createur.email === userEmail) return true;
+        if (item.createurDetails?.email && item.createurDetails.email === userEmail) return true;
+        break;
+
+      case "don":
+        if (item.utilisateurUuid && item.utilisateurUuid === userUuid) return true;
+        if (item.utilisateur?.uuid && item.utilisateur.uuid === userUuid) return true;
+        if (item.createur?.uuid && item.createur.uuid === userUuid) return true;
+        if (item.createurDetails?.uuid && item.createurDetails.uuid === userUuid) return true;
+        if (item.utilisateur?.email && item.utilisateur.email === userEmail) return true;
+        if (item.createur?.email && item.createur.email === userEmail) return true;
+        if (item.createurDetails?.email && item.createurDetails.email === userEmail) return true;
+        break;
+
+      case "echange":
+        if (item.utilisateurUuid && item.utilisateurUuid === userUuid) return true;
+        if (item.utilisateur?.uuid && item.utilisateur.uuid === userUuid) return true;
+        if (item.createur?.uuid && item.createur.uuid === userUuid) return true;
+        if (item.createurDetails?.uuid && item.createurDetails.uuid === userUuid) return true;
+        if (item.utilisateur?.email && item.utilisateur.email === userEmail) return true;
+        if (item.createur?.email && item.createur.email === userEmail) return true;
+        if (item.createurDetails?.email && item.createurDetails.email === userEmail) return true;
+        break;
+    }
+
+    return false;
+  };
+
   // ✅ Fonction de transformation adaptée à toutes les structures
-  const transformAnnonceData = (item: any, type: string): AnnonceData => {
-    // Extraire l'UUID
+  const transformAnnonceData = (item: any, type: string): AnnonceData | null => {
+    // Filtrer les annonces qui n'appartiennent pas à l'utilisateur
+    if (!isOwnAnnonce(item, type)) {
+      console.log(`🚫 Annonce ignorée (pas pour l'utilisateur): ${item.uuid} (${type})`);
+      return null;
+    }
+
     const uuid = item.uuid || item.id?.toString() || "";
 
-    // Extraire le titre selon le type
     let title = "";
     switch (type) {
       case "produit":
@@ -103,43 +143,57 @@ export default function AnnoncesPage() {
         title = item.titre || item.nom || item.libelle || "Annonce sans nom";
     }
 
-    // Extraire la description
     const description = item.description || item.message || "";
-
-    // Extraire l'image
     const image = item.image || item.image_key || item.avatar || "";
 
-    // Extraire le prix
     let price = null;
     if (item.prix) price = item.prix;
     else if (item.price) price = item.price;
 
-    // Extraire la quantité
     let quantity = 1;
     if (item.quantite) quantity = Number(item.quantite);
     else if (item.quantity) quantity = Number(item.quantity);
 
-    // Déterminer le statut de publication et blocage
-    const estPublie = 
-      item.estPublie === true || 
-      item.publie === true || 
-      item.published === true || 
-      false;
+    // ✅ Détection robuste du statut bloqué
+    let estBloque = false;
+    if (item.est_bloque === true || item.estBloque === true) {
+      estBloque = true;
+    } else if (item.statut && typeof item.statut === 'string') {
+      const statutLower = item.statut.toLowerCase();
+      if (statutLower.includes('bloque') || statutLower.includes('bloqué')) {
+        estBloque = true;
+      }
+    }
 
-    const estBloque = 
-      item.est_bloque === true || 
-      item.estBloque === true || 
-      item.bloque === true || 
-      item.blocked === true || 
-      false;
+    // ✅ Détection robuste du statut publié
+    let estPublie = false;
+    if (item.estPublie === true || item.est_public === 1) {
+      estPublie = true;
+    } else if (item.statut && typeof item.statut === 'string') {
+      const statutLower = item.statut.toLowerCase();
+      if (statutLower.includes('publie') || statutLower.includes('publié')) {
+        estPublie = true;
+      }
+    }
 
-    // Déterminer le statut général
-    let status = "en-attente";
-    if (estBloque) status = "bloque";
-    else if (estPublie) status = "publie";
-    else if (item.statut) status = item.statut.toLowerCase();
+    // ✅ Déterminer le statut général (TRÈS IMPORTANT)
+    let status = "en-attente"; // Par défaut
+    
+    if (estBloque) {
+      status = "bloque";
+    } else if (estPublie) {
+      status = "publie";
+    } else if (item.statut && typeof item.statut === 'string') {
+      const statutLower = item.statut.toLowerCase();
+      if (statutLower.includes('en-attente') || 
+          statutLower.includes('en_attente') || 
+          statutLower.includes('attente')) {
+        status = "en-attente";
+      } else {
+        status = statutLower;
+      }
+    }
 
-    // Extraire la date
     const date = 
       item.dateProposition || 
       item.date_debut || 
@@ -149,7 +203,6 @@ export default function AnnoncesPage() {
       item.updated_at || 
       new Date().toISOString();
 
-    // Extraire la catégorie
     let category = "Non catégorisé";
     if (item.categorie) {
       if (typeof item.categorie === "string") category = item.categorie;
@@ -170,6 +223,7 @@ export default function AnnoncesPage() {
       estPublie,
       estBloque,
       category,
+      createurUuid: userUuid || undefined,
       originalData: item,
     };
   };
@@ -179,7 +233,6 @@ export default function AnnoncesPage() {
     setDetailLoading(true);
     try {
       let endpoint = "";
-
       switch (annonce.type) {
         case "produit":
           endpoint = API_ENDPOINTS.PRODUCTS.DETAIL(annonce.uuid);
@@ -191,7 +244,6 @@ export default function AnnoncesPage() {
           endpoint = API_ENDPOINTS.ECHANGES.DETAIL(annonce.uuid);
           break;
       }
-
       const response = await api.get(endpoint);
       setFullDetails(response.data || response);
     } catch (err: any) {
@@ -202,7 +254,6 @@ export default function AnnoncesPage() {
     }
   }, []);
 
-  // ✅ Gérer l'ouverture de la modal de détails
   const handleView = useCallback(
     async (uuid: string, type: string) => {
       const annonce = annonces.find((a) => a.uuid === uuid && a.type === type);
@@ -215,14 +266,13 @@ export default function AnnoncesPage() {
     [annonces, fetchFullDetails],
   );
 
-  // ✅ Fermer la modal
   const handleCloseModal = useCallback(() => {
     setShowViewModal(false);
     setSelectedAnnonce(null);
     setFullDetails(null);
   }, []);
 
-  // ✅ Charger les données selon le type et le statut
+  // ✅ CHARGER LES DONNÉES - VERSION CORRIGÉE
   const fetchData = useCallback(async (type: string, status: string) => {
     try {
       setLoading(true);
@@ -231,9 +281,9 @@ export default function AnnoncesPage() {
 
       let allItems: AnnonceData[] = [];
 
-      // Charger selon le type et le statut
+      console.log(`🔍 Chargement: type=${type}, status=${status}`);
+
       if (type === "tous") {
-        // Déterminer les endpoints à utiliser selon le statut
         let produitsEndpoint, donsEndpoint, echangesEndpoint;
         
         if (status === "publie") {
@@ -245,59 +295,55 @@ export default function AnnoncesPage() {
           donsEndpoint = API_ENDPOINTS.DONS.USER_BLOCKED;
           echangesEndpoint = API_ENDPOINTS.ECHANGES.USER_BLOCKED;
         } else {
-          // "tous" ou "en-attente" - utiliser les endpoints génériques
+          // Pour "en-attente" et "tous", on utilise les endpoints génériques
           produitsEndpoint = API_ENDPOINTS.PRODUCTS.LISTE_PRODUITS_UTILISATEUR;
           donsEndpoint = API_ENDPOINTS.DONS.USER_DONS;
           echangesEndpoint = API_ENDPOINTS.ECHANGES.USER_ECHANGES;
         }
 
+        console.log("📡 Endpoints:", { produitsEndpoint, donsEndpoint, echangesEndpoint });
+
         const promises = [
-          api.get(produitsEndpoint).catch(err => {
-            console.warn("Erreur chargement produits:", err);
-            return null;
-          }),
-          api.get(donsEndpoint).catch(err => {
-            console.warn("Erreur chargement dons:", err);
-            return null;
-          }),
-          api.get(echangesEndpoint).catch(err => {
-            console.warn("Erreur chargement échanges:", err);
-            return null;
-          }),
+          api.get(produitsEndpoint).catch(err => { console.warn("Erreur produits:", err); return null; }),
+          api.get(donsEndpoint).catch(err => { console.warn("Erreur dons:", err); return null; }),
+          api.get(echangesEndpoint).catch(err => { console.warn("Erreur échanges:", err); return null; }),
         ];
 
         const [produitsRes, donsRes, echangesRes] = await Promise.all(promises);
 
-        // Log pour déboguer
-        console.log("📦 Réponse produits:", produitsRes);
-        console.log("📦 Réponse dons:", donsRes);
-        console.log("📦 Réponse échanges:", echangesRes);
-
         if (produitsRes) {
           const produitsItems = extractItems(produitsRes);
-          console.log(`📊 Produits extraits: ${produitsItems.length}`);
-          allItems.push(...produitsItems.map((item: any) => transformAnnonceData(item, "produit")));
+          const produitsTransformes = produitsItems
+            .map((item: any) => transformAnnonceData(item, "produit"))
+            .filter((item): item is AnnonceData => item !== null);
+          allItems.push(...produitsTransformes);
         }
 
         if (donsRes) {
           const donsItems = extractItems(donsRes);
-          console.log(`📊 Dons extraits: ${donsItems.length}`);
-          allItems.push(...donsItems.map((item: any) => transformAnnonceData(item, "don")));
+          const donsTransformes = donsItems
+            .map((item: any) => transformAnnonceData(item, "don"))
+            .filter((item): item is AnnonceData => item !== null);
+          allItems.push(...donsTransformes);
         }
 
         if (echangesRes) {
           const echangesItems = extractItems(echangesRes);
-          console.log(`📊 Échanges extraits: ${echangesItems.length}`);
-          allItems.push(...echangesItems.map((item: any) => transformAnnonceData(item, "echange")));
+          const echangesTransformes = echangesItems
+            .map((item: any) => transformAnnonceData(item, "echange"))
+            .filter((item): item is AnnonceData => item !== null);
+          allItems.push(...echangesTransformes);
         }
 
-        console.log(`📊 Total items: ${allItems.length}`);
+        console.log(`📊 Total après filtrage utilisateur: ${allItems.length}`);
 
-        // Si on est en "en-attente", filtrer côté client
+        // ✅ SI STATUT "EN-ATTENTE", FILTRER PAR RAPPORT AU STATUT CALCULÉ
         if (status === "en-attente") {
           allItems = allItems.filter(item => 
-            !item.estPublie && !item.estBloque
+            item.status === "en-attente" || 
+            (!item.estPublie && !item.estBloque && item.status?.includes("attente"))
           );
+          console.log(`📊 Après filtrage en-attente: ${allItems.length}`);
         }
       } else {
         // Type spécifique
@@ -312,7 +358,6 @@ export default function AnnoncesPage() {
           else if (type === "don") endpoint = API_ENDPOINTS.DONS.USER_BLOCKED;
           else if (type === "echange") endpoint = API_ENDPOINTS.ECHANGES.USER_BLOCKED;
         } else {
-          // "tous" ou "en-attente"
           if (type === "produit") endpoint = API_ENDPOINTS.PRODUCTS.LISTE_PRODUITS_UTILISATEUR;
           else if (type === "don") endpoint = API_ENDPOINTS.DONS.USER_DONS;
           else if (type === "echange") endpoint = API_ENDPOINTS.ECHANGES.USER_ECHANGES;
@@ -329,16 +374,19 @@ export default function AnnoncesPage() {
         });
         
         if (response) {
-          console.log(`📦 Réponse ${type}:`, response);
           const items = extractItems(response);
-          console.log(`📊 Items extraits ${type}: ${items.length}`);
-          allItems = items.map((item: any) => transformAnnonceData(item, type));
+          const itemsTransformes = items
+            .map((item: any) => transformAnnonceData(item, type))
+            .filter((item): item is AnnonceData => item !== null);
+          allItems = itemsTransformes;
 
-          // Si on est en "en-attente", filtrer côté client
+          // ✅ SI STATUT "EN-ATTENTE", FILTRER PAR RAPPORT AU STATUT CALCULÉ
           if (status === "en-attente") {
             allItems = allItems.filter(item => 
-              !item.estPublie && !item.estBloque
+              item.status === "en-attente" || 
+              (!item.estPublie && !item.estBloque && item.status?.includes("attente"))
             );
+            console.log(`📊 Après filtrage en-attente: ${allItems.length}`);
           }
         }
       }
@@ -368,7 +416,6 @@ export default function AnnoncesPage() {
         const title = item.title.toLowerCase();
         const description = item.description?.toLowerCase() || "";
         const category = item.category?.toLowerCase() || "";
-
         return (
           title.includes(query) ||
           description.includes(query) ||
@@ -412,10 +459,17 @@ export default function AnnoncesPage() {
     async (uuid: string, type: string, publish: boolean) => {
       try {
         console.log(`${publish ? "Publication" : "Dépublication"}:`, uuid, type);
-        await fetchData(selectedType, selectedStatus);
-      } catch (err) {
+        const endpoint = publish 
+          ? API_ENDPOINTS.PRODUCTS.PUBLISH(uuid) 
+          : API_ENDPOINTS.PRODUCTS.UNPUBLISH(uuid);
+        if (endpoint) {
+          await api.post(endpoint);
+          alert(`Annonce ${publish ? "publiée" : "dépubliée"} avec succès`);
+          await fetchData(selectedType, selectedStatus);
+        }
+      } catch (err: any) {
         console.error("Erreur lors de l'opération:", err);
-        alert("Erreur lors de l'opération");
+        alert(err.response?.data?.message || "Erreur lors de l'opération");
       }
     },
     [selectedType, selectedStatus, fetchData],
@@ -425,10 +479,17 @@ export default function AnnoncesPage() {
     async (uuid: string, type: string, block: boolean) => {
       try {
         console.log(`${block ? "Blocage" : "Déblocage"}:`, uuid, type);
-        await fetchData(selectedType, selectedStatus);
-      } catch (err) {
+        const endpoint = block 
+          ? API_ENDPOINTS.PRODUCTS.BLOCK(uuid) 
+          : API_ENDPOINTS.PRODUCTS.UNBLOCK(uuid);
+        if (endpoint) {
+          await api.post(endpoint);
+          alert(`Annonce ${block ? "bloquée" : "débloquée"} avec succès`);
+          await fetchData(selectedType, selectedStatus);
+        }
+      } catch (err: any) {
         console.error("Erreur lors de l'opération:", err);
-        alert("Erreur lors de l'opération");
+        alert(err.response?.data?.message || "Erreur lors de l'opération");
       }
     },
     [selectedType, selectedStatus, fetchData],
@@ -436,12 +497,29 @@ export default function AnnoncesPage() {
 
   const handleDelete = useCallback(
     async (uuid: string, type: string) => {
+      if (!confirm("Êtes-vous sûr de vouloir supprimer cette annonce ?")) return;
       try {
         console.log("Suppression:", uuid, type);
-        await fetchData(selectedType, selectedStatus);
-      } catch (err) {
+        let endpoint = "";
+        switch (type) {
+          case "produit":
+            endpoint = API_ENDPOINTS.PRODUCTS.DELETE(uuid);
+            break;
+          case "don":
+            endpoint = API_ENDPOINTS.DONS.DELETE(uuid);
+            break;
+          case "echange":
+            endpoint = API_ENDPOINTS.ECHANGES.DELETE(uuid);
+            break;
+        }
+        if (endpoint) {
+          await api.delete(endpoint);
+          alert("Annonce supprimée avec succès");
+          await fetchData(selectedType, selectedStatus);
+        }
+      } catch (err: any) {
         console.error("Erreur lors de la suppression:", err);
-        alert("Erreur lors de la suppression");
+        alert(err.response?.data?.message || "Erreur lors de la suppression");
       }
     },
     [selectedType, selectedStatus, fetchData],
@@ -451,8 +529,6 @@ export default function AnnoncesPage() {
     async (action: string, items: AnnonceData[]) => {
       try {
         console.log(`Action en masse "${action}" sur ${items.length} items`);
-        
-        // Exécuter l'action sur chaque élément
         for (const item of items) {
           switch (action) {
             case "publish":
@@ -472,7 +548,6 @@ export default function AnnoncesPage() {
               break;
           }
         }
-        
         setSelectedItems(new Set());
       } catch (err) {
         console.error("Erreur lors de l'action en masse:", err);
@@ -493,7 +568,6 @@ export default function AnnoncesPage() {
     fetchData(selectedType, selectedStatus);
   }, [selectedType, selectedStatus, fetchData]);
 
-  // Indicateur de chargement combiné
   const isLoading = loading || isFetchingBlocked;
 
   return (
@@ -501,7 +575,6 @@ export default function AnnoncesPage() {
       className="container-fluid px-0"
       style={{ minHeight: "100vh", backgroundColor: colors.oskar.lightGrey }}
     >
-      {/* Barre de filtres */}
       <FilterBar
         selectedType={selectedType}
         selectedStatus={selectedStatus}
@@ -515,22 +588,18 @@ export default function AnnoncesPage() {
         selectedCount={selectedItems.size}
       />
 
-      {/* Contenu principal */}
       <div className="container-fluid px-4 py-4">
-        {/* En-tête */}
         <div className="d-flex justify-content-between align-items-center mb-4">
           <div>
-            <h1
-              className="h4 fw-bold mb-2"
-              style={{ color: colors.oskar.black }}
-            >
-              Liste des annonces
+            <h1 className="h4 fw-bold mb-2" style={{ color: colors.oskar.black }}>
+              Mes annonces
             </h1>
             <p className="text-muted small mb-0">
               {filteredAnnonces.length} annonce(s) trouvée(s)
               {selectedType !== "tous" && ` • Type: ${selectedType}`}
               {selectedStatus !== "tous" && ` • Statut: ${selectedStatus}`}
               {searchQuery && ` • Recherche: "${searchQuery}"`}
+              {selectedStatus === "bloque" && " • (Annonces bloquées)"}
             </p>
           </div>
 
@@ -556,7 +625,6 @@ export default function AnnoncesPage() {
           </div>
         </div>
 
-        {/* Tableau ou état vide */}
         {filteredAnnonces.length > 0 ? (
           <DataTable
             data={filteredAnnonces}
@@ -582,7 +650,7 @@ export default function AnnoncesPage() {
               selectedStatus !== "tous" ||
               selectedType !== "tous"
                 ? "Aucune annonce ne correspond à vos critères de recherche."
-                : "Aucune annonce n'a été publiée pour le moment."
+                : "Vous n'avez pas encore créé d'annonce."
             }
             searchQuery={searchQuery}
             showResetButton={
@@ -595,7 +663,6 @@ export default function AnnoncesPage() {
         )}
       </div>
 
-      {/* Modal de détails */}
       <ViewModal
         show={showViewModal}
         onClose={handleCloseModal}

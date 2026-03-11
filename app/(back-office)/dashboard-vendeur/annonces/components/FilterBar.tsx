@@ -45,7 +45,7 @@ export default function FilterBar({
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(true);
 
-  // ✅ Options de statut (supprimé "Disponible")
+  // ✅ Options de statut CORRIGÉES pour correspondre aux valeurs des données
   const statusOptions = [
     { value: "tous", label: "Tous", color: colors.oskar.grey },
     { value: "en-attente", label: "En attente", color: colors.status.pending },
@@ -67,10 +67,12 @@ export default function FilterBar({
   }, [searchQuery, onSearchChange]);
 
   const handleStatusChange = (status: string) => {
+    console.log("✅ Changement de statut dans FilterBar:", status);
     onStatusChange?.(status);
   };
 
   const handleTypeChange = (type: string) => {
+    console.log("✅ Changement de type dans FilterBar:", type);
     onTypeChange?.(type);
   };
 

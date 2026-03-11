@@ -1,5 +1,4 @@
 // app/(back-office)/dashboard-agent/annonces/components/DataTable.tsx
-
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -23,11 +22,15 @@ import {
   faLock,
   faUnlock,
   faImage,
+  faClock,
+  faGlobe,
+  faBan,
 } from "@fortawesome/free-solid-svg-icons";
 import "bootstrap/dist/css/bootstrap.min.css";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { buildImageUrl } from "@/app/shared/utils/image-utils";
+import colors from "@/app/shared/constants/colors";
 
 interface ContentItem {
   id: string;
@@ -241,25 +244,20 @@ export default function DataTable({
     return item.image || `https://via.placeholder.com/48?text=${encodeURIComponent(item.title?.charAt?.(0)?.toUpperCase() || "?")}`;
   };
 
-  // Filtrer les données
+  // ✅ Filtrer les données - VERSION CORRIGÉE basée sur estPublie/estBloque
   const filteredData = useMemo(() => {
     return data.filter((item) => {
       if (!item.title) return false;
 
-      // Filtre par statut
+      // ✅ Filtre par statut - basé sur les propriétés booléennes
       if (statusFilter !== "tous") {
-        if (statusFilter === "publie" && !item.estPublie) return false;
-        if (statusFilter === "bloque" && !item.estBloque) return false;
-        if (
-          statusFilter === "en-attente" &&
-          item.status !== "en-attente" &&
-          item.status !== "en_attente"
-        )
-          return false;
-        if (statusFilter === "valide" && item.status !== "valide") return false;
-        if (statusFilter === "refuse" && item.status !== "refuse") return false;
-        if (statusFilter === "disponible" && item.status !== "disponible")
-          return false;
+        if (statusFilter === "publie" && item.estPublie !== true) return false;
+        if (statusFilter === "bloque" && item.estBloque !== true) return false;
+        if (statusFilter === "en-attente") {
+          // En attente = ni publié, ni bloqué
+          if (item.estPublie === true || item.estBloque === true) return false;
+        }
+        // Ignorer les autres statuts (valide, refuse, disponible)
       }
 
       // Filtre par catégorie
@@ -320,98 +318,66 @@ export default function DataTable({
     const configs = {
       produit: {
         icon: faTag,
-        color: "#10B981",
-        bgColor: "rgba(16, 185, 129, 0.1)",
+        color: colors.type.product,
+        bgColor: `${colors.type.product}15`,
         label: "Produit",
       },
       don: {
         icon: faGift,
-        color: "#8B5CF6",
-        bgColor: "rgba(139, 92, 246, 0.1)",
+        color: colors.type.don,
+        bgColor: `${colors.type.don}15`,
         label: "Don",
       },
       echange: {
         icon: faArrowRightArrowLeft,
-        color: "#F59E0B",
-        bgColor: "rgba(245, 158, 11, 0.1)",
+        color: colors.type.exchange,
+        bgColor: `${colors.type.exchange}15`,
         label: "Échange",
       },
     };
     return configs[type as keyof typeof configs] || configs.produit;
   };
 
+  // ✅ Fonction getStatusBadge simplifiée - basée sur estPublie/estBloque
   const getStatusBadge = (item: ContentItem) => {
-    const configs: Record<string, { color: string; label: string }> = {
-      "en-attente": { color: "#F59E0B", label: "En attente" },
-      en_attente: { color: "#F59E0B", label: "En attente" },
-      publie: { color: "#10B981", label: "Publié" },
-      disponible: { color: "#3B82F6", label: "Disponible" },
-      valide: { color: "#10B981", label: "Validé" },
-      refuse: { color: "#EF4444", label: "Refusé" },
-      bloque: { color: "#EF4444", label: "Bloqué" },
-    };
-
-    let status = item.status;
     if (item.estBloque) {
-      status = "bloque";
-    } else if (item.estPublie) {
-      status = "publie";
+      return {
+        label: "Bloqué",
+        color: colors.status.blocked,
+        icon: faBan,
+      };
     }
-
-    const config = configs[status] || { color: "#6B7280", label: status };
-
-    return (
-      <span
-        className="badge rounded-pill"
-        style={{
-          backgroundColor: `${config.color}20`,
-          color: config.color,
-          fontSize: "0.7rem",
-          padding: "0.25rem 0.5rem",
-        }}
-      >
-        {config.label}
-      </span>
-    );
+    
+    if (item.estPublie) {
+      return {
+        label: "Publié",
+        color: colors.status.published,
+        icon: faGlobe,
+      };
+    }
+    
+    return {
+      label: "En attente",
+      color: colors.status.pending,
+      icon: faClock,
+    };
   };
 
   // ✅ Fonction handleViewDetails améliorée
   const handleViewDetails = (row: ContentItem) => {
-    // Déterminer si l'élément est publié
-    const isPublished =
-      row.estPublie ||
-      row.status === "publie" ||
-      row.status === "disponible" ||
-      row.status === "valide";
-
     let basePath = "/dashboard-agent/annonces";
 
     // Construire l'URL selon le type
     switch (row.type) {
       case "produit":
-        if (isPublished) {
-          router.push(`${basePath}/produit/${row.uuid}`);
-        } else {
-          router.push(`${basePath}/produit/non-publie/${row.uuid}`);
-        }
+        router.push(`${basePath}/produit/${row.uuid}`);
         break;
-
       case "don":
-        if (isPublished) {
-          router.push(`${basePath}/don/${row.uuid}`);
-        } else {
-          router.push(`${basePath}/don/non-publie/${row.uuid}`);
-        }
+        router.push(`${basePath}/don/${row.uuid}`);
         break;
-
       case "echange":
-        if (isPublished) {
-          router.push(`${basePath}/echange/${row.uuid}`);
-        } else {
-          router.push(`${basePath}/echange/${row.uuid}`);
-        }
+        router.push(`${basePath}/echange/${row.uuid}`);
         break;
-
       default:
         router.push(`${basePath}/${row.type}/${row.uuid}`);
     }
@@ -748,7 +714,6 @@ export default function DataTable({
               <th className="px-3 py-3 text-start text-uppercase fw-semibold text-muted small border-bottom">
                 Titre
               </th>
-              {/* ✅ Colonne vendeur supprimée */}
               <th className="px-3 py-3 text-start text-uppercase fw-semibold text-muted small border-bottom">
                 Type
               </th>
@@ -766,10 +731,10 @@ export default function DataTable({
           <tbody>
             {currentItems.map((row) => {
               const typeConfig = getTypeConfig(row.type);
+              const statusBadge = getStatusBadge(row);
               const isItemProcessing = isProcessing(row.uuid);
               const isSelected = selectedItems.has(row.uuid);
-              const isEnAttente =
-                row.status === "en-attente" || row.status === "en_attente";
+              const isEnAttente = !row.estPublie && !row.estBloque;
               const imageUrl = getImageUrl(row);
 
               return (
@@ -841,7 +806,22 @@ export default function DataTable({
                     </span>
                   </td>
 
-                  <td className="px-3 py-3">{getStatusBadge(row)}</td>
+                  <td className="px-3 py-3">
+                    <span
+                      className="badge rounded-pill d-inline-flex align-items-center gap-1"
+                      style={{
+                        backgroundColor: `${statusBadge.color}20`,
+                        color: statusBadge.color,
+                        fontSize: "0.7rem",
+                        padding: "0.3rem 0.6rem",
+                      }}
+                    >
+                      {statusBadge.icon && (
+                        <FontAwesomeIcon icon={statusBadge.icon} size="xs" />
+                      )}
+                      {statusBadge.label}
+                    </span>
+                  </td>
 
                   <td className="px-3 py-3">
                     <div>
@@ -889,43 +869,43 @@ export default function DataTable({
                           </button>
 
                           {isEnAttente && (
-                            <button
-                              type="button"
-                              className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
-                              style={{
-                                width: "28px",
-                                height: "28px",
-                                backgroundColor: "rgba(16, 185, 129, 0.1)",
-                                color: "#10B981",
-                                border: "none",
-                                borderRadius: "6px",
-                              }}
-                              onClick={() => handleValidate(row.uuid)}
-                              title="Valider"
-                              disabled={isItemProcessing}
-                            >
-                              <FontAwesomeIcon icon={faCheck} size="xs" />
-                            </button>
-                          )}
+                            <>
+                              <button
+                                type="button"
+                                className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
+                                style={{
+                                  width: "28px",
+                                  height: "28px",
+                                  backgroundColor: "rgba(16, 185, 129, 0.1)",
+                                  color: "#10B981",
+                                  border: "none",
+                                  borderRadius: "6px",
+                                }}
+                                onClick={() => handleValidate(row.uuid)}
+                                title="Valider"
+                                disabled={isItemProcessing}
+                              >
+                                <FontAwesomeIcon icon={faCheck} size="xs" />
+                              </button>
 
-                          {isEnAttente && (
-                            <button
-                              type="button"
-                              className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
-                              style={{
-                                width: "28px",
-                                height: "28px",
-                                backgroundColor: "rgba(239, 68, 68, 0.1)",
-                                color: "#EF4444",
-                                border: "none",
-                                borderRadius: "6px",
-                              }}
-                              onClick={() => handleReject(row.uuid)}
-                              title="Refuser"
-                              disabled={isItemProcessing}
-                            >
-                              <FontAwesomeIcon icon={faXmark} size="xs" />
-                            </button>
+                              <button
+                                type="button"
+                                className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
+                                style={{
+                                  width: "28px",
+                                  height: "28px",
+                                  backgroundColor: "rgba(239, 68, 68, 0.1)",
+                                  color: "#EF4444",
+                                  border: "none",
+                                  borderRadius: "6px",
+                                }}
+                                onClick={() => handleReject(row.uuid)}
+                                title="Refuser"
+                                disabled={isItemProcessing}
+                              >
+                                <FontAwesomeIcon icon={faXmark} size="xs" />
+                              </button>
+                            </>
                           )}
 
                           <button

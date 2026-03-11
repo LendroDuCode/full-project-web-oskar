@@ -59,9 +59,33 @@ export default function AnnoncesPage() {
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // ✅ Fonction pour transformer les données selon le type
+  // ✅ Fonction pour transformer les données selon le type (CORRIGÉE)
   const transformAnnonceData = useCallback(
     (item: any, type: string): AnnonceData => {
+      // Déterminer correctement estBloque
+      let estBloque = false;
+      
+      // Vérifier toutes les sources possibles pour le statut bloqué
+      if (item.estBloque === true || item.est_bloque === true) {
+        estBloque = true;
+      } else if (item.statut && typeof item.statut === 'string') {
+        const statutLower = item.statut.toLowerCase();
+        if (statutLower.includes('bloque') || statutLower.includes('bloqué')) {
+          estBloque = true;
+        }
+      }
+
+      // Déterminer correctement estPublie
+      let estPublie = false;
+      if (item.estPublie === true) {
+        estPublie = true;
+      } else if (item.statut && typeof item.statut === 'string') {
+        const statutLower = item.statut.toLowerCase();
+        if (statutLower.includes('publie') || statutLower.includes('publié')) {
+          estPublie = true;
+        }
+      }
+
       const baseData = {
         uuid: item.uuid,
         title:
@@ -87,8 +111,8 @@ export default function AnnoncesPage() {
           new Date().toISOString(),
         price: item.prix || null,
         quantity: item.quantite,
-        estPublie: item.estPublie === true,
-        estBloque: item.estBloque === true || item.est_bloque === true,
+        estPublie: estPublie,
+        estBloque: estBloque,
         category:
           typeof item.categorie === "string"
             ? item.categorie
@@ -421,19 +445,21 @@ export default function AnnoncesPage() {
         await fetchBlockedData(type);
       } else if (status === "publie") {
         await fetchPublishedSpecificData(type);
+      } else if (status === "en-attente") {
+        await fetchPublishedData(type);
+        // Filtrer pour ne garder que les annonces en attente
+        setAnnonces((prev) => {
+          const filtered = prev.filter(
+            (item) =>
+              !item.estPublie && 
+              !item.estBloque && 
+              !item.status?.includes('publie') &&
+              !item.status?.includes('bloque')
+          );
+          return filtered;
+        });
       } else {
         await fetchPublishedData(type);
-
-        // Filtrer par statut "en-attente" si nécessaire
-        if (status === "en-attente") {
-          setAnnonces((prev) => {
-            const filtered = prev.filter(
-              (item) =>
-                !item.estPublie && !item.estBloque && item.status !== "publie",
-            );
-            return filtered;
-          });
-        }
       }
     },
     [fetchPublishedData, fetchBlockedData, fetchPublishedSpecificData],
@@ -648,11 +674,11 @@ export default function AnnoncesPage() {
       // Pour dépublication
       switch (type) {
         case "produit":
-          return API_ENDPOINTS.PRODUCTS.UPDATE_STOCK_PRODUIT(uuid);
+          return API_ENDPOINTS.PRODUCTS.UNPUBLISH(uuid);
         case "don":
-          return API_ENDPOINTS.DONS.UPDATE_STOCK_DON(uuid);
+          return API_ENDPOINTS.DONS.UNPUBLISH(uuid);
         case "echange":
-          return API_ENDPOINTS.ECHANGES.UPDATE_STOCK_VENDEUR(uuid);
+          return API_ENDPOINTS.ECHANGES.DETAIL_NON_PUBLIE(uuid);
         default:
           return "";
       }
@@ -669,9 +695,9 @@ export default function AnnoncesPage() {
         case "produit":
           return API_ENDPOINTS.PRODUCTS.BLOCK(uuid);
         case "don":
-          return API_ENDPOINTS.DONS.UPDATE_STOCK_DON(uuid);
+         // return API_ENDPOINTS.DONS.BLOCK(uuid);
         case "echange":
-          return API_ENDPOINTS.ECHANGES.UPDATE_STOCK_VENDEUR(uuid);
+        //  return API_ENDPOINTS.ECHANGES.BLOCK(uuid);
         default:
           return "";
       }
@@ -680,9 +706,9 @@ export default function AnnoncesPage() {
         case "produit":
           return API_ENDPOINTS.PRODUCTS.UNBLOCK(uuid);
         case "don":
-          return API_ENDPOINTS.DONS.UPDATE_STOCK_DON(uuid);
+         // return API_ENDPOINTS.DONS.UNBLOCK(uuid);
         case "echange":
-          return API_ENDPOINTS.ECHANGES.UPDATE_STOCK_VENDEUR(uuid);
+        //  return API_ENDPOINTS.ECHANGES.UNBLOCK(uuid);
         default:
           return "";
       }

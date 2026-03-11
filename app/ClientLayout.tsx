@@ -1,6 +1,7 @@
 "use client";
 
 import { AuthProvider } from "./(front-office)/auth/AuthContext";
+import { SearchProvider } from "./(front-office)/home/contexts/SearchContext";
 import Header from "./shared/components/layout/Header";
 import AuthModals from "./(front-office)/auth/AuthModals";
 import Footer from "./shared/components/layout/Footer";
@@ -38,10 +39,12 @@ export default function ClientLayout({
 
   return (
     <AuthProvider key={key}>
-      <Header />
-      <main>{children}</main>
-      <AuthModals />
-      <Footer />
+      <SearchProvider>
+        <Header />
+        <main>{children}</main>
+        <AuthModals />
+        <Footer />
+      </SearchProvider>
     </AuthProvider>
   );
 }

@@ -107,7 +107,7 @@ export default function ViewCategoryModal({
 
         // Total général
         const allResponse = await api.get(
-          API_ENDPOINTS.CATEGORIES.ALL(category.uuid),
+          API_ENDPOINTS.CATEGORIES.ALL_ELEMENTS(category.uuid),
         );
         statsData.total = allResponse.data?.length || 0;
 

@@ -420,14 +420,14 @@ export default function Annonces() {
                       router.push(
                         isPublished
                           ? `${basePath}/produit/${item.uuid}`
-                          : `${basePath}/produit/non-publie/${item.uuid}`,
+                          : `${basePath}/produit/${item.uuid}`,
                       );
                       break;
                     case "don":
                       router.push(
                         isPublished
                           ? `${basePath}/don/${item.uuid}`
-                          : `${basePath}/don/non-publie/${item.uuid}`,
+                          : `${basePath}/don/${item.uuid}`,
                       );
                       break;
                     case "echange":

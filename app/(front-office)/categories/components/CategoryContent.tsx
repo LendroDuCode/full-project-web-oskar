@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import colors from "@/app/shared/constants/colors";
 import Link from "next/link";
-import { SearchProvider } from "../../home/contexts/SearchContext";
 import CategoryListGrid from "./CategoryListGrid";
 import CategoryFilterStatsBar from "./CategoryFilterStatsBar";
 import CategoryFiltersSidebar from "./CategoryFiltersSidebar";
@@ -25,16 +24,26 @@ interface CategoryContentProps {
   };
   subCategories?: any[];
   isSubCategory?: boolean;
+  parentCategory?: {
+    libelle: string;
+    slug: string;
+    uuid: string;
+  };
+  currentFilterType?: "all" | "don" | "echange" | "produit";
+  onFilterChange?: (type: "all" | "don" | "echange" | "produit") => void;
 }
 
-function CategoryContentInner({
+export default function CategoryContent({
   category,
   stats: initialStats,
   subCategories = [],
   isSubCategory = false,
+  parentCategory,
+  currentFilterType = "all",
+  onFilterChange,
 }: CategoryContentProps) {
   const [filters, setFilters] = useState({});
-  const [activeFilter, setActiveFilter] = useState<string>("all");
+  const [activeFilter, setActiveFilter] = useState<string>(currentFilterType);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [sortOption, setSortOption] = useState<string>("recent");
   const [currentPage, setCurrentPage] = useState(1);
@@ -48,6 +57,7 @@ function CategoryContentInner({
     total: initialStats.totalItems,
   });
 
+  // Mettre à jour les stats quand initialStats change
   useEffect(() => {
     setCategoryStats({
       dons: initialStats.totalDons,
@@ -55,11 +65,22 @@ function CategoryContentInner({
       produits: initialStats.totalProduits,
       total: initialStats.totalItems,
     });
+    setTotalItems(initialStats.totalItems);
   }, [initialStats]);
+
+  // Mettre à jour le filtre actif quand currentFilterType change
+  useEffect(() => {
+    setActiveFilter(currentFilterType);
+  }, [currentFilterType]);
 
   const handleFilterChange = (filterId: string) => {
     setActiveFilter(filterId);
     setCurrentPage(1);
+    
+    // Notifier le parent si la fonction existe
+    if (onFilterChange) {
+      onFilterChange(filterId as any);
+    }
   };
 
   const handleViewModeChange = (mode: "grid" | "list") => {
@@ -106,26 +127,6 @@ function CategoryContentInner({
         color: "#6b7280", 
         icon: "fa-broom",
         gradient: "from-gray-500 to-slate-600"
-      },
-      "Maison & Jardin": { 
-        color: "#b45309", 
-        icon: "fa-couch",
-        gradient: "from-amber-700 to-orange-800"
-      },
-      Véhicules: { 
-        color: "#64748b", 
-        icon: "fa-car",
-        gradient: "from-slate-500 to-gray-600"
-      },
-      "Emploi & Services": { 
-        color: "#ea580c", 
-        icon: "fa-briefcase",
-        gradient: "from-orange-600 to-red-600"
-      },
-      Téléphones: { 
-        color: "#10b981", 
-        icon: "fa-mobile-alt",
-        gradient: "from-emerald-500 to-green-600"
       },
       Autres: { 
         color: colors.oskar.green, 
@@ -180,6 +181,13 @@ function CategoryContentInner({
                       Catégories
                     </Link>
                   </li>
+                  {isSubCategory && parentCategory && (
+                    <li className="breadcrumb-item">
+                      <Link href={`/categories/${parentCategory.slug}`} className="text-white text-decoration-none opacity-75 hover-opacity-100 transition-all">
+                        {parentCategory.libelle}
+                      </Link>
+                    </li>
+                  )}
                   <li className="breadcrumb-item active text-white fw-semibold" aria-current="page">
                     {category.libelle}
                   </li>
@@ -213,7 +221,7 @@ function CategoryContentInner({
         </div>
       </section>
 
-      {/* Statistiques avec design épuré - MIS À JOUR AVEC LES BONNES COULEURS ET ICÔNES */}
+      {/* Statistiques avec design épuré */}
       <section className="py-3 border-bottom bg-white">
         <div className="container">
           <div className="row g-3">
@@ -227,19 +235,19 @@ function CategoryContentInner({
               { 
                 label: "Ventes", 
                 value: categoryStats.produits, 
-                color: colors.oskar.green, // Vert pour les ventes
-                icon: "fa-basket-shopping" // Panier au lieu de dollar
+                color: colors.oskar.green,
+                icon: "fa-basket-shopping"
               },
               { 
                 label: "Dons", 
                 value: categoryStats.dons, 
-                color: "#8b5cf6", // Violet pour les dons
+                color: "#8b5cf6",
                 icon: "fa-gift" 
               },
               { 
                 label: "Échanges", 
                 value: categoryStats.echanges, 
-                color: "#3b82f6", // Bleu pour les échanges
+                color: "#3b82f6",
                 icon: "fa-arrows-rotate" 
               },
             ].map((stat, index) => (
@@ -360,6 +368,8 @@ function CategoryContentInner({
                   <CategoryListGrid
                     key={`${category.uuid}-${activeFilter}-${sortOption}-${JSON.stringify(filters)}`}
                     categoryUuid={category.uuid}
+                    categorySlug={category.slug}
+                    parentSlug={parentCategory?.slug}
                     isSubCategory={isSubCategory}
                     filterType={activeFilter as any}
                     viewMode={viewMode}
@@ -516,13 +526,5 @@ function CategoryContentInner({
         }
       `}</style>
     </>
-  );
-}
-
-export default function CategoryContent(props: CategoryContentProps) {
-  return (
-    <SearchProvider>
-      <CategoryContentInner {...props} />
-    </SearchProvider>
   );
 }

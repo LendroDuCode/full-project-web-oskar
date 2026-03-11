@@ -24,6 +24,8 @@ import {
   faChevronDown,
   faChevronUp,
   faListCheck,
+  faClock,
+  faBan,
 } from "@fortawesome/free-solid-svg-icons";
 import colors from "@/app/shared/constants/colors";
 import {
@@ -75,6 +77,7 @@ interface AnnonceItem {
   title: string;
   description?: string;
   image: string;
+  image_key?: string;
   type: "produit" | "don" | "echange";
   status: string;
   date: string;
@@ -84,6 +87,13 @@ interface AnnonceItem {
   estBloque?: boolean;
   category?: string;
   originalData?: any;
+  seller?: {
+    name: string;
+    avatar?: string;
+    avatar_key?: string;
+    isPro?: boolean;
+    type?: string;
+  };
 }
 
 interface DataTableProps {
@@ -130,9 +140,20 @@ export default function DataTable({
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
 
-  const totalPages = Math.ceil(data.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const currentItems = data.slice(startIndex, startIndex + itemsPerPage);
+  const totalPages = useMemo(
+    () => Math.ceil(data.length / itemsPerPage),
+    [data.length, itemsPerPage],
+  );
+
+  const startIndex = useMemo(
+    () => (currentPage - 1) * itemsPerPage,
+    [currentPage, itemsPerPage],
+  );
+
+  const currentItems = useMemo(
+    () => data.slice(startIndex, startIndex + itemsPerPage),
+    [data, startIndex, itemsPerPage],
+  );
 
   const getTypeConfig = (type: string) => {
     const configs = {
@@ -140,43 +161,91 @@ export default function DataTable({
         icon: faTag,
         color: colors.type.product,
         bgColor: `${colors.type.product}15`,
+        label: "Produit",
       },
       don: {
         icon: faGift,
         color: colors.type.don,
         bgColor: `${colors.type.don}15`,
+        label: "Don",
       },
       echange: {
         icon: faArrowRightArrowLeft,
         color: colors.type.exchange,
         bgColor: `${colors.type.exchange}15`,
+        label: "Échange",
       },
     };
     return configs[type as keyof typeof configs] || configs.produit;
   };
 
+  // ✅ FONCTION CORRIGÉE POUR LES STATUTS
   const getStatusConfig = (item: AnnonceItem) => {
-    let status = item.status;
-    let color = colors.oskar.grey;
-    let icon = null;
+    const statusLower = item.status?.toLowerCase() || "";
 
-    if (item.estBloque) {
-      status = "bloque";
-      color = colors.status.blocked;
-      icon = faLock;
-    } else if (item.estPublie) {
-      status = "publie";
-      color = colors.status.published;
-      icon = faGlobe;
-    } else if (status === "en-attente" || status === "en_attente") {
-      status = "en-attente";
-      color = colors.status.pending;
+    // Log pour déboguer
+    console.log(`🎯 Statut pour ${item.title}:`, {
+      status: item.status,
+      estPublie: item.estPublie,
+      estBloque: item.estBloque,
+      statusLower
+    });
+
+    // ✅ PRIORITÉ 1: Bloqué (priorité absolue)
+    if (item.estBloque === true) {
+      return {
+        label: "Bloqué",
+        color: colors.status.blocked,
+        icon: faBan,
+      };
     }
 
+    // ✅ PRIORITÉ 2: Si le statut contient "bloqué"
+    if (statusLower.includes("bloque") || statusLower.includes("bloqué")) {
+      return {
+        label: "Bloqué",
+        color: colors.status.blocked,
+        icon: faBan,
+      };
+    }
+
+    // ✅ PRIORITÉ 3: Publié
+    if (item.estPublie === true) {
+      return {
+        label: "Publié",
+        color: colors.status.published,
+        icon: faGlobe,
+      };
+    }
+
+    // ✅ PRIORITÉ 4: Si le statut contient "publié" (mais pas "en attente")
+    if (statusLower.includes("publie") || statusLower.includes("publié")) {
+      if (!statusLower.includes("attente")) {
+        return {
+          label: "Publié",
+          color: colors.status.published,
+          icon: faGlobe,
+        };
+      }
+    }
+
+    // ✅ PRIORITÉ 5: En attente
+    if (statusLower.includes("en-attente") || 
+        statusLower.includes("en_attente") || 
+        statusLower.includes("en attente") ||
+        statusLower.includes("attente")) {
+      return {
+        label: "En attente",
+        color: colors.status.pending,
+        icon: faClock,
+      };
+    }
+
+    // ✅ PRIORITÉ 6: Non publié (cas par défaut)
     return {
-      label: getStatusLabel(status),
-      color,
-      icon,
+      label: "Non publié",
+      color: colors.oskar.warning,
+      icon: faClock,
     };
   };
 
@@ -215,6 +284,13 @@ export default function DataTable({
       return `https://via.placeholder.com/48?text=${item.title?.charAt(0) || "?"}`;
     }
 
+    // Essayer d'abord avec image_key
+    if (item.image_key) {
+      const url = buildImageUrl(item.image_key);
+      if (url) return url;
+    }
+
+    // Sinon avec image
     if (item.image) {
       const url = buildImageUrl(item.image);
       if (url) return url;
@@ -512,6 +588,7 @@ export default function DataTable({
               <th className="py-3 text-muted small fw-semibold">Type</th>
               <th className="py-3 text-muted small fw-semibold">Statut</th>
               <th className="py-3 text-muted small fw-semibold">Prix</th>
+              <th className="py-3 text-muted small fw-semibold">Quantité</th>
               <th className="py-3 text-muted small fw-semibold">Date</th>
               <th className="py-3 text-muted small fw-semibold text-end pe-4">
                 Actions
@@ -525,8 +602,12 @@ export default function DataTable({
               const isSelected = selectedItems.has(item.uuid);
               const isProcessing = processingItems.has(item.uuid);
               const isExpanded = expandedItems.has(item.uuid);
-              const isEnAttente =
-                item.status === "en-attente" || item.status === "en_attente";
+              const isPublished = item.estPublie === true;
+              const isBlocked = item.estBloque === true;
+              const isEnAttente = 
+                !isPublished && 
+                !isBlocked && 
+                (item.status?.toLowerCase().includes("attente") || !isPublished);
               const imageUrl = getImageUrl(item);
 
               return (
@@ -596,20 +677,24 @@ export default function DataTable({
                           </p>
                         )}
 
-                        {isExpanded && (
+                        {isExpanded && item.originalData && (
                           <div
                             className="mt-2 p-2 border rounded"
                             style={{ fontSize: "0.75rem" }}
                           >
                             <div className="row">
-                              <div className="col-12">
+                              <div className="col-6">
+                                <span className="text-muted">UUID:</span>{" "}
+                                <span className="fw-medium">{item.uuid}</span>
+                              </div>
+                              <div className="col-6">
                                 <span className="text-muted">Catégorie:</span>{" "}
                                 <span className="fw-medium">
                                   {item.category || "Non définie"}
                                 </span>
                               </div>
                               {item.quantity && (
-                                <div className="col-12 mt-1">
+                                <div className="col-6 mt-1">
                                   <span className="text-muted">Quantité:</span>{" "}
                                   <span className="fw-medium">
                                     {item.quantity}
@@ -634,7 +719,7 @@ export default function DataTable({
                       }}
                     >
                       <FontAwesomeIcon icon={typeConfig.icon} size="xs" />
-                      {getTypeLabel(item.type)}
+                      {typeConfig.label}
                     </div>
                   </td>
 
@@ -661,6 +746,15 @@ export default function DataTable({
                       style={{ color: colors.oskar.black }}
                     >
                       {formatPrice(item.price)}
+                    </span>
+                  </td>
+
+                  <td>
+                    <span
+                      className="fw-medium small"
+                      style={{ color: colors.oskar.black }}
+                    >
+                      {item.quantity || 1}
                     </span>
                   </td>
 
@@ -755,19 +849,19 @@ export default function DataTable({
                               className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
                               onClick={() =>
                                 handleAction(
-                                  item.estPublie ? "unpublish" : "publish",
+                                  isPublished ? "unpublish" : "publish",
                                   item.uuid,
                                   item.type,
                                 )
                               }
-                              title={item.estPublie ? "Dépublier" : "Publier"}
+                              title={isPublished ? "Dépublier" : "Publier"}
                               style={{
                                 width: "28px",
                                 height: "28px",
-                                backgroundColor: item.estPublie
+                                backgroundColor: isPublished
                                   ? `${colors.oskar.warning}15`
                                   : `${colors.status.published}15`,
-                                color: item.estPublie
+                                color: isPublished
                                   ? colors.oskar.warning
                                   : colors.status.published,
                                 border: "none",
@@ -776,7 +870,7 @@ export default function DataTable({
                             >
                               <FontAwesomeIcon
                                 icon={
-                                  item.estPublie
+                                  isPublished
                                     ? faCalendarXmark
                                     : faCalendarCheck
                                 }
@@ -792,19 +886,19 @@ export default function DataTable({
                               className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
                               onClick={() =>
                                 handleAction(
-                                  item.estBloque ? "unblock" : "block",
+                                  isBlocked ? "unblock" : "block",
                                   item.uuid,
                                   item.type,
                                 )
                               }
-                              title={item.estBloque ? "Débloquer" : "Bloquer"}
+                              title={isBlocked ? "Débloquer" : "Bloquer"}
                               style={{
                                 width: "28px",
                                 height: "28px",
-                                backgroundColor: item.estBloque
+                                backgroundColor: isBlocked
                                   ? `${colors.oskar.green}15`
                                   : `${colors.status.blocked}15`,
-                                color: item.estBloque
+                                color: isBlocked
                                   ? colors.oskar.green
                                   : colors.status.blocked,
                                 border: "none",
@@ -812,7 +906,7 @@ export default function DataTable({
                               }}
                             >
                               <FontAwesomeIcon
-                                icon={item.estBloque ? faUnlock : faLock}
+                                icon={isBlocked ? faUnlock : faLock}
                                 size="xs"
                               />
                             </button>

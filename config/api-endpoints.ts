@@ -506,6 +506,7 @@ export const API_ENDPOINTS = {
     BLOCKED: withBaseUrl("/produits/bloques"),
     VENDEUR_PRODUCTS: withBaseUrl("/produits/liste-produits-cree-vendeur"),
     ALL_VENDEUR_PRODUCTS: withBaseUrl("/produits/all-vendeur-produit"),
+    BLOQUE_PRODUITS: withBaseUrl("/produits/unpublish"),
     DETAIL_NON_PUBLIE: (uuid: string) =>
       withBaseUrl(`/produits/non-publie/${uuid}`),
     DETAIL: (uuid: string) => withBaseUrl(`/produits/${uuid}`),
@@ -532,51 +533,58 @@ export const API_ENDPOINTS = {
     LISTE_PRODUITS_PUBLIES_UTILISATEUR: withBaseUrl("/produits/produits-utilisateur-publies"),
   },
 
-  // Catégories
-  CATEGORIES: {
-    LIST: withBaseUrl("/categories"),
-    DETAIL: (uuid: string) => withBaseUrl(`/categories/${uuid}`),
-    LISTE_SOUS_CATEGORIE_UUI: (uuid: string) => withBaseUrl(`/categories/${uuid}/annonces-simples`),
-    BY_SLUG: (slug: string) => withBaseUrl(`/categories/by-slug/${slug}`),
-    CREATE: withBaseUrl("/categories/creer-categorie"),
-    CREATE_SOUS_CATEGORIE: (uuid: string) =>
-      withBaseUrl(`/categories/${uuid}/sous-categories`),
-    
-    RECUPERER_SOUS_CATEGORIE_UUID: (uuid: string) =>
-      withBaseUrl(`/categories/${uuid}/sous-categories/${uuid}`),
-    RECUPERER_CATEGORIE_UUID_PAR_LISTE_SOUS_CATEGORIE: (parrentUuid: string) =>
-      withBaseUrl(`/categories/${parrentUuid}/sous-categories`),
-    UPDATE: (uuid: string) => withBaseUrl(`/categories/modifier/${uuid}`),
-    DELETE: (uuid: string) => withBaseUrl(`/categories/${uuid}`),
+ // Catégories
+CATEGORIES: {
+      LISTE_SOUS_CATEGORIE_UUI: (uuid: string) => withBaseUrl(`/categories/${uuid}/annonces-simples`),
 
-    LISTE_SOUS_CATEGORIE: (uuid: string) =>
-      withBaseUrl(`/categories/sous/${uuid}/liste-sous-categories`),
-    RECUPERER_LISTE_DON_UUID_SOUS_CATEGORIES: (uuid: string) =>
-      withBaseUrl(`/categories/${uuid}/sous/${uuid}`),
-    RECUPERER_LISTE_PRODUIT_UUID_SOUS_CATEGORIES: (uuid: string) =>
-      withBaseUrl(`/categories/${uuid}/sous/${uuid}/produits`),
-    RECUPERER_LISTE_ECHANGE_UUID_SOUS_CATEGORIES: (uuid: string) =>
-      withBaseUrl(`/categories/${uuid}/sous/${uuid}/echanges`),
+  LIST: withBaseUrl("/categories"),
+  DETAIL: (uuid: string) => withBaseUrl(`/categories/${uuid}`),
+  BY_SLUG: (slug: string) => withBaseUrl(`/categories/by-slug/${slug}`),
+  
+  // ✅ CORRECT: Récupérer une catégorie avec tous ses éléments par slug
+  RECUPERER_CATEGORIE_PAR_SLUG: (slug: string) => 
+    withBaseUrl(`/categories/by-slug/${slug}/tous-elements`),
 
+      ALL: (uuid: string) => withBaseUrl(`/categories/${uuid}/tous`),
 
-    ALL_ELEMENTS: (uuid: string) =>
-      withBaseUrl(`/categories/${uuid}/all-elements`),
-    PRODUITS: (uuid: string) => withBaseUrl(`/categories/${uuid}/produits`),
-    DONS: (uuid: string) => withBaseUrl(`/categories/${uuid}/dons`),
-    ECHANGES: (uuid: string) => withBaseUrl(`/categories/${uuid}/echanges`),
-    ANNONCES: (uuid: string) => withBaseUrl(`/categories/${uuid}/annonces`),
-    ALL: (uuid: string) => withBaseUrl(`/categories/${uuid}/tous`),
-
-
-    EXPORT_PDF: withBaseUrl("/categories/categorie-export-pdf"),
-    WITH_ITEMS: withBaseUrl("/categories/with-items"),
-    WITH_ITEMS_BY_UUID: (uuid: string) =>
-      withBaseUrl(`/categories/${uuid}/with-items`),
-    BY_LIBELLE_WITH_ITEMS: (slug: string) =>
-      withBaseUrl(`/categories/libelle/${slug}/with-items`),
-    BY_TYPE_WITH_ITEMS: (type: string) =>
-      withBaseUrl(`/categories/type/${type}/with-items`),
-  },
+  
+  // ✅ CORRECT: Récupérer une catégorie avec tous ses éléments par UUID
+  RECUPERER_CATEGORIE_PAR_UUID: (uuid: string) => 
+    withBaseUrl(`/categories/${uuid}/tous-elements`),
+  
+  // ✅ CORRECT: Récupérer les éléments d'une sous-catégorie par slugs
+  RECUPERER_SOUS_CATEGORIE_PAR_SLUGS: (parentSlug: string, sousCategorieSlug: string) => 
+    withBaseUrl(`/categories/${parentSlug}/sous-categories/${sousCategorieSlug}/elements-simples`),
+  
+  // ✅ CORRECT: Récupérer les éléments d'une sous-catégorie avec pagination
+  RECUPERER_SOUS_CATEGORIE_PAR_SLUGS_PAGINE: (parentSlug: string, sousCategorieSlug: string) => 
+    withBaseUrl(`/categories/${parentSlug}/sous-categories/${sousCategorieSlug}/elements`),
+  
+  LISTE_SOUS_CATEGORIE: (uuid: string) =>
+    withBaseUrl(`/categories/${uuid}/liste-sous-categories`),
+  
+  RECUPERER_CATEGORIE_UUID_PAR_LISTE_SOUS_CATEGORIE: (parentUuid: string) =>
+    withBaseUrl(`/categories/${parentUuid}/sous-categories`),
+  
+  CREATE: withBaseUrl("/categories/creer-categorie"),
+  CREATE_SOUS_CATEGORIE: (uuid: string) =>
+    withBaseUrl(`/categories/${uuid}/sous-categories`),
+  UPDATE: (uuid: string) => withBaseUrl(`/categories/modifier/${uuid}`),
+  DELETE: (uuid: string) => withBaseUrl(`/categories/${uuid}`),
+  
+  // Endpoints pour les éléments
+  PRODUITS: (uuid: string) => withBaseUrl(`/categories/${uuid}/produits`),
+  DONS: (uuid: string) => withBaseUrl(`/categories/${uuid}/dons`),
+  ECHANGES: (uuid: string) => withBaseUrl(`/categories/${uuid}/echanges`),
+  ANNONCES: (uuid: string) => withBaseUrl(`/categories/${uuid}/annonces`),
+  ALL_ELEMENTS: (uuid: string) => withBaseUrl(`/categories/${uuid}/all-elements`),
+  
+  EXPORT_PDF: withBaseUrl("/categories/categorie-export-pdf"),
+  WITH_ITEMS: withBaseUrl("/categories/with-items"),
+  WITH_ITEMS_BY_UUID: (uuid: string) => withBaseUrl(`/categories/${uuid}/with-items`),
+  BY_LIBELLE_WITH_ITEMS: (slug: string) => withBaseUrl(`/categories/libelle/${slug}/with-items`),
+  BY_TYPE_WITH_ITEMS: (type: string) => withBaseUrl(`/categories/type/${type}/with-items`),
+},
 
   // Dons
   DONS: {
@@ -591,6 +599,7 @@ export const API_ENDPOINTS = {
       withBaseUrl(`/dons/ajouter-favoris/${uuid}`),
     DONS_FAVORIS: withBaseUrl("/dons/liste-dons-favoris"),
     DETAIL: (uuid: string) => withBaseUrl(`/dons/${uuid}`),
+    BLOQUE_DON: withBaseUrl(`/dons/depublier`),
     DETAIL_NON_PUBLIE: (uuid: string) =>
       withBaseUrl(`/dons/non-publie/${uuid}`),
     CREATE: withBaseUrl("/dons/creer-don-agent-vendeur-utilisateur"), // CORRIGÉ
@@ -652,6 +661,7 @@ export const API_ENDPOINTS = {
     ECHANGES_FAVORIS: withBaseUrl(
       "/echanges/liste-echange-favoris-utilisateur",
     ),
+    BLOQUER_ECHNAGE: withBaseUrl(`/echanges/depublier`),
     DETAIL_NON_PUBLIE: (uuid: string) =>
       withBaseUrl(`/echanges/non-publie/${uuid}`),
     BY_STATUS: (statut: string) => withBaseUrl(`/echanges/statut/${statut}`),
