@@ -1112,15 +1112,19 @@ export default function Annonces() {
         )}
 
         {/* Barre de filtres */}
-        <div className="mb-4">
-          <FilterBar
-            onStatusChange={setSelectedStatus}
-            onContentTypeChange={setSelectedType}
-            onSearchChange={setSearchQuery}
-            selectedStatus={selectedStatus}
-            selectedContentType={selectedType}
-          />
-        </div>
+<div className="mb-4">
+  <FilterBar
+    onStatusChange={setSelectedStatus}
+    onContentTypeChange={setSelectedType}
+    onSearchChange={setSearchQuery}
+    onRefresh={() => fetchAllData(false)}
+    onReset={handleResetFilters}
+    selectedStatus={selectedStatus}
+    selectedContentType={selectedType}
+    loading={loading}
+    totalItems={preparedData.length}
+  />
+</div>
 
         {/* Informations sur les filtres */}
         {!loading && !error && (

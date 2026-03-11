@@ -1,4 +1,3 @@
-// app/(back-office)/dashboard-agent/annonces/components/FilterBar.tsx
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -94,6 +93,7 @@ export default function FilterBar({
   };
 
   const handleStatusClick = (statusId: string) => {
+    console.log("🔍 FilterBar - Statut cliqué:", statusId);
     onStatusChange?.(statusId);
   };
 

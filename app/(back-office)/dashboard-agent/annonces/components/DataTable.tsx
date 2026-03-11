@@ -1,4 +1,3 @@
-// app/(back-office)/dashboard-agent/annonces/components/DataTable.tsx
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
@@ -83,8 +82,8 @@ export default function DataTable({
   hideVendeurColumn = true,
 }: DataTableProps) {
   const router = useRouter();
-  const [data, setData] = useState<ContentItem[]>(externalData || []);
-  const [loading, setLoading] = useState<boolean>(externalLoading || true);
+  const [data, setData] = useState<ContentItem[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -93,10 +92,30 @@ export default function DataTable({
   const [selectAll, setSelectAll] = useState(false);
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
 
-  const fetchData = useCallback(async () => {
+  // ============================================
+  // GESTION DES DONNÉES EXTERNES
+  // ============================================
+  useEffect(() => {
     if (externalData !== undefined) {
+      console.log("📦 DataTable - Données externes reçues:", externalData.length);
       setData(externalData);
       setLoading(false);
+      setError(null);
+    }
+  }, [externalData]);
+
+  useEffect(() => {
+    if (externalLoading !== undefined) {
+      setLoading(externalLoading);
+    }
+  }, [externalLoading]);
+
+  // ============================================
+  // CHARGEMENT DES DONNÉES (SI PAS DE DONNÉES EXTERNES)
+  // ============================================
+  const fetchData = useCallback(async () => {
+    // Si on a des données externes, on ne charge pas
+    if (externalData !== undefined) {
       return;
     }
 
@@ -121,6 +140,7 @@ export default function DataTable({
           endpoint = API_ENDPOINTS.PRODUCTS.ALL;
       }
 
+      console.log("📦 DataTable - Chargement depuis:", endpoint);
       const response = await api.get<any[]>(endpoint);
 
       const transformedData = response.map((item) => {
@@ -139,8 +159,6 @@ export default function DataTable({
             (item.estPublie ? "publie" : "en-attente");
           isPublished = item.estPublie || false;
           isBlocked = item.estBloque || false;
-
-          // ✅ Utilisation de buildImageUrl
           imageUrl = item.image ? buildImageUrl(item.image) : "";
         } else if (contentType === "don") {
           title = item.nom || "Don sans nom";
@@ -148,8 +166,6 @@ export default function DataTable({
           status = item.statut?.toLowerCase() || "en-attente";
           isPublished = item.estPublie || false;
           isBlocked = item.est_bloque || false;
-
-          // ✅ Utilisation de buildImageUrl
           imageUrl = item.image ? buildImageUrl(item.image) : "";
         } else if (contentType === "echange") {
           title =
@@ -160,8 +176,6 @@ export default function DataTable({
           status = item.statut?.toLowerCase() || "en-attente";
           isPublished = item.estPublie || false;
           isBlocked = item.estBloque || false;
-
-          // ✅ Utilisation de buildImageUrl
           imageUrl = item.image ? buildImageUrl(item.image) : "";
         }
 
@@ -199,65 +213,67 @@ export default function DataTable({
     }
   }, [contentType, externalData]);
 
+  // Chargement initial si pas de données externes
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  useEffect(() => {
-    if (externalData !== undefined) {
-      setData(externalData);
+    if (externalData === undefined) {
+      fetchData();
     }
-  }, [externalData]);
+  }, [fetchData, externalData]);
 
-  useEffect(() => {
-    if (externalLoading !== undefined) {
-      setLoading(externalLoading);
-    }
-  }, [externalLoading]);
-
-  // ✅ Gestion des erreurs d'image
+  // ============================================
+  // GESTION DES ERREURS D'IMAGE
+  // ============================================
   const handleImageError = (
     e: React.SyntheticEvent<HTMLImageElement, Event>,
     title: string,
     uuid: string,
   ) => {
     const target = e.currentTarget;
-    
-    // Marquer cette image comme en erreur
     setImageErrors((prev) => new Set(prev).add(uuid));
-
-    // Fallback vers placeholder
     const firstChar = title?.charAt?.(0)?.toUpperCase() || "?";
     target.src = `https://via.placeholder.com/48?text=${encodeURIComponent(firstChar)}`;
-    target.onerror = null; // Éviter les boucles infinies
+    target.onerror = null;
   };
 
-  // ✅ Obtenir l'URL de l'image avec fallback
   const getImageUrl = (item: ContentItem): string => {
-    // Si l'image a déjà eu une erreur, utiliser directement le placeholder
     if (imageErrors.has(item.uuid)) {
       const firstChar = item.title?.charAt?.(0)?.toUpperCase() || "?";
       return `https://via.placeholder.com/48?text=${encodeURIComponent(firstChar)}`;
     }
-    
-    // Sinon, retourner l'URL construite (peut être vide)
     return item.image || `https://via.placeholder.com/48?text=${encodeURIComponent(item.title?.charAt?.(0)?.toUpperCase() || "?")}`;
   };
 
-  // ✅ Filtrer les données - VERSION CORRIGÉE basée sur estPublie/estBloque
+  // ============================================
+  // FILTRAGE DES DONNÉES - CORRIGÉ
+  // ============================================
   const filteredData = useMemo(() => {
+    console.log("🔍 DataTable - Filtrage avec:", {
+      statusFilter,
+      categoryFilter,
+      searchQuery,
+      dataLength: data.length
+    });
+
     return data.filter((item) => {
       if (!item.title) return false;
 
       // ✅ Filtre par statut - basé sur les propriétés booléennes
       if (statusFilter !== "tous") {
-        if (statusFilter === "publie" && item.estPublie !== true) return false;
-        if (statusFilter === "bloque" && item.estBloque !== true) return false;
+        if (statusFilter === "publie" && item.estPublie !== true) {
+          console.log("❌ Rejeté (pas publié):", item.title);
+          return false;
+        }
+        if (statusFilter === "bloque" && item.estBloque !== true) {
+          console.log("❌ Rejeté (pas bloqué):", item.title);
+          return false;
+        }
         if (statusFilter === "en-attente") {
           // En attente = ni publié, ni bloqué
-          if (item.estPublie === true || item.estBloque === true) return false;
+          if (item.estPublie === true || item.estBloque === true) {
+            console.log("❌ Rejeté (publié ou bloqué):", item.title);
+            return false;
+          }
         }
-        // Ignorer les autres statuts (valide, refuse, disponible)
       }
 
       // Filtre par catégorie
@@ -281,7 +297,9 @@ export default function DataTable({
     });
   }, [data, statusFilter, categoryFilter, searchQuery]);
 
-  // Pagination
+  // ============================================
+  // PAGINATION
+  // ============================================
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const currentItems = filteredData.slice(
@@ -289,7 +307,16 @@ export default function DataTable({
     startIndex + itemsPerPage,
   );
 
-  // Gestion de la sélection
+  // Réinitialiser la page quand les filtres changent
+  useEffect(() => {
+    setCurrentPage(1);
+    setSelectedItems(new Set());
+    setSelectAll(false);
+  }, [statusFilter, categoryFilter, searchQuery]);
+
+  // ============================================
+  // GESTION DE LA SÉLECTION
+  // ============================================
   const toggleSelectAll = () => {
     if (selectAll) {
       setSelectedItems(new Set());
@@ -314,6 +341,9 @@ export default function DataTable({
     setSelectAll(allSelected);
   };
 
+  // ============================================
+  // CONFIGURATIONS
+  // ============================================
   const getTypeConfig = (type: string) => {
     const configs = {
       produit: {
@@ -338,7 +368,6 @@ export default function DataTable({
     return configs[type as keyof typeof configs] || configs.produit;
   };
 
-  // ✅ Fonction getStatusBadge simplifiée - basée sur estPublie/estBloque
   const getStatusBadge = (item: ContentItem) => {
     if (item.estBloque) {
       return {
@@ -363,11 +392,11 @@ export default function DataTable({
     };
   };
 
-  // ✅ Fonction handleViewDetails améliorée
+  // ============================================
+  // ACTIONS
+  // ============================================
   const handleViewDetails = (row: ContentItem) => {
     let basePath = "/dashboard-agent/annonces";
-
-    // Construire l'URL selon le type
     switch (row.type) {
       case "produit":
         router.push(`${basePath}/produit/${row.uuid}`);
@@ -383,7 +412,6 @@ export default function DataTable({
     }
   };
 
-  // Actions individuelles
   const handleValidate = async (uuid: string) => {
     try {
       setProcessing((prev) => new Set(prev).add(uuid));
@@ -480,7 +508,6 @@ export default function DataTable({
     }
   };
 
-  // Actions en masse
   const handleBulkAction = async (
     action:
       | "validate"
@@ -555,6 +582,9 @@ export default function DataTable({
 
   const isProcessing = (uuid: string) => processing.has(uuid);
 
+  // ============================================
+  // RENDU
+  // ============================================
   if (loading) {
     return (
       <div className="d-flex flex-column align-items-center justify-content-center py-5">
@@ -589,6 +619,8 @@ export default function DataTable({
       </div>
     );
   }
+
+  console.log("📊 DataTable - filteredData:", filteredData.length);
 
   return (
     <div
