@@ -16,8 +16,6 @@ import {
 
 interface CategoryListGridProps {
   categoryUuid: string;
-  categorySlug?: string;
-  parentSlug?: string;
   isSubCategory?: boolean;
   filterType?: "all" | "don" | "echange" | "produit";
   viewMode?: "grid" | "list";
@@ -51,8 +49,6 @@ interface ListingItem {
 
 const CategoryListGrid: React.FC<CategoryListGridProps> = ({
   categoryUuid,
-  categorySlug,
-  parentSlug,
   isSubCategory = false,
   filterType = "all",
   viewMode = "grid",
@@ -79,24 +75,45 @@ const CategoryListGrid: React.FC<CategoryListGridProps> = ({
   // FONCTION DE TRANSFORMATION DES DONNÉES
   // ============================================
   const transformItem = (item: any, type: "produit" | "don" | "echange"): ListingItem => {
+    // Récupérer l'UUID de la catégorie de différentes manières
+    const categorieUuid = 
+      item.categorie_uuid || 
+      item.categorie?.uuid || 
+      item.categorieId ||
+      item.category_uuid ||
+      item.category?.uuid;
+    
+    const categorieLibelle = 
+      item.categorie_libelle ||
+      item.categorie?.libelle ||
+      item.category?.libelle ||
+      item.categorie?.nom ||
+      "";
+
     return {
       uuid: item.uuid,
       type,
-      titre: item.nom || item.libelle || item.nomElementEchange || item.titre || "Sans titre",
+      titre: item.titre || item.nom || item.libelle || item.nomElementEchange || "Sans titre",
       nom: item.nom,
       libelle: item.libelle,
       description: item.description || item.message,
       prix: item.prix,
       image: item.image || item.image_key || item.images?.[0] || "",
-      date: item.date || item.createdAt || item.publieLe || item.dateProposition || item.date_debut || item.dateCreation,
+      date: item.date || item.createdAt || item.publieLe || item.dateProposition || item.date_debut,
       disponible: item.disponible !== false,
       statut: item.statut || item.status,
       numero: item.numero || item.telephone,
       localisation: item.localisation || item.ville || item.lieu_retrait || item.lieu_rencontre || "",
-      createdAt: item.createdAt || item.dateCreation,
-      categorie_uuid: item.categorie_uuid || item.categorieUuid,
-      categorie_libelle: item.categorie_libelle || "",
-      seller: item.vendeur ? {
+      createdAt: item.createdAt,
+      categorie_uuid: categorieUuid,
+      categorie_libelle: categorieLibelle,
+      seller: item.createurDetails ? {
+        name: item.createurDetails.nom || "Annonceur",
+        avatar: item.createurDetails.avatar,
+      } : item.createur ? {
+        name: `${item.createur.prenoms || ""} ${item.createur.nom || ""}`.trim() || "Annonceur",
+        avatar: item.createur.avatar,
+      } : item.vendeur ? {
         name: `${item.vendeur.prenoms || ""} ${item.vendeur.nom || ""}`.trim() || "Vendeur",
         avatar: item.vendeur.avatar,
       } : item.utilisateur ? {
@@ -107,13 +124,10 @@ const CategoryListGrid: React.FC<CategoryListGridProps> = ({
   };
 
   // ============================================
-  // FONCTION DE CHARGEMENT CORRIGÉE
+  // FONCTION DE CHARGEMENT AVEC GESTION ROBUSTE DES ENDPOINTS
   // ============================================
   const fetchCategoryItems = useCallback(async () => {
-    if (!categoryUuid) {
-      console.error("❌ categoryUuid est manquant");
-      return;
-    }
+    if (!categoryUuid) return;
 
     // Annuler la requête précédente si elle existe
     if (abortControllerRef.current) {
@@ -129,93 +143,68 @@ const CategoryListGrid: React.FC<CategoryListGridProps> = ({
     try {
       console.log(`📦 Chargement pour ${isSubCategory ? 'sous-catégorie' : 'catégorie'} UUID: ${categoryUuid}`);
       console.log(`🔍 Filtre type: ${filterType}`);
-      console.log(`🔍 Slug: ${categorySlug}, ParentSlug: ${parentSlug}`);
 
       let allItems: ListingItem[] = [];
-      let response: any = null;
 
       // ============================================
-      // CHOISIR LE BON ENDPOINT SELON LE CONTEXTE
+      // STRATÉGIE: UTILISER LES ENDPOINTS QUI FONCTIONNENT (d'après vos logs)
       // ============================================
       
-      if (isSubCategory && parentSlug && categorySlug) {
-        // C'est une sous-catégorie - utiliser l'endpoint spécifique
-        console.log(`📦 Sous-catégorie: ${parentSlug}/${categorySlug}`);
-        const url = `/categories/${parentSlug}/sous-categories/${categorySlug}/elements-simples?limit=100`;
-        response = await api.get(url);
-        console.log("✅ Réponse sous-catégorie:", response);
+      // L'endpoint CATEGORIES.ANNONCES fonctionne (status 200 dans vos logs)
+      try {
+        console.log("📦 Tentative avec CATEGORIES.ANNONCES");
+        const response = await api.get(API_ENDPOINTS.CATEGORIES.ANNONCES(categoryUuid));
         
-        if (response?.success && response?.data) {
-          const data = response.data;
+        if (response.annonces && Array.isArray(response.annonces)) {
+          // Transformer toutes les annonces
+          allItems = response.annonces.map((item: any) => {
+            let type: "produit" | "don" | "echange" = "produit";
+            if (item.type === "don" || item.type_don) type = "don";
+            else if (item.type === "echange" || item.type_echange) type = "echange";
+            return transformItem(item, type);
+          });
           
-          // Extraire les éléments selon la structure de l'API
-          if (data.elements) {
-            // Structure: { elements: { dons: [...], echanges: [...], produits: [...] } }
-            if (data.elements.dons && Array.isArray(data.elements.dons)) {
-              allItems.push(...data.elements.dons.map((item: any) => transformItem(item, "don")));
-            }
-            if (data.elements.echanges && Array.isArray(data.elements.echanges)) {
-              allItems.push(...data.elements.echanges.map((item: any) => transformItem(item, "echange")));
-            }
-            if (data.elements.produits && Array.isArray(data.elements.produits)) {
-              allItems.push(...data.elements.produits.map((item: any) => transformItem(item, "produit")));
-            }
-          }
+          console.log(`✅ ${allItems.length} items trouvés via ANNONCES`);
         }
-      } else if (categorySlug) {
-        // Catégorie principale avec slug
-        console.log(`📦 Catégorie par slug: ${categorySlug}`);
-        const url = `/categories/by-slug/${categorySlug}/tous-elements`;
-        response = await api.get(url);
-        console.log("✅ Réponse catégorie par slug:", response);
+      } catch (error) {
+        console.warn("⚠️ Endpoint ANNONCES a échoué, essai des endpoints spécifiques");
         
-        if (response?.success && response?.data) {
-          const data = response.data;
+        // Fallback: essayer les endpoints spécifiques selon le type
+        try {
+          if (filterType === "all" || filterType === "don") {
+            const donRes = await api.get(API_ENDPOINTS.CATEGORIES.DONS(categoryUuid));
+            if (donRes.dons && Array.isArray(donRes.dons)) {
+              const dons = donRes.dons.map((item: any) => transformItem(item, "don"));
+              allItems.push(...dons);
+            }
+          }
           
-          // Structure: { dons: { count, items }, echanges: { count, items }, produits: { count, items } }
-          if (data.dons?.items && Array.isArray(data.dons.items)) {
-            allItems.push(...data.dons.items.map((item: any) => transformItem(item, "don")));
+          if (filterType === "all" || filterType === "produit") {
+            const produitRes = await api.get(API_ENDPOINTS.CATEGORIES.PRODUITS(categoryUuid));
+            if (produitRes.produits && Array.isArray(produitRes.produits)) {
+              const produits = produitRes.produits.map((item: any) => transformItem(item, "produit"));
+              allItems.push(...produits);
+            }
           }
-          if (data.echanges?.items && Array.isArray(data.echanges.items)) {
-            allItems.push(...data.echanges.items.map((item: any) => transformItem(item, "echange")));
-          }
-          if (data.produits?.items && Array.isArray(data.produits.items)) {
-            allItems.push(...data.produits.items.map((item: any) => transformItem(item, "produit")));
-          }
-        }
-      } else {
-        // Fallback: utiliser l'UUID
-        console.log(`📦 Chargement par UUID: ${categoryUuid}`);
-        response = await api.get(API_ENDPOINTS.CATEGORIES.ANNONCES(categoryUuid));
-        console.log("✅ Réponse par UUID:", response);
-        
-        if (response?.data) {
-          const data = response.data;
           
-          if (data.dons?.items && Array.isArray(data.dons.items)) {
-            allItems.push(...data.dons.items.map((item: any) => transformItem(item, "don")));
+          if (filterType === "all" || filterType === "echange") {
+            const echangeRes = await api.get(API_ENDPOINTS.CATEGORIES.ECHANGES(categoryUuid));
+            if (echangeRes.echanges && Array.isArray(echangeRes.echanges)) {
+              const echanges = echangeRes.echanges.map((item: any) => transformItem(item, "echange"));
+              allItems.push(...echanges);
+            }
           }
-          if (data.echanges?.items && Array.isArray(data.echanges.items)) {
-            allItems.push(...data.echanges.items.map((item: any) => transformItem(item, "echange")));
-          }
-          if (data.produits?.items && Array.isArray(data.produits.items)) {
-            allItems.push(...data.produits.items.map((item: any) => transformItem(item, "produit")));
-          }
+        } catch (fallbackError) {
+          console.error("❌ Tous les endpoints ont échoué:", fallbackError);
         }
       }
 
-      console.log(`📊 Total items chargés: ${allItems.length}`);
-
-      // Filtrer selon le type si nécessaire
-      let filteredByType = allItems;
-      if (filterType !== "all") {
-        filteredByType = allItems.filter(item => item.type === filterType);
-      }
+      console.log(`📊 Total: ${allItems.length} items pour la catégorie ${categoryUuid}`);
 
       // ============================================
       // FILTRES DE RECHERCHE
       // ============================================
-      let filteredItems = [...filteredByType];
+      let filteredItems = [...allItems];
 
       // Filtre texte
       if (searchQuery) {
@@ -307,10 +296,8 @@ const CategoryListGrid: React.FC<CategoryListGridProps> = ({
       abortControllerRef.current = null;
     }
   }, [
-    categoryUuid,
-    categorySlug,
-    parentSlug,
-    isSubCategory,
+    categoryUuid, 
+    isSubCategory, 
     filterType, 
     sortOption, 
     searchQuery, 
@@ -322,7 +309,7 @@ const CategoryListGrid: React.FC<CategoryListGridProps> = ({
   // ✅ CHARGEMENT INITIAL
   useEffect(() => {
     fetchedRef.current = false;
-  }, [categoryUuid, categorySlug, parentSlug, filterType]);
+  }, [categoryUuid, filterType]);
 
   useEffect(() => {
     if (!fetchedRef.current) {
@@ -336,25 +323,15 @@ const CategoryListGrid: React.FC<CategoryListGridProps> = ({
       fetchCategoryItems();
     };
 
-    const handleSortChange = () => {
-      fetchedRef.current = false;
-      fetchCategoryItems();
-    };
-
-    const handleFiltersUpdate = () => {
-      fetchedRef.current = false;
-      fetchCategoryItems();
-    };
-
     window.addEventListener('category-filter-changed', handleFilterChange);
-    window.addEventListener('category-sort-changed', handleSortChange);
-    window.addEventListener('category-filters-updated', handleFiltersUpdate);
+    window.addEventListener('category-sort-changed', handleFilterChange);
+    window.addEventListener('category-filters-updated', handleFilterChange);
 
     // Nettoyage
     return () => {
       window.removeEventListener('category-filter-changed', handleFilterChange);
-      window.removeEventListener('category-sort-changed', handleSortChange);
-      window.removeEventListener('category-filters-updated', handleFiltersUpdate);
+      window.removeEventListener('category-sort-changed', handleFilterChange);
+      window.removeEventListener('category-filters-updated', handleFilterChange);
       
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
