@@ -28,9 +28,6 @@ import colors from "@/app/shared/constants/colors";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 
-// ============================================
-// TYPES
-// ============================================
 
 interface RegistreCommerce {
   url: string;           // Format: "registres-commerce%2F1773068608380-449337069-..."
