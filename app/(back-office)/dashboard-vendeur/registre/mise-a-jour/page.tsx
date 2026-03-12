@@ -293,7 +293,7 @@ export default function RegistreCommercePage() {
       if (response.success) {
         setCurrentRegistre(response.data);
         
-        // Sauvegarder dans localStorage
+        // Sauvegarder dans localStorage test
         localStorage.setItem("currentRegistre", JSON.stringify(response.data));
 
         // Ajouter à l'historique
