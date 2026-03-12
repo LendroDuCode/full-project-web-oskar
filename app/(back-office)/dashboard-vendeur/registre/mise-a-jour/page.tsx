@@ -89,9 +89,7 @@ const getFileIcon = (mimetype: string) => {
   return faFileAlt;
 };
 
-// ============================================
-// FONCTION: Construire l'URL complète pour l'affichage
-// ============================================
+
 const getFileUrl = (url: string | null | undefined): string | null => {
   if (!url) return null;
   
