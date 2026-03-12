@@ -278,7 +278,7 @@ export default function RegistreCommercePage() {
 
       console.log("📤 Upload du fichier:", file.name, file.size, file.type);
 
-      // ✅ Utiliser le bon endpoint API_ENDPOINTS.VENDEURS.UPLOADER_REGISTRE_COMMERCE
+      //Utiliser le bon endpoint API_ENDPOINTS.VENDEURS.UPLOADER_REGISTRE_COMMERCE
       const response = await api.post<UploadResponse>(
         API_ENDPOINTS.VENDEURS.UPLOADER_REGISTRE_COMMERCE,
         formData,
