@@ -99,6 +99,133 @@ const colors = {
   },
 };
 
+// ============================================
+// FONCTION POUR OBTENIR LES INITIALES
+// ============================================
+const getInitials = (nom?: string, prenoms?: string, email?: string): string => {
+  if (prenoms && nom) {
+    return `${prenoms.charAt(0).toUpperCase()}${nom.charAt(0).toUpperCase()}`;
+  }
+  if (prenoms) {
+    return prenoms.charAt(0).toUpperCase();
+  }
+  if (nom) {
+    return nom.charAt(0).toUpperCase();
+  }
+  if (email) {
+    return email.charAt(0).toUpperCase();
+  }
+  return "A";
+};
+
+// ============================================
+// FONCTION POUR CONSTRUIRE L'URL DE L'AVATAR
+// ============================================
+const buildAvatarUrl = (avatarPath: string | null | undefined): string | null => {
+  if (!avatarPath) return null;
+  
+  // Si c'est déjà une URL complète
+  if (avatarPath.startsWith('http')) {
+    return avatarPath;
+  }
+  
+  // Construire l'URL vers le serveur de fichiers
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3005';
+  return `${API_URL}/api/files/${avatarPath}`;
+};
+
+// ============================================
+// COMPOSANT D'AVATAR AVEC FALLBACK VERS INITIALES
+// ============================================
+const UserAvatar = ({
+  avatar,
+  nom,
+  prenoms,
+  email,
+  userType = "admin",
+  size = 40,
+  showStatus = false,
+  online = false,
+  border = false,
+}: {
+  avatar?: string | null;
+  nom?: string;
+  prenoms?: string;
+  email?: string;
+  userType?: string;
+  size?: number;
+  showStatus?: boolean;
+  online?: boolean;
+  border?: boolean;
+}) => {
+  const [imageError, setImageError] = useState(false);
+  const avatarUrl = useMemo(() => {
+    if (!avatar || imageError) return null;
+    return buildAvatarUrl(avatar);
+  }, [avatar, imageError]);
+
+  const initials = useMemo(() => {
+    return getInitials(nom, prenoms, email);
+  }, [nom, prenoms, email]);
+
+  const getUserTypeColor = (type: string) => {
+    switch (type) {
+      case "super_admin":
+        return "#6f42c1";
+      case "admin":
+        return "#0dcaf0";
+      case "agent":
+        return "#0d6efd";
+      case "vendeur":
+        return "#ffc107";
+      default:
+        return "#198754";
+    }
+  };
+
+  const bgColor = getUserTypeColor(userType);
+
+  return (
+    <div className="position-relative d-inline-block">
+      <div
+        className="rounded-circle d-flex align-items-center justify-content-center overflow-hidden"
+        style={{
+          width: size,
+          height: size,
+          backgroundColor: avatarUrl && !imageError ? 'transparent' : `${bgColor}20`,
+          border: border ? `2px solid ${online ? '#25D366' : '#e9ecef'}` : 'none',
+        }}
+      >
+        {avatarUrl && !imageError ? (
+          <img
+            src={avatarUrl}
+            alt={prenoms || nom || email || "Avatar"}
+            className="w-100 h-100"
+            style={{ objectFit: "cover" }}
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <span
+            className="fw-bold"
+            style={{
+              color: bgColor,
+              fontSize: size * 0.4,
+            }}
+          >
+            {initials}
+          </span>
+        )}
+      </div>
+      {showStatus && online && (
+        <div
+          className="position-absolute bottom-0 end-0 bg-success rounded-circle border border-2 border-white"
+          style={{ width: size * 0.25, height: size * 0.25 }}
+        />
+      )}
+    </div>
+  );
+};
+
 // Types pour les utilisateurs
 interface UtilisateurBase {
   uuid: string;
@@ -144,6 +271,7 @@ interface Message {
   expediteurNom: string;
   expediteurEmail: string;
   expediteurUuid?: string;
+  expediteurAvatar?: string | null;
   destinataireEmail: string;
   destinataireUuid?: string;
   type: string;
@@ -191,7 +319,7 @@ interface ContactConversation {
     nom: string;
     uuid: string;
   };
-  avatar?: string;
+  avatar?: string | null;
   online?: boolean;
   lastSeen?: string;
   typing?: boolean;
@@ -229,6 +357,20 @@ interface ToastNotification {
     date?: string;
   };
 }
+
+// ============================================
+// FONCTION UTILITAIRE POUR ÉVITER LES DOUBLONS
+// ============================================
+const ensureUniqueMessages = (messages: Message[], source: string): Message[] => {
+  const uuids = messages.map(m => m.uuid);
+  const duplicates = uuids.filter((uuid, index) => uuids.indexOf(uuid) !== index);
+  if (duplicates.length > 0) {
+    console.warn(`⚠️ Duplicate UUIDs found in ${source}:`, [...new Set(duplicates)]);
+    // Remove duplicates
+    return Array.from(new Map(messages.map(msg => [msg.uuid, msg])).values());
+  }
+  return messages;
+};
 
 // ============================================
 // COMPOSANTS UTILITAIRES
@@ -378,6 +520,7 @@ const MessageBubble = ({
   showAvatar,
   avatar,
   senderName,
+  senderAvatar,
   onReply,
   onDelete,
   onForward,
@@ -389,6 +532,7 @@ const MessageBubble = ({
   showAvatar?: boolean;
   avatar?: string;
   senderName?: string;
+  senderAvatar?: string | null;
   onReply?: () => void;
   onDelete?: () => void;
   onForward?: () => void;
@@ -446,21 +590,13 @@ const MessageBubble = ({
     >
       {!isOwn && showAvatar && (
         <div className="me-2 flex-shrink-0">
-          {avatar ? (
-            <img
-              src={avatar}
-              alt={senderName || "Avatar"}
-              className="rounded-circle"
-              style={{ width: "36px", height: "36px", objectFit: "cover" }}
-            />
-          ) : (
-            <div
-              className="rounded-circle d-flex align-items-center justify-content-center"
-              style={{ width: "36px", height: "36px", backgroundColor: "#6f42c120" }}
-            >
-              <FontAwesomeIcon icon={faCrown} style={{ color: "#6f42c1" }} />
-            </div>
-          )}
+          <UserAvatar
+            avatar={senderAvatar}
+            nom={senderName}
+            email={message.expediteurEmail}
+            userType={message.type === "SUPER_ADMIN" ? "super_admin" : "admin"}
+            size={36}
+          />
         </div>
       )}
 
@@ -592,21 +728,12 @@ const MessageBubble = ({
 
       {isOwn && showAvatar && (
         <div className="ms-2 flex-shrink-0">
-          {avatar ? (
-            <img
-              src={avatar}
-              alt="Vous"
-              className="rounded-circle"
-              style={{ width: "36px", height: "36px", objectFit: "cover" }}
-            />
-          ) : (
-            <div
-              className="rounded-circle d-flex align-items-center justify-content-center"
-              style={{ width: "36px", height: "36px", backgroundColor: "#6f42c120" }}
-            >
-              <FontAwesomeIcon icon={faCrown} style={{ color: "#6f42c1" }} />
-            </div>
-          )}
+          <UserAvatar
+            avatar={avatar}
+            nom="Vous"
+            userType="admin"
+            size={36}
+          />
         </div>
       )}
     </div>
@@ -647,36 +774,6 @@ const ChatHeader = ({
     return "Hors ligne";
   };
 
-  const getUserTypeColor = (userType: string) => {
-    switch (userType) {
-      case "super_admin":
-        return "#6f42c1";
-      case "admin":
-        return "#0dcaf0";
-      case "agent":
-        return "#0d6efd";
-      case "vendeur":
-        return "#ffc107";
-      default:
-        return "#198754";
-    }
-  };
-
-  const getUserTypeIcon = (userType: string) => {
-    switch (userType) {
-      case "super_admin":
-        return faCrown;
-      case "admin":
-        return faShield;
-      case "agent":
-        return faUserTie;
-      case "vendeur":
-        return faStore;
-      default:
-        return faUser;
-    }
-  };
-
   return (
     <div className="bg-white border-bottom p-3 d-flex align-items-center">
       {onBack && (
@@ -690,26 +787,17 @@ const ChatHeader = ({
       )}
       
       <div className="position-relative me-3">
-        <div
-          className="rounded-circle d-flex align-items-center justify-content-center"
-          style={{
-            width: "45px",
-            height: "45px",
-            backgroundColor: getUserTypeColor(contact.userType) + "20",
-            border: contact.online ? "2px solid #25D366" : "none",
-          }}
-        >
-          <FontAwesomeIcon
-            icon={getUserTypeIcon(contact.userType)}
-            style={{ fontSize: "1.2rem", color: getUserTypeColor(contact.userType) }}
-          />
-        </div>
-        {contact.online && (
-          <div
-            className="position-absolute bottom-0 end-0 bg-success rounded-circle border border-2 border-white"
-            style={{ width: "12px", height: "12px" }}
-          />
-        )}
+        <UserAvatar
+          avatar={contact.avatar}
+          nom={contact.nom}
+          prenoms={contact.prenoms}
+          email={contact.email}
+          userType={contact.userType}
+          size={45}
+          showStatus={true}
+          online={contact.online}
+          border={true}
+        />
       </div>
 
       <div className="flex-grow-1">
@@ -888,36 +976,6 @@ const ConversationItem = ({
       : lastMessage.contenu;
   };
 
-  const getUserTypeColor = (userType: string) => {
-    switch (userType) {
-      case "super_admin":
-        return "#6f42c1";
-      case "admin":
-        return "#0dcaf0";
-      case "agent":
-        return "#0d6efd";
-      case "vendeur":
-        return "#ffc107";
-      default:
-        return "#198754";
-    }
-  };
-
-  const getUserTypeIcon = (userType: string) => {
-    switch (userType) {
-      case "super_admin":
-        return faCrown;
-      case "admin":
-        return faShield;
-      case "agent":
-        return faUserTie;
-      case "vendeur":
-        return faStore;
-      default:
-        return faUser;
-    }
-  };
-
   return (
     <div
       className={`d-flex align-items-center p-3 border-bottom cursor-pointer ${
@@ -930,26 +988,17 @@ const ConversationItem = ({
       }}
     >
       <div className="position-relative me-3 flex-shrink-0">
-        <div
-          className="rounded-circle d-flex align-items-center justify-content-center"
-          style={{
-            width: "50px",
-            height: "50px",
-            backgroundColor: getUserTypeColor(contact.userType) + "20",
-            border: contact.online ? "2px solid #25D366" : "none",
-          }}
-        >
-          <FontAwesomeIcon
-            icon={getUserTypeIcon(contact.userType)}
-            style={{ fontSize: "1.3rem", color: getUserTypeColor(contact.userType) }}
-          />
-        </div>
-        {contact.online && (
-          <div
-            className="position-absolute bottom-0 end-0 bg-success rounded-circle border border-2 border-white"
-            style={{ width: "12px", height: "12px" }}
-          />
-        )}
+        <UserAvatar
+          avatar={contact.avatar}
+          nom={contact.nom}
+          prenoms={contact.prenoms}
+          email={contact.email}
+          userType={contact.userType}
+          size={50}
+          showStatus={true}
+          online={contact.online}
+          border={true}
+        />
       </div>
       
       <div className="flex-grow-1 min-width-0">
@@ -1021,36 +1070,6 @@ const ContactInfo = ({
     }
   };
 
-  const getUserTypeIcon = (userType: string) => {
-    switch (userType) {
-      case "super_admin":
-        return faCrown;
-      case "admin":
-        return faShield;
-      case "agent":
-        return faUserTie;
-      case "vendeur":
-        return faStore;
-      default:
-        return faUser;
-    }
-  };
-
-  const getUserTypeColor = (userType: string) => {
-    switch (userType) {
-      case "super_admin":
-        return "#6f42c1";
-      case "admin":
-        return "#0dcaf0";
-      case "agent":
-        return "#0d6efd";
-      case "vendeur":
-        return "#ffc107";
-      default:
-        return "#198754";
-    }
-  };
-
   return (
     <div className="bg-white h-100">
       <div className="p-3 border-bottom d-flex align-items-center justify-content-between">
@@ -1063,20 +1082,16 @@ const ContactInfo = ({
       </div>
       
       <div className="p-4 text-center border-bottom">
-        <div
-          className="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3"
-          style={{
-            width: "100px",
-            height: "100px",
-            backgroundColor: getUserTypeColor(contact.userType) + "20",
-          }}
-        >
-          <FontAwesomeIcon
-            icon={getUserTypeIcon(contact.userType)}
-            style={{ fontSize: "3rem", color: getUserTypeColor(contact.userType) }}
-          />
-        </div>
-        <h5 className="mb-1">
+        <UserAvatar
+          avatar={contact.avatar}
+          nom={contact.nom}
+          prenoms={contact.prenoms}
+          email={contact.email}
+          userType={contact.userType}
+          size={100}
+          border={true}
+        />
+        <h5 className="mb-1 mt-3">
           {contact.prenoms} {contact.nom}
         </h5>
         <p className="text-muted small mb-2">{getUserTypeLabel(contact.userType)}</p>
@@ -1285,6 +1300,17 @@ function MessagesContent() {
   const [messageToDelete, setMessageToDelete] = useState<Message | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
+  // ✅ Cache pour les messages
+  const messagesCache = useRef<{
+    recus: Message[];
+    envoyes: Message[];
+    lastFetch: number;
+  }>({
+    recus: [],
+    envoyes: [],
+    lastFetch: 0,
+  });
+
   // États pour les filtres
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedType, setSelectedType] = useState<string>("all");
@@ -1305,7 +1331,7 @@ function MessagesContent() {
   const pollingInterval = useRef<NodeJS.Timeout | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // ✅ Fonction pour naviguer vers l'accueil (CORRIGÉE)
+  // ✅ Fonction pour naviguer vers l'accueil
   const navigateToHome = useCallback(() => {
     router.push('/');
   }, [router]);
@@ -1367,7 +1393,6 @@ function MessagesContent() {
         },
       ]);
 
-      // Jouer un son pour les nouveaux messages
       if (type === "new-message") {
         if (audioRef.current) {
           audioRef.current.play().catch((err) => {
@@ -1452,7 +1477,6 @@ function MessagesContent() {
         );
       } catch (err: any) {
         console.error("❌ Erreur lors du marquage comme lu:", err);
-        // Ne pas afficher de toast d'erreur
       }
     },
     [currentConversation, showToast],
@@ -1515,7 +1539,6 @@ function MessagesContent() {
         );
       } catch (err: any) {
         console.error("❌ Erreur lors du marquage comme non lu:", err);
-        // Ne pas afficher de toast d'erreur
       }
     },
     [currentConversation, showToast],
@@ -1597,13 +1620,25 @@ function MessagesContent() {
           .map((item: any) => {
             if (!item) return null;
             const message = item.message || item;
+            
+            if (message.expediteurEmail === 'system@example.com' ||
+                message.expediteurEmail?.includes('noreply') ||
+                !message.expediteurEmail) {
+              return null;
+            }
+
+            // Générer un UUID unique si nécessaire
+            const uniqueId = message.uuid || 
+              `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${item.dateReception || ''}-${message.expediteurEmail || ''}`;
+
             return {
-              uuid: message.uuid || `msg-${Date.now()}`,
+              uuid: uniqueId,
               sujet: message.sujet || "Sans sujet",
               contenu: message.contenu || "",
               expediteurNom: message.expediteurNom || "Expéditeur inconnu",
               expediteurEmail: message.expediteurEmail || "",
               expediteurUuid: message.expediteurUuid,
+              expediteurAvatar: message.expediteurAvatar || null,
               destinataireEmail: message.destinataireEmail || adminProfile.email,
               destinataireUuid: message.destinataireUuid || adminProfile.uuid,
               type: (message.type || "notification").toUpperCase(),
@@ -1616,13 +1651,18 @@ function MessagesContent() {
           })
           .filter((item): item is Message => item !== null);
 
+        // Supprimer les doublons par UUID
+        const uniqueMessages = Array.from(
+          new Map(transformedMessages.map(msg => [msg.uuid, msg])).values()
+        );
+
         const existingIds = new Set(messagesRecus.map((m) => m.uuid));
-        const newMessages = transformedMessages.filter(
+        const newMessages = uniqueMessages.filter(
           (msg) => !existingIds.has(msg.uuid) && !msg.estLu,
         );
 
         if (newMessages.length > 0) {
-          setMessagesRecus((prev) => [...newMessages, ...prev]);
+          setMessagesRecus((prev) => ensureUniqueMessages([...newMessages, ...prev], 'messagesRecus'));
           setUnreadCount((prev) => prev + newMessages.length);
 
           newMessages.forEach((msg) => {
@@ -1648,7 +1688,6 @@ function MessagesContent() {
     }
   }, [adminProfile, messagesRecus, showToast]);
 
-  // Démarrer le polling
   useEffect(() => {
     if (!adminProfile) return;
 
@@ -1662,7 +1701,6 @@ function MessagesContent() {
     };
   }, [adminProfile, checkNewMessages]);
 
-  // Mise à jour du compteur de non lus
   useEffect(() => {
     const unread = messagesRecus.filter((m) => !m.estLu).length;
     setUnreadCount(unread);
@@ -1686,17 +1724,10 @@ function MessagesContent() {
           email: profile.email,
           type: profile.type,
           uuid: profile.uuid,
+          avatar: profile.avatar,
         });
 
         setAdminProfile(profile);
-        setNewMessage((prev) => ({
-          ...prev,
-          expediteurEmail: profile.email || "",
-          expediteurNom:
-            `${profile.prenoms || ""} ${profile.nom || ""}`.trim() ||
-            "Administrateur SONEC",
-          expediteurUuid: profile.uuid || "",
-        }));
         return profile;
       }
       return null;
@@ -1779,13 +1810,19 @@ function MessagesContent() {
   }, []);
 
   // ============================================
-  // CHARGEMENT DES MESSAGES
+  // ✅ CHARGEMENT DES MESSAGES REÇUS AVEC CACHE ET DÉDOUBLONNAGE
   // ============================================
   const fetchMessagesRecus = useCallback(
-    async (profileEmail?: string, profileUuid?: string) => {
+    async (profileEmail?: string, profileUuid?: string, forceRefresh = false) => {
+      const now = Date.now();
+      if (!forceRefresh && messagesCache.current.recus.length > 0 && (now - messagesCache.current.lastFetch) < 30000) {
+        console.log("📦 Utilisation du cache pour les messages reçus");
+        setMessagesRecus(messagesCache.current.recus);
+        return;
+      }
+
       setLoading((prev) => ({ ...prev, messages: true }));
       try {
-        console.log("📥 Chargement des messages reçus...");
         const response = await api.get<MessageReceived[] | Message[]>(
           API_ENDPOINTS.MESSAGERIE.RECEIVED,
         );
@@ -1796,20 +1833,24 @@ function MessagesContent() {
               if (!item) return null;
               const message = item.message || item;
 
-              // Filtrer les messages système
               if (message.expediteurEmail === 'system@example.com' ||
                   message.expediteurEmail?.includes('noreply') ||
                   !message.expediteurEmail) {
                 return null;
               }
 
+              // Générer un UUID unique si nécessaire
+              const uniqueId = message.uuid || 
+                `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${item.dateReception || ''}-${message.expediteurEmail || ''}-${Math.random().toString(36).substr(2, 5)}`;
+
               return {
-                uuid: message.uuid || `msg-${Date.now()}`,
+                uuid: uniqueId,
                 sujet: message.sujet || "Sans sujet",
                 contenu: message.contenu || "",
                 expediteurNom: message.expediteurNom || "Expéditeur inconnu",
                 expediteurEmail: message.expediteurEmail || "",
                 expediteurUuid: message.expediteurUuid,
+                expediteurAvatar: message.expediteurAvatar || null,
                 destinataireEmail: message.destinataireEmail || profileEmail || "",
                 destinataireUuid: message.destinataireUuid || profileUuid,
                 type: (message.type || "notification").toUpperCase(),
@@ -1822,9 +1863,14 @@ function MessagesContent() {
             })
             .filter((item): item is Message => item !== null);
 
-          setMessagesRecus(transformedMessages);
+          // Supprimer les doublons par UUID
+          const uniqueMessages = ensureUniqueMessages(transformedMessages, 'fetchMessagesRecus');
 
-          const unreadMessages = transformedMessages.filter((m) => !m.estLu);
+          setMessagesRecus(uniqueMessages);
+          messagesCache.current.recus = uniqueMessages;
+          messagesCache.current.lastFetch = now;
+
+          const unreadMessages = uniqueMessages.filter((m) => !m.estLu);
           if (unreadMessages.length > 0) {
             showToast(
               "info",
@@ -1844,10 +1890,17 @@ function MessagesContent() {
   );
 
   // ============================================
-  // ✅ CHARGEMENT DES MESSAGES ENVOYÉS - VERSION CORRIGÉE
+  // ✅ CHARGEMENT DES MESSAGES ENVOYÉS AVEC CACHE ET DÉDOUBLONNAGE
   // ============================================
   const fetchMessagesEnvoyes = useCallback(
-    async (profileNom?: string, profileEmail?: string, profileUuid?: string) => {
+    async (profileNom?: string, profileEmail?: string, profileUuid?: string, forceRefresh = false) => {
+      const now = Date.now();
+      if (!forceRefresh && messagesCache.current.envoyes.length > 0 && (now - messagesCache.current.lastFetch) < 30000) {
+        console.log("📦 Utilisation du cache pour les messages envoyés");
+        setMessagesEnvoyes(messagesCache.current.envoyes);
+        return;
+      }
+
       try {
         const response = await api.get<Message[]>(API_ENDPOINTS.MESSAGERIE.SENT);
 
@@ -1863,6 +1916,7 @@ function MessagesContent() {
                 expediteurNom: msg.expediteurNom || profileNom || "Administrateur SONEC",
                 expediteurEmail: msg.expediteurEmail || profileEmail || "",
                 expediteurUuid: msg.expediteurUuid || profileUuid,
+                expediteurAvatar: msg.expediteurAvatar || null,
                 destinataireEmail: msg.destinataireEmail || "",
                 destinataireUuid: msg.destinataireUuid,
                 type: (msg.type || "notification").toUpperCase(),
@@ -1875,7 +1929,12 @@ function MessagesContent() {
             })
             .filter((msg): msg is Message => msg !== null);
 
-          setMessagesEnvoyes(formattedMessages);
+          // Supprimer les doublons par UUID
+          const uniqueMessages = ensureUniqueMessages(formattedMessages, 'fetchMessagesEnvoyes');
+
+          setMessagesEnvoyes(uniqueMessages);
+          messagesCache.current.envoyes = uniqueMessages;
+          messagesCache.current.lastFetch = now;
         }
       } catch (err: any) {
         console.error("❌ Error fetching sent messages:", err);
@@ -1894,7 +1953,11 @@ function MessagesContent() {
       setLoading((prev) => ({ ...prev, contacts: true }));
 
       try {
-        const allMessages = [...messagesRecus, ...messagesEnvoyes];
+        // S'assurer que les messages sont uniques avant de construire les conversations
+        const uniqueMessagesRecus = ensureUniqueMessages(messagesRecus, 'buildContacts-recus');
+        const uniqueMessagesEnvoyes = ensureUniqueMessages(messagesEnvoyes, 'buildContacts-envoyes');
+        
+        const allMessages = [...uniqueMessagesRecus, ...uniqueMessagesEnvoyes];
         const contactsMap = new Map<string, ContactConversation>();
         const conversationsMap = new Map<string, Conversation>();
 
@@ -1932,6 +1995,7 @@ function MessagesContent() {
               lastMessageStatus: isFromMe ? message.status : (message.estLu ? "read" : "delivered"),
               unreadCount: !isFromMe && !message.estLu ? 1 : 0,
               totalMessages: 1,
+              avatar: isFromMe ? null : message.expediteurAvatar,
               online: Math.random() > 0.5,
               lastSeen: new Date(Date.now() - Math.random() * 3600000).toISOString(),
             };
@@ -1999,16 +2063,6 @@ function MessagesContent() {
     },
     [messagesRecus, messagesEnvoyes],
   );
-
-  // ============================================
-  // SÉLECTIONNER LE PREMIER CONTACT PAR DÉFAUT
-  // ============================================
-  useEffect(() => {
-    if (conversations.length > 0 && !currentConversation && !loading.initial) {
-      setCurrentConversation(conversations[0]);
-      setShowMobileConversations(false);
-    }
-  }, [conversations, currentConversation, loading.initial]);
 
   // ============================================
   // CHARGEMENT INITIAL
@@ -2128,15 +2182,6 @@ function MessagesContent() {
         setCurrentConversation(newConv);
       }
 
-      setNewMessage((prev) => ({
-        ...prev,
-        destinataireEmail: destinataireEmail,
-        destinataireUuid: destinataireUuid || "",
-        sujet: sujet || `Message pour ${destinataireNom || destinataireEmail}`,
-        contenu: "",
-        type: "notification",
-      }));
-
       setShowMobileConversations(false);
 
       const url = new URL(window.location.href);
@@ -2179,6 +2224,7 @@ function MessagesContent() {
         is_super_admin: true,
         is_admin: false,
         online: Math.random() > 0.5,
+        avatar: user.avatar || null,
         lastSeen: new Date(Date.now() - Math.random() * 3600000).toISOString(),
       } as ContactConversation);
     });
@@ -2190,6 +2236,7 @@ function MessagesContent() {
         is_admin: false,
         is_super_admin: false,
         online: Math.random() > 0.5,
+        avatar: user.avatar || null,
         lastSeen: new Date(Date.now() - Math.random() * 3600000).toISOString(),
       } as ContactConversation);
     });
@@ -2201,6 +2248,7 @@ function MessagesContent() {
         is_admin: false,
         is_super_admin: false,
         online: Math.random() > 0.5,
+        avatar: user.avatar || null,
         lastSeen: new Date(Date.now() - Math.random() * 3600000).toISOString(),
       } as ContactConversation);
     });
@@ -2212,6 +2260,7 @@ function MessagesContent() {
         is_admin: false,
         is_super_admin: false,
         online: Math.random() > 0.5,
+        avatar: user.avatar || null,
         lastSeen: new Date(Date.now() - Math.random() * 3600000).toISOString(),
       } as ContactConversation);
     });
@@ -2270,6 +2319,16 @@ function MessagesContent() {
   }, [conversations, allUsers, adminProfile, searchTerm, selectedType]);
 
   // ============================================
+  // SÉLECTIONNER LE PREMIER CONTACT PAR DÉFAUT
+  // ============================================
+  useEffect(() => {
+    if (conversations.length > 0 && !currentConversation && !loading.initial) {
+      setCurrentConversation(conversations[0]);
+      setShowMobileConversations(false);
+    }
+  }, [conversations, currentConversation, loading.initial]);
+
+  // ============================================
   // CHARGEMENT DE LA CONVERSATION
   // ============================================
   const loadConversation = useCallback((contact: ContactConversation) => {
@@ -2278,11 +2337,9 @@ function MessagesContent() {
     if (conversation) {
       setCurrentConversation(conversation);
       
-      // Marquer les messages comme lus (sans attendre la réponse du serveur)
       conversation.messages
         .filter((m) => !m.estLu && m.expediteurEmail !== adminProfile?.email)
         .forEach((m) => {
-          // Mise à jour locale immédiate
           setMessagesRecus((prev) =>
             prev.map((msg) =>
               msg.uuid === m.uuid
@@ -2290,7 +2347,6 @@ function MessagesContent() {
                 : msg,
             ),
           );
-          // Appel API en arrière-plan
           handleMarkAsRead(m.uuid).catch(() => {});
         });
     } else {
@@ -2312,21 +2368,7 @@ function MessagesContent() {
   }, [conversations, adminProfile, handleMarkAsRead]);
 
   // ============================================
-  // État pour le formulaire d'envoi
-  // ============================================
-  const [newMessage, setNewMessage] = useState({
-    destinataireEmail: "",
-    destinataireUuid: "",
-    sujet: "",
-    contenu: "",
-    type: "notification",
-    expediteurNom: "Administrateur SONEC",
-    expediteurEmail: "",
-    expediteurUuid: "",
-  });
-
-  // ============================================
-  // ✅ ENVOI DE MESSAGE - VERSION CORRIGÉE AVEC PUBLIC_SEND
+  // ✅ ENVOI DE MESSAGE - VERSION CORRIGÉE AVEC UUID UNIQUE
   // ============================================
   const handleSendMessage = useCallback(
     async (content: string) => {
@@ -2361,7 +2403,6 @@ function MessagesContent() {
           type: "NOTIFICATION",
         };
 
-        // ✅ Utiliser PUBLIC_SEND pour éviter les problèmes d'authentification
         const response = await api.post<any>(
           API_ENDPOINTS.MESSAGERIE.PUBLIC_SEND,
           messageData,
@@ -2369,14 +2410,17 @@ function MessagesContent() {
 
         console.log("✅ Message envoyé avec succès, réponse:", response);
 
-        // ✅ Utiliser l'UUID réel de la réponse
+        // Générer un UUID unique pour le message temporaire
+        const tempUuid = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}-${Math.random().toString(36).substr(2, 5)}`;
+
         const newMessageObj: Message = {
-          uuid: response.uuid || response.data?.uuid || `temp-${Date.now()}`,
+          uuid: response.uuid || response.data?.uuid || tempUuid,
           sujet: messageData.sujet,
           contenu: messageData.contenu,
           expediteurNom: messageData.expediteurNom,
           expediteurEmail: messageData.expediteurEmail,
           expediteurUuid: messageData.expediteurUuid,
+          expediteurAvatar: adminProfile.avatar || null,
           destinataireEmail: messageData.destinataireEmail,
           destinataireUuid: messageData.destinataireUuid,
           type: "NOTIFICATION",
@@ -2387,19 +2431,17 @@ function MessagesContent() {
           status: "sent",
         };
 
-        // Ajouter aux messages envoyés
-        setMessagesEnvoyes((prev) => [newMessageObj, ...prev]);
+        setMessagesEnvoyes((prev) => ensureUniqueMessages([newMessageObj, ...prev], 'handleSendMessage'));
+        messagesCache.current.envoyes = ensureUniqueMessages([newMessageObj, ...messagesCache.current.envoyes], 'handleSendMessage-cache');
 
-        // Mettre à jour la conversation courante
         const updatedConversation = {
           ...currentConversation,
-          messages: [...currentConversation.messages, newMessageObj],
+          messages: ensureUniqueMessages([...currentConversation.messages, newMessageObj], 'updatedConversation'),
           lastMessage: newMessageObj,
         };
 
         setCurrentConversation(updatedConversation);
 
-        // Mettre à jour la liste des conversations
         setConversations((prev) =>
           prev.map((conv) =>
             conv.contact.email === currentConversation.contact.email
@@ -2460,12 +2502,13 @@ function MessagesContent() {
     if (adminProfile) {
       setLoading((prev) => ({ ...prev, messages: true }));
       try {
-        await fetchMessagesRecus(adminProfile.email, adminProfile.uuid);
+        await fetchMessagesRecus(adminProfile.email, adminProfile.uuid, true);
         await fetchMessagesEnvoyes(
           `${adminProfile.prenoms || ""} ${adminProfile.nom || ""}`.trim() ||
             "Administrateur SONEC",
           adminProfile.email,
           adminProfile.uuid,
+          true,
         );
         await buildContactsAndConversations(adminProfile);
         showToast("info", "🔄 Actualisation", "Vos messages ont été actualisés", {
@@ -2665,10 +2708,9 @@ function MessagesContent() {
               maxWidth: "350px",
             }}
           >
-            {/* En-tête de la liste avec logo OSKAR - CORRIGÉ */}
+            {/* En-tête de la liste avec logo OSKAR */}
             <div className="p-3 border-bottom" style={{ background: "#f0f2f5" }}>
               <div className="d-flex align-items-center justify-content-between mb-3">
-                {/* 👇 LOGO OSKAR cliquable - Version corrigée */}
                 <div 
                   className="d-flex align-items-center gap-2" 
                   style={{ cursor: "pointer" }}
@@ -2732,7 +2774,7 @@ function MessagesContent() {
                 />
               </div>
 
-              {/* Filtre "Tous" uniquement - affiché de façon statique pour information */}
+              {/* Filtre "Tous" uniquement */}
               <div className="mt-3">
                 <span className="badge bg-success" style={{ borderRadius: "20px", fontSize: "0.8rem", padding: "6px 12px" }}>
                   Tous les contacts
@@ -2798,27 +2840,32 @@ function MessagesContent() {
                     </div>
                   ) : (
                     <>
-                      {currentConversation.messages.map((message) => (
-                        <MessageBubble
-                          key={message.uuid}
-                          message={message}
-                          isOwn={message.expediteurEmail === adminProfile?.email}
-                          status={message.status}
-                          showAvatar={true}
-                          avatar={adminProfile?.avatar}
-                          senderName={currentConversation.contact.prenoms}
-                          onReply={() => handleReply(message)}
-                          onDelete={() => openDeleteModal(message)}
-                          onForward={() => {
-                            navigator.clipboard.writeText(message.contenu);
-                            showToast("success", "📋 Message copié", "Le message a été copié pour être transféré", { duration: 2000 });
-                          }}
-                          onCopy={() => {
-                            navigator.clipboard.writeText(message.contenu);
-                            showToast("success", "📋 Message copié", "Le message a été copié dans le presse-papiers", { duration: 2000 });
-                          }}
-                        />
-                      ))}
+                      {currentConversation.messages.map((message) => {
+                        const isOwn = message.expediteurEmail === adminProfile?.email;
+                        
+                        return (
+                          <MessageBubble
+                            key={message.uuid}
+                            message={message}
+                            isOwn={isOwn}
+                            status={message.status}
+                            showAvatar={true}
+                            avatar={adminProfile?.avatar}
+                            senderName={currentConversation.contact.prenoms}
+                            senderAvatar={!isOwn ? message.expediteurAvatar : null}
+                            onReply={() => handleReply(message)}
+                            onDelete={() => openDeleteModal(message)}
+                            onForward={() => {
+                              navigator.clipboard.writeText(message.contenu);
+                              showToast("success", "📋 Message copié", "Le message a été copié pour être transféré", { duration: 2000 });
+                            }}
+                            onCopy={() => {
+                              navigator.clipboard.writeText(message.contenu);
+                              showToast("success", "📋 Message copié", "Le message a été copié dans le presse-papiers", { duration: 2000 });
+                            }}
+                          />
+                        );
+                      })}
                       <div ref={messagesEndRef} />
                     </>
                   )}
@@ -2856,7 +2903,6 @@ function MessagesContent() {
                     <span className="badge bg-warning px-3 py-2">Vendeurs</span>
                     <span className="badge bg-success px-3 py-2">Utilisateurs</span>
                   </div>
-                  {/* 👇 LOGO OSKAR QUAND AUCUN CONTACT - CORRIGÉ */}
                   <div 
                     className="d-flex align-items-center justify-content-center gap-2 mx-auto mt-4"
                     style={{ cursor: "pointer", maxWidth: "fit-content" }}

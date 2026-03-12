@@ -1750,11 +1750,6 @@ export default function EchangeDetailPage() {
                       <span className="fw-semibold fs-5">{createur.telephone || "Non disponible"}</span>
                     </div>
                   </div>
-
-                  <p className="text-muted small">
-                    <FontAwesomeIcon icon={faLaptop} className="me-1" />
-                    Vous êtes sur un ordinateur. Pour appeler directement, utilisez votre téléphone ou copiez le numéro.
-                  </p>
                 </div>
 
                 <div className="d-flex gap-3 justify-content-center">

@@ -20,6 +20,8 @@ import {
   faCalendarAlt,
   faUser,
   faClock,
+  faLink,
+  faCopy,
 } from "@fortawesome/free-solid-svg-icons";
 import "bootstrap/dist/css/bootstrap.min.css";
 import colors from "@/app/shared/constants/colors";
@@ -70,7 +72,6 @@ const formatDate = (dateString: string): string => {
   try {
     const date = new Date(dateString);
     
-    // Formater la date en français
     const options: Intl.DateTimeFormatOptions = {
       day: "2-digit",
       month: "long",
@@ -79,7 +80,7 @@ const formatDate = (dateString: string): string => {
       minute: "2-digit"
     };
     
-    return date.toLocaleDateString("fr-FR", options).replace(" à ", "' à '");
+    return date.toLocaleDateString("fr-FR", options).replace(" à ", " à ");
   } catch {
     return dateString;
   }
@@ -102,9 +103,16 @@ const getFileUrl = (url: string | null | undefined): string | null => {
     return url;
   }
   
-  // Sinon, construire l'URL vers le nouveau endpoint files
+  // Si l'URL contient %2F (encodé), l'utiliser directement
+  if (url.includes('%2F')) {
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3005';
+    return `${API_URL}/api/files/${url}`;
+  }
+  
+  // Sinon, encoder le chemin
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3005';
-  return `${API_URL}/api/files/${url}`;
+  const encodedPath = encodeURIComponent(url);
+  return `${API_URL}/api/files/${encodedPath}`;
 };
 
 // ============================================
@@ -124,6 +132,7 @@ export default function RegistreCommercePage() {
   const [dragActive, setDragActive] = useState(false);
   const [activeTab, setActiveTab] = useState<"consultation" | "upload" | "historique">("consultation");
   const [displayUrl, setDisplayUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -161,17 +170,28 @@ export default function RegistreCommercePage() {
     try {
       setLoading(true);
       
+      // Récupérer le profil du vendeur connecté
+      const token = localStorage.getItem('access_token') || localStorage.getItem('oskar_token');
+      
+      if (!token) {
+        console.log("⚠️ Aucun token trouvé");
+        return;
+      }
+
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3005';
       const response = await fetch(`${API_URL}/auth/vendeur/profile`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+          'Authorization': `Bearer ${token}`
         }
       });
       
       if (response.ok) {
         const data = await response.json();
+        console.log("✅ Profil vendeur chargé:", data);
+        
+        // Vérifier si le vendeur a un registre de commerce
         if (data.data?.registre_commerce) {
-          const registreData = {
+          const registreData: RegistreCommerce = {
             url: data.data.registre_commerce,
             key: data.data.registre_commerce_key || data.data.registre_commerce.replace(/%2F/g, '/'),
             original_name: data.data.registre_commerce_original_name || 'Registre de commerce',
@@ -180,7 +200,14 @@ export default function RegistreCommercePage() {
             uploaded_at: data.data.registre_commerce_uploaded_at
           };
           setCurrentRegistre(registreData);
+          
+          // Sauvegarder dans localStorage pour persistence
+          localStorage.setItem("currentRegistre", JSON.stringify(registreData));
+        } else {
+          console.log("ℹ️ Aucun registre de commerce trouvé");
         }
+      } else {
+        console.error("❌ Erreur chargement profil:", response.status);
       }
       
       // Fallback sur localStorage pour le développement
@@ -189,7 +216,7 @@ export default function RegistreCommercePage() {
         setCurrentRegistre(JSON.parse(mockRegistre));
       }
     } catch (err) {
-      console.error("Erreur chargement registre:", err);
+      console.error("❌ Erreur chargement registre:", err);
     } finally {
       setLoading(false);
     }
@@ -197,6 +224,7 @@ export default function RegistreCommercePage() {
 
   const fetchUploadHistory = async () => {
     try {
+      // Pour l'instant, utiliser localStorage
       const mockHistory = localStorage.getItem("uploadHistory");
       if (mockHistory) {
         setUploadHistory(JSON.parse(mockHistory));
@@ -209,6 +237,7 @@ export default function RegistreCommercePage() {
             date: new Date().toISOString(),
             size: 245760,
             status: "succès",
+            url: currentRegistre?.url || "registres-commerce%2Fdemo.pdf",
           },
           {
             id: "2",
@@ -216,12 +245,13 @@ export default function RegistreCommercePage() {
             date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
             size: 189440,
             status: "succès",
+            url: "registres-commerce%2Fdemo_2023.pdf",
           },
         ];
         setUploadHistory(demoHistory);
       }
     } catch (err) {
-      console.error("Erreur chargement historique:", err);
+      console.error("❌ Erreur chargement historique:", err);
     }
   };
 
@@ -246,9 +276,11 @@ export default function RegistreCommercePage() {
       const formData = new FormData();
       formData.append("registre_commerce", file);
 
-      // Appel API
+      console.log("📤 Upload du fichier:", file.name, file.size, file.type);
+
+      // ✅ Utiliser le bon endpoint API_ENDPOINTS.VENDEURS.UPLOADER_REGISTRE_COMMERCE
       const response = await api.post<UploadResponse>(
-        "/auth/upload-regis-commerce",
+        API_ENDPOINTS.VENDEURS.UPLOADER_REGISTRE_COMMERCE,
         formData,
         { isFormData: true }
       );
@@ -256,10 +288,12 @@ export default function RegistreCommercePage() {
       clearInterval(interval);
       setUploadProgress(100);
 
+      console.log("✅ Réponse upload:", response);
+
       if (response.success) {
         setCurrentRegistre(response.data);
         
-        // Sauvegarder dans localStorage (simulation)
+        // Sauvegarder dans localStorage
         localStorage.setItem("currentRegistre", JSON.stringify(response.data));
 
         // Ajouter à l'historique
@@ -276,7 +310,7 @@ export default function RegistreCommercePage() {
         setUploadHistory(updatedHistory);
         localStorage.setItem("uploadHistory", JSON.stringify(updatedHistory));
 
-        setSuccessMessage("Registre de commerce uploadé avec succès !");
+        setSuccessMessage("✅ Registre de commerce uploadé avec succès !");
         setTimeout(() => setSuccessMessage(null), 5000);
 
         // Passer à l'onglet consultation après 2 secondes
@@ -285,7 +319,7 @@ export default function RegistreCommercePage() {
         }, 2000);
       }
     } catch (err: any) {
-      console.error("Erreur upload:", err);
+      console.error("❌ Erreur upload:", err);
       setError(err.message || "Erreur lors de l'upload du registre");
       
       // Ajouter à l'historique comme échec
@@ -325,10 +359,11 @@ export default function RegistreCommercePage() {
       "image/jpg",
       "image/png",
       "image/gif",
+      "image/webp",
     ];
     
     if (!allowedTypes.includes(file.type)) {
-      setError("Format de fichier non supporté. Utilisez PDF, JPEG, PNG ou GIF.");
+      setError("Format de fichier non supporté. Utilisez PDF, JPEG, PNG, GIF ou WEBP.");
       return;
     }
 
@@ -387,6 +422,19 @@ export default function RegistreCommercePage() {
     setPreviewUrl(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
+    }
+  };
+
+  const handleCopyLink = () => {
+    if (displayUrl) {
+      navigator.clipboard.writeText(displayUrl)
+        .then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        })
+        .catch(() => {
+          setError("Erreur lors de la copie du lien");
+        });
     }
   };
 
@@ -568,7 +616,7 @@ export default function RegistreCommercePage() {
                               objectFit: "contain",
                             }}
                             onError={(e) => {
-                              console.error("Erreur chargement image:", displayUrl);
+                              console.error("❌ Erreur chargement image:", displayUrl);
                               e.currentTarget.style.display = 'none';
                               // Afficher un placeholder
                               const parent = e.currentTarget.parentElement;
@@ -635,6 +683,16 @@ export default function RegistreCommercePage() {
                             </p>
                           </div>
 
+                          {currentRegistre.uploaded_at && (
+                            <div>
+                              <p className="small text-muted mb-1">Date d'upload</p>
+                              <p className="fw-semibold mb-0">
+                                <FontAwesomeIcon icon={faCalendarAlt} className="me-2" />
+                                {formatDate(currentRegistre.uploaded_at)}
+                              </p>
+                            </div>
+                          )}
+
                           <div className="d-grid gap-2 mt-3">
                             {displayUrl && (
                               <>
@@ -684,6 +742,28 @@ export default function RegistreCommercePage() {
                                   <FontAwesomeIcon icon={faEye} />
                                   <span>Ouvrir</span>
                                 </a>
+
+                                <button
+                                  onClick={handleCopyLink}
+                                  className="btn d-flex align-items-center justify-content-center gap-2 py-3"
+                                  style={{
+                                    backgroundColor: "transparent",
+                                    color: colors.oskar.grey,
+                                    border: `1px solid ${colors.oskar.lightGrey}`,
+                                    borderRadius: "10px",
+                                    transition: "all 0.2s ease",
+                                    fontWeight: "500",
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.backgroundColor = colors.oskar.lightGrey;
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.backgroundColor = "transparent";
+                                  }}
+                                >
+                                  <FontAwesomeIcon icon={copied ? faCheckCircle : faCopy} />
+                                  <span>{copied ? "Copié !" : "Copier le lien"}</span>
+                                </button>
                               </>
                             )}
                           </div>
@@ -758,7 +838,7 @@ export default function RegistreCommercePage() {
                         ref={fileInputRef}
                         type="file"
                         className="d-none"
-                        accept=".pdf,.jpg,.jpeg,.png,.gif"
+                        accept=".pdf,.jpg,.jpeg,.png,.gif,.webp"
                         onChange={handleFileSelect}
                       />
 
@@ -802,7 +882,7 @@ export default function RegistreCommercePage() {
                               handleRemoveFile();
                             }}
                           >
-                            <FontAwesomeIcon icon={faTimes} />
+                            <FontAwesomeIcon icon={faTrash} />
                             <span>Supprimer</span>
                           </button>
                         </div>
@@ -827,7 +907,7 @@ export default function RegistreCommercePage() {
                             ou cliquez pour parcourir
                           </p>
                           <p className="small text-muted">
-                            Formats acceptés : PDF, JPEG, PNG, GIF (max 10MB)
+                            Formats acceptés : PDF, JPEG, PNG, GIF, WEBP (max 10MB)
                           </p>
                         </>
                       )}
@@ -914,7 +994,7 @@ export default function RegistreCommercePage() {
                           <p className="small text-muted mb-0">
                             Le registre de commerce est un document officiel requis pour
                             les vendeurs professionnels. Assurez-vous que le document est
-                            lisible et à jour. Les formats acceptés sont PDF, JPEG, PNG et GIF.
+                            lisible et à jour. Les formats acceptés sont PDF, JPEG, PNG, GIF et WEBP.
                             Taille maximum : 10MB.
                           </p>
                         </div>
@@ -964,7 +1044,7 @@ export default function RegistreCommercePage() {
                                         : "#DC2626",
                                   }}
                                 >
-                                  <FontAwesomeIcon icon={faFilePdf} />
+                                  <FontAwesomeIcon icon={getFileIcon(item.url?.includes('pdf') ? 'application/pdf' : 'image/jpeg')} />
                                 </div>
                                 <div>
                                   <p className="fw-semibold mb-1">{item.filename}</p>
@@ -1052,6 +1132,19 @@ export default function RegistreCommercePage() {
                     <p className="text-muted mb-3">
                       Vous n'avez pas encore effectué d'upload de registre.
                     </p>
+                    <button
+                      className="btn d-inline-flex align-items-center gap-2 px-4 py-3"
+                      style={{
+                        backgroundColor: colors.oskar.green,
+                        color: "white",
+                        border: "none",
+                        borderRadius: "10px",
+                      }}
+                      onClick={() => setActiveTab("upload")}
+                    >
+                      <FontAwesomeIcon icon={faUpload} />
+                      <span>Uploader mon premier registre</span>
+                    </button>
                   </div>
                 )}
               </div>

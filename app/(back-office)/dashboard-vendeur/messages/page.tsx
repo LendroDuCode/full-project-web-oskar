@@ -106,6 +106,127 @@ const colors = {
 };
 
 // ============================================
+// FONCTION POUR OBTENIR LES INITIALES
+// ============================================
+const getInitials = (nom?: string, prenoms?: string, email?: string): string => {
+  if (prenoms && nom) {
+    return `${prenoms.charAt(0).toUpperCase()}${nom.charAt(0).toUpperCase()}`;
+  }
+  if (prenoms) {
+    return prenoms.charAt(0).toUpperCase();
+  }
+  if (nom) {
+    return nom.charAt(0).toUpperCase();
+  }
+  if (email) {
+    return email.charAt(0).toUpperCase();
+  }
+  return "U";
+};
+
+// ============================================
+// FONCTION POUR CONSTRUIRE L'URL DE L'AVATAR
+// ============================================
+const buildAvatarUrl = (avatarPath: string | null | undefined): string | null => {
+  if (!avatarPath) return null;
+  
+  // Si c'est déjà une URL complète
+  if (avatarPath.startsWith('http')) {
+    return avatarPath;
+  }
+  
+  // Construire l'URL vers le serveur de fichiers
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3005';
+  return `${API_URL}/api/files/${avatarPath}`;
+};
+
+// ============================================
+// COMPOSANT D'AVATAR AVEC FALLBACK VERS INITIALES
+// ============================================
+const UserAvatar = ({
+  avatar,
+  nom,
+  prenoms,
+  email,
+  userType = "utilisateur",
+  size = 40,
+  showStatus = false,
+  online = false,
+  border = false,
+}: {
+  avatar?: string | null;
+  nom?: string;
+  prenoms?: string;
+  email?: string;
+  userType?: string;
+  size?: number;
+  showStatus?: boolean;
+  online?: boolean;
+  border?: boolean;
+}) => {
+  const [imageError, setImageError] = useState(false);
+  const avatarUrl = useMemo(() => {
+    if (!avatar || imageError) return null;
+    return buildAvatarUrl(avatar);
+  }, [avatar, imageError]);
+
+  const initials = useMemo(() => {
+    return getInitials(nom, prenoms, email);
+  }, [nom, prenoms, email]);
+
+  const getUserTypeColor = (type: string) => {
+    switch (type) {
+      case "vendeur":
+        return "#25D366";
+      default:
+        return "#0dcaf0";
+    }
+  };
+
+  const bgColor = getUserTypeColor(userType);
+
+  return (
+    <div className="position-relative d-inline-block">
+      <div
+        className="rounded-circle d-flex align-items-center justify-content-center overflow-hidden"
+        style={{
+          width: size,
+          height: size,
+          backgroundColor: avatarUrl && !imageError ? 'transparent' : `${bgColor}20`,
+          border: border ? `2px solid ${online ? '#25D366' : '#e9ecef'}` : 'none',
+        }}
+      >
+        {avatarUrl && !imageError ? (
+          <img
+            src={avatarUrl}
+            alt={prenoms || nom || email || "Avatar"}
+            className="w-100 h-100"
+            style={{ objectFit: "cover" }}
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <span
+            className="fw-bold"
+            style={{
+              color: bgColor,
+              fontSize: size * 0.4,
+            }}
+          >
+            {initials}
+          </span>
+        )}
+      </div>
+      {showStatus && online && (
+        <div
+          className="position-absolute bottom-0 end-0 bg-success rounded-circle border border-2 border-white"
+          style={{ width: size * 0.25, height: size * 0.25 }}
+        />
+      )}
+    </div>
+  );
+};
+
+// ============================================
 // TYPES
 // ============================================
 interface UtilisateurBase {
@@ -148,6 +269,7 @@ interface Message {
   expediteurNom: string;
   expediteurEmail: string;
   expediteurUuid?: string;
+  expediteurAvatar?: string | null;
   destinataireEmail: string;
   destinataireUuid?: string;
   type: string;
@@ -192,7 +314,7 @@ interface ContactConversation {
     nom: string;
     uuid: string;
   };
-  avatar?: string;
+  avatar?: string | null;
   online?: boolean;
   lastSeen?: string;
   typing?: boolean;
@@ -350,6 +472,7 @@ const MessageBubble = ({
   showAvatar,
   avatar,
   senderName,
+  senderAvatar,
   onReply,
   onDelete,
   onForward,
@@ -361,6 +484,7 @@ const MessageBubble = ({
   showAvatar?: boolean;
   avatar?: string;
   senderName?: string;
+  senderAvatar?: string | null;
   onReply?: () => void;
   onDelete?: () => void;
   onForward?: () => void;
@@ -402,21 +526,12 @@ const MessageBubble = ({
     >
       {!isOwn && showAvatar && (
         <div className="me-2 flex-shrink-0">
-          {avatar ? (
-            <img
-              src={avatar}
-              alt={senderName || "Avatar"}
-              className="rounded-circle"
-              style={{ width: "36px", height: "36px", objectFit: "cover" }}
-            />
-          ) : (
-            <div
-              className="rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center"
-              style={{ width: "36px", height: "36px" }}
-            >
-              <FontAwesomeIcon icon={faUser} className="text-primary" />
-            </div>
-          )}
+          <UserAvatar
+            avatar={senderAvatar}
+            nom={senderName}
+            email={message.expediteurEmail}
+            size={36}
+          />
         </div>
       )}
 
@@ -541,21 +656,11 @@ const MessageBubble = ({
 
       {isOwn && showAvatar && (
         <div className="ms-2 flex-shrink-0">
-          {avatar ? (
-            <img
-              src={avatar}
-              alt="Vous"
-              className="rounded-circle"
-              style={{ width: "36px", height: "36px", objectFit: "cover" }}
-            />
-          ) : (
-            <div
-              className="rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center"
-              style={{ width: "36px", height: "36px" }}
-            >
-              <FontAwesomeIcon icon={faUser} className="text-primary" />
-            </div>
-          )}
+          <UserAvatar
+            avatar={avatar}
+            nom="Vous"
+            size={36}
+          />
         </div>
       )}
     </div>
@@ -731,7 +836,18 @@ function MessagesContent() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
 
-  // ✅ Fonction pour naviguer vers l'accueil (CORRIGÉE)
+  // Cache pour les messages (persistance)
+  const messagesCache = useRef<{
+    recus: Message[];
+    envoyes: Message[];
+    lastFetch: number;
+  }>({
+    recus: [],
+    envoyes: [],
+    lastFetch: 0,
+  });
+
+  // ✅ Fonction pour naviguer vers l'accueil
   const navigateToHome = useCallback(() => {
     router.push('/');
   }, [router]);
@@ -1044,10 +1160,18 @@ function MessagesContent() {
   }, []);
 
   // ============================================
-  // ✅ CHARGEMENT DES MESSAGES REÇUS AVEC FILTRAGE
+  // ✅ CHARGEMENT DES MESSAGES REÇUS AVEC FILTRAGE ET CACHE
   // ============================================
   const fetchMessagesRecus = useCallback(
-    async (profileEmail?: string, profileUuid?: string) => {
+    async (profileEmail?: string, profileUuid?: string, forceRefresh = false) => {
+      // Vérifier le cache (rafraîchir toutes les 30 secondes max)
+      const now = Date.now();
+      if (!forceRefresh && messagesCache.current.recus.length > 0 && (now - messagesCache.current.lastFetch) < 30000) {
+        console.log("📦 Utilisation du cache pour les messages reçus");
+        setMessagesRecus(messagesCache.current.recus);
+        return;
+      }
+
       setLoading((prev) => ({ ...prev, messages: true }));
       try {
         const response = await api.get<MessageReceived[]>(
@@ -1058,6 +1182,7 @@ function MessagesContent() {
 
         if (!response || !Array.isArray(response) || response.length === 0) {
           setMessagesRecus([]);
+          messagesCache.current.recus = [];
           return;
         }
 
@@ -1086,6 +1211,7 @@ function MessagesContent() {
               expediteurNom,
               expediteurEmail,
               expediteurUuid: messageData.expediteurUuid,
+              expediteurAvatar: messageData.expediteurAvatar || null,
               destinataireEmail: messageData.destinataireEmail || profileEmail || "",
               destinataireUuid: messageData.destinataireUuid || profileUuid || "",
               type: (messageData.type || "NOTIFICATION").toUpperCase(),
@@ -1099,6 +1225,10 @@ function MessagesContent() {
 
         console.log(`✅ ${transformedMessages.length} messages reçus valides après filtrage`);
         setMessagesRecus(transformedMessages);
+        
+        // Mettre à jour le cache
+        messagesCache.current.recus = transformedMessages;
+        messagesCache.current.lastFetch = now;
 
         const unreadMessages = transformedMessages.filter((m) => !m.estLu);
         if (unreadMessages.length > 0) {
@@ -1119,14 +1249,23 @@ function MessagesContent() {
   );
 
   // ============================================
-  // ✅ CHARGEMENT DES MESSAGES ENVOYÉS AVEC FILTRAGE
+  // ✅ CHARGEMENT DES MESSAGES ENVOYÉS AVEC FILTRAGE ET CACHE
   // ============================================
   const fetchMessagesEnvoyes = useCallback(
     async (
       profileNom?: string,
       profileEmail?: string,
       profileUuid?: string,
+      forceRefresh = false,
     ) => {
+      // Vérifier le cache
+      const now = Date.now();
+      if (!forceRefresh && messagesCache.current.envoyes.length > 0 && (now - messagesCache.current.lastFetch) < 30000) {
+        console.log("📦 Utilisation du cache pour les messages envoyés");
+        setMessagesEnvoyes(messagesCache.current.envoyes);
+        return;
+      }
+
       setLoading((prev) => ({ ...prev, messages: true }));
       try {
         const response = await api.get<any[]>(API_ENDPOINTS.MESSAGERIE.SENT);
@@ -1135,6 +1274,7 @@ function MessagesContent() {
 
         if (!response || !Array.isArray(response) || response.length === 0) {
           setMessagesEnvoyes([]);
+          messagesCache.current.envoyes = [];
           return;
         }
 
@@ -1158,6 +1298,7 @@ function MessagesContent() {
               expediteurNom: msg.expediteurNom || profileNom || "Vendeur SONEC",
               expediteurEmail: msg.expediteurEmail || profileEmail || "",
               expediteurUuid: msg.expediteurUuid || profileUuid || "",
+              expediteurAvatar: msg.expediteurAvatar || null,
               destinataireEmail: msg.destinataireEmail || "",
               destinataireUuid: msg.destinataireUuid || "",
               type: (msg.type || "NOTIFICATION").toUpperCase(),
@@ -1173,6 +1314,10 @@ function MessagesContent() {
 
         console.log(`✅ ${formattedMessages.length} messages envoyés valides après filtrage`);
         setMessagesEnvoyes(formattedMessages);
+        
+        // Mettre à jour le cache
+        messagesCache.current.envoyes = formattedMessages;
+        messagesCache.current.lastFetch = now;
       } catch (err) {
         console.error("❌ Erreur chargement messages envoyés:", err);
       } finally {
@@ -1183,16 +1328,18 @@ function MessagesContent() {
   );
 
   // ============================================
-  // FONCTION DE RAFRAÎCHISSEMENT
+  // FONCTION DE RAFRAÎCHISSEMENT FORCÉ
   // ============================================
   const handleRefresh = useCallback(() => {
     if (vendeurProfile) {
-      fetchMessagesRecus(vendeurProfile.email, vendeurProfile.uuid);
+      // Forcer le rafraîchissement en ignorant le cache
+      fetchMessagesRecus(vendeurProfile.email, vendeurProfile.uuid, true);
       fetchMessagesEnvoyes(
         `${vendeurProfile.prenoms || ""} ${vendeurProfile.nom || ""}`.trim() ||
           "Vendeur SONEC",
         vendeurProfile.email,
         vendeurProfile.uuid,
+        true,
       );
       showToast("info", "🔄 Actualisation", "Vos messages ont été actualisés", {
         duration: 2000,
@@ -1235,6 +1382,7 @@ function MessagesContent() {
             lastMessageStatus: msg.estLu ? "read" : "delivered",
             unreadCount: !msg.estLu ? 1 : 0,
             totalMessages: 1,
+            avatar: msg.expediteurAvatar,
             online: Math.random() > 0.5,
             lastSeen: new Date(Date.now() - Math.random() * 3600000).toISOString(),
           };
@@ -1274,6 +1422,7 @@ function MessagesContent() {
             lastMessageStatus: msg.estLu ? "read" : "sent",
             unreadCount: 0,
             totalMessages: 1,
+            avatar: null,
             online: Math.random() > 0.5,
             lastSeen: new Date(Date.now() - Math.random() * 3600000).toISOString(),
           };
@@ -1435,7 +1584,6 @@ function MessagesContent() {
       );
     }
 
-    // Garder seulement le filtre "all" (tous les types)
     return result;
   }, [contacts, searchTerm]);
 
@@ -1443,7 +1591,6 @@ function MessagesContent() {
   // SÉLECTIONNER LE PREMIER CONTACT PAR DÉFAUT
   // ============================================
   useEffect(() => {
-    // Si on a des contacts et qu'aucune conversation n'est sélectionnée, sélectionner le premier contact
     if (filteredContacts.length > 0 && !currentConversation && !loading.initial) {
       loadConversation(filteredContacts[0]);
     }
@@ -1496,11 +1643,9 @@ function MessagesContent() {
     setApiError(null);
 
     try {
-      // ✅ CORRECTION : Utiliser l'endpoint AUTHENTIFIÉ au lieu du public
       const messageData = {
         destinataireEmail: currentConversation.contact.email,
         destinataireUuid: currentConversation.contact.uuid,
-        // ✅ Le backend va utiliser l'email et le nom du token
         sujet: newMessage.sujet || `Message pour ${currentConversation.contact.prenoms}`,
         contenu: newMessage.contenu.trim(),
         type: "NOTIFICATION",
@@ -1511,7 +1656,6 @@ function MessagesContent() {
         contenu: messageData.contenu.substring(0, 50) + "...",
       });
 
-      // ✅ Utiliser SEND au lieu de PUBLIC_SEND
       const response = await api.post<any>(
         API_ENDPOINTS.MESSAGERIE.SEND,
         messageData,
@@ -1523,10 +1667,10 @@ function MessagesContent() {
         uuid: response.uuid || `temp-${Date.now()}`,
         sujet: messageData.sujet,
         contenu: messageData.contenu,
-        // ✅ Utiliser les informations du profil pour l'affichage local
         expediteurNom: vendeurProfile ? `${vendeurProfile.prenoms || ""} ${vendeurProfile.nom || ""}`.trim() : "Vendeur SONEC",
         expediteurEmail: vendeurProfile?.email || "",
         expediteurUuid: vendeurProfile?.uuid || "",
+        expediteurAvatar: vendeurProfile?.avatar || null,
         destinataireEmail: messageData.destinataireEmail,
         destinataireUuid: messageData.destinataireUuid,
         type: "NOTIFICATION",
@@ -1538,6 +1682,9 @@ function MessagesContent() {
 
       // Ajouter à la liste des messages envoyés
       setMessagesEnvoyes((prev) => [sentMessage, ...prev]);
+      
+      // Mettre à jour le cache
+      messagesCache.current.envoyes = [sentMessage, ...messagesCache.current.envoyes];
 
       // Ajouter à la conversation courante
       setCurrentConversation((prev) => {
@@ -1783,7 +1930,7 @@ function MessagesContent() {
       <div className="container-fluid p-0 vh-100 bg-light">
         <div className="d-flex h-100">
           {/* ======================================== */}
-          {/* PANGAUCHE - LISTE DES CONTACTS - TOUJOURS AFFICHÉE */}
+          {/* PANGAUCHE - LISTE DES CONTACTS */}
           {/* ======================================== */}
           <div
             className="d-flex flex-column border-end bg-white"
@@ -1793,10 +1940,9 @@ function MessagesContent() {
               maxWidth: "350px",
             }}
           >
-            {/* En-tête de la liste avec logo OSKAR - CORRIGÉ */}
+            {/* En-tête de la liste avec logo OSKAR */}
             <div className="p-3 border-bottom" style={{ background: "#f0f2f5" }}>
               <div className="d-flex align-items-center justify-content-between mb-3">
-                {/* 👇 LOGO OSKAR cliquable - Version corrigée avec router */}
                 <div 
                   className="d-flex align-items-center gap-2" 
                   style={{ cursor: "pointer" }}
@@ -1860,7 +2006,7 @@ function MessagesContent() {
                 />
               </div>
 
-              {/* Filtre "Tous" uniquement - affiché de façon statique pour information */}
+              {/* Filtre "Tous" uniquement */}
               <div className="mt-3">
                 <span className="badge bg-success" style={{ borderRadius: "20px", fontSize: "0.8rem", padding: "6px 12px" }}>
                   Tous les contacts
@@ -1899,28 +2045,19 @@ function MessagesContent() {
                       }
                     }}
                   >
-                    {/* Avatar */}
+                    {/* Avatar avec initiales si pas d'image */}
                     <div className="position-relative me-3 flex-shrink-0">
-                      <div
-                        className="rounded-circle d-flex align-items-center justify-content-center"
-                        style={{
-                          width: "50px",
-                          height: "50px",
-                          backgroundColor: getUserTypeColor(contact.userType) + "20",
-                          border: contact.online ? "2px solid #25D366" : "none",
-                        }}
-                      >
-                        <FontAwesomeIcon
-                          icon={getUserTypeIcon(contact.userType)}
-                          style={{ fontSize: "1.3rem", color: getUserTypeColor(contact.userType) }}
-                        />
-                      </div>
-                      {contact.online && (
-                        <div
-                          className="position-absolute bottom-0 end-0 bg-success rounded-circle border border-2 border-white"
-                          style={{ width: "12px", height: "12px" }}
-                        />
-                      )}
+                      <UserAvatar
+                        avatar={contact.avatar}
+                        nom={contact.nom}
+                        prenoms={contact.prenoms}
+                        email={contact.email}
+                        userType={contact.userType}
+                        size={50}
+                        showStatus={true}
+                        online={contact.online}
+                        border={true}
+                      />
                     </div>
 
                     {/* Infos contact */}
@@ -1960,15 +2097,15 @@ function MessagesContent() {
           </div>
 
           {/* ======================================== */}
-          {/* PAN DROIT - CONVERSATION - TOUJOURS AFFICHÉE */}
+          {/* PAN DROIT - CONVERSATION */}
           {/* ======================================== */}
           <div className="flex-grow-1 d-flex flex-column" style={{ background: "#efeae2" }}>
             {currentConversation ? (
               <>
-                {/* En-tête de la conversation avec logo OSKAR pour mobile - CORRIGÉ */}
+                {/* En-tête de la conversation */}
                 <div className="p-3 border-bottom" style={{ background: "#f0f2f5" }}>
                   <div className="d-flex align-items-center">
-                    {/* 👇 LOGO OSKAR pour mobile (visible uniquement sur petits écrans) - CORRIGÉ */}
+                    {/* Logo mobile */}
                     <div 
                       className="d-flex align-items-center gap-2 me-2 d-lg-none" 
                       style={{ cursor: "pointer" }}
@@ -1992,26 +2129,17 @@ function MessagesContent() {
                     </div>
 
                     <div className="position-relative me-3">
-                      <div
-                        className="rounded-circle d-flex align-items-center justify-content-center"
-                        style={{
-                          width: "45px",
-                          height: "45px",
-                          backgroundColor: getUserTypeColor(currentConversation.contact.userType) + "20",
-                          border: currentConversation.contact.online ? "2px solid #25D366" : "none",
-                        }}
-                      >
-                        <FontAwesomeIcon
-                          icon={getUserTypeIcon(currentConversation.contact.userType)}
-                          style={{ fontSize: "1.2rem", color: getUserTypeColor(currentConversation.contact.userType) }}
-                        />
-                      </div>
-                      {currentConversation.contact.online && (
-                        <div
-                          className="position-absolute bottom-0 end-0 bg-success rounded-circle border border-2 border-white"
-                          style={{ width: "12px", height: "12px" }}
-                        />
-                      )}
+                      <UserAvatar
+                        avatar={currentConversation.contact.avatar}
+                        nom={currentConversation.contact.nom}
+                        prenoms={currentConversation.contact.prenoms}
+                        email={currentConversation.contact.email}
+                        userType={currentConversation.contact.userType}
+                        size={45}
+                        showStatus={true}
+                        online={currentConversation.contact.online}
+                        border={true}
+                      />
                     </div>
 
                     <div className="flex-grow-1">
@@ -2040,7 +2168,6 @@ function MessagesContent() {
                         <FontAwesomeIcon icon={faEllipsisVertical} />
                       </button>
                       <div className="dropdown-menu dropdown-menu-end">
-                        {/* 👇 OPTION OSKAR DANS LE MENU DÉROULANT - CORRIGÉ */}
                         <button 
                           className="dropdown-item d-flex align-items-center gap-2" 
                           onClick={navigateToHome}
@@ -2114,6 +2241,7 @@ function MessagesContent() {
                         showAvatar={true}
                         avatar={vendeurProfile?.avatar}
                         senderName={!isOwn ? currentConversation.contact.prenoms : undefined}
+                        senderAvatar={!isOwn ? message.expediteurAvatar : null}
                         onReply={() => {
                           setNewMessage((prev) => ({
                             ...prev,
@@ -2221,7 +2349,6 @@ function MessagesContent() {
                   <p className="text-muted mb-4" style={{ maxWidth: "400px", fontSize: "0.95rem" }}>
                     Aucune discussion disponible pour le moment
                   </p>
-                  {/* 👇 LOGO OSKAR QUAND AUCUN CONTACT - CORRIGÉ */}
                   <div 
                     className="d-flex align-items-center justify-content-center gap-2 mx-auto"
                     style={{ cursor: "pointer", maxWidth: "fit-content" }}

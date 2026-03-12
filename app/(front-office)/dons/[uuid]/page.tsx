@@ -76,7 +76,7 @@ import {
 import { faHeart as FaHeartRegular } from "@fortawesome/free-regular-svg-icons";
 
 // ============================================
-// TYPES (inchangés)
+// TYPES
 // ============================================
 interface CreateurInfo {
   uuid: string;
@@ -330,7 +330,7 @@ interface NoteStats {
 }
 
 // ============================================
-// COMPOSANT D'IMAGE SÉCURISÉ AMÉLIORÉ - CORRIGÉ
+// COMPOSANT D'IMAGE SÉCURISÉ AMÉLIORÉ
 // ============================================
 const SecureImage = ({
   src,
@@ -363,14 +363,13 @@ const SecureImage = ({
   const [retryCount, setRetryCount] = useState(0);
   const [key, setKey] = useState(Date.now());
 
-  // Réinitialiser quand la source change
   useEffect(() => {
     if (src && src !== "null" && src !== "undefined" && src.trim() !== "") {
       setCurrentSrc(src);
       setLoading(true);
       setHasError(false);
       setRetryCount(0);
-      setKey(Date.now()); // Force le rechargement
+      setKey(Date.now());
     } else {
       setCurrentSrc(fallbackSrc);
       setLoading(false);
@@ -378,7 +377,6 @@ const SecureImage = ({
   }, [src, fallbackSrc]);
 
   const handleError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-    // ✅ CORRECTION: Ne pas logger les erreurs pour les images par défaut
     if (currentSrc === fallbackSrc || currentSrc.includes("placeholder") || currentSrc.includes("ui-avatars")) {
       return;
     }
@@ -388,36 +386,30 @@ const SecureImage = ({
     if (!hasError) {
       setHasError(true);
 
-      // Tentative de reconstruction avec différents formats
       if (retryCount < 3) {
         setRetryCount((prev) => prev + 1);
 
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
         const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
 
-        // Essayer différentes combinaisons
         if (retryCount === 0) {
-          // Essayer avec le chemin tel quel
           const path = currentSrc.split('/').pop();
           if (path) {
             setCurrentSrc(`${apiUrl}${filesUrl}/${path}`);
             return;
           }
         } else if (retryCount === 1) {
-          // Essayer avec l'URL complète
           if (!currentSrc.startsWith('http')) {
             setCurrentSrc(`${apiUrl}${filesUrl}/${currentSrc}`);
             return;
           }
         } else if (retryCount === 2) {
-          // Dernier essai avec timestamp pour éviter le cache
           const baseUrl = currentSrc.split('?')[0];
           setCurrentSrc(`${baseUrl}?t=${Date.now()}`);
           return;
         }
       }
 
-      // Si tous les essais échouent, utiliser le fallback
       setCurrentSrc(fallbackSrc);
     }
 
@@ -466,7 +458,7 @@ const SecureImage = ({
 };
 
 // ============================================
-// COMPOSANT MODAL DE CONTACT AMÉLIORÉ
+// COMPOSANT MODAL DE CONTACT - MÊME DESIGN QUE LES ÉCHANGES
 // ============================================
 const ContactModal = ({
   show,
@@ -482,6 +474,16 @@ const ContactModal = ({
   onCopySuccess: (message: string) => void;
 }) => {
   const [copied, setCopied] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+      const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
+      setIsMobile(mobileRegex.test(userAgent));
+    };
+    checkMobile();
+  }, []);
 
   if (!show || !createur) return null;
 
@@ -513,6 +515,24 @@ const ContactModal = ({
     }
   };
 
+  const handleCall = () => {
+    if (createur.telephone) {
+      const phoneNumber = createur.telephone.replace(/\s/g, '');
+      window.location.href = `tel:${phoneNumber}`;
+    }
+  };
+
+  const handleWhatsApp = () => {
+    if (createur.telephone) {
+      let phoneNumber = createur.telephone.replace(/\D/g, '');
+      if (!phoneNumber.startsWith('+')) {
+        phoneNumber = `+225${phoneNumber}`;
+      }
+      const message = `Bonjour ${createur.prenoms}, je suis intéressé(e) par votre don "${donNom}" sur OSKAR. Pourrions-nous discuter ?`;
+      window.open(`https://wa.me/${phoneNumber.replace(/\+/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
+    }
+  };
+
   return (
     <div
       className="modal fade show d-block"
@@ -533,7 +553,9 @@ const ContactModal = ({
               aria-label="Fermer"
             ></button>
           </div>
+
           <div className="modal-body">
+            {/* Avatar et infos */}
             <div className="text-center mb-4">
               <div className="mb-3">
                 {createur.avatar ? (
@@ -573,7 +595,7 @@ const ContactModal = ({
               </div>
             </div>
 
-            {/* Informations de contact avec bouton de copie */}
+            {/* Section téléphone avec bouton de copie */}
             {createur.telephone && (
               <div className="mb-3 p-3 bg-light rounded-4">
                 <div className="d-flex justify-content-between align-items-center">
@@ -593,88 +615,45 @@ const ContactModal = ({
               </div>
             )}
 
-            {createur.email && (
-              <div className="mb-3 p-3 bg-light rounded-4">
-                <div className="d-flex justify-content-between align-items-center">
-                  <div>
-                    <small className="text-muted d-block">Email</small>
-                    <span className="fw-semibold text-truncate" style={{ maxWidth: "200px" }}>
-                      {createur.email}
-                    </span>
-                  </div>
-                  <button
-                    onClick={handleCopyEmail}
-                    className="btn btn-outline-primary btn-sm rounded-circle p-2"
-                    style={{ width: "40px", height: "40px" }}
-                    title="Copier l'email"
-                  >
-                    <FontAwesomeIcon icon={copied ? faCheck : faCopy} />
-                  </button>
-                </div>
-              </div>
-            )}
+          
 
-            {/* Actions rapides */}
+            {/* Boutons d'action rapide */}
             <div className="row g-3 mt-3">
-              {createur.telephone && (
+              {createur.telephone && isMobile && (
                 <div className="col-6">
-                  <a
-                    href={`tel:${createur.telephone}`}
+                  <button
+                    onClick={handleCall}
                     className="btn btn-outline-success w-100 py-3 d-flex align-items-center justify-content-center gap-2"
                   >
                     <FontAwesomeIcon icon={faPhone} />
                     <span className="fw-semibold">Appeler</span>
-                  </a>
+                  </button>
                 </div>
               )}
-              {createur.email && (
-                <div className="col-6">
-                  <a
-                    href={`mailto:${createur.email}?subject=Question concernant votre don : ${donNom}`}
-                    className="btn btn-outline-primary w-100 py-3 d-flex align-items-center justify-content-center gap-2"
+              {createur.telephone && (
+                <div className={isMobile ? "col-6" : "col-12"}>
+                  <button
+                    onClick={handleWhatsApp}
+                    className="btn btn-outline-success w-100 py-3 d-flex align-items-center justify-content-center gap-2"
+                    style={{ borderColor: "#25D366", color: "#25D366" }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = "#25D366";
+                      e.currentTarget.style.color = "white";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = "transparent";
+                      e.currentTarget.style.color = "#25D366";
+                    }}
                   >
-                    <FontAwesomeIcon icon={faEnvelope} />
-                    <span className="fw-semibold">Email</span>
-                  </a>
+                    <FontAwesomeIcon icon={faWhatsapp} />
+                    <span className="fw-semibold">WhatsApp</span>
+                  </button>
                 </div>
               )}
             </div>
 
-            {createur.whatsapp_url && (
-              <div className="mt-3">
-                <a
-                  href={createur.whatsapp_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn btn-outline-success w-100 py-3 d-flex align-items-center justify-content-center gap-2"
-                  style={{ borderColor: "#25D366", color: "#25D366" }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = "#25D366";
-                    e.currentTarget.style.color = "white";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = "transparent";
-                    e.currentTarget.style.color = "#25D366";
-                  }}
-                >
-                  <FontAwesomeIcon icon={faWhatsapp} />
-                  <span className="fw-semibold">WhatsApp</span>
-                </a>
-              </div>
-            )}
-
-            <div className="mt-4 p-3 bg-info bg-opacity-10 rounded-4">
-              <div className="d-flex gap-2">
-                <FontAwesomeIcon icon={faShieldAlt} className="text-info mt-1" />
-                <div>
-                  <p className="small fw-semibold mb-1">Conseil de sécurité</p>
-                  <p className="small text-muted mb-0">
-                    Préférez les rencontres dans des lieux publics et vérifiez l'article avant de l'accepter.
-                  </p>
-                </div>
-              </div>
-            </div>
           </div>
+
           <div className="modal-footer border-0 pt-0">
             <button
               type="button"
@@ -691,7 +670,7 @@ const ContactModal = ({
 };
 
 // ============================================
-// FONCTION DE FORMATAGE DE DATE CORRIGÉE
+// FONCTION DE FORMATAGE DE DATE
 // ============================================
 const formatDate = (dateString: string | null | undefined): string => {
   if (!dateString) return "Date inconnue";
@@ -750,7 +729,7 @@ const formatNumber = (value: number | null | undefined): string => {
 };
 
 // ============================================
-// FONCTIONS POUR LES IMAGES PAR DÉFAUT DU PROJET
+// FONCTIONS POUR LES IMAGES PAR DÉFAUT
 // ============================================
 const getDefaultAvatarUrl = (): string => {
   return "/images/default-avatar.png";
@@ -758,10 +737,6 @@ const getDefaultAvatarUrl = (): string => {
 
 const getDefaultDonImage = (): string => {
   return "/images/default-don.jpg";
-};
-
-const getDefaultPlaceholderImage = (): string => {
-  return "/images/placeholder.jpg";
 };
 
 // ============================================
@@ -962,7 +937,6 @@ export default function DonDetailPage() {
   };
 
   const transformDonData = (apiDon: DonAPI): Don => {
-    // Construction robuste de l'URL de l'image
     let imageUrl = "";
     if (apiDon.image) {
       imageUrl = buildImageUrl(apiDon.image);
@@ -1224,7 +1198,6 @@ export default function DonDetailPage() {
         setCreateur(createurData);
       }
 
-      // Construire la liste des images
       const imageUrls: string[] = [donData.image];
 
       response.similaires.slice(0, 4).forEach((similaire) => {
@@ -1236,7 +1209,6 @@ export default function DonDetailPage() {
         }
       });
 
-      // Ajouter des placeholders si nécessaire
       while (imageUrls.length < 5) {
         imageUrls.push(getDefaultDonImage());
       }
@@ -1244,10 +1216,8 @@ export default function DonDetailPage() {
       setImages(imageUrls.slice(0, 5));
       setImagePrincipale(imageUrls[0]);
 
-      // Marquer le chargement initial comme terminé
       initialLoadDone.current = true;
 
-      // Charger les commentaires et dons récents
       fetchCommentaires(donData.uuid);
       fetchDonsRecents();
     } catch (err: any) {
@@ -1269,7 +1239,6 @@ export default function DonDetailPage() {
     }
   }, [uuid, fetchCommentaires, fetchDonsRecents]);
 
-  // 🔴 useEffect simplifié avec une seule dépendance
   useEffect(() => {
     if (uuid && !initialLoadDone.current) {
       fetchDonDetails();
@@ -1372,7 +1341,7 @@ export default function DonDetailPage() {
     action();
   };
 
-  // ✅ Gestionnaire pour ouvrir la modale de publication
+  // ✅ GESTIONNAIRE POUR OUVRIR LA MODALE DE PUBLICATION
   const handleOpenPublishModal = () => {
     if (!isLoggedIn) {
       openLoginModal();
@@ -1381,7 +1350,7 @@ export default function DonDetailPage() {
     }
   };
 
-  // ✅ Gestionnaire pour "Je suis intéressé(e)"
+  // ✅ GESTIONNAIRE POUR "JE SUIS INTÉRESSÉ(E)" - CORRIGÉ
   const handleInterest = () => {
     requireAuth(() => {
       if (!createur || !don) return;
@@ -1396,7 +1365,8 @@ export default function DonDetailPage() {
         if (createur.telephone) {
           window.location.href = `tel:${createur.telephone}`;
         } else {
-          showToast("error", "Le donateur n'a pas de numéro de téléphone renseigné.");
+          // Si pas de téléphone, afficher quand même le modal
+          setShowContactModal(true);
         }
       } else {
         // Sur ordinateur : afficher le modal
@@ -1451,37 +1421,14 @@ export default function DonDetailPage() {
       let phoneNumber = createur.telephone || createur.whatsapp_url || "";
       phoneNumber = phoneNumber.replace(/\D/g, "");
 
-      if (phoneNumber.startsWith("225")) {
-        phoneNumber = phoneNumber.substring(3);
-      }
-
       if (phoneNumber && !phoneNumber.startsWith("+")) {
         phoneNumber = `+225${phoneNumber}`;
       }
 
       const message = `Bonjour ${createur.prenoms}, je suis intéressé(e) par votre don "${don?.nom}" sur OSKAR. Pourrions-nous discuter ?`;
-      const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+      const whatsappUrl = `https://wa.me/${phoneNumber.replace(/\+/g, '')}?text=${encodeURIComponent(message)}`;
 
       window.open(whatsappUrl, "_blank", "noopener,noreferrer");
-    });
-  };
-
-  const handleContactFacebook = () => {
-    requireAuth(() => {
-      if (!createur) return;
-
-      if (createur.facebook_url) {
-        window.open(createur.facebook_url, "_blank", "noopener,noreferrer");
-      } else {
-        const searchQuery = encodeURIComponent(
-          `${createur.prenoms} ${createur.nom} OSKAR`,
-        );
-        window.open(
-          `https://www.facebook.com/search/top?q=${searchQuery}`,
-          "_blank",
-          "noopener,noreferrer",
-        );
-      }
     });
   };
 
@@ -1610,7 +1557,6 @@ export default function DonDetailPage() {
           },
         );
 
-        // Réinitialiser les flags pour forcer le rechargement
         setCommentairesFetched(false);
         commentsLoadDone.current = false;
         await fetchCommentaires(don.uuid);
@@ -1770,7 +1716,7 @@ export default function DonDetailPage() {
         </div>
       )}
 
-      {/* Modal de contact */}
+      {/* Modal de contact - MÊME DESIGN QUE LES ÉCHANGES */}
       <ContactModal
         show={showContactModal}
         onHide={() => setShowContactModal(false)}
@@ -1994,7 +1940,6 @@ export default function DonDetailPage() {
 
             {/* Localisation */}
             <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
-
               <div className="mt-4 bg-info bg-opacity-10 border border-info rounded-4 p-4">
                 <div className="d-flex gap-3">
                   <FontAwesomeIcon
@@ -2406,7 +2351,7 @@ export default function DonDetailPage() {
 
           {/* Colonne droite - Sidebar (4/12) */}
           <div className="col-lg-4">
-            {/* Carte prix et actions */}
+            {/* Carte prix et actions - CORRIGÉE */}
             <div
               className="card border-0 shadow-lg rounded-4 p-4 sticky-top"
               style={{ top: "100px" }}
@@ -2434,14 +2379,15 @@ export default function DonDetailPage() {
               </div>
 
               <div className="d-grid gap-3 mb-4">
+                {/* ✅ BOUTON CORRIGÉ - TOUJOURS ACTIF */}
                 <button
                   onClick={handleInterest}
                   className="btn btn-success btn-lg fw-bold text-white py-4"
-                  disabled={!don.disponible}
                 >
                   <FontAwesomeIcon icon={faHandHoldingHeart} className="me-2" />
-                  {don.disponible ? "Je suis intéressé(e)" : "Non disponible"}
+                  {don.disponible ? "Je suis intéressé(e)" : "Contacter le donateur"}
                 </button>
+                
                 <button
                   onClick={handleContactWhatsApp}
                   className="btn btn-success btn-lg fw-bold py-4"
@@ -2451,6 +2397,7 @@ export default function DonDetailPage() {
                   <FontAwesomeIcon icon={faWhatsapp} className="me-2" />
                   WhatsApp
                 </button>
+                
                 <button
                   onClick={handleContactDonateur}
                   className="btn btn-outline-success btn-lg fw-bold py-4"

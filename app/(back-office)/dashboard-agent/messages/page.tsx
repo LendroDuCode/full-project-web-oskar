@@ -98,6 +98,133 @@ const colors = {
   },
 };
 
+// ============================================
+// FONCTION POUR OBTENIR LES INITIALES
+// ============================================
+const getInitials = (nom?: string, prenoms?: string, email?: string): string => {
+  if (prenoms && nom) {
+    return `${prenoms.charAt(0).toUpperCase()}${nom.charAt(0).toUpperCase()}`;
+  }
+  if (prenoms) {
+    return prenoms.charAt(0).toUpperCase();
+  }
+  if (nom) {
+    return nom.charAt(0).toUpperCase();
+  }
+  if (email) {
+    return email.charAt(0).toUpperCase();
+  }
+  return "A";
+};
+
+// ============================================
+// FONCTION POUR CONSTRUIRE L'URL DE L'AVATAR
+// ============================================
+const buildAvatarUrl = (avatarPath: string | null | undefined): string | null => {
+  if (!avatarPath) return null;
+  
+  // Si c'est déjà une URL complète
+  if (avatarPath.startsWith('http')) {
+    return avatarPath;
+  }
+  
+  // Construire l'URL vers le serveur de fichiers
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3005';
+  return `${API_URL}/api/files/${avatarPath}`;
+};
+
+// ============================================
+// COMPOSANT D'AVATAR AVEC FALLBACK VERS INITIALES
+// ============================================
+const UserAvatar = ({
+  avatar,
+  nom,
+  prenoms,
+  email,
+  userType = "agent",
+  size = 40,
+  showStatus = false,
+  online = false,
+  border = false,
+}: {
+  avatar?: string | null;
+  nom?: string;
+  prenoms?: string;
+  email?: string;
+  userType?: string;
+  size?: number;
+  showStatus?: boolean;
+  online?: boolean;
+  border?: boolean;
+}) => {
+  const [imageError, setImageError] = useState(false);
+  const avatarUrl = useMemo(() => {
+    if (!avatar || imageError) return null;
+    return buildAvatarUrl(avatar);
+  }, [avatar, imageError]);
+
+  const initials = useMemo(() => {
+    return getInitials(nom, prenoms, email);
+  }, [nom, prenoms, email]);
+
+  const getUserTypeColor = (type: string) => {
+    switch (type) {
+      case "super_admin":
+        return "#6f42c1";
+      case "admin":
+        return "#0dcaf0";
+      case "agent":
+        return "#0d6efd";
+      case "vendeur":
+        return "#ffc107";
+      default:
+        return "#198754";
+    }
+  };
+
+  const bgColor = getUserTypeColor(userType);
+
+  return (
+    <div className="position-relative d-inline-block">
+      <div
+        className="rounded-circle d-flex align-items-center justify-content-center overflow-hidden"
+        style={{
+          width: size,
+          height: size,
+          backgroundColor: avatarUrl && !imageError ? 'transparent' : `${bgColor}20`,
+          border: border ? `2px solid ${online ? '#25D366' : '#e9ecef'}` : 'none',
+        }}
+      >
+        {avatarUrl && !imageError ? (
+          <img
+            src={avatarUrl}
+            alt={prenoms || nom || email || "Avatar"}
+            className="w-100 h-100"
+            style={{ objectFit: "cover" }}
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <span
+            className="fw-bold"
+            style={{
+              color: bgColor,
+              fontSize: size * 0.4,
+            }}
+          >
+            {initials}
+          </span>
+        )}
+      </div>
+      {showStatus && online && (
+        <div
+          className="position-absolute bottom-0 end-0 bg-success rounded-circle border border-2 border-white"
+          style={{ width: size * 0.25, height: size * 0.25 }}
+        />
+      )}
+    </div>
+  );
+};
+
 // Types pour les utilisateurs
 interface UtilisateurBase {
   uuid: string;
@@ -145,6 +272,7 @@ interface Message {
   expediteurNom: string;
   expediteurEmail: string;
   expediteurUuid?: string;
+  expediteurAvatar?: string | null;
   destinataireEmail: string;
   destinataireUuid?: string;
   type: string;
@@ -192,7 +320,7 @@ interface ContactConversation {
     uuid: string;
     nom: string;
   };
-  avatar?: string;
+  avatar?: string | null;
   online?: boolean;
   lastSeen?: string;
   typing?: boolean;
@@ -382,6 +510,7 @@ const MessageBubble = ({
   showAvatar,
   avatar,
   senderName,
+  senderAvatar,
   onReply,
   onDelete,
   onForward,
@@ -393,6 +522,7 @@ const MessageBubble = ({
   showAvatar?: boolean;
   avatar?: string;
   senderName?: string;
+  senderAvatar?: string | null;
   onReply?: () => void;
   onDelete?: () => void;
   onForward?: () => void;
@@ -452,21 +582,13 @@ const MessageBubble = ({
     >
       {!isOwn && showAvatar && (
         <div className="me-2 flex-shrink-0">
-          {avatar ? (
-            <img
-              src={avatar}
-              alt={senderName || "Avatar"}
-              className="rounded-circle"
-              style={{ width: "36px", height: "36px", objectFit: "cover" }}
-            />
-          ) : (
-            <div
-              className="rounded-circle d-flex align-items-center justify-content-center"
-              style={{ width: "36px", height: "36px", backgroundColor: "#0d6efd20" }}
-            >
-              <FontAwesomeIcon icon={faUser} style={{ color: "#0d6efd" }} />
-            </div>
-          )}
+          <UserAvatar
+            avatar={senderAvatar}
+            nom={senderName}
+            email={message.expediteurEmail}
+            userType={message.type === "SUPER_ADMIN" ? "super_admin" : "agent"}
+            size={36}
+          />
         </div>
       )}
 
@@ -598,21 +720,12 @@ const MessageBubble = ({
 
       {isOwn && showAvatar && (
         <div className="ms-2 flex-shrink-0">
-          {avatar ? (
-            <img
-              src={avatar}
-              alt="Vous"
-              className="rounded-circle"
-              style={{ width: "36px", height: "36px", objectFit: "cover" }}
-            />
-          ) : (
-            <div
-              className="rounded-circle d-flex align-items-center justify-content-center"
-              style={{ width: "36px", height: "36px", backgroundColor: "#0d6efd20" }}
-            >
-              <FontAwesomeIcon icon={faUserTie} style={{ color: "#0d6efd" }} />
-            </div>
-          )}
+          <UserAvatar
+            avatar={avatar}
+            nom="Vous"
+            userType="agent"
+            size={36}
+          />
         </div>
       )}
     </div>
@@ -696,26 +809,17 @@ const ChatHeader = ({
       )}
       
       <div className="position-relative me-3">
-        <div
-          className="rounded-circle d-flex align-items-center justify-content-center"
-          style={{
-            width: "45px",
-            height: "45px",
-            backgroundColor: getUserTypeColor(contact.userType) + "20",
-            border: contact.online ? "2px solid #25D366" : "none",
-          }}
-        >
-          <FontAwesomeIcon
-            icon={getUserTypeIcon(contact.userType)}
-            style={{ fontSize: "1.2rem", color: getUserTypeColor(contact.userType) }}
-          />
-        </div>
-        {contact.online && (
-          <div
-            className="position-absolute bottom-0 end-0 bg-success rounded-circle border border-2 border-white"
-            style={{ width: "12px", height: "12px" }}
-          />
-        )}
+        <UserAvatar
+          avatar={contact.avatar}
+          nom={contact.nom}
+          prenoms={contact.prenoms}
+          email={contact.email}
+          userType={contact.userType}
+          size={45}
+          showStatus={true}
+          online={contact.online}
+          border={true}
+        />
       </div>
 
       <div className="flex-grow-1">
@@ -933,26 +1037,17 @@ const ConversationItem = ({
       }}
     >
       <div className="position-relative me-3 flex-shrink-0">
-        <div
-          className="rounded-circle d-flex align-items-center justify-content-center"
-          style={{
-            width: "50px",
-            height: "50px",
-            backgroundColor: getUserTypeColor(contact.userType) + "20",
-            border: contact.online ? "2px solid #25D366" : "none",
-          }}
-        >
-          <FontAwesomeIcon
-            icon={getUserTypeIcon(contact.userType)}
-            style={{ fontSize: "1.3rem", color: getUserTypeColor(contact.userType) }}
-          />
-        </div>
-        {contact.online && (
-          <div
-            className="position-absolute bottom-0 end-0 bg-success rounded-circle border border-2 border-white"
-            style={{ width: "12px", height: "12px" }}
-          />
-        )}
+        <UserAvatar
+          avatar={contact.avatar}
+          nom={contact.nom}
+          prenoms={contact.prenoms}
+          email={contact.email}
+          userType={contact.userType}
+          size={50}
+          showStatus={true}
+          online={contact.online}
+          border={true}
+        />
       </div>
       
       <div className="flex-grow-1 min-width-0">
@@ -1063,20 +1158,16 @@ const ContactInfo = ({
       </div>
       
       <div className="p-4 text-center border-bottom">
-        <div
-          className="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3"
-          style={{
-            width: "100px",
-            height: "100px",
-            backgroundColor: getUserTypeColor(contact.userType) + "20",
-          }}
-        >
-          <FontAwesomeIcon
-            icon={getUserTypeIcon(contact.userType)}
-            style={{ fontSize: "3rem", color: getUserTypeColor(contact.userType) }}
-          />
-        </div>
-        <h5 className="mb-1">
+        <UserAvatar
+          avatar={contact.avatar}
+          nom={contact.nom}
+          prenoms={contact.prenoms}
+          email={contact.email}
+          userType={contact.userType}
+          size={100}
+          border={true}
+        />
+        <h5 className="mb-1 mt-3">
           {contact.prenoms} {contact.nom}
         </h5>
         <p className="text-muted small mb-2">{getUserTypeLabel(contact.userType)}</p>
@@ -1241,6 +1332,17 @@ function MessagesContent() {
 
   // Cache pour les appels API
   const apiCache = useRef<Map<string, { data: any; timestamp: number }>>(new Map());
+
+  // Cache pour les messages (persistance)
+  const messagesCache = useRef<{
+    recus: Message[];
+    envoyes: Message[];
+    lastFetch: number;
+  }>({
+    recus: [],
+    envoyes: [],
+    lastFetch: 0,
+  });
 
   // États pour les filtres
   const [searchTerm, setSearchTerm] = useState("");
@@ -1623,6 +1725,7 @@ function MessagesContent() {
           prenoms: profile.prenoms,
           email: profile.email,
           uuid: profile.uuid,
+          avatar: profile.avatar,
         });
 
         setAgentProfile(profile);
@@ -1703,10 +1806,17 @@ function MessagesContent() {
   }, [cachedApiCall]);
 
   // ============================================
-  // CHARGEMENT DES MESSAGES REÇUS
+  // ✅ CHARGEMENT DES MESSAGES REÇUS AVEC CACHE
   // ============================================
   const fetchMessagesRecus = useCallback(
-    async (profileEmail?: string, profileUuid?: string) => {
+    async (profileEmail?: string, profileUuid?: string, forceRefresh = false) => {
+      const now = Date.now();
+      if (!forceRefresh && messagesCache.current.recus.length > 0 && (now - messagesCache.current.lastFetch) < 30000) {
+        console.log("📦 Utilisation du cache pour les messages reçus");
+        setMessages(messagesCache.current.recus);
+        return;
+      }
+
       setLoading((prev) => ({ ...prev, messages: true }));
       try {
         const response = await api.get<MessageReceived[]>(
@@ -1719,7 +1829,6 @@ function MessagesContent() {
               const message = item.message || item;
               if (!message || !message.uuid) return null;
 
-              // Filtrer les messages système
               if (message.expediteurEmail === 'system@example.com' ||
                   message.expediteurEmail?.includes('noreply') ||
                   !message.expediteurEmail) {
@@ -1733,6 +1842,7 @@ function MessagesContent() {
                 expediteurNom: message.expediteurNom || "Expéditeur inconnu",
                 expediteurEmail: message.expediteurEmail || "",
                 expediteurUuid: message.expediteurUuid,
+                expediteurAvatar: message.expediteurAvatar || null,
                 destinataireEmail: message.destinataireEmail || profileEmail || "",
                 destinataireUuid: message.destinataireUuid || profileUuid || "",
                 type: (message.type || "notification").toUpperCase(),
@@ -1746,6 +1856,8 @@ function MessagesContent() {
             .filter((msg): msg is Message => msg !== null);
 
           setMessages(formattedMessages);
+          messagesCache.current.recus = formattedMessages;
+          messagesCache.current.lastFetch = now;
 
           const unreadMessages = formattedMessages.filter((m) => !m.estLu);
           if (unreadMessages.length > 0) {
@@ -1758,10 +1870,12 @@ function MessagesContent() {
           }
         } else {
           setMessages([]);
+          messagesCache.current.recus = [];
         }
       } catch (err: any) {
         console.error("❌ Erreur chargement messages:", err);
         setMessages([]);
+        messagesCache.current.recus = [];
       } finally {
         setLoading((prev) => ({ ...prev, messages: false }));
       }
@@ -1770,10 +1884,17 @@ function MessagesContent() {
   );
 
   // ============================================
-  // CHARGEMENT DES MESSAGES ENVOYÉS
+  // ✅ CHARGEMENT DES MESSAGES ENVOYÉS AVEC CACHE
   // ============================================
   const fetchMessagesEnvoyes = useCallback(
-    async (profileNom?: string, profileEmail?: string, profileUuid?: string) => {
+    async (profileNom?: string, profileEmail?: string, profileUuid?: string, forceRefresh = false) => {
+      const now = Date.now();
+      if (!forceRefresh && messagesCache.current.envoyes.length > 0 && (now - messagesCache.current.lastFetch) < 30000) {
+        console.log("📦 Utilisation du cache pour les messages envoyés");
+        setMessagesEnvoyes(messagesCache.current.envoyes);
+        return;
+      }
+
       try {
         const response = await api.get<Message[]>(
           API_ENDPOINTS.MESSAGERIE.SENT,
@@ -1791,6 +1912,7 @@ function MessagesContent() {
                 expediteurNom: msg.expediteurNom || profileNom || "Agent SONEC",
                 expediteurEmail: msg.expediteurEmail || profileEmail || "",
                 expediteurUuid: msg.expediteurUuid || profileUuid,
+                expediteurAvatar: msg.expediteurAvatar || null,
                 destinataireEmail: msg.destinataireEmail || "",
                 destinataireUuid: msg.destinataireUuid,
                 type: (msg.type || "notification").toUpperCase(),
@@ -1804,14 +1926,43 @@ function MessagesContent() {
             .filter((msg): msg is Message => msg !== null);
 
           setMessagesEnvoyes(formattedMessages);
+          messagesCache.current.envoyes = formattedMessages;
+          messagesCache.current.lastFetch = now;
         }
       } catch (err: any) {
         console.error("❌ Error fetching sent messages:", err);
         setMessagesEnvoyes([]);
+        messagesCache.current.envoyes = [];
       }
     },
     [],
   );
+
+  // ============================================
+  // FONCTION DE RAFRAÎCHISSEMENT FORCÉ
+  // ============================================
+  const handleRefresh = useCallback(async () => {
+    if (agentProfile) {
+      setLoading((prev) => ({ ...prev, messages: true }));
+      try {
+        await fetchMessagesRecus(agentProfile.email, agentProfile.uuid, true);
+        await fetchMessagesEnvoyes(
+          `${agentProfile.prenoms || ""} ${agentProfile.nom || ""}`.trim() || "Agent SONEC",
+          agentProfile.email,
+          agentProfile.uuid,
+          true,
+        );
+        await buildContactsAndConversations(agentProfile);
+        showToast("info", "🔄 Actualisation", "Vos messages ont été actualisés", {
+          duration: 2000,
+        });
+      } catch (err) {
+        console.error("❌ Erreur lors de l'actualisation:", err);
+      } finally {
+        setLoading((prev) => ({ ...prev, messages: false }));
+      }
+    }
+  }, [agentProfile, fetchMessagesRecus, fetchMessagesEnvoyes, showToast]);
 
   // ============================================
   // CONSTRUCTION DES CONTACTS ET CONVERSATIONS
@@ -1862,6 +2013,7 @@ function MessagesContent() {
               lastMessageStatus: isFromMe ? message.status : (message.estLu ? "read" : "delivered"),
               unreadCount: !isFromMe && !message.estLu ? 1 : 0,
               totalMessages: 1,
+              avatar: isFromMe ? null : message.expediteurAvatar,
               online: Math.random() > 0.5,
               lastSeen: new Date(Date.now() - Math.random() * 3600000).toISOString(),
             };
@@ -1930,16 +2082,6 @@ function MessagesContent() {
     },
     [messages, messagesEnvoyes],
   );
-
-  // ============================================
-  // SÉLECTIONNER LE PREMIER CONTACT PAR DÉFAUT
-  // ============================================
-  useEffect(() => {
-    if (conversations.length > 0 && !currentConversation && !loading.initial) {
-      setCurrentConversation(conversations[0]);
-      setShowMobileConversations(false);
-    }
-  }, [conversations, currentConversation, loading.initial]);
 
   // ============================================
   // CHARGEMENT INITIAL
@@ -2037,19 +2179,39 @@ function MessagesContent() {
     const users: ContactConversation[] = [];
 
     superAdmins.forEach((user) => {
-      users.push({ ...user, userType: "super_admin", online: Math.random() > 0.5 } as ContactConversation);
+      users.push({ 
+        ...user, 
+        userType: "super_admin", 
+        online: Math.random() > 0.5,
+        avatar: user.avatar || null,
+      } as ContactConversation);
     });
 
     agents.forEach((user) => {
-      users.push({ ...user, userType: "agent", online: Math.random() > 0.5 } as ContactConversation);
+      users.push({ 
+        ...user, 
+        userType: "agent", 
+        online: Math.random() > 0.5,
+        avatar: user.avatar || null,
+      } as ContactConversation);
     });
 
     vendeurs.forEach((user) => {
-      users.push({ ...user, userType: "vendeur", online: Math.random() > 0.5 } as ContactConversation);
+      users.push({ 
+        ...user, 
+        userType: "vendeur", 
+        online: Math.random() > 0.5,
+        avatar: user.avatar || null,
+      } as ContactConversation);
     });
 
     utilisateurs.forEach((user) => {
-      users.push({ ...user, userType: "utilisateur", online: Math.random() > 0.5 } as ContactConversation);
+      users.push({ 
+        ...user, 
+        userType: "utilisateur", 
+        online: Math.random() > 0.5,
+        avatar: user.avatar || null,
+      } as ContactConversation);
     });
 
     return users;
@@ -2059,10 +2221,8 @@ function MessagesContent() {
   // FILTRAGE DES CONTACTS
   // ============================================
   const filteredContacts = useMemo(() => {
-    // Commencer avec les conversations existantes
     const contactEmails = new Set(conversations.map(c => c.contact.email));
     
-    // Ajouter tous les utilisateurs qui ne sont pas dans les conversations
     const allContacts = [...conversations.map(c => c.contact)];
     
     allUsers.forEach((user) => {
@@ -2108,6 +2268,16 @@ function MessagesContent() {
   }, [conversations, allUsers, agentProfile, searchTerm, selectedType]);
 
   // ============================================
+  // SÉLECTIONNER LE PREMIER CONTACT PAR DÉFAUT
+  // ============================================
+  useEffect(() => {
+    if (conversations.length > 0 && !currentConversation && !loading.initial) {
+      setCurrentConversation(conversations[0]);
+      setShowMobileConversations(false);
+    }
+  }, [conversations, currentConversation, loading.initial]);
+
+  // ============================================
   // CHARGEMENT DE LA CONVERSATION
   // ============================================
   const loadConversation = useCallback((contact: ContactConversation) => {
@@ -2116,11 +2286,9 @@ function MessagesContent() {
     if (conversation) {
       setCurrentConversation(conversation);
       
-      // Marquer les messages comme lus (sans attendre la réponse du serveur)
       conversation.messages
         .filter((m) => !m.estLu && m.expediteurEmail !== agentProfile?.email)
         .forEach((m) => {
-          // Mise à jour locale immédiate
           setMessages((prev) =>
             prev.map((msg) =>
               msg.uuid === m.uuid
@@ -2128,11 +2296,9 @@ function MessagesContent() {
                 : msg,
             ),
           );
-          // Appel API en arrière-plan
           handleMarkAsRead(m.uuid).catch(() => {});
         });
     } else {
-      // Nouvelle conversation
       const newConv: Conversation = {
         contact,
         messages: [],
@@ -2199,6 +2365,7 @@ function MessagesContent() {
           expediteurNom: `${agentProfile.prenoms || ""} ${agentProfile.nom || ""}`.trim() || "Agent SONEC",
           expediteurEmail: agentProfile.email || "",
           expediteurUuid: agentProfile.uuid || "",
+          expediteurAvatar: agentProfile.avatar || null,
           destinataireEmail: messageData.destinataireEmail,
           destinataireUuid: messageData.destinataireUuid,
           type: "NOTIFICATION",
@@ -2210,6 +2377,7 @@ function MessagesContent() {
         };
 
         setMessagesEnvoyes((prev) => [newMessage, ...prev]);
+        messagesCache.current.envoyes = [newMessage, ...messagesCache.current.envoyes];
 
         const updatedConversation = {
           ...currentConversation,
@@ -2274,28 +2442,6 @@ function MessagesContent() {
   const handleCancelReply = () => {
     setReplyingTo(null);
   };
-
-  const handleRefresh = useCallback(async () => {
-    if (agentProfile) {
-      setLoading((prev) => ({ ...prev, messages: true }));
-      try {
-        await fetchMessagesRecus(agentProfile.email, agentProfile.uuid);
-        await fetchMessagesEnvoyes(
-          `${agentProfile.prenoms || ""} ${agentProfile.nom || ""}`.trim() || "Agent SONEC",
-          agentProfile.email,
-          agentProfile.uuid,
-        );
-        await buildContactsAndConversations(agentProfile);
-        showToast("info", "🔄 Actualisation", "Vos messages ont été actualisés", {
-          duration: 2000,
-        });
-      } catch (err) {
-        console.error("❌ Erreur lors de l'actualisation:", err);
-      } finally {
-        setLoading((prev) => ({ ...prev, messages: false }));
-      }
-    }
-  }, [agentProfile, fetchMessagesRecus, fetchMessagesEnvoyes, buildContactsAndConversations, showToast]);
 
   // ============================================
   // GESTION DE LA SUPPRESSION D'UNE CONVERSATION
@@ -2607,27 +2753,31 @@ function MessagesContent() {
                     </div>
                   ) : (
                     <>
-                      {currentConversation.messages.map((message) => (
-                        <MessageBubble
-                          key={message.uuid}
-                          message={message}
-                          isOwn={message.expediteurEmail === agentProfile?.email}
-                          status={message.status}
-                          showAvatar={true}
-                          avatar={agentProfile?.avatar}
-                          senderName={currentConversation.contact.prenoms}
-                          onReply={() => handleReply(message)}
-                          onDelete={() => openDeleteModal(message)}
-                          onForward={() => {
-                            navigator.clipboard.writeText(message.contenu);
-                            showToast("success", "📋 Message copié", "Le message a été copié pour être transféré", { duration: 2000 });
-                          }}
-                          onCopy={() => {
-                            navigator.clipboard.writeText(message.contenu);
-                            showToast("success", "📋 Message copié", "Le message a été copié dans le presse-papiers", { duration: 2000 });
-                          }}
-                        />
-                      ))}
+                      {currentConversation.messages.map((message) => {
+                        const isOwn = message.expediteurEmail === agentProfile?.email;
+                        return (
+                          <MessageBubble
+                            key={message.uuid}
+                            message={message}
+                            isOwn={isOwn}
+                            status={message.status}
+                            showAvatar={true}
+                            avatar={agentProfile?.avatar}
+                            senderName={!isOwn ? currentConversation.contact.prenoms : undefined}
+                            senderAvatar={!isOwn ? message.expediteurAvatar : null}
+                            onReply={() => handleReply(message)}
+                            onDelete={() => openDeleteModal(message)}
+                            onForward={() => {
+                              navigator.clipboard.writeText(message.contenu);
+                              showToast("success", "📋 Message copié", "Le message a été copié pour être transféré", { duration: 2000 });
+                            }}
+                            onCopy={() => {
+                              navigator.clipboard.writeText(message.contenu);
+                              showToast("success", "📋 Message copié", "Le message a été copié dans le presse-papiers", { duration: 2000 });
+                            }}
+                          />
+                        );
+                      })}
                       <div ref={messagesEndRef} />
                     </>
                   )}
