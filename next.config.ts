@@ -39,22 +39,19 @@ const nextConfig = {
     ignoreBuildErrors: false,
   },
 
-    async rewrites() {
-    // En production, utiliser l'URL spécifique du backend
-    const backendUrl = process.env.NODE_ENV === 'production'
-      ? 'https://oskar-api.mysonec.pro'  // ← URL FIXE du backend
-      : (process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005");
-
-    console.log('🔧 Rewrites - Backend URL:', backendUrl);
-
+  async rewrites() {
     return [
       {
         source: "/api/:path*",
-        destination: `${backendUrl}/:path*`,
+        destination: `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005"}/:path*`,
+      },
+      // Proxy pour les fichiers statiques
+      {
+        source: "/api/files/:path*",
+        destination: `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005"}/api/files/:path*`,
       },
     ];
   },
-
 
   reactStrictMode: false,
   compiler: {

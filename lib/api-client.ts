@@ -18,26 +18,21 @@ class ApiClient {
   private maxRetries: number = 3;
   private retryDelay: number = 1000;
 
- // api-client.ts - MODIFIER LE CONSTRUCTEUR
-constructor() {
-  this.isProduction = process.env.NODE_ENV === "production";
-  
-  if (this.isProduction) {
-    // En production, on appelle DIRECTEMENT l'API backend
-    this.useProxy = false;
-    this.baseApiUrl = "https://oskar-api.mysonec.pro"; // URL directe du backend
-  } else {
-    // En développement, on utilise la configuration
+  constructor() {
     this.useProxy = process.env.NEXT_PUBLIC_USE_PROXY === "true";
-    this.baseApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
+    this.isProduction = process.env.NODE_ENV === "production";
+    this.baseApiUrl =
+      process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
+
+    if (!this.isProduction) {
+      console.log("🔧 ApiClient initialisé:", {
+        useProxy: this.useProxy,
+        isProduction: this.isProduction,
+        baseApiUrl: this.baseApiUrl,
+      });
+    }
   }
 
-  console.log("🔧 ApiClient initialisé:", {
-    useProxy: this.useProxy,
-    isProduction: this.isProduction,
-    baseApiUrl: this.baseApiUrl,
-  });
-}
   /**
    * Méthode spéciale pour envoyer des messages via la messagerie
    */
