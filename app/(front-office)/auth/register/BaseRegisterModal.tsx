@@ -242,7 +242,7 @@ const BaseRegisterModal: React.FC<BaseRegisterModalProps> = ({
                     }}
                   >
                     <FontAwesomeIcon icon={faUser} />
-                    <span>Utilisateur</span>
+                    <span>Particulier</span>
                   </button>
                   <button
                     type="button"
@@ -269,7 +269,7 @@ const BaseRegisterModal: React.FC<BaseRegisterModalProps> = ({
                     }}
                   >
                     <FontAwesomeIcon icon={faStore} />
-                    <span>Vendeur</span>
+                    <span>Proféssionnel</span>
                   </button>
                 </div>
               )}

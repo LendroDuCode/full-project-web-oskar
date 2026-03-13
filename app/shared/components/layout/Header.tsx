@@ -72,8 +72,6 @@ interface UserProfile {
   };
 }
 
-
-
 const Header: FC = () => {
   const pathname = usePathname();
   const [hoveredButton, setHoveredButton] = useState<string | null>(null);
@@ -833,9 +831,9 @@ const Header: FC = () => {
                 type="button"
                 style={{
                   color: colors.oskar.grey,
-                  fontSize: "var(--font-size-icon, 1rem)",
-                  width: "var(--size-icon, 36px)",
-                  height: "var(--size-icon, 36px)",
+                  fontSize: "1.2rem",
+                  width: "40px",
+                  height: "40px",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -856,8 +854,8 @@ const Header: FC = () => {
                 <div
                   className="rounded d-flex align-items-center justify-content-center"
                   style={{
-                    width: "var(--size-logo, 40px)",
-                    height: "var(--size-logo, 40px)",
+                    width: "40px",
+                    height: "40px",
                     backgroundColor: colors.oskar.green,
                     transition: "background-color 0.3s",
                   }}
@@ -871,16 +869,16 @@ const Header: FC = () => {
                 >
                   <span
                     className="text-white fw-bold"
-                    style={{ fontSize: "var(--font-size-logo-letter, 1rem)" }}
+                    style={{ fontSize: "1rem" }}
                   >
                     O
                   </span>
                 </div>
                 <span
-                  className="fw-bold ms-2"
+                  className="fw-bold ms-2 d-none d-sm-inline"
                   style={{
                     color: colors.oskar.black,
-                    fontSize: "var(--font-size-logo, 1.5rem)",
+                    fontSize: "1.5rem",
                     transition: "font-size 0.2s",
                   }}
                 >
@@ -889,13 +887,14 @@ const Header: FC = () => {
               </Link>
             </div>
 
-            {/* Navigation Desktop - TOUJOURS sur UNE SEULE LIGNE sans scroll */}
-            <div className="flex-grow-1 mx-3 mx-xl-4 position-relative">
+            {/* ===== MODIFICATION PRINCIPALE ===== */}
+            {/* Navigation Desktop - Cachée sur mobile (≤ 991px) */}
+            <div className="flex-grow-1 mx-3 mx-xl-4 position-relative d-none d-lg-block">
               <nav
                 className="d-flex align-items-center justify-content-center"
                 style={{
                   flexWrap: "nowrap",
-                  gap: "var(--gap-nav, 0.35rem)",
+                  gap: "0.35rem",
                 }}
               >
                 {loadingCategories ? (
@@ -922,9 +921,9 @@ const Header: FC = () => {
                           transition: "color 0.3s",
                           color: getLinkColor(link),
                           fontWeight: isLinkActive(link) ? "600" : "400",
-                          fontSize: "var(--font-size-nav, 0.75rem)",
+                          fontSize: "0.75rem",
                           whiteSpace: "nowrap",
-                          padding: "var(--padding-nav, 0.4rem 0)",
+                          padding: "0.4rem 0",
                         }}
                         onMouseEnter={() => {
                           if (link.hasChildren) {
@@ -946,7 +945,7 @@ const Header: FC = () => {
                         {link.hasChildren && (
                           <i
                             className="fa-solid fa-chevron-down ms-1"
-                            style={{ fontSize: "var(--font-size-icon-small, 0.55rem)" }}
+                            style={{ fontSize: "0.55rem" }}
                           ></i>
                         )}
                         {isLinkActive(link) && !link.hasChildren && (
@@ -991,7 +990,7 @@ const Header: FC = () => {
                                 href={child.href}
                                 className="dropdown-item py-2 px-3"
                                 style={{
-                                  fontSize: "var(--font-size-dropdown, 0.8rem)",
+                                  fontSize: "0.8rem",
                                   color: colors.oskar.grey,
                                   transition: "all 0.2s",
                                   minHeight: "36px",
@@ -1023,21 +1022,21 @@ const Header: FC = () => {
               </nav>
             </div>
 
-            {/* Actions Desktop - TOUJOURS visible, jamais cachée */}
-            <div className="d-flex align-items-center flex-shrink-0 action-buttons">
+            {/* Actions Desktop - Cachées sur mobile (≤ 991px) */}
+            <div className="d-none d-lg-flex align-items-center flex-shrink-0 action-buttons">
               <Link href={isLoggedIn ? getUserMessagesUrl() : "#"}>
                 <button
                   className="btn btn-link border-0 position-relative me-2 me-xl-3 action-button"
                   style={{
                     transition: "color 0.3s",
-                    fontSize: "var(--font-size-icon, 1rem)",
+                    fontSize: "1rem",
                     color:
                       pathname.includes("/messages") ||
                       pathname.includes("/messagerie")
                         ? colors.oskar.green
                         : colors.oskar.grey,
-                    width: "var(--size-icon, 36px)",
-                    height: "var(--size-icon, 36px)",
+                    width: "36px",
+                    height: "36px",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1071,13 +1070,13 @@ const Header: FC = () => {
                   className="btn btn-link border-0 me-2 me-xl-3 action-button"
                   style={{
                     transition: "color 0.3s",
-                    fontSize: "var(--font-size-icon, 1rem)",
+                    fontSize: "1rem",
                     color:
                       pathname === "/contact"
                         ? colors.oskar.green
                         : colors.oskar.grey,
-                    width: "var(--size-icon, 36px)",
-                    height: "var(--size-icon, 36px)",
+                    width: "36px",
+                    height: "36px",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1104,13 +1103,13 @@ const Header: FC = () => {
                   className="btn btn-link border-0 me-3 me-xl-4 action-button"
                   style={{
                     transition: "color 0.3s",
-                    fontSize: "var(--font-size-icon, 1rem)",
+                    fontSize: "1rem",
                     color:
                       pathname === "/liste-favoris"
                         ? colors.oskar.green
                         : colors.oskar.grey,
-                    width: "var(--size-icon, 36px)",
-                    height: "var(--size-icon, 36px)",
+                    width: "36px",
+                    height: "36px",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1132,7 +1131,7 @@ const Header: FC = () => {
                 </button>
               </Link>
 
-              {/* Compte utilisateur */}
+              {/* Compte utilisateur Desktop */}
               {isLoggedIn ? (
                 <div
                   className="dropdown"
@@ -1161,8 +1160,8 @@ const Header: FC = () => {
                       <div
                         className="rounded-circle d-flex align-items-center justify-content-center"
                         style={{
-                          width: "var(--size-avatar, 36px)",
-                          height: "var(--size-avatar, 36px)",
+                          width: "36px",
+                          height: "36px",
                           backgroundColor: "#f3f4f6",
                         }}
                       >
@@ -1179,8 +1178,8 @@ const Header: FC = () => {
                       <div
                         className="rounded-circle overflow-hidden position-relative d-flex align-items-center justify-content-center"
                         style={{
-                          width: "var(--size-avatar, 36px)",
-                          height: "var(--size-avatar, 36px)",
+                          width: "36px",
+                          height: "36px",
                           border: `2px solid ${colors.oskar.green}`,
                           backgroundColor: hasValidAvatar() ? 'transparent' : colors.oskar.green,
                         }}
@@ -1197,7 +1196,7 @@ const Header: FC = () => {
                             onError={handleImageError}
                           />
                         ) : (
-                          <span className="text-white fw-bold" style={{ fontSize: 'calc(var(--size-avatar, 36px) * 0.4)' }}>
+                          <span className="text-white fw-bold" style={{ fontSize: '14px' }}>
                             {getUserInitials()}
                           </span>
                         )}
@@ -1370,10 +1369,10 @@ const Header: FC = () => {
                   className="btn btn-link border-0 action-button"
                   style={{
                     transition: "color 0.3s",
-                    fontSize: "var(--font-size-icon, 1rem)",
+                    fontSize: "1rem",
                     color: colors.oskar.grey,
-                    width: "var(--size-icon, 36px)",
-                    height: "var(--size-icon, 36px)",
+                    width: "36px",
+                    height: "36px",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1401,14 +1400,14 @@ const Header: FC = () => {
                       ? colors.oskar.greenHover
                       : colors.oskar.green,
                   color: "white",
-                  padding: "var(--padding-button, 0.4rem 1rem)",
+                  padding: "0.4rem 1rem",
                   fontWeight: 600,
                   borderRadius: "6px",
                   border: "none",
                   transition: "background-color 0.3s",
-                  fontSize: "var(--font-size-button, 0.75rem)",
+                  fontSize: "0.75rem",
                   whiteSpace: "nowrap",
-                  minHeight: "var(--size-button, 34px)",
+                  minHeight: "34px",
                 }}
                 onMouseEnter={() => setHoveredButton("publish")}
                 onMouseLeave={() => setHoveredButton(null)}
@@ -1416,15 +1415,79 @@ const Header: FC = () => {
                 onClick={handlePublishClick}
                 type="button"
               >
-                <i className="fa-solid fa-plus me-2" style={{ fontSize: "var(--font-size-icon-small, 0.7rem)" }}></i>
+                <i className="fa-solid fa-plus me-2" style={{ fontSize: "0.7rem" }}></i>
                 <span>Publier</span>
               </button>
+            </div>
+
+            {/* ===== ÉLÉMENTS MOBILES ===== */}
+            {/* Icône de connexion/utilisateur sur mobile - visible uniquement sur mobile */}
+            <div className="d-lg-none d-flex align-items-center">
+              {isLoggedIn ? (
+                <button
+                  className="btn btn-link border-0 p-0 me-2"
+                  onClick={() => setMobileMenuOpen(true)}
+                  style={{
+                    color: colors.oskar.grey,
+                    width: "40px",
+                    height: "40px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <div
+                    className="rounded-circle overflow-hidden"
+                    style={{
+                      width: "32px",
+                      height: "32px",
+                      border: `2px solid ${colors.oskar.green}`,
+                      backgroundColor: hasValidAvatar() ? 'transparent' : colors.oskar.green,
+                    }}
+                  >
+                    {hasValidAvatar() ? (
+                      <img
+                        src={getAvatarUrl()}
+                        alt={getUserFullName()}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
+                        onError={handleImageError}
+                      />
+                    ) : (
+                      <div className="w-100 h-100 d-flex align-items-center justify-content-center">
+                        <span className="text-white fw-bold" style={{ fontSize: '12px' }}>
+                          {getUserInitials()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </button>
+              ) : (
+                <button
+                  className="btn btn-link border-0 p-0 me-2"
+                  onClick={handleLoginClick}
+                  style={{
+                    color: colors.oskar.grey,
+                    fontSize: "1.2rem",
+                    width: "40px",
+                    height: "40px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <i className="fa-solid fa-user"></i>
+                </button>
+              )}
             </div>
           </div>
         </div>
       </header>
 
-      {/* Menu Mobile Plein Écran */}
+      {/* Menu Mobile Plein Écran - CONTIENT TOUS LES ÉLÉMENTS */}
       {mobileMenuOpen && (
         <div className="d-lg-none">
           <div
@@ -1487,6 +1550,7 @@ const Header: FC = () => {
             </div>
 
             <div className="p-2">
+              {/* LIENS DE NAVIGATION DANS LE MENU MOBILE */}
               {navLinks.map((link, index) => (
                 <div key={`${link.name}-${index}-mobile-menu`}>
                   <Link
@@ -1541,6 +1605,7 @@ const Header: FC = () => {
                 </div>
               ))}
 
+              {/* SECTION COMPTE UTILISATEUR DANS LE MENU MOBILE */}
               {isLoggedIn && (
                 <div className="mt-4 border-top pt-3">
                   <div className="px-3 mb-2">
@@ -1583,7 +1648,7 @@ const Header: FC = () => {
                     <span>Mon profil</span>
                   </Link>
 
-                  {/* ✅ LIEN VERS LES ANNONCES DANS LE MENU MOBILE POUR TOUS LES TYPES */}
+                  {/* ✅ LIEN VERS LES ANNONCES DANS LE MENU MOBILE */}
                   {canViewAnnonces() && (
                     <Link
                       href={getUserAnnoncesUrl()}
@@ -1620,6 +1685,40 @@ const Header: FC = () => {
                     <span>Messages</span>
                   </Link>
 
+                  <Link
+                    href="/contact"
+                    className="d-flex align-items-center py-3 px-3 text-decoration-none"
+                    onClick={() => setMobileMenuOpen(false)}
+                    style={{
+                      color: colors.oskar.grey,
+                      fontSize: "0.85rem",
+                      minHeight: "40px",
+                    }}
+                  >
+                    <i
+                      className="fa-solid fa-phone me-3"
+                      style={{ width: "16px", fontSize: "0.9rem" }}
+                    ></i>
+                    <span>Contact</span>
+                  </Link>
+
+                  <Link
+                    href="/liste-favoris"
+                    className="d-flex align-items-center py-3 px-3 text-decoration-none"
+                    onClick={() => setMobileMenuOpen(false)}
+                    style={{
+                      color: colors.oskar.grey,
+                      fontSize: "0.85rem",
+                      minHeight: "40px",
+                    }}
+                  >
+                    <i
+                      className="fa-solid fa-heart me-3"
+                      style={{ width: "16px", fontSize: "0.9rem" }}
+                    ></i>
+                    <span>Favoris</span>
+                  </Link>
+
                   <button
                     className="d-flex align-items-center py-3 px-3 w-100 text-start border-0 bg-transparent text-danger"
                     onClick={() => {
@@ -1641,6 +1740,7 @@ const Header: FC = () => {
                 </div>
               )}
 
+              {/* BOUTON PUBLIER DANS LE MENU MOBILE */}
               <div className="p-3 mt-3">
                 <button
                   className="btn w-100"
@@ -1663,6 +1763,52 @@ const Header: FC = () => {
                   Publier une annonce
                 </button>
               </div>
+
+              {/* LIENS DE CONNEXION/INSCRIPTION SI NON CONNECTÉ */}
+              {!isLoggedIn && (
+                <div className="p-3">
+                  <button
+                    className="btn w-100 mb-2"
+                    style={{
+                      backgroundColor: colors.oskar.green,
+                      color: "white",
+                      borderRadius: "6px",
+                      border: "none",
+                      fontWeight: 600,
+                      padding: "0.6rem",
+                      fontSize: "0.8rem",
+                    }}
+                    onClick={() => {
+                      handleLoginClick();
+                      setMobileMenuOpen(false);
+                    }}
+                    type="button"
+                  >
+                    <i className="fa-solid fa-right-to-bracket me-2"></i>
+                    Se connecter
+                  </button>
+                  <button
+                    className="btn w-100"
+                    style={{
+                      backgroundColor: "transparent",
+                      color: colors.oskar.green,
+                      borderRadius: "6px",
+                      border: `1px solid ${colors.oskar.green}`,
+                      fontWeight: 600,
+                      padding: "0.6rem",
+                      fontSize: "0.8rem",
+                    }}
+                    onClick={() => {
+                      // Ouvrir modal d'inscription
+                      setMobileMenuOpen(false);
+                    }}
+                    type="button"
+                  >
+                    <i className="fa-solid fa-user-plus me-2"></i>
+                    S'inscrire
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1716,230 +1862,6 @@ const Header: FC = () => {
           }
           100% {
             opacity: 0.6;
-          }
-        }
-
-        /* Variables CSS pour la réduction progressive */
-        :root {
-          --font-size-nav: 0.75rem;
-          --font-size-icon: 1rem;
-          --font-size-icon-small: 0.7rem;
-          --font-size-button: 0.75rem;
-          --font-size-logo: 1.5rem;
-          --font-size-logo-letter: 1rem;
-          --font-size-dropdown: 0.8rem;
-          --font-size-badge: 0.55rem;
-
-          --size-icon: 36px;
-          --size-avatar: 36px;
-          --size-logo: 40px;
-          --size-button: 34px;
-          --size-badge: 14px;
-
-          --padding-button: 0.4rem 1rem;
-          --padding-nav: 0.4rem 0;
-          --gap-nav: 0.35rem;
-        }
-
-        /* Réduction progressive sur les écrans moyens */
-        @media (max-width: 1400px) {
-          :root {
-            --font-size-nav: 0.7rem;
-            --font-size-icon: 0.95rem;
-            --font-size-logo: 1.4rem;
-            --size-icon: 34px;
-            --size-avatar: 34px;
-            --gap-nav: 0.3rem;
-          }
-        }
-
-        @media (max-width: 1200px) {
-          :root {
-            --font-size-nav: 0.65rem;
-            --font-size-icon: 0.9rem;
-            --font-size-logo: 1.3rem;
-            --font-size-logo-letter: 0.95rem;
-            --size-icon: 32px;
-            --size-avatar: 32px;
-            --size-logo: 38px;
-            --gap-nav: 0.25rem;
-          }
-        }
-
-        @media (max-width: 992px) {
-          :root {
-            --font-size-nav: 0.6rem;
-            --font-size-icon: 0.85rem;
-            --font-size-button: 0.7rem;
-            --font-size-logo: 1.2rem;
-            --font-size-logo-letter: 0.9rem;
-            --size-icon: 30px;
-            --size-avatar: 30px;
-            --size-logo: 36px;
-            --size-button: 30px;
-            --padding-button: 0.35rem 0.8rem;
-            --gap-nav: 0.2rem;
-          }
-        }
-
-        @media (max-width: 768px) {
-          :root {
-            --font-size-nav: 0.55rem;
-            --font-size-icon: 0.8rem;
-            --font-size-icon-small: 0.6rem;
-            --font-size-button: 0.65rem;
-            --font-size-logo: 1.1rem;
-            --font-size-logo-letter: 0.85rem;
-            --size-icon: 28px;
-            --size-avatar: 28px;
-            --size-logo: 34px;
-            --size-button: 28px;
-            --padding-button: 0.3rem 0.7rem;
-            --gap-nav: 0.15rem;
-          }
-        }
-
-        @media (max-width: 640px) {
-          :root {
-            --font-size-nav: 0.5rem;
-            --font-size-icon: 0.75rem;
-            --font-size-button: 0.6rem;
-            --font-size-logo: 1rem;
-            --font-size-logo-letter: 0.8rem;
-            --size-icon: 26px;
-            --size-avatar: 26px;
-            --size-logo: 32px;
-            --size-button: 26px;
-            --padding-button: 0.25rem 0.6rem;
-            --gap-nav: 0.1rem;
-          }
-        }
-
-        @media (max-width: 576px) {
-          :root {
-            --font-size-nav: 0.45rem;
-            --font-size-icon: 0.7rem;
-            --font-size-icon-small: 0.55rem;
-            --font-size-button: 0.55rem;
-            --font-size-logo: 0.9rem;
-            --font-size-logo-letter: 0.75rem;
-            --font-size-badge: 0.5rem;
-            --size-icon: 24px;
-            --size-avatar: 24px;
-            --size-logo: 30px;
-            --size-button: 24px;
-            --size-badge: 12px;
-            --padding-button: 0.2rem 0.5rem;
-            --gap-nav: 0.08rem;
-          }
-        }
-
-        @media (max-width: 480px) {
-          :root {
-            --font-size-nav: 0.4rem;
-            --font-size-icon: 0.65rem;
-            --font-size-button: 0.5rem;
-            --font-size-logo: 0.8rem;
-            --font-size-logo-letter: 0.7rem;
-            --size-icon: 22px;
-            --size-avatar: 22px;
-            --size-logo: 28px;
-            --size-button: 22px;
-            --padding-button: 0.15rem 0.4rem;
-            --gap-nav: 0.05rem;
-          }
-        }
-
-        @media (max-width: 400px) {
-          :root {
-            --font-size-nav: 0.35rem;
-            --font-size-icon: 0.6rem;
-            --font-size-button: 0.45rem;
-            --font-size-logo: 0.7rem;
-            --font-size-logo-letter: 0.65rem;
-            --size-icon: 20px;
-            --size-avatar: 20px;
-            --size-logo: 26px;
-            --size-button: 20px;
-            --padding-button: 0.1rem 0.3rem;
-          }
-        }
-
-        @media (max-width: 360px) {
-          :root {
-            --font-size-nav: 0.3rem;
-            --font-size-icon: 0.55rem;
-            --font-size-button: 0.4rem;
-            --font-size-logo: 0.6rem;
-            --font-size-logo-letter: 0.6rem;
-            --size-icon: 18px;
-            --size-avatar: 18px;
-            --size-logo: 24px;
-            --size-button: 18px;
-            --padding-button: 0.05rem 0.2rem;
-          }
-        }
-
-        /* Styles de base */
-        .nav-link {
-          font-size: var(--font-size-nav) !important;
-          padding: var(--padding-nav) !important;
-        }
-
-        .action-button {
-          width: var(--size-icon) !important;
-          height: var(--size-icon) !important;
-          font-size: var(--font-size-icon) !important;
-        }
-
-        .publish-button {
-          font-size: var(--font-size-button) !important;
-          padding: var(--padding-button) !important;
-          min-height: var(--size-button) !important;
-        }
-
-        .publish-button i {
-          font-size: var(--font-size-icon-small) !important;
-        }
-
-        /* Ultra large screens (4K) */
-        @media (min-width: 2560px) {
-          .container-fluid {
-            max-width: 2000px;
-            margin: 0 auto;
-          }
-        }
-
-        /* Large desktop */
-        @media (min-width: 1920px) and (max-width: 2559px) {
-          .container-fluid {
-            max-width: 1600px;
-            margin: 0 auto;
-          }
-        }
-
-        /* Standard desktop */
-        @media (min-width: 1200px) and (max-width: 1919px) {
-          .container-fluid {
-            max-width: 1200px;
-            margin: 0 auto;
-          }
-        }
-
-        /* Small desktop */
-        @media (min-width: 992px) and (max-width: 1199px) {
-          .container-fluid {
-            max-width: 960px;
-            margin: 0 auto;
-          }
-        }
-
-        /* Accessibility */
-        @media (prefers-reduced-motion: reduce) {
-          .btn,
-          .dropdown-item,
-          .nav-link {
-            transition: none !important;
           }
         }
 

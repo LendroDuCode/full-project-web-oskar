@@ -602,9 +602,9 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
         </div>
 
         {viewMode === "grid" ? (
-          <div className="row g-4">
+          <div className="row g-3 g-md-4">
             {listings.map((item) => (
-              <div key={item.uuid} className="col-lg-4 col-md-6">
+              <div key={item.uuid} className="col-6 col-md-4 col-lg-4">
                 <ListingCard listing={item} viewMode="grid" />
               </div>
             ))}

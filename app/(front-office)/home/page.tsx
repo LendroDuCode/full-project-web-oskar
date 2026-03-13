@@ -27,7 +27,7 @@ const Home: React.FC = () => {
         <WhyOskar />
         <CTABanner />
         <Testimonials />
-        <AppDownload />
+        {/* <AppDownload /> */}
       </div>
     </SearchProvider>
   );

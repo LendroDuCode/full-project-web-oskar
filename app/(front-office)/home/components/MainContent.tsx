@@ -46,23 +46,25 @@ const MainContent = () => {
   return (
     <main id="main-content" className="container-fluid py-5">
       <div className="row g-4">
-        {/* Sidebar des filtres avancés - visible sur desktop */}
+        {/* Sidebar des filtres avancés - visible seulement sur desktop */}
         <div className="col-auto d-none d-lg-block">
           <FiltersSidebar filters={filters} onFiltersChange={setFilters} />
         </div>
 
         {/* Contenu principal */}
         <div className="col">
-          {/* Barre de filtres rapides et statistiques */}
-          <FilterStatsBar
-            totalItems={totalItems}
-            activeFilter={activeFilter}
-            onFilterChange={handleFilterChange}
-            viewMode={viewMode}
-            onViewModeChange={handleViewModeChange}
-            sortOption={sortOption}
-            onSortChange={handleSortChange}
-          />
+          {/* Barre de filtres rapides et statistiques - visible seulement sur desktop */}
+          <div className="d-none d-md-block">
+            <FilterStatsBar
+              totalItems={totalItems}
+              activeFilter={activeFilter}
+              onFilterChange={handleFilterChange}
+              viewMode={viewMode}
+              onViewModeChange={handleViewModeChange}
+              sortOption={sortOption}
+              onSortChange={handleSortChange}
+            />
+          </div>
 
           {/* Grid des annonces avec filtres */}
           <div className="mt-4">
@@ -85,7 +87,7 @@ const MainContent = () => {
         </div>
       </div>
 
-      {/* Bouton de filtres mobile */}
+      {/* Bouton de filtres mobile - visible seulement sur mobile */}
       <div className="d-lg-none fixed-bottom p-3">
         <button
           className="btn w-100 py-3 fw-semibold text-white border-0 rounded-4 shadow-lg d-flex align-items-center justify-content-center gap-2"
@@ -160,6 +162,8 @@ const MainContent = () => {
         @media (min-width: 1400px) {
           #main-content {
             max-width: 1400px;
+            margin-left: auto;
+            margin-right: auto;
           }
         }
       `}</style>

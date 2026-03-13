@@ -497,15 +497,16 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
             maxWidth: compactMode ? "100%" : "clamp(100%, 90vw, 900px)",
           }}
         >
-          {/* Titre */}
+          {/* ===== MODIFICATION PRINCIPALE ===== */}
+          {/* Titre - Caché sur mobile */}
           {!compactMode && (
             <h1
-              className="text-center mb-4 fw-bold"
+              className="text-center mb-4 fw-bold d-none d-md-block"
               style={{
                 color: colors.oskar.black,
                 fontSize: "clamp(1.75rem, 5vw, 2.75rem)",
                 lineHeight: 1.2,
-                marginBottom: isMobile ? "1.5rem" : "2rem",
+                marginBottom: "2rem",
               }}
             >
               Découvrez les pépites près de chez vous
@@ -523,12 +524,12 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
             </h1>
           )}
 
-          {/* Barre de recherche */}
+          {/* Barre de recherche - TOUJOURS visible */}
           <div
-            className="position-relative mb-4"
+            className="position-relative"
             style={{
               maxWidth: compactMode ? "100%" : "100%",
-              marginBottom: isMobile ? "1.5rem" : "2rem",
+              marginBottom: isMobile ? "0" : "2rem",
             }}
           >
             <div className="position-relative">
@@ -561,7 +562,7 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
                     ? colors.oskar.green
                     : colors.oskar.lightGrey,
                   color: colors.oskar.black,
-                  fontSize: isMobile ? "1rem" : "clamp(1rem, 1.5vw, 1.125rem)",
+                  fontSize: isMobile ? "16px" : "clamp(1rem, 1.5vw, 1.125rem)",
                   height: isMobile ? "52px" : "clamp(52px, 6vw, 60px)",
                   boxShadow: inputFocused
                     ? `0 4px 20px rgba(76, 175, 80, 0.15)`
@@ -702,176 +703,19 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
             )}
           </div>
 
-          {/* FILTRES RAPIDES - MOBILE */}
-          {!compactMode && isMobile && (
-            <div className="mb-4">
+          {/* ===== ÉLÉMENTS CACHÉS SUR MOBILE ===== */}
+          {/* FILTRES RAPIDES - UNIQUEMENT SUR TABLETTE/DESKTOP */}
+          {!compactMode && !isMobile && (
+            <div className="d-none d-md-block mb-4">
               <div
                 className="d-flex gap-2 overflow-auto pb-2"
                 style={{ scrollbarWidth: "none" }}
               >
-                {/* Localisation - Mobile */}
-                <div
-                  className="position-relative flex-shrink-0"
-                  style={{ minWidth: "160px" }}
-                >
-                  <div className="position-relative">
-                    <select
-                      className="form-select"
-                      style={{
-                        width: "100%",
-                        padding: "0.7rem 2.2rem 0.7rem 2.2rem",
-                        borderColor: selectedLocation
-                          ? colors.oskar.green
-                          : colors.oskar.lightGrey,
-                        fontSize: "0.85rem",
-                        backgroundColor: "white",
-                        color: selectedLocation
-                          ? colors.oskar.black
-                          : "#6c757d",
-                        appearance: "none",
-                        cursor: "pointer",
-                        borderWidth: "1.5px",
-                        height: "48px",
-                        borderRadius: "10px",
-                        fontWeight: selectedLocation ? "500" : "400",
-                      }}
-                      value={selectedLocation}
-                      onChange={(e) => {
-                        setSelectedLocation(e.target.value);
-                        if (typeof window !== "undefined") {
-                          const event = new CustomEvent(
-                            "search-filters-updated",
-                            {
-                              detail: {
-                                searchQuery,
-                                category: selectedCategory,
-                                sousCategorie: selectedSousCategorie,
-                                sousCategorieLibelle: selectedSousCategorieLibelle,
-                                location: e.target.value,
-                                maxPrice,
-                              },
-                            },
-                          );
-                          window.dispatchEvent(event);
-                        }
-                      }}
-                    >
-                      {locations.map((loc) => (
-                        <option key={loc.value} value={loc.value}>
-                          {loc.label}
-                        </option>
-                      ))}
-                    </select>
+            
 
-                    <div
-                      className="position-absolute top-50 start-0 translate-middle-y"
-                      style={{
-                        color: selectedLocation
-                          ? colors.oskar.green
-                          : colors.oskar.grey,
-                        left: "12px",
-                        pointerEvents: "none",
-                        zIndex: 2,
-                      }}
-                    >
-                      <i className="fa-solid fa-location-dot"></i>
-                    </div>
+              
 
-                    <div
-                      className="position-absolute top-50 end-0 translate-middle-y"
-                      style={{
-                        color: colors.oskar.green,
-                        pointerEvents: "none",
-                        zIndex: 2,
-                        right: "12px",
-                      }}
-                    >
-                      <i className="fa-solid fa-chevron-down"></i>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Prix max - Mobile */}
-                <div
-                  className="position-relative flex-shrink-0"
-                  style={{ minWidth: "160px" }}
-                >
-                  <div className="position-relative">
-                    <select
-                      className="form-select"
-                      style={{
-                        width: "100%",
-                        padding: "0.7rem 2.2rem 0.7rem 2.2rem",
-                        borderColor: maxPrice
-                          ? colors.oskar.green
-                          : colors.oskar.lightGrey,
-                        fontSize: "0.85rem",
-                        backgroundColor: "white",
-                        color: maxPrice ? colors.oskar.black : "#6c757d",
-                        appearance: "none",
-                        cursor: "pointer",
-                        borderWidth: "1.5px",
-                        height: "48px",
-                        borderRadius: "10px",
-                        fontWeight: maxPrice ? "500" : "400",
-                      }}
-                      value={maxPrice}
-                      onChange={(e) => {
-                        setMaxPrice(e.target.value);
-                        if (typeof window !== "undefined") {
-                          const event = new CustomEvent(
-                            "search-filters-updated",
-                            {
-                              detail: {
-                                searchQuery,
-                                category: selectedCategory,
-                                sousCategorie: selectedSousCategorie,
-                                sousCategorieLibelle: selectedSousCategorieLibelle,
-                                location: selectedLocation,
-                                maxPrice: e.target.value,
-                              },
-                            },
-                          );
-                          window.dispatchEvent(event);
-                        }
-                      }}
-                    >
-                      {priceRanges.map((price) => (
-                        <option key={price.value} value={price.value}>
-                          {price.label}
-                        </option>
-                      ))}
-                    </select>
-
-                    <div
-                      className="position-absolute top-50 start-0 translate-middle-y"
-                      style={{
-                        color: maxPrice
-                          ? colors.oskar.green
-                          : colors.oskar.grey,
-                        left: "12px",
-                        pointerEvents: "none",
-                        zIndex: 2,
-                      }}
-                    >
-                      <i className="fa-solid fa-coins"></i>
-                    </div>
-
-                    <div
-                      className="position-absolute top-50 end-0 translate-middle-y"
-                      style={{
-                        color: colors.oskar.green,
-                        pointerEvents: "none",
-                        zIndex: 2,
-                        right: "12px",
-                      }}
-                    >
-                      <i className="fa-solid fa-chevron-down"></i>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Bouton Effacer - Mobile */}
+                {/* Bouton Effacer */}
                 {hasActiveFilters && (
                   <button
                     onClick={clearAllFilters}
@@ -899,16 +743,16 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
             </div>
           )}
 
-          {/* SOUS-CATÉGORIES POPULAIRES - SANS LES BADGES DE CATÉGORIES PRINCIPALES */}
+          {/* SOUS-CATÉGORIES POPULAIRES - UNIQUEMENT SUR TABLETTE/DESKTOP */}
           {showPopularSearches &&
             !loadingSubs &&
             categoriesWithSubs.length > 0 && (
-              <div className="mt-4 mt-md-5">
+              <div className="d-none d-md-block mt-4 mt-md-5">
                 <h3
                   className="text-center mb-4"
                   style={{
                     color: colors.oskar.grey,
-                    fontSize: isMobile ? "0.9375rem" : "1rem",
+                    fontSize: "1rem",
                     fontWeight: 600,
                     letterSpacing: "0.5px",
                     textTransform: "uppercase",
@@ -945,10 +789,8 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
                               selectedSousCategorie === sub.uuid
                                 ? "white"
                                 : colors.oskar.grey,
-                            fontSize: isMobile ? "0.75rem" : "0.8125rem",
-                            padding: isMobile
-                              ? "0.4rem 1rem"
-                              : "0.5rem 1.25rem",
+                            fontSize: "0.8125rem",
+                            padding: "0.5rem 1.25rem",
                             transition:
                               "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
                             border:
@@ -1004,9 +846,9 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
               </div>
             )}
 
-          {/* Message si chargement */}
+          {/* Message si chargement - UNIQUEMENT SUR TABLETTE/DESKTOP */}
           {loadingSubs && showPopularSearches && (
-            <div className="d-flex justify-content-center align-items-center gap-2 mt-4">
+            <div className="d-none d-md-flex justify-content-center align-items-center gap-2 mt-4">
               <div
                 className="spinner-border spinner-border-sm"
                 style={{ color: colors.oskar.green }}
@@ -1020,9 +862,9 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
             </div>
           )}
 
-          {/* RÉSUMÉ DES FILTRES ACTIFS */}
+          {/* RÉSUMÉ DES FILTRES ACTIFS - UNIQUEMENT SUR TABLETTE/DESKTOP */}
           {hasActiveFilters && (
-            <div className="mt-4 text-center">
+            <div className="d-none d-md-block mt-4 text-center">
               <div
                 className="d-inline-flex align-items-center gap-2 px-3 py-2 rounded-pill"
                 style={{
@@ -1199,7 +1041,7 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
           font-size: 0.75rem;
         }
 
-        /* Scroll horizontal pour mobile */
+        /* Scroll horizontal pour mobile (mais caché car plus utilisé) */
         #hero-search .overflow-auto {
           scrollbar-width: none;
           -ms-overflow-style: none;
@@ -1210,25 +1052,28 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
           display: none;
         }
 
-        /* Améliorations pour mobile */
+        /* Améliorations pour mobile - SEULEMENT LE CHAMP DE RECHERCHE */
         @media (max-width: 768px) {
           #hero-search button,
-          #hero-search .btn,
-          #hero-search .form-select {
-            min-height: 48px;
+          #hero-search .btn {
+            min-height: 44px;
             touch-action: manipulation;
           }
 
           #hero-search .form-control {
             font-size: 16px !important;
+            padding-right: 3.5rem !important;
           }
 
-          #hero-search .d-flex.gap-2 {
-            gap: 0.75rem !important;
+          /* Supprimer les marges inutiles */
+          #hero-search .container-fluid {
+            padding-left: 12px !important;
+            padding-right: 12px !important;
           }
 
-          #hero-search .gap-4 {
-            gap: 1rem !important;
+          /* Ajuster l'espacement */
+          #hero-search section {
+            padding: 1rem 0 !important;
           }
         }
 
