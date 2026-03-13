@@ -23,12 +23,19 @@ import {
   faClock,
   faLink,
   faCopy,
+  faFile,
+  faFileWord,
+  faFileExcel,
+  faFilePowerpoint,
+  faFileArchive,
+  faFileCode,
+  faFileVideo,
+  faFileAudio,
 } from "@fortawesome/free-solid-svg-icons";
 import "bootstrap/dist/css/bootstrap.min.css";
 import colors from "@/app/shared/constants/colors";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
-import { useAuth } from "@/app/(front-office)/auth/AuthContext";
 
 
 interface RegistreCommerce {
@@ -47,6 +54,7 @@ interface UploadHistoryItem {
   size: number;
   status: "succès" | "échec";
   url?: string;
+  errorMessage?: string;
 }
 
 interface UploadResponse {
@@ -85,9 +93,16 @@ const formatDate = (dateString: string): string => {
   }
 };
 
-const getFileIcon = (mimetype: string) => {
+const getFileIcon = (mimetype: string, filename: string = "") => {
   if (mimetype.includes("pdf")) return faFilePdf;
   if (mimetype.includes("image")) return faFileImage;
+  if (mimetype.includes("word") || mimetype.includes("document") || filename.endsWith('.doc') || filename.endsWith('.docx')) return faFileWord;
+  if (mimetype.includes("excel") || mimetype.includes("spreadsheet") || filename.endsWith('.xls') || filename.endsWith('.xlsx')) return faFileExcel;
+  if (mimetype.includes("powerpoint") || mimetype.includes("presentation") || filename.endsWith('.ppt') || filename.endsWith('.pptx')) return faFilePowerpoint;
+  if (mimetype.includes("zip") || mimetype.includes("rar") || mimetype.includes("tar") || mimetype.includes("7z")) return faFileArchive;
+  if (mimetype.includes("text") || mimetype.includes("json") || mimetype.includes("xml") || mimetype.includes("javascript")) return faFileCode;
+  if (mimetype.includes("video")) return faFileVideo;
+  if (mimetype.includes("audio")) return faFileAudio;
   return faFileAlt;
 };
 
@@ -112,13 +127,37 @@ const getFileUrl = (url: string | null | undefined): string | null => {
   return `${API_URL}/api/files/${encodedPath}`;
 };
 
+// Fonction pour parser l'erreur 413 et autres erreurs serveur
+const parseUploadError = (err: any): string => {
+  // Erreur 413 (Request Entity Too Large)
+  if (err.response?.status === 413 || err.message?.includes('413') || err.response?.data?.includes('413')) {
+    return "Le fichier est trop volumineux pour le serveur. Veuillez contacter l'administrateur pour augmenter la limite d'upload (client_max_body_size dans Nginx).";
+  }
+  
+  // Erreur de connexion
+  if (err.message?.includes('Network Error') || err.code === 'ECONNABORTED') {
+    return "Problème de connexion au serveur. Vérifiez votre connexion internet et réessayez.";
+  }
+  
+  // Erreur de timeout
+  if (err.message?.includes('timeout') || err.code === 'ECONNABORTED') {
+    return "Le téléchargement a pris trop de temps. Réessayez avec un fichier plus petit ou une meilleure connexion.";
+  }
+  
+  // Erreur de type de fichier (si gérée par le backend)
+  if (err.response?.status === 415) {
+    return "Type de fichier non supporté. Veuillez utiliser un format de fichier valide.";
+  }
+  
+  // Autres erreurs
+  return err.message || err.response?.data?.message || "Erreur lors de l'upload du fichier";
+};
+
 // ============================================
 // COMPOSANT PRINCIPAL
 // ============================================
 
 export default function RegistreCommercePage() {
-  const { isLoggedIn, user } = useAuth();
-  
   // États
   const [isMobile, setIsMobile] = useState(false);
   const [currentRegistre, setCurrentRegistre] = useState<RegistreCommerce | null>(null);
@@ -134,7 +173,7 @@ export default function RegistreCommercePage() {
   const [displayUrl, setDisplayUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [fileTooLarge, setFileTooLarge] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
+  const [serverLimit, setServerLimit] = useState<string>("inconnue");
   
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -152,35 +191,12 @@ export default function RegistreCommercePage() {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Récupérer le token au chargement
-  useEffect(() => {
-    const getToken = () => {
-      // Essayer différentes sources pour le token
-      const tokenFromStorage = 
-        localStorage.getItem('oskar_token') || 
-        localStorage.getItem('token') || 
-        localStorage.getItem('temp_token') ||
-        localStorage.getItem('access_token');
-      
-      console.log("🔑 Token récupéré:", tokenFromStorage ? "Présent" : "Absent");
-      setToken(tokenFromStorage);
-      
-      return tokenFromStorage;
-    };
-
-    getToken();
-  }, []);
-
   // Charger les données initiales
   useEffect(() => {
-    if (token) {
-      fetchCurrentRegistre();
-      fetchUploadHistory();
-    } else {
-      console.log("⚠️ Aucun token, impossible de charger les données");
-      setError("Vous devez être connecté pour accéder à cette page");
-    }
-  }, [token]);
+    fetchCurrentRegistre();
+    fetchUploadHistory();
+    detectServerLimit();
+  }, []);
 
   // Mettre à jour l'URL d'affichage quand le registre change
   useEffect(() => {
@@ -204,13 +220,31 @@ export default function RegistreCommercePage() {
   // FONCTIONS API
   // ============================================
 
+  const detectServerLimit = async () => {
+    try {
+      // Tenter de détecter la limite du serveur
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3005';
+      
+      const response = await fetch(`${API_URL}/api/config/upload-limit`, {
+        method: 'HEAD',
+      }).catch(() => null);
+      
+      if (response?.headers) {
+        const limit = response.headers.get('X-Upload-Limit');
+        if (limit) {
+          setServerLimit(limit);
+        }
+      }
+    } catch (err) {
+      console.log("Impossible de détecter la limite serveur");
+    }
+  };
+
   const fetchCurrentRegistre = async () => {
     try {
       setLoading(true);
       
-      const token = localStorage.getItem('oskar_token') || 
-                    localStorage.getItem('token') || 
-                    localStorage.getItem('access_token');
+      const token = localStorage.getItem('access_token') || localStorage.getItem('oskar_token');
       
       if (!token) {
         console.log("⚠️ Aucun token trouvé");
@@ -228,7 +262,6 @@ export default function RegistreCommercePage() {
         const data = await response.json();
         console.log("✅ Profil vendeur chargé:", data);
         
-        // Vérifier si le vendeur a un registre de commerce
         if (data.data?.registre_commerce) {
           const registreData: RegistreCommerce = {
             url: data.data.registre_commerce,
@@ -240,19 +273,14 @@ export default function RegistreCommercePage() {
           };
           setCurrentRegistre(registreData);
           
-          // Sauvegarder dans localStorage pour persistence
           localStorage.setItem("currentRegistre", JSON.stringify(registreData));
         } else {
           console.log("ℹ️ Aucun registre de commerce trouvé");
         }
       } else {
         console.error("❌ Erreur chargement profil:", response.status);
-        if (response.status === 401) {
-          setError("Session expirée. Veuillez vous reconnecter.");
-        }
       }
       
-      // Fallback sur localStorage pour le développement
       const mockRegistre = localStorage.getItem("currentRegistre");
       if (mockRegistre && !currentRegistre) {
         setCurrentRegistre(JSON.parse(mockRegistre));
@@ -266,12 +294,10 @@ export default function RegistreCommercePage() {
 
   const fetchUploadHistory = async () => {
     try {
-      // Pour l'instant, utiliser localStorage
       const mockHistory = localStorage.getItem("uploadHistory");
       if (mockHistory) {
         setUploadHistory(JSON.parse(mockHistory));
       } else {
-        // Données de démonstration
         const demoHistory: UploadHistoryItem[] = [
           {
             id: "1",
@@ -304,17 +330,6 @@ export default function RegistreCommercePage() {
       setUploadProgress(0);
       setFileTooLarge(false);
 
-      // Récupérer le token
-      const token = localStorage.getItem('oskar_token') || 
-                    localStorage.getItem('token') || 
-                    localStorage.getItem('access_token');
-      
-      if (!token) {
-        throw new Error("Token d'authentification manquant");
-      }
-
-      console.log("🔑 Token utilisé pour l'upload");
-
       // Simuler la progression
       const interval = setInterval(() => {
         setUploadProgress((prev) => {
@@ -332,57 +347,35 @@ export default function RegistreCommercePage() {
 
       console.log("📤 Upload du fichier:", file.name, file.size, file.type);
 
-      // Utiliser fetch directement pour avoir plus de contrôle sur les headers
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3005';
-      const endpoint = API_ENDPOINTS.VENDEURS.UPLOADER_REGISTRE_COMMERCE;
-      const fullUrl = endpoint.startsWith('http') ? endpoint : `${API_URL}${endpoint}`;
-
-      console.log("📡 URL complète:", fullUrl);
-
-      const response = await fetch(fullUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          // Ne pas définir Content-Type, le navigateur le fera automatiquement avec la boundary
-        },
-        body: formData,
-      });
+      // Utiliser le bon endpoint - SANS l'option timeout qui n'existe pas
+      const response = await api.post<UploadResponse>(
+        API_ENDPOINTS.VENDEURS.UPLOADER_REGISTRE_COMMERCE,
+        formData,
+        { 
+          isFormData: true,
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          }
+        }
+      );
 
       clearInterval(interval);
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error("❌ Réponse erreur:", response.status, errorData);
-        
-        if (response.status === 401) {
-          throw new Error("Session expirée. Veuillez vous reconnecter.");
-        } else if (response.status === 413) {
-          setFileTooLarge(true);
-          throw new Error("Le fichier est trop volumineux (limite serveur dépassée)");
-        } else {
-          throw new Error(errorData.message || `Erreur ${response.status} lors de l'upload`);
-        }
-      }
-
       setUploadProgress(100);
 
-      const data = await response.json();
-      console.log("✅ Réponse upload:", data);
+      console.log("✅ Réponse upload:", response);
 
-      if (data.success) {
-        setCurrentRegistre(data.data);
+      if (response.success) {
+        setCurrentRegistre(response.data);
         
-        // Sauvegarder dans localStorage
-        localStorage.setItem("currentRegistre", JSON.stringify(data.data));
+        localStorage.setItem("currentRegistre", JSON.stringify(response.data));
 
-        // Ajouter à l'historique
         const historyItem: UploadHistoryItem = {
           id: Date.now().toString(),
-          filename: data.data.original_name,
+          filename: response.data.original_name,
           date: new Date().toISOString(),
-          size: data.data.size,
+          size: response.data.size,
           status: "succès",
-          url: data.data.url,
+          url: response.data.url,
         };
 
         const updatedHistory = [historyItem, ...uploadHistory];
@@ -392,22 +385,34 @@ export default function RegistreCommercePage() {
         setSuccessMessage("✅ Registre de commerce uploadé avec succès !");
         setTimeout(() => setSuccessMessage(null), 5000);
 
-        // Passer à l'onglet consultation après 2 secondes
         setTimeout(() => {
           setActiveTab("consultation");
         }, 2000);
       }
     } catch (err: any) {
       console.error("❌ Erreur upload:", err);
-      setError(err.message || "Erreur lors de l'upload du registre");
       
-      // Ajouter à l'historique comme échec
+      const errorMessage = parseUploadError(err);
+      
+      if (err.response?.status === 413 || err.message?.includes('413') || err.response?.data?.includes('413')) {
+        setFileTooLarge(true);
+        
+        const limitMatch = err.response?.data?.match(/limit (\d+)/i) || err.message?.match(/limit (\d+)/i);
+        if (limitMatch) {
+          const limitBytes = parseInt(limitMatch[1]) * 1024 * 1024;
+          setServerLimit(formatFileSize(limitBytes));
+        }
+      }
+      
+      setError(errorMessage);
+      
       const historyItem: UploadHistoryItem = {
         id: Date.now().toString(),
         filename: file.name,
         date: new Date().toISOString(),
         size: file.size,
         status: "échec",
+        errorMessage: errorMessage,
       };
 
       const updatedHistory = [historyItem, ...uploadHistory];
@@ -431,38 +436,28 @@ export default function RegistreCommercePage() {
   };
 
   const validateAndSetFile = (file: File) => {
-    // Réinitialiser les erreurs
     setError(null);
     setFileTooLarge(false);
 
-    // Validation du type de fichier
-    const allowedTypes = [
-      "application/pdf",
-      "image/jpeg",
-      "image/jpg",
-      "image/png",
-      "image/gif",
-      "image/webp",
-    ];
+    // ACCEPTER TOUS LES TYPES DE FICHIERS
+    // Plus de restriction sur les types
     
-    if (!allowedTypes.includes(file.type)) {
-      setError("Format de fichier non supporté. Utilisez PDF, JPEG, PNG, GIF ou WEBP.");
-      return;
-    }
-
-    // Validation de la taille (max 5MB pour éviter l'erreur 413)
+    // Validation de la taille (avertissement seulement)
     const maxSize = 5 * 1024 * 1024; // 5MB
+    
     if (file.size > maxSize) {
       setFileTooLarge(true);
-      setError(`Le fichier est trop volumineux (${formatFileSize(file.size)}). Taille maximum autorisée : 5MB.`);
-      return;
+      setError(`⚠️ Attention: Le fichier est volumineux (${formatFileSize(file.size)}). 
+               La limite du serveur est actuellement ${serverLimit !== "inconnue" ? serverLimit : "inconnue"}. 
+               Si l'upload échoue, veuillez contacter l'administrateur.`);
     }
 
     setSelectedFile(file);
-    setError(null);
 
-    // Créer une prévisualisation
     if (file.type.startsWith("image/")) {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
     } else {
@@ -503,7 +498,10 @@ export default function RegistreCommercePage() {
 
   const handleRemoveFile = () => {
     setSelectedFile(null);
-    setPreviewUrl(null);
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
     setFileTooLarge(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -560,7 +558,7 @@ export default function RegistreCommercePage() {
             <div className="alert alert-danger alert-dismissible fade show d-flex align-items-center gap-2 gap-md-3 mb-3 mb-md-4 rounded-3 border-0 shadow-sm"
                  style={{ backgroundColor: "#FEE2E2", color: "#991B1B", fontSize: isMobile ? "0.8rem" : "0.9rem" }}>
               <FontAwesomeIcon icon={faExclamationCircle} className={isMobile ? "fs-6" : "fs-5"} />
-              <div className="flex-grow-1">{error}</div>
+              <div className="flex-grow-1" style={{ whiteSpace: "pre-line" }}>{error}</div>
               <button type="button" className="btn-close" onClick={() => setError(null)} />
             </div>
           )}
@@ -682,25 +680,6 @@ export default function RegistreCommercePage() {
                     </div>
                     <p className="text-muted" style={{ fontSize: isMobile ? "0.8rem" : "0.9rem" }}>Chargement du registre...</p>
                   </div>
-                ) : !token ? (
-                  <div className="text-center py-4 py-md-5">
-                    <div
-                      className="rounded-circle mx-auto mb-2 mb-md-3 d-flex align-items-center justify-content-center"
-                      style={{
-                        width: isMobile ? "60px" : "80px",
-                        height: isMobile ? "60px" : "80px",
-                        backgroundColor: colors.oskar.lightGrey,
-                        color: colors.oskar.grey,
-                        fontSize: isMobile ? "1.5rem" : "2rem",
-                      }}
-                    >
-                      <FontAwesomeIcon icon={faExclamationCircle} />
-                    </div>
-                    <h5 className="fw-semibold mb-1" style={{ fontSize: isMobile ? "1rem" : "1.1rem" }}>Non authentifié</h5>
-                    <p className="text-muted mb-2 mb-md-3" style={{ fontSize: isMobile ? "0.8rem" : "0.9rem" }}>
-                      Vous devez être connecté pour accéder à cette page.
-                    </p>
-                  </div>
                 ) : currentRegistre ? (
                   <div className="row g-3 g-md-4">
                     <div className="col-md-8">
@@ -728,7 +707,6 @@ export default function RegistreCommercePage() {
                             onError={(e) => {
                               console.error("❌ Erreur chargement image:", displayUrl);
                               e.currentTarget.style.display = 'none';
-                              // Afficher un placeholder
                               const parent = e.currentTarget.parentElement;
                               if (parent) {
                                 const placeholder = document.createElement('div');
@@ -756,9 +734,9 @@ export default function RegistreCommercePage() {
                                 fontSize: isMobile ? "1.5rem" : "2rem",
                               }}
                             >
-                              <FontAwesomeIcon icon={faFilePdf} />
+                              <FontAwesomeIcon icon={getFileIcon(currentRegistre.mimetype, currentRegistre.original_name)} />
                             </div>
-                            <h5 className="fw-semibold mb-1" style={{ fontSize: isMobile ? "1rem" : "1.2rem" }}>Document PDF</h5>
+                            <h5 className="fw-semibold mb-1" style={{ fontSize: isMobile ? "1rem" : "1.2rem" }}>{currentRegistre.original_name}</h5>
                             <p className="text-muted small mb-2 mb-md-3" style={{ fontSize: isMobile ? "0.7rem" : "0.8rem" }}>
                               Cliquez pour ouvrir le document
                             </p>
@@ -922,108 +900,48 @@ export default function RegistreCommercePage() {
                   Mettre à jour le registre de commerce
                 </h4>
 
-                {!token ? (
-                  <div className="text-center py-4 py-md-5">
+                <div className="row">
+                  <div className="col-md-8 mx-auto">
+                    {/* Zone de drop */}
                     <div
-                      className="rounded-circle mx-auto mb-2 mb-md-3 d-flex align-items-center justify-content-center"
+                      ref={dropZoneRef}
+                      className={`border-2 border-dashed rounded-4 p-3 p-md-5 mb-3 mb-md-4 text-center ${
+                        dragActive ? "bg-light" : ""
+                      }`}
                       style={{
-                        width: isMobile ? "60px" : "80px",
-                        height: isMobile ? "60px" : "80px",
-                        backgroundColor: colors.oskar.lightGrey,
-                        color: colors.oskar.grey,
-                        fontSize: isMobile ? "1.5rem" : "2rem",
+                        borderColor: dragActive ? colors.oskar.green : colors.oskar.lightGrey,
+                        backgroundColor: dragActive ? colors.oskar.green + "10" : "white",
+                        transition: "all 0.2s ease",
+                        cursor: "pointer",
                       }}
+                      onDragEnter={handleDrag}
+                      onDragLeave={handleDrag}
+                      onDragOver={handleDrag}
+                      onDrop={handleDrop}
+                      onClick={() => fileInputRef.current?.click()}
                     >
-                      <FontAwesomeIcon icon={faExclamationCircle} />
-                    </div>
-                    <h5 className="fw-semibold mb-1" style={{ fontSize: isMobile ? "1rem" : "1.1rem" }}>Non authentifié</h5>
-                    <p className="text-muted mb-2 mb-md-3" style={{ fontSize: isMobile ? "0.8rem" : "0.9rem" }}>
-                      Vous devez être connecté pour uploader un registre.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="row">
-                    <div className="col-md-8 mx-auto">
-                      {/* Zone de drop */}
-                      <div
-                        ref={dropZoneRef}
-                        className={`border-2 border-dashed rounded-4 p-3 p-md-5 mb-3 mb-md-4 text-center ${
-                          dragActive ? "bg-light" : ""
-                        }`}
-                        style={{
-                          borderColor: dragActive ? colors.oskar.green : colors.oskar.lightGrey,
-                          backgroundColor: dragActive ? colors.oskar.green + "10" : "white",
-                          transition: "all 0.2s ease",
-                          cursor: "pointer",
-                        }}
-                        onDragEnter={handleDrag}
-                        onDragLeave={handleDrag}
-                        onDragOver={handleDrag}
-                        onDrop={handleDrop}
-                        onClick={() => fileInputRef.current?.click()}
-                      >
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          className="d-none"
-                          accept=".pdf,.jpg,.jpeg,.png,.gif,.webp"
-                          onChange={handleFileSelect}
-                        />
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        className="d-none"
+                        accept="*" // Accepter tous les types de fichiers
+                        onChange={handleFileSelect}
+                      />
 
-                        {selectedFile ? (
-                          <div className="text-center">
-                            {previewUrl ? (
-                              <img
-                                src={previewUrl}
-                                alt="Aperçu"
-                                className="rounded-3 mb-2 mb-md-3"
-                                style={{
-                                  maxWidth: isMobile ? "150px" : "200px",
-                                  maxHeight: isMobile ? "150px" : "200px",
-                                  objectFit: "contain",
-                                }}
-                              />
-                            ) : (
-                              <div
-                                className="rounded-circle mx-auto mb-2 mb-md-3 d-flex align-items-center justify-content-center"
-                                style={{
-                                  width: isMobile ? "60px" : "80px",
-                                  height: isMobile ? "60px" : "80px",
-                                  backgroundColor: colors.oskar.green + "20",
-                                  color: colors.oskar.green,
-                                  fontSize: isMobile ? "1.5rem" : "2rem",
-                                }}
-                              >
-                                <FontAwesomeIcon icon={faFilePdf} />
-                              </div>
-                            )}
-
-                            <h5 className="fw-semibold mb-1" style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}>{selectedFile.name}</h5>
-                            <p className="text-muted small mb-2 mb-md-3" style={{ fontSize: isMobile ? "0.7rem" : "0.8rem" }}>
-                              {formatFileSize(selectedFile.size)}
-                            </p>
-
-                            {fileTooLarge && (
-                              <div className="alert alert-warning py-2 mb-3" style={{ fontSize: isMobile ? "0.7rem" : "0.8rem" }}>
-                                <FontAwesomeIcon icon={faExclamationCircle} className="me-1" />
-                                Fichier trop volumineux (max 5MB)
-                              </div>
-                            )}
-
-                            <button
-                              className="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-2"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRemoveFile();
+                      {selectedFile ? (
+                        <div className="text-center">
+                          {previewUrl ? (
+                            <img
+                              src={previewUrl}
+                              alt="Aperçu"
+                              className="rounded-3 mb-2 mb-md-3"
+                              style={{
+                                maxWidth: isMobile ? "150px" : "200px",
+                                maxHeight: isMobile ? "150px" : "200px",
+                                objectFit: "contain",
                               }}
-                              style={{ fontSize: isMobile ? "0.7rem" : "0.8rem", padding: isMobile ? "0.25rem 0.5rem" : "0.25rem 0.75rem" }}
-                            >
-                              <FontAwesomeIcon icon={faTrash} style={{ fontSize: isMobile ? "0.6rem" : "0.7rem" }} />
-                              <span>Supprimer</span>
-                            </button>
-                          </div>
-                        ) : (
-                          <>
+                            />
+                          ) : (
                             <div
                               className="rounded-circle mx-auto mb-2 mb-md-3 d-flex align-items-center justify-content-center"
                               style={{
@@ -1034,108 +952,159 @@ export default function RegistreCommercePage() {
                                 fontSize: isMobile ? "1.5rem" : "2rem",
                               }}
                             >
-                              <FontAwesomeIcon icon={faUpload} />
+                              <FontAwesomeIcon icon={getFileIcon(selectedFile.type, selectedFile.name)} />
                             </div>
-                            <h5 className="fw-semibold mb-1" style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}>
-                              {isMobile ? "Appuyez pour uploader" : "Glissez-déposez votre fichier ici"}
-                            </h5>
-                            <p className="text-muted mb-2" style={{ fontSize: isMobile ? "0.7rem" : "0.8rem" }}>
-                              ou cliquez pour parcourir
-                            </p>
-                            <p className="small text-muted" style={{ fontSize: isMobile ? "0.6rem" : "0.7rem" }}>
-                              Formats acceptés : PDF, JPEG, PNG, GIF, WEBP (max 5MB)
-                            </p>
-                          </>
-                        )}
-                      </div>
+                          )}
 
-                      {/* Barre de progression */}
-                      {uploadProgress > 0 && uploadProgress < 100 && (
-                        <div className="mb-3 mb-md-4">
-                          <div className="d-flex justify-content-between align-items-center mb-1 mb-md-2">
-                            <span className="small text-muted" style={{ fontSize: isMobile ? "0.7rem" : "0.8rem" }}>Upload en cours...</span>
-                            <span className="small fw-semibold" style={{ fontSize: isMobile ? "0.7rem" : "0.8rem" }}>{uploadProgress}%</span>
-                          </div>
-                          <div className="progress" style={{ height: isMobile ? "6px" : "8px" }}>
-                            <div
-                              className="progress-bar"
-                              role="progressbar"
-                              style={{
-                                width: `${uploadProgress}%`,
-                                backgroundColor: colors.oskar.green,
-                                transition: "width 0.2s ease",
-                              }}
-                              aria-valuenow={uploadProgress}
-                              aria-valuemin={0}
-                              aria-valuemax={100}
-                            />
-                          </div>
+                          <h5 className="fw-semibold mb-1" style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}>{selectedFile.name}</h5>
+                          <p className="text-muted small mb-2 mb-md-3" style={{ fontSize: isMobile ? "0.7rem" : "0.8rem" }}>
+                            {formatFileSize(selectedFile.size)} • {selectedFile.type || "Type inconnu"}
+                          </p>
+
+                          {fileTooLarge && (
+                            <div className="alert alert-warning py-2 mb-3" style={{ fontSize: isMobile ? "0.7rem" : "0.8rem" }}>
+                              <FontAwesomeIcon icon={faExclamationCircle} className="me-1" />
+                              ⚠️ Fichier volumineux ({formatFileSize(selectedFile.size)}). 
+                              Limite serveur actuelle: {serverLimit !== "inconnue" ? serverLimit : "inconnue"}.
+                              Si l'upload échoue, contactez l'administrateur pour augmenter la limite Nginx (client_max_body_size).
+                            </div>
+                          )}
+
+                          <button
+                            className="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-2"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveFile();
+                            }}
+                            style={{ fontSize: isMobile ? "0.7rem" : "0.8rem", padding: isMobile ? "0.25rem 0.5rem" : "0.25rem 0.75rem" }}
+                          >
+                            <FontAwesomeIcon icon={faTrash} style={{ fontSize: isMobile ? "0.6rem" : "0.7rem" }} />
+                            <span>Supprimer</span>
+                          </button>
                         </div>
-                      )}
-
-                      {/* Bouton d'upload */}
-                      <button
-                        className="btn w-100 d-flex align-items-center justify-content-center gap-2 py-2 py-md-3"
-                        style={{
-                          backgroundColor: colors.oskar.green,
-                          color: "white",
-                          border: "none",
-                          borderRadius: "10px",
-                          fontSize: isMobile ? "0.8rem" : "0.9rem",
-                          opacity: loading || !selectedFile || fileTooLarge ? 0.5 : 1,
-                          cursor: loading || !selectedFile || fileTooLarge ? "not-allowed" : "pointer",
-                        }}
-                        onClick={handleUpload}
-                        disabled={loading || !selectedFile || fileTooLarge}
-                        onMouseEnter={(e) => {
-                          if (!loading && selectedFile && !fileTooLarge) {
-                            e.currentTarget.style.backgroundColor = colors.oskar.greenHover;
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (!loading && selectedFile && !fileTooLarge) {
-                            e.currentTarget.style.backgroundColor = colors.oskar.green;
-                          }
-                        }}
-                      >
-                        {loading ? (
-                          <>
-                            <FontAwesomeIcon icon={faRefresh} spin style={{ fontSize: isMobile ? "0.7rem" : "0.8rem" }} />
-                            <span>Upload en cours...</span>
-                          </>
-                        ) : (
-                          <>
-                            <FontAwesomeIcon icon={faUpload} style={{ fontSize: isMobile ? "0.7rem" : "0.8rem" }} />
-                            <span>Uploader le registre</span>
-                          </>
-                        )}
-                      </button>
-
-                      {/* Informations */}
-                      <div
-                        className="mt-3 mt-md-4 p-2 p-md-3 rounded-3"
-                        style={{
-                          backgroundColor: colors.oskar.blue + "10",
-                          border: `1px solid ${colors.oskar.blue}30`,
-                        }}
-                      >
-                        <div className="d-flex gap-2 gap-md-3">
-                          <FontAwesomeIcon
-                            icon={faInfoCircle}
-                            style={{ color: colors.oskar.blue, fontSize: isMobile ? "0.8rem" : "1rem" }}
-                          />
-                          <div>
-                            <h6 className="fw-semibold mb-1" style={{ fontSize: isMobile ? "0.8rem" : "0.9rem" }}>Important</h6>
-                            <p className="small text-muted mb-0" style={{ fontSize: isMobile ? "0.7rem" : "0.8rem" }}>
-                              Le registre de commerce est un document officiel requis pour
-                              les vendeurs professionnels. Taille maximum autorisée : 5MB.
-                            </p>
+                      ) : (
+                        <>
+                          <div
+                            className="rounded-circle mx-auto mb-2 mb-md-3 d-flex align-items-center justify-content-center"
+                            style={{
+                              width: isMobile ? "60px" : "80px",
+                              height: isMobile ? "60px" : "80px",
+                              backgroundColor: colors.oskar.green + "20",
+                              color: colors.oskar.green,
+                              fontSize: isMobile ? "1.5rem" : "2rem",
+                            }}
+                          >
+                            <FontAwesomeIcon icon={faUpload} />
                           </div>
+                          <h5 className="fw-semibold mb-1" style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}>
+                            {isMobile ? "Appuyez pour uploader" : "Glissez-déposez votre fichier ici"}
+                          </h5>
+                          <p className="text-muted mb-2" style={{ fontSize: isMobile ? "0.7rem" : "0.8rem" }}>
+                            ou cliquez pour parcourir
+                          </p>
+                          <p className="small text-muted" style={{ fontSize: isMobile ? "0.6rem" : "0.7rem" }}>
+                            Tous les formats acceptés • Limite serveur: {serverLimit !== "inconnue" ? serverLimit : "inconnue"}
+                          </p>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Barre de progression */}
+                    {uploadProgress > 0 && uploadProgress < 100 && (
+                      <div className="mb-3 mb-md-4">
+                        <div className="d-flex justify-content-between align-items-center mb-1 mb-md-2">
+                          <span className="small text-muted" style={{ fontSize: isMobile ? "0.7rem" : "0.8rem" }}>Upload en cours...</span>
+                          <span className="small fw-semibold" style={{ fontSize: isMobile ? "0.7rem" : "0.8rem" }}>{uploadProgress}%</span>
+                        </div>
+                        <div className="progress" style={{ height: isMobile ? "6px" : "8px" }}>
+                          <div
+                            className="progress-bar"
+                            role="progressbar"
+                            style={{
+                              width: `${uploadProgress}%`,
+                              backgroundColor: colors.oskar.green,
+                              transition: "width 0.2s ease",
+                            }}
+                            aria-valuenow={uploadProgress}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Bouton d'upload */}
+                    <button
+                      className="btn w-100 d-flex align-items-center justify-content-center gap-2 py-2 py-md-3"
+                      style={{
+                        backgroundColor: colors.oskar.green,
+                        color: "white",
+                        border: "none",
+                        borderRadius: "10px",
+                        fontSize: isMobile ? "0.8rem" : "0.9rem",
+                        opacity: loading || !selectedFile ? 0.5 : 1,
+                        cursor: loading || !selectedFile ? "not-allowed" : "pointer",
+                      }}
+                      onClick={handleUpload}
+                      disabled={loading || !selectedFile}
+                      onMouseEnter={(e) => {
+                        if (!loading && selectedFile) {
+                          e.currentTarget.style.backgroundColor = colors.oskar.greenHover;
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!loading && selectedFile) {
+                          e.currentTarget.style.backgroundColor = colors.oskar.green;
+                        }
+                      }}
+                    >
+                      {loading ? (
+                        <>
+                          <FontAwesomeIcon icon={faRefresh} spin style={{ fontSize: isMobile ? "0.7rem" : "0.8rem" }} />
+                          <span>Upload en cours...</span>
+                        </>
+                      ) : (
+                        <>
+                          <FontAwesomeIcon icon={faUpload} style={{ fontSize: isMobile ? "0.7rem" : "0.8rem" }} />
+                          <span>Uploader le registre</span>
+                        </>
+                      )}
+                    </button>
+
+                    {/* Informations */}
+                    <div
+                      className="mt-3 mt-md-4 p-2 p-md-3 rounded-3"
+                      style={{
+                        backgroundColor: colors.oskar.blue + "10",
+                        border: `1px solid ${colors.oskar.blue}30`,
+                      }}
+                    >
+                      <div className="d-flex gap-2 gap-md-3">
+                        <FontAwesomeIcon
+                          icon={faInfoCircle}
+                          style={{ color: colors.oskar.blue, fontSize: isMobile ? "0.8rem" : "1rem" }}
+                        />
+                        <div>
+                          <h6 className="fw-semibold mb-1" style={{ fontSize: isMobile ? "0.8rem" : "0.9rem" }}>Important</h6>
+                          <p className="small text-muted mb-1" style={{ fontSize: isMobile ? "0.7rem" : "0.8rem" }}>
+                            Le registre de commerce est un document officiel requis pour les vendeurs professionnels.
+                          </p>
+                          {serverLimit !== "inconnue" && (
+                            <p className="small text-muted mb-0" style={{ fontSize: isMobile ? "0.7rem" : "0.8rem" }}>
+                              <strong>Limite serveur actuelle:</strong> {serverLimit}
+                            </p>
+                          )}
+                          {fileTooLarge && (
+                            <p className="small text-danger mt-2" style={{ fontSize: isMobile ? "0.7rem" : "0.8rem" }}>
+                              <strong>💡 Solution:</strong> Demandez à l'administrateur d'augmenter 
+                              <code> client_max_body_size</code> dans la configuration Nginx.
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>
                   </div>
-                )}
+                </div>
               </div>
             )}
 
@@ -1179,10 +1148,15 @@ export default function RegistreCommercePage() {
                                     fontSize: isMobile ? "0.7rem" : "0.9rem",
                                   }}
                                 >
-                                  <FontAwesomeIcon icon={getFileIcon(item.url?.includes('pdf') ? 'application/pdf' : 'image/jpeg')} />
+                                  <FontAwesomeIcon icon={getFileIcon(item.url?.includes('pdf') ? 'application/pdf' : 'image/jpeg', item.filename)} />
                                 </div>
                                 <div className="text-truncate" style={{ maxWidth: isMobile ? "100px" : "200px" }}>
                                   <p className="fw-semibold mb-0 text-truncate" style={{ fontSize: isMobile ? "0.7rem" : "0.8rem" }}>{item.filename}</p>
+                                  {item.status === "échec" && item.errorMessage && (
+                                    <small className="text-danger d-block text-truncate" style={{ fontSize: isMobile ? "0.55rem" : "0.65rem" }}>
+                                      {item.errorMessage.substring(0, 50)}...
+                                    </small>
+                                  )}
                                 </div>
                               </div>
                             </td>
