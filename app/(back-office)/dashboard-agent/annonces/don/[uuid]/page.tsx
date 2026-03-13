@@ -643,7 +643,6 @@ export default function DonDetailPage() {
 
   return (
     <div className="container-fluid px-lg-5 py-4 bg-white min-vh-100">
-      {/* ✅ ALERTES AMÉLIORÉES - Position fixe en haut à droite */}
       {alert && (
         <div
           className="position-fixed top-0 end-0 p-4"
