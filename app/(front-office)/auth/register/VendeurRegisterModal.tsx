@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, CSSProperties } from "react";
+import { useState, useEffect } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faEnvelope,
@@ -47,6 +47,7 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
   onShowLoginAfterRegister,
   onSwitchToUser,
 }) => {
+  const [isMobile, setIsMobile] = useState(false);
   const [formData, setFormData] = useState<VendeurFormData>({
     nom: "",
     prenoms: "",
@@ -68,6 +69,18 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
   const [registreCommercePreview, setRegistreCommercePreview] = useState<string | null>(null);
   const [passwordStrength, setPasswordStrength] = useState(0);
   const [phoneError, setPhoneError] = useState<string | null>(null);
+
+  // Détection de l'écran mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Nettoyage des previews
   useEffect(() => {
@@ -358,8 +371,8 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
   const getPasswordStrengthColor = () => {
     if (passwordStrength === 0) return "#dc2626";
     if (passwordStrength <= 2) return "#f59e0b";
-    if (passwordStrength <= 4) return "#10b981";
-    return "#059669";
+    if (passwordStrength <= 4) return "#16a34a";
+    return "#15803d";
   };
 
   const getPasswordStrengthText = () => {
@@ -371,192 +384,13 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
 
   // Fonctions de gestion du focus
   const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-    e.currentTarget.style.borderColor = "#0ea5e9";
-    e.currentTarget.style.boxShadow = "0 0 0 3px rgba(14, 165, 233, 0.1)";
+    e.currentTarget.style.borderColor = "#16a34a";
+    e.currentTarget.style.boxShadow = "0 0 0 3px rgba(22, 163, 74, 0.1)";
   };
 
   const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     e.currentTarget.style.borderColor = "#d1d5db";
     e.currentTarget.style.boxShadow = "none";
-  };
-
-  // Styles avec typage CSSProperties
-  const inputStyle: CSSProperties = {
-    width: "100%",
-    padding: "0.75rem",
-    border: "1px solid #d1d5db",
-    borderRadius: "0.5rem",
-    outline: "none",
-    transition: "all 0.2s",
-    fontSize: "0.875rem",
-  };
-
-  const passwordToggleStyle: CSSProperties = {
-    position: "absolute",
-    right: "0.75rem",
-    top: "50%",
-    transform: "translateY(-50%)",
-    background: "none",
-    border: "none",
-    color: "#6b7280",
-    cursor: "pointer",
-    padding: "0.25rem",
-  };
-
-  const passwordStrengthHeaderStyle: CSSProperties = {
-    display: "flex",
-    justifyContent: "space-between",
-    marginBottom: "0.25rem",
-    fontSize: "0.75rem",
-    color: "#6b7280",
-  };
-
-  const passwordStrengthBarsStyle: CSSProperties = {
-    display: "flex",
-    gap: "0.25rem",
-  };
-
-  const passwordStrengthBarStyle: CSSProperties = {
-    flex: 1,
-    height: "4px",
-    borderRadius: "2px",
-    transition: "background-color 0.3s",
-  };
-
-  const errorTextStyle: CSSProperties = {
-    color: "#ef4444",
-    fontSize: "0.75rem",
-    marginTop: "0.25rem",
-  };
-
-  const filePreviewStyle: CSSProperties = {
-    border: "2px solid #0ea5e9",
-    borderRadius: "0.5rem",
-    padding: "1rem",
-    backgroundColor: "#f0f9ff",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-  };
-
-  const fileInfoStyle: CSSProperties = {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.75rem",
-  };
-
-  const fileNameStyle: CSSProperties = {
-    fontWeight: 600,
-    color: "#1e40af",
-    margin: 0,
-  };
-
-  const fileSizeStyle: CSSProperties = {
-    fontSize: "0.75rem",
-    color: "#6b7280",
-    margin: 0,
-  };
-
-  const removeFileButtonStyle: CSSProperties = {
-    padding: "0.375rem 0.75rem",
-    backgroundColor: "#ef4444",
-    color: "white",
-    border: "none",
-    borderRadius: "0.375rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    transition: "background-color 0.2s",
-    fontSize: "0.75rem",
-  };
-
-  const uploadAreaStyle: CSSProperties = {
-    border: "2px dashed #d1d5db",
-    borderRadius: "0.5rem",
-    padding: "2rem",
-    backgroundColor: "#f9fafb",
-    textAlign: "center",
-    transition: "all 0.2s",
-    cursor: "pointer",
-  };
-
-  const uploadIconStyle: CSSProperties = {
-    fontSize: "2rem",
-    color: "#9ca3af",
-    marginBottom: "0.75rem",
-  };
-
-  const uploadTextStyle: CSSProperties = {
-    color: "#6b7280",
-    margin: 0,
-  };
-
-  const uploadSubtextStyle: CSSProperties = {
-    color: "#94a3b8",
-    fontSize: "0.75rem",
-    marginTop: "0.5rem",
-  };
-
-  const termsContainerStyle: CSSProperties = {
-    display: "flex",
-    alignItems: "flex-start",
-    gap: "0.75rem",
-    padding: "1rem",
-    borderRadius: "0.5rem",
-    backgroundColor: "#f9fafb",
-    marginTop: "0.5rem",
-  };
-
-  const checkboxStyle: CSSProperties = {
-    height: "1.25rem",
-    width: "1.25rem",
-    borderRadius: "0.25rem",
-    border: "2px solid #d1d5db",
-    accentColor: "#0ea5e9",
-  };
-
-  const termsLabelStyle: CSSProperties = {
-    fontSize: "0.875rem",
-    color: "#4b5563",
-    lineHeight: "1.5",
-  };
-
-  const vendeurTermsLinkStyle: CSSProperties = {
-    color: "#0ea5e9",
-    fontWeight: 600,
-    textDecoration: "none",
-  };
-
-  const submitButtonStyle: CSSProperties = {
-    width: "100%",
-    backgroundColor: "#0ea5e9",
-    color: "white",
-    fontWeight: "bold",
-    padding: "1rem",
-    borderRadius: "0.5rem",
-    fontSize: "1rem",
-    border: "none",
-    cursor: "pointer",
-    transition: "all 0.3s",
-    marginTop: "1rem",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "0.5rem",
-  };
-
-  const loginLinkContainerStyle: CSSProperties = {
-    textAlign: "center",
-    paddingTop: "1rem",
-  };
-
-  const vendeurLoginLinkStyle: CSSProperties = {
-    color: "#0ea5e9",
-    fontWeight: 600,
-    background: "none",
-    border: "none",
-    cursor: "pointer",
-    padding: 0,
-    fontSize: "0.875rem",
   };
 
   return (
@@ -578,13 +412,13 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: "1rem",
+          gap: isMobile ? "0.75rem" : "1rem",
         }}
       >
-        <div style={{ marginBottom: "1.5rem" }}>
+        <div style={{ marginBottom: isMobile ? "1rem" : "1.5rem" }}>
           <h2
             style={{
-              fontSize: "1.5rem",
+              fontSize: isMobile ? "1.3rem" : "1.5rem",
               fontWeight: "bold",
               color: "#1f2937",
               marginBottom: "0.5rem",
@@ -592,7 +426,7 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
           >
             Créer un compte vendeur
           </h2>
-          <p style={{ color: "#6b7280", fontSize: "0.875rem" }}>
+          <p style={{ color: "#6b7280", fontSize: isMobile ? "0.85rem" : "0.875rem" }}>
             Remplissez les informations pour créer votre compte professionnel
           </p>
         </div>
@@ -604,7 +438,7 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
               borderRadius: "0.5rem",
               backgroundColor: "#fef2f2",
               border: "1px solid #fecaca",
-              fontSize: "0.875rem",
+              fontSize: isMobile ? "0.85rem" : "0.875rem",
               color: "#dc2626",
               display: "flex",
               alignItems: "center",
@@ -619,18 +453,18 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "1rem",
+            gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+            gap: isMobile ? "0.75rem" : "1rem",
           }}
         >
           <div>
             <label
               style={{
                 display: "block",
-                fontSize: "0.875rem",
+                fontSize: isMobile ? "0.85rem" : "0.875rem",
                 fontWeight: 600,
                 color: "#374151",
-                marginBottom: "0.5rem",
+                marginBottom: "0.4rem",
               }}
             >
               Prénom *
@@ -644,7 +478,14 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
               }
               disabled={loading}
               required
-              style={inputStyle}
+              style={{
+                width: "100%",
+                padding: isMobile ? "0.6rem" : "0.75rem",
+                border: "1px solid #d1d5db",
+                borderRadius: "0.5rem",
+                outline: "none",
+                fontSize: isMobile ? "0.85rem" : "0.875rem",
+              }}
               onFocus={handleFocus}
               onBlur={handleBlur}
             />
@@ -654,10 +495,10 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
             <label
               style={{
                 display: "block",
-                fontSize: "0.875rem",
+                fontSize: isMobile ? "0.85rem" : "0.875rem",
                 fontWeight: 600,
                 color: "#374151",
-                marginBottom: "0.5rem",
+                marginBottom: "0.4rem",
               }}
             >
               Nom *
@@ -671,7 +512,14 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
               }
               disabled={loading}
               required
-              style={inputStyle}
+              style={{
+                width: "100%",
+                padding: isMobile ? "0.6rem" : "0.75rem",
+                border: "1px solid #d1d5db",
+                borderRadius: "0.5rem",
+                outline: "none",
+                fontSize: isMobile ? "0.85rem" : "0.875rem",
+              }}
               onFocus={handleFocus}
               onBlur={handleBlur}
             />
@@ -682,10 +530,10 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
           <label
             style={{
               display: "block",
-              fontSize: "0.875rem",
+              fontSize: isMobile ? "0.85rem" : "0.875rem",
               fontWeight: 600,
               color: "#374151",
-              marginBottom: "0.5rem",
+              marginBottom: "0.4rem",
             }}
           >
             Email *
@@ -699,7 +547,14 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
             }
             disabled={loading}
             required
-            style={inputStyle}
+            style={{
+              width: "100%",
+              padding: isMobile ? "0.6rem" : "0.75rem",
+              border: "1px solid #d1d5db",
+              borderRadius: "0.5rem",
+              outline: "none",
+              fontSize: isMobile ? "0.85rem" : "0.875rem",
+            }}
             onFocus={handleFocus}
             onBlur={handleBlur}
           />
@@ -708,18 +563,18 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "1rem",
+            gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+            gap: isMobile ? "0.75rem" : "1rem",
           }}
         >
           <div>
             <label
               style={{
                 display: "block",
-                fontSize: "0.875rem",
+                fontSize: isMobile ? "0.85rem" : "0.875rem",
                 fontWeight: 600,
                 color: "#374151",
-                marginBottom: "0.5rem",
+                marginBottom: "0.4rem",
               }}
             >
               Téléphone *
@@ -732,16 +587,22 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
               disabled={loading}
               required
               style={{
-                ...inputStyle,
-                borderColor: phoneError ? "#ef4444" : "#d1d5db",
+                width: "100%",
+                padding: isMobile ? "0.6rem" : "0.75rem",
+                border: `1px solid ${phoneError ? "#ef4444" : "#d1d5db"}`,
+                borderRadius: "0.5rem",
+                outline: "none",
+                fontSize: isMobile ? "0.85rem" : "0.875rem",
               }}
               onFocus={handleFocus}
               onBlur={handleBlur}
             />
             {phoneError && (
-              <p style={errorTextStyle}>{phoneError}</p>
+              <p style={{ color: "#ef4444", fontSize: isMobile ? "0.7rem" : "0.75rem", marginTop: "0.25rem" }}>
+                {phoneError}
+              </p>
             )}
-            <small style={{ color: "#6b7280", fontSize: "0.75rem", marginTop: "0.25rem", display: "block" }}>
+            <small style={{ color: "#6b7280", fontSize: isMobile ? "0.7rem" : "0.75rem", marginTop: "0.25rem", display: "block" }}>
               Format: +225 07 09 18 18 64 (10 chiffres)
             </small>
           </div>
@@ -750,10 +611,10 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
             <label
               style={{
                 display: "block",
-                fontSize: "0.875rem",
+                fontSize: isMobile ? "0.85rem" : "0.875rem",
                 fontWeight: 600,
                 color: "#374151",
-                marginBottom: "0.5rem",
+                marginBottom: "0.4rem",
               }}
             >
               Ville *
@@ -767,7 +628,14 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
               }
               disabled={loading}
               required
-              style={inputStyle}
+              style={{
+                width: "100%",
+                padding: isMobile ? "0.6rem" : "0.75rem",
+                border: "1px solid #d1d5db",
+                borderRadius: "0.5rem",
+                outline: "none",
+                fontSize: isMobile ? "0.85rem" : "0.875rem",
+              }}
               onFocus={handleFocus}
               onBlur={handleBlur}
             />
@@ -779,10 +647,10 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
           <label
             style={{
               display: "block",
-              fontSize: "0.875rem",
+              fontSize: isMobile ? "0.85rem" : "0.875rem",
               fontWeight: 600,
               color: "#374151",
-              marginBottom: "0.5rem",
+              marginBottom: "0.4rem",
             }}
           >
             Registre de commerce (Optionnel)
@@ -790,7 +658,7 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
               style={{
                 color: "#6b7280",
                 fontWeight: "normal",
-                fontSize: "0.75rem",
+                fontSize: isMobile ? "0.7rem" : "0.75rem",
                 marginLeft: "0.5rem",
               }}
             >
@@ -799,15 +667,29 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
           </label>
 
           {registreCommerceFile ? (
-            <div style={filePreviewStyle}>
-              <div style={fileInfoStyle}>
+            <div
+              style={{
+                border: "2px solid #16a34a",
+                borderRadius: "0.5rem",
+                padding: isMobile ? "0.75rem" : "1rem",
+                backgroundColor: "#f0fdf4",
+                display: "flex",
+                flexDirection: isMobile ? "column" : "row",
+                alignItems: isMobile ? "flex-start" : "center",
+                justifyContent: "space-between",
+                gap: isMobile ? "1rem" : "0",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", width: isMobile ? "100%" : "auto" }}>
                 <FontAwesomeIcon
                   icon={faFileAlt}
-                  style={{ fontSize: "1.5rem", color: "#0ea5e9" }}
+                  style={{ fontSize: isMobile ? "1.2rem" : "1.5rem", color: "#16a34a" }}
                 />
                 <div>
-                  <p style={fileNameStyle}>{registreCommerceFile.name}</p>
-                  <p style={fileSizeStyle}>
+                  <p style={{ fontWeight: 600, color: "#166534", margin: 0, fontSize: isMobile ? "0.85rem" : "1rem" }}>
+                    {registreCommerceFile.name}
+                  </p>
+                  <p style={{ fontSize: isMobile ? "0.7rem" : "0.75rem", color: "#6b7280", margin: 0 }}>
                     {(registreCommerceFile.size / 1024).toFixed(2)} KB
                   </p>
                 </div>
@@ -816,14 +698,31 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
                 type="button"
                 onClick={removeRegistreCommerceFile}
                 disabled={loading}
-                style={removeFileButtonStyle}
+                style={{
+                  padding: isMobile ? "0.5rem 1rem" : "0.375rem 0.75rem",
+                  backgroundColor: "#ef4444",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "0.375rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  fontSize: isMobile ? "0.8rem" : "0.75rem",
+                  width: isMobile ? "100%" : "auto",
+                }}
               >
                 Supprimer
               </button>
             </div>
           ) : (
             <div
-              style={uploadAreaStyle}
+              style={{
+                border: "2px dashed #d1d5db",
+                borderRadius: "0.5rem",
+                padding: isMobile ? "1.5rem 1rem" : "2rem",
+                backgroundColor: "#f9fafb",
+                textAlign: "center",
+                cursor: "pointer",
+              }}
               onClick={() => {
                 if (!loading) {
                   const input = document.createElement("input");
@@ -839,11 +738,16 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
             >
               <FontAwesomeIcon
                 icon={faUpload}
+                style={{
+                  fontSize: isMobile ? "1.5rem" : "2rem",
+                  color: "#9ca3af",
+                  marginBottom: "0.75rem",
+                }}
               />
-              <p style={uploadTextStyle}>
-                Cliquez pour télécharger votre registre de commerce
+              <p style={{ color: "#6b7280", margin: 0, fontSize: isMobile ? "0.85rem" : "1rem" }}>
+                {isMobile ? "Télécharger" : "Cliquez pour télécharger votre registre de commerce"}
               </p>
-              <p style={uploadSubtextStyle}>
+              <p style={{ color: "#94a3b8", fontSize: isMobile ? "0.7rem" : "0.75rem", marginTop: "0.5rem" }}>
                 Optionnel - Vous pourrez l'ajouter plus tard
               </p>
             </div>
@@ -853,18 +757,18 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "1rem",
+            gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+            gap: isMobile ? "0.75rem" : "1rem",
           }}
         >
           <div>
             <label
               style={{
                 display: "block",
-                fontSize: "0.875rem",
+                fontSize: isMobile ? "0.85rem" : "0.875rem",
                 fontWeight: 600,
                 color: "#374151",
-                marginBottom: "0.5rem",
+                marginBottom: "0.4rem",
               }}
             >
               Mot de passe *
@@ -882,7 +786,14 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
                 }
                 disabled={loading}
                 required
-                style={inputStyle}
+                style={{
+                  width: "100%",
+                  padding: isMobile ? "0.6rem" : "0.75rem",
+                  border: "1px solid #d1d5db",
+                  borderRadius: "0.5rem",
+                  outline: "none",
+                  fontSize: isMobile ? "0.85rem" : "0.875rem",
+                }}
                 onFocus={handleFocus}
                 onBlur={handleBlur}
               />
@@ -890,7 +801,17 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 disabled={loading}
-                style={passwordToggleStyle}
+                style={{
+                  position: "absolute",
+                  right: "0.75rem",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "none",
+                  border: "none",
+                  color: "#6b7280",
+                  cursor: "pointer",
+                  padding: "0.25rem",
+                }}
               >
                 <FontAwesomeIcon icon={showPassword ? faEyeSlash : faEye} />
               </button>
@@ -898,18 +819,28 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
 
             {formData.mot_de_passe && (
               <div style={{ marginTop: "0.5rem" }}>
-                <div style={passwordStrengthHeaderStyle}>
-                  <span>Force du mot de passe:</span>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: "0.25rem",
+                    fontSize: isMobile ? "0.7rem" : "0.75rem",
+                    color: "#6b7280",
+                  }}
+                >
+                  <span>Force:</span>
                   <span style={{ color: getPasswordStrengthColor() }}>
                     {getPasswordStrengthText()}
                   </span>
                 </div>
-                <div style={passwordStrengthBarsStyle}>
+                <div style={{ display: "flex", gap: "0.25rem" }}>
                   {[1, 2, 3, 4, 5].map((index) => (
                     <div
                       key={index}
                       style={{
-                        ...passwordStrengthBarStyle,
+                        flex: 1,
+                        height: "4px",
+                        borderRadius: "2px",
                         backgroundColor:
                           index <= passwordStrength
                             ? getPasswordStrengthColor()
@@ -926,13 +857,13 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
             <label
               style={{
                 display: "block",
-                fontSize: "0.875rem",
+                fontSize: isMobile ? "0.85rem" : "0.875rem",
                 fontWeight: 600,
                 color: "#374151",
-                marginBottom: "0.5rem",
+                marginBottom: "0.4rem",
               }}
             >
-              Confirmer le mot de passe *
+              Confirmer *
             </label>
             <div style={{ position: "relative" }}>
               <input
@@ -946,8 +877,12 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
                 disabled={loading}
                 required
                 style={{
-                  ...inputStyle,
-                  borderColor: passwordMismatch ? "#ef4444" : "#d1d5db",
+                  width: "100%",
+                  padding: isMobile ? "0.6rem" : "0.75rem",
+                  border: `1px solid ${passwordMismatch ? "#ef4444" : "#d1d5db"}`,
+                  borderRadius: "0.5rem",
+                  outline: "none",
+                  fontSize: isMobile ? "0.85rem" : "0.875rem",
                 }}
                 onFocus={handleFocus}
                 onBlur={(e) => {
@@ -961,7 +896,17 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                 disabled={loading}
-                style={passwordToggleStyle}
+                style={{
+                  position: "absolute",
+                  right: "0.75rem",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "none",
+                  border: "none",
+                  color: "#6b7280",
+                  cursor: "pointer",
+                  padding: "0.25rem",
+                }}
               >
                 <FontAwesomeIcon
                   icon={showConfirmPassword ? faEyeSlash : faEye}
@@ -969,29 +914,53 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
               </button>
             </div>
             {passwordMismatch && (
-              <p style={errorTextStyle}>
+              <p style={{ color: "#ef4444", fontSize: isMobile ? "0.7rem" : "0.75rem", marginTop: "0.25rem" }}>
                 Les mots de passe ne correspondent pas
               </p>
             )}
           </div>
         </div>
 
-        <div style={termsContainerStyle}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: "0.75rem",
+            padding: isMobile ? "0.75rem" : "1rem",
+            borderRadius: "0.5rem",
+            backgroundColor: "#f9fafb",
+            marginTop: "0.5rem",
+          }}
+        >
           <input
             type="checkbox"
             id="terms"
             checked={acceptTerms}
             onChange={(e) => setAcceptTerms(e.target.checked)}
             disabled={loading}
-            style={checkboxStyle}
+            style={{
+              height: isMobile ? "1.1rem" : "1.25rem",
+              width: isMobile ? "1.1rem" : "1.25rem",
+              borderRadius: "0.25rem",
+              border: "2px solid #d1d5db",
+              accentColor: "#16a34a",
+              flexShrink: 0,
+            }}
           />
-          <label htmlFor="terms" style={termsLabelStyle}>
+          <label
+            htmlFor="terms"
+            style={{
+              fontSize: isMobile ? "0.8rem" : "0.875rem",
+              color: "#4b5563",
+              lineHeight: "1.5",
+            }}
+          >
             J'accepte les{" "}
-            <a href="#" style={vendeurTermsLinkStyle}>
+            <a href="#" style={{ color: "#16a34a", fontWeight: 600, textDecoration: "none" }}>
               conditions d'utilisation
             </a>{" "}
             et la{" "}
-            <a href="#" style={vendeurTermsLinkStyle}>
+            <a href="#" style={{ color: "#16a34a", fontWeight: 600, textDecoration: "none" }}>
               politique de confidentialité
             </a>{" "}
             de OskarStore.
@@ -1001,28 +970,55 @@ const VendeurRegisterModal: React.FC<VendeurRegisterModalProps> = ({
         <button
           type="submit"
           disabled={loading || !acceptTerms || passwordMismatch}
-          style={submitButtonStyle}
+          style={{
+            width: "100%",
+            backgroundColor: "#16a34a",
+            color: "white",
+            fontWeight: "bold",
+            padding: isMobile ? "0.85rem" : "1rem",
+            borderRadius: "0.5rem",
+            fontSize: isMobile ? "0.95rem" : "1rem",
+            border: "none",
+            cursor: "pointer",
+            marginTop: "1rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "0.5rem",
+          }}
         >
           {loading ? (
             <>
               <FontAwesomeIcon icon={faSpinner} spin />
-              Création en cours...
+              <span style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}>
+                Création en cours...
+              </span>
             </>
           ) : (
             <>
               <FontAwesomeIcon icon={faStore} />
-              Créer mon compte vendeur
+              <span style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}>
+                Créer mon compte vendeur
+              </span>
             </>
           )}
         </button>
 
-        <div style={loginLinkContainerStyle}>
-          <p>
+        <div style={{ textAlign: "center", paddingTop: "1rem" }}>
+          <p style={{ fontSize: isMobile ? "0.85rem" : "0.875rem" }}>
             Déjà un compte ?{" "}
             <button
               type="button"
               onClick={onSwitchToLogin}
-              style={vendeurLoginLinkStyle}
+              style={{
+                color: "#16a34a",
+                fontWeight: 600,
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: 0,
+                fontSize: isMobile ? "0.85rem" : "0.875rem",
+              }}
             >
               Se connecter
             </button>

@@ -806,69 +806,7 @@ const handleCreateBoutique = async (boutiqueData: any) => {
                 </div>
               )}
 
-              <div style={{ marginBottom: "clamp(1.5rem, 4vw, 2rem)" }}>
-                <h4
-                  style={{
-                    color: colors.textDark,
-                    fontSize: "clamp(0.95rem, 2.8vw, 1rem)",
-                    fontWeight: "bold",
-                    marginBottom: "1rem",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                  }}
-                >
-                  <FontAwesomeIcon icon={faArrowRight} color={colors.primary} />
-                  Pourquoi créer votre boutique maintenant ?
-                </h4>
-                <div className="benefits-grid" style={{ display: "grid", gap: "0.75rem" }}>
-                  {benefits.map((benefit, index) => (
-                    <div
-                      key={index}
-                      className="benefit-item"
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.75rem",
-                        padding: "0.75rem",
-                        backgroundColor: "#f8fafc",
-                        borderRadius: "0.75rem",
-                        transition: "transform 0.2s, box-shadow 0.2s",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = "translateX(5px)";
-                        e.currentTarget.style.boxShadow = "0 2px 8px rgba(22, 163, 74, 0.1)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = "translateX(0)";
-                        e.currentTarget.style.boxShadow = "none";
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: "1.5rem",
-                          height: "1.5rem",
-                          backgroundColor: colors.primary,
-                          borderRadius: "50%",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <FontAwesomeIcon
-                          icon={benefit.icon}
-                          style={{ color: colors.white, fontSize: "0.75rem" }}
-                        />
-                      </div>
-                      <span style={{ color: colors.textMuted, fontSize: "clamp(0.85rem, 2.5vw, 0.9rem)" }}>
-                        {benefit.text}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
+             
               <div
                 style={{
                   display: "flex",

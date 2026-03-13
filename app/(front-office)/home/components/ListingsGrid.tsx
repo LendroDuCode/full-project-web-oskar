@@ -1,3 +1,4 @@
+// app/(front-office)/components/ListingsGrid.tsx
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -34,12 +35,25 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
   onDataLoaded,
   showFeatured = true,
 }) => {
+  const [isMobile, setIsMobile] = useState(false);
   const [listings, setListings] = useState<ListingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
+
+  // Détection de l'écran mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Récupérer les filtres de recherche depuis le contexte
   const { 
@@ -538,26 +552,27 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
         <div
           className="spinner-border text-success mb-3"
           role="status"
-          style={{ width: "3rem", height: "3rem" }}
+          style={{ width: isMobile ? "2.5rem" : "3rem", height: isMobile ? "2.5rem" : "3rem" }}
         >
           <span className="visually-hidden">Chargement...</span>
         </div>
-        <span className="text-muted">Chargement des annonces...</span>
+        <span className="text-muted" style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}>Chargement des annonces...</span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="alert alert-danger m-3 d-flex align-items-center justify-content-between">
-        <div>
+      <div className="alert alert-danger m-2 d-flex align-items-center justify-content-between">
+        <div className="d-flex align-items-center">
           <i className="fa-solid fa-triangle-exclamation me-2"></i>
-          <span>{error}</span>
+          <span style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}>{error}</span>
         </div>
         <button
           className="btn btn-outline-danger btn-sm"
           onClick={handleRefresh}
           disabled={retryCount >= MAX_RETRIES}
+          style={{ fontSize: isMobile ? "0.8rem" : "0.875rem" }}
         >
           <i className="fa-solid fa-rotate me-1"></i>Réessayer
         </button>
@@ -567,12 +582,12 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
 
   if (listings.length === 0) {
     return (
-      <div className="text-center py-5">
-        <div className="mb-3">
-          <i className="fa-solid fa-inbox fa-3x text-muted"></i>
+      <div className="text-center py-4">
+        <div className="mb-2">
+          <i className="fa-solid fa-inbox fa-2x text-muted"></i>
         </div>
-        <h5 className="text-muted mb-2">Aucune annonce trouvée</h5>
-        <p className="text-muted mb-4">
+        <h5 className="text-muted mb-1" style={{ fontSize: isMobile ? "1rem" : "1.1rem" }}>Aucune annonce trouvée</h5>
+        <p className="text-muted mb-3" style={{ fontSize: isMobile ? "0.85rem" : "0.9rem" }}>
           {selectedSousCategorie ? (
             "Aucune annonce n'est disponible pour cette sous-catégorie."
           ) : searchQuery || selectedCategory || selectedLocation || maxPrice ? (
@@ -583,7 +598,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
             `Aucun ${filterType === "donation" ? "don" : filterType === "exchange" ? "échange" : "produit"} n'est disponible.`
           )}
         </p>
-        <button className="btn btn-success" onClick={handleRefresh}>
+        <button className="btn btn-success" onClick={handleRefresh} style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}>
           <i className="fa-solid fa-rotate me-2"></i>Rafraîchir
         </button>
       </div>
@@ -593,16 +608,16 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
   return (
     <div className="listings-grid flex-1">
       {/* ✅ TOUTES LES ANNONCES - PLUS DE SECTION "À LA UNE" */}
-      <div className="all-listings mb-5">
-        <div className="d-flex align-items-center justify-content-between mb-4">
-          <h2 className="h4 fw-bold text-dark">Toutes les annonces</h2>
-          <p className="text-muted mb-0">
+      <div className="all-listings">
+        <div className="d-flex align-items-center justify-content-between mb-2">
+          <h2 className="fw-bold text-dark" style={{ fontSize: isMobile ? "1.1rem" : "1.25rem" }}>Toutes les annonces</h2>
+          <p className="text-muted mb-0" style={{ fontSize: isMobile ? "0.85rem" : "0.9rem" }}>
             {listings.length} résultat(s)
           </p>
         </div>
 
         {viewMode === "grid" ? (
-          <div className="row g-3 g-md-4">
+          <div className="row g-2 g-md-3">
             {listings.map((item) => (
               <div key={item.uuid} className="col-6 col-md-4 col-lg-4">
                 <ListingCard listing={item} viewMode="grid" />
@@ -617,6 +632,18 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           </div>
         )}
       </div>
+
+      <style jsx>{`
+        .listings-grid {
+          width: 100%;
+        }
+        
+        @media (max-width: 576px) {
+          .all-listings {
+            padding: 0 0.25rem;
+          }
+        }
+      `}</style>
     </div>
   );
 };

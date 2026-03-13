@@ -53,11 +53,24 @@ const ListingCard: React.FC<ListingCardProps> = ({
     return null;
   }
 
+  const [isMobile, setIsMobile] = useState(false);
   const [isFavorite, setIsFavorite] = useState(listing.is_favoris || false);
   const [imageError, setImageError] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const [loading, setLoading] = useState(false);
   const { isLoggedIn, openLoginModal } = useAuth();
+
+  // Détection de l'écran mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Vérifier au chargement si l'annonce est dans les favoris
   useEffect(() => {
@@ -180,7 +193,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
       }
       const priceNum = typeof price === "string" ? parseFloat(price) : price;
       if (isNaN(priceNum) || priceNum === 0) return "Troc";
-      return `${priceNum.toLocaleString("fr-FR")} FCFA (ou troc)`;
+      return `${priceNum.toLocaleString("fr-FR")} FCFA`;
     }
     
     if (type === "produit") {
@@ -206,8 +219,8 @@ const ListingCard: React.FC<ListingCardProps> = ({
 
       if (diffDays === 0) return "Aujourd'hui";
       if (diffDays === 1) return "Hier";
-      if (diffDays < 7) return `Il y a ${diffDays} jours`;
-      if (diffDays < 30) return `Il y a ${diffDays} jours`;
+      if (diffDays < 7) return `Il y a ${diffDays}j`;
+      if (diffDays < 30) return `Il y a ${diffDays}j`;
       return date.toLocaleDateString("fr-FR", {
         day: "2-digit",
         month: "short",
@@ -236,7 +249,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
   };
 
   const getButtonClasses = () => {
-    return "btn text-white px-3 py-1 rounded-3 fw-semibold border-0 transition-colors";
+    return "btn text-white rounded-3 fw-semibold border-0 transition-colors";
   };
 
   const getButtonStyle = () => {
@@ -263,7 +276,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
           src={buildImageUrl(listing.seller!.avatar) || ""}
           alt={sellerName}
           className="rounded-circle object-fit-cover"
-          style={{ width: "24px", height: "24px", flexShrink: 0 }}
+          style={{ width: isMobile ? "20px" : "24px", height: isMobile ? "20px" : "24px", flexShrink: 0 }}
           onError={() => setAvatarError(true)}
         />
       );
@@ -274,11 +287,11 @@ const ListingCard: React.FC<ListingCardProps> = ({
       <div
         className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
         style={{
-          width: "24px",
-          height: "24px",
+          width: isMobile ? "20px" : "24px",
+          height: isMobile ? "20px" : "24px",
           flexShrink: 0,
           backgroundColor: avatarColor,
-          fontSize: "10px",
+          fontSize: isMobile ? "8px" : "10px",
         }}
       >
         {initials}
@@ -355,15 +368,16 @@ const ListingCard: React.FC<ListingCardProps> = ({
   };
 
   if (viewMode === "list") {
+    // Version liste - adaptée mobile
     return (
       <div
-        className={`card border-0 rounded-4 overflow-hidden shadow mb-3 ${featured ? "border-2 border-warning" : ""}`}
-        style={{ height: "200px" }}
+        className={`card border-0 rounded-4 overflow-hidden shadow mb-2 ${featured ? "border-2 border-warning" : ""}`}
+        style={{ height: isMobile ? "150px" : "200px" }}
       >
         <div className="row g-0 h-100">
           {/* Image cliquable */}
           <div 
-            className="col-md-3 position-relative h-100"
+            className="col-4 position-relative h-100"
             onClick={handleImageClick}
             style={{ cursor: "pointer" }}
           >
@@ -376,17 +390,17 @@ const ListingCard: React.FC<ListingCardProps> = ({
                 onError={() => setImageError(true)}
               />
               <div
-                className="position-absolute top-0 start-0 px-2 py-1 text-white small fw-bold rounded-3 d-flex align-items-center gap-1 m-2"
-                style={{ backgroundColor: typeConfig.bgColor }}
+                className="position-absolute top-0 start-0 px-1 py-0.5 text-white small fw-bold rounded-2 d-flex align-items-center gap-1 m-1"
+                style={{ backgroundColor: typeConfig.bgColor, fontSize: isMobile ? "9px" : "11px" }}
               >
-                <i className={`fas ${typeConfig.icon}`}></i>
+                <i className={`fas ${typeConfig.icon}`} style={{ fontSize: isMobile ? "8px" : "10px" }}></i>
                 <span>{typeConfig.label}</span>
               </div>
               <button
-                className="position-absolute top-0 end-0 w-10 h-10 bg-white rounded-circle d-flex align-items-center justify-content-center shadow border-0 m-2 transition-colors"
+                className="position-absolute top-0 end-0 bg-white rounded-circle d-flex align-items-center justify-content-center shadow border-0 m-1 transition-colors"
                 style={{ 
-                  width: "32px", 
-                  height: "32px",
+                  width: isMobile ? "28px" : "32px", 
+                  height: isMobile ? "28px" : "32px",
                   opacity: loading ? 0.5 : 1,
                   cursor: loading ? "not-allowed" : "pointer",
                 }}
@@ -402,8 +416,8 @@ const ListingCard: React.FC<ListingCardProps> = ({
                   <i
                     className={`fa-${isFavorite ? "solid" : "regular"} fa-heart`}
                     style={{ 
-                      color: isFavorite ? "#ec4899" : "#6b7280", // Rose si favori, gris sinon
-                      fontSize: "14px",
+                      color: isFavorite ? "#ec4899" : "#6b7280",
+                      fontSize: isMobile ? "12px" : "14px",
                       transition: "color 0.2s ease"
                     }}
                   />
@@ -411,79 +425,84 @@ const ListingCard: React.FC<ListingCardProps> = ({
               </button>
             </div>
           </div>
-          <div className="col-md-9 h-100">
-            <div className="card-body h-100 d-flex flex-column p-3">
-              <div className="d-flex justify-content-between align-items-start mb-1">
-                <div className="flex-grow-1">
+          <div className="col-8 h-100">
+            <div className="card-body h-100 d-flex flex-column p-2">
+              <div className="d-flex justify-content-between align-items-start mb-0">
+                <div className="flex-grow-1" style={{ maxWidth: "60%" }}>
                   <Link 
                     href={getDetailLink()} 
                     className="text-decoration-none"
                   >
-                    <h6 className="card-title fw-bold text-dark mb-0">
-                      {listing.titre}
+                    <h6 className="card-title fw-bold text-dark mb-0" style={{ fontSize: isMobile ? "13px" : "14px" }}>
+                      {listing.titre || "Sans titre"}
                     </h6>
                   </Link>
-                  <div className="d-flex flex-wrap gap-2 mt-1">
-                    {listing.statut && (
-                      <span className="badge bg-secondary" style={{ fontSize: "10px" }}>
-                        {listing.statut === "disponible"
-                          ? "Disponible"
-                          : listing.statut === "en_attente"
-                            ? "En attente"
-                            : listing.statut === "publie"
-                              ? "Publié"
-                              : listing.statut}
-                      </span>
-                    )}
-                  </div>
                 </div>
-                <div className="text-end ms-2">
-                  <div className={`fw-bold fs-5 mb-2`} style={getPriceStyle()}>
+                <div className="text-end ms-1">
+                  <div className={`fw-bold`} style={{ fontSize: isMobile ? "12px" : "14px", ...getPriceStyle() }}>
                     {formatPrice(listing.prix, listing.type)}
                   </div>
                 </div>
               </div>
               
-              <div className="d-flex align-items-center gap-2 mb-1">
+              <div className="d-flex align-items-center gap-2 mb-0" style={{ fontSize: isMobile ? "10px" : "11px" }}>
                 {listing.localisation && (
-                  <span className="d-flex align-items-center text-muted small">
-                    <i className="fa-solid fa-location-dot me-1 text-warning" style={{ fontSize: "10px" }}></i>
-                    <span className="text-truncate" style={{ maxWidth: "150px" }}>
+                  <span className="d-flex align-items-center text-muted">
+                    <i className="fa-solid fa-location-dot me-1 text-warning" style={{ fontSize: isMobile ? "8px" : "10px" }}></i>
+                    <span className="text-truncate" style={{ maxWidth: isMobile ? "80px" : "150px" }}>
                       {listing.localisation}
                     </span>
                   </span>
                 )}
                 {(listing.date || listing.createdAt) && (
-                  <span className="d-flex align-items-center text-muted small">
-                    <i className="fa-regular fa-clock me-1" style={{ fontSize: "10px" }}></i>
+                  <span className="d-flex align-items-center text-muted">
+                    <i className="fa-regular fa-clock me-1" style={{ fontSize: isMobile ? "8px" : "10px" }}></i>
                     {formatDate(listing.date || listing.createdAt)}
                   </span>
                 )}
               </div>
 
               {listing.description && (
-                <p className="card-text text-muted small mb-2 flex-grow-1">
-                  {listing.description.length > 100
-                    ? `${listing.description.substring(0, 100)}...`
+                <p className="card-text text-muted mb-1 flex-grow-1" style={{ fontSize: isMobile ? "10px" : "11px", lineHeight: "1.2" }}>
+                  {listing.description.length > (isMobile ? 60 : 100)
+                    ? `${listing.description.substring(0, isMobile ? 60 : 100)}...`
                     : listing.description}
                 </p>
               )}
 
               <div className="d-flex justify-content-between align-items-center mt-auto">
-                <div className="d-flex align-items-center gap-2">
-                  {listing.seller && (
-                    <div className="d-flex align-items-center gap-1">
+                <div className="d-flex align-items-center gap-1">
+                  {listing.seller ? (
+                    <>
                       {renderAvatar()}
-                      <span className="small fw-medium text-dark">
+                      <span className="small fw-medium text-dark text-truncate" style={{ fontSize: isMobile ? "10px" : "11px", maxWidth: isMobile ? "60px" : "100px" }}>
                         {listing.seller.name}
                       </span>
-                    </div>
+                    </>
+                  ) : (
+                    <>
+                      <div
+                        className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
+                        style={{
+                          width: isMobile ? "20px" : "24px",
+                          height: isMobile ? "20px" : "24px",
+                          flexShrink: 0,
+                          backgroundColor: getAvatarColor(),
+                          fontSize: isMobile ? "8px" : "10px",
+                        }}
+                      >
+                        AN
+                      </div>
+                      <span className="small fw-medium text-dark" style={{ fontSize: isMobile ? "10px" : "11px" }}>
+                        Annonceur
+                      </span>
+                    </>
                   )}
                 </div>
                 <Link
                   href={getDetailLink()}
                   className={getButtonClasses()}
-                  style={getButtonStyle()}
+                  style={{ ...getButtonStyle(), fontSize: isMobile ? "10px" : "11px", padding: isMobile ? "4px 8px" : "6px 12px" }}
                 >
                   {getButtonText()}
                 </Link>
@@ -495,13 +514,17 @@ const ListingCard: React.FC<ListingCardProps> = ({
     );
   }
 
-  // MODE GRID
+  // MODE GRID - Version mobile optimisée
+  const cardHeight = isMobile ? "320px" : "420px";
+  const imageHeight = isMobile ? "140px" : "180px";
+  const contentHeight = isMobile ? "180px" : "240px";
+
   return (
-    <div className={getCardClasses()} style={{ height: "420px" }}>
+    <div className={getCardClasses()} style={{ height: cardHeight }}>
       {/* Image cliquable */}
       <div
         className="position-relative overflow-hidden"
-        style={{ height: "180px", flexShrink: 0, cursor: "pointer" }}
+        style={{ height: imageHeight, flexShrink: 0, cursor: "pointer" }}
         onClick={handleImageClick}
       >
         <img
@@ -514,19 +537,19 @@ const ListingCard: React.FC<ListingCardProps> = ({
 
         {/* Badge type */}
         <div
-          className="position-absolute top-0 start-0 px-2 py-1 text-white small fw-bold rounded-3 d-flex align-items-center gap-1 m-2"
-          style={{ backgroundColor: typeConfig.bgColor }}
+          className="position-absolute top-0 start-0 px-1 py-0.5 text-white small fw-bold rounded-2 d-flex align-items-center gap-1 m-1"
+          style={{ backgroundColor: typeConfig.bgColor, fontSize: isMobile ? "9px" : "11px" }}
         >
-          <i className={`fas ${typeConfig.icon}`} style={{ fontSize: "10px" }}></i>
-          <span style={{ fontSize: "10px" }}>{typeConfig.label}</span>
+          <i className={`fas ${typeConfig.icon}`} style={{ fontSize: isMobile ? "8px" : "10px" }}></i>
+          <span>{typeConfig.label}</span>
         </div>
 
-        {/* Bouton favori - ROSE quand actif */}
+        {/* Bouton favori */}
         <button
-          className="position-absolute top-0 end-0 w-10 h-10 bg-white rounded-circle d-flex align-items-center justify-content-center shadow border-0 m-2 transition-colors"
+          className="position-absolute top-0 end-0 bg-white rounded-circle d-flex align-items-center justify-content-center shadow border-0 m-1 transition-colors"
           style={{ 
-            width: "32px", 
-            height: "32px",
+            width: isMobile ? "28px" : "32px", 
+            height: isMobile ? "28px" : "32px",
             opacity: loading ? 0.5 : 1,
             cursor: loading ? "not-allowed" : "pointer",
           }}
@@ -542,8 +565,8 @@ const ListingCard: React.FC<ListingCardProps> = ({
             <i
               className={`fa-${isFavorite ? "solid" : "regular"} fa-heart`}
               style={{ 
-                color: isFavorite ? "#ec4899" : "#6b7280", // Rose si favori, gris sinon
-                fontSize: "14px",
+                color: isFavorite ? "#ec4899" : "#6b7280",
+                fontSize: isMobile ? "12px" : "14px",
                 transition: "color 0.2s ease"
               }}
             />
@@ -552,42 +575,42 @@ const ListingCard: React.FC<ListingCardProps> = ({
       </div>
 
       {/* Contenu */}
-      <div className="card-body p-3 d-flex flex-column" style={{ height: "240px" }}>
+      <div className="card-body p-2 d-flex flex-column" style={{ height: contentHeight }}>
         {/* Titre */}
-        <div style={{ height: "42px", overflow: "hidden" }} className="mb-1">
+        <div style={{ height: isMobile ? "32px" : "42px", overflow: "hidden" }} className="mb-0">
           <Link href={getDetailLink()} className="text-decoration-none">
-            <h6 className="card-title fw-bold text-dark mb-0" style={{ fontSize: "14px" }}>
+            <h6 className="card-title fw-bold text-dark mb-0" style={{ fontSize: isMobile ? "13px" : "14px", lineHeight: "1.2" }}>
               {listing.titre || "Sans titre"}
             </h6>
           </Link>
         </div>
 
         {/* Prix */}
-        <div style={{ height: "28px" }} className="mb-1">
-          <div className="fw-bold" style={{ fontSize: "14px", ...getPriceStyle() }}>
+        <div style={{ height: isMobile ? "22px" : "28px" }} className="mb-0">
+          <div className="fw-bold" style={{ fontSize: isMobile ? "13px" : "14px", ...getPriceStyle() }}>
             {formatPrice(listing.prix, listing.type)}
           </div>
         </div>
 
         {/* Description */}
-        <div style={{ height: "40px", overflow: "hidden" }} className="mb-2">
+        <div style={{ height: isMobile ? "30px" : "40px", overflow: "hidden" }} className="mb-1">
           {listing.description ? (
-            <p className="card-text text-muted small" style={{ fontSize: "11px", lineHeight: "1.2" }}>
-              {listing.description.length > 70
-                ? `${listing.description.substring(0, 70)}...`
+            <p className="card-text text-muted" style={{ fontSize: isMobile ? "10px" : "11px", lineHeight: "1.2" }}>
+              {listing.description.length > (isMobile ? 40 : 70)
+                ? `${listing.description.substring(0, isMobile ? 40 : 70)}...`
                 : listing.description}
             </p>
           ) : (
-            <p className="card-text text-muted small" style={{ fontSize: "11px" }}>Aucune description</p>
+            <p className="card-text text-muted" style={{ fontSize: isMobile ? "10px" : "11px" }}>Aucune description</p>
           )}
         </div>
 
         {/* Localisation et date */}
-        <div className="d-flex justify-content-between align-items-center text-muted" style={{ height: "20px" }}>
+        <div className="d-flex justify-content-between align-items-center text-muted" style={{ height: isMobile ? "18px" : "20px" }}>
           {listing.localisation ? (
             <span className="d-flex align-items-center">
-              <i className="fa-solid fa-location-dot me-1 text-warning" style={{ fontSize: "10px" }}></i>
-              <span className="text-truncate" style={{ maxWidth: "100px", fontSize: "11px" }}>
+              <i className="fa-solid fa-location-dot me-1 text-warning" style={{ fontSize: isMobile ? "8px" : "10px" }}></i>
+              <span className="text-truncate" style={{ maxWidth: isMobile ? "80px" : "100px", fontSize: isMobile ? "9px" : "11px" }}>
                 {listing.localisation}
               </span>
             </span>
@@ -596,19 +619,19 @@ const ListingCard: React.FC<ListingCardProps> = ({
           )}
           {(listing.date || listing.createdAt) && (
             <span className="d-flex align-items-center">
-              <i className="fa-regular fa-clock me-1" style={{ fontSize: "10px" }}></i>
-              <span style={{ fontSize: "11px" }}>{formatDate(listing.date || listing.createdAt)}</span>
+              <i className="fa-regular fa-clock me-1" style={{ fontSize: isMobile ? "8px" : "10px" }}></i>
+              <span style={{ fontSize: isMobile ? "9px" : "11px" }}>{formatDate(listing.date || listing.createdAt)}</span>
             </span>
           )}
         </div>
 
         {/* Footer avec avatar et bouton */}
-        <div className="d-flex justify-content-between align-items-center pt-2 border-top mt-2" style={{ height: "50px" }}>
-          <div className="d-flex align-items-center" style={{ maxWidth: "110px" }}>
+        <div className="d-flex justify-content-between align-items-center pt-1 border-top mt-1" style={{ height: isMobile ? "38px" : "50px" }}>
+          <div className="d-flex align-items-center" style={{ maxWidth: isMobile ? "90px" : "110px" }}>
             {listing.seller ? (
               <>
                 {renderAvatar()}
-                <span className="small fw-medium text-dark text-truncate ms-1" style={{ fontSize: "11px" }}>
+                <span className="small fw-medium text-dark text-truncate ms-1" style={{ fontSize: isMobile ? "10px" : "11px" }}>
                   {listing.seller.name}
                 </span>
               </>
@@ -617,16 +640,16 @@ const ListingCard: React.FC<ListingCardProps> = ({
                 <div
                   className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
                   style={{
-                    width: "24px",
-                    height: "24px",
+                    width: isMobile ? "20px" : "24px",
+                    height: isMobile ? "20px" : "24px",
                     flexShrink: 0,
                     backgroundColor: getAvatarColor(),
-                    fontSize: "10px",
+                    fontSize: isMobile ? "8px" : "10px",
                   }}
                 >
                   AN
                 </div>
-                <span className="small fw-medium text-dark text-truncate ms-1" style={{ fontSize: "11px" }}>
+                <span className="small fw-medium text-dark text-truncate ms-1" style={{ fontSize: isMobile ? "10px" : "11px" }}>
                   Annonceur
                 </span>
               </>
@@ -635,7 +658,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
           <Link
             href={getDetailLink()}
             className={getButtonClasses()}
-            style={{ ...getButtonStyle(), fontSize: "11px", padding: "4px 8px" }}
+            style={{ ...getButtonStyle(), fontSize: isMobile ? "10px" : "11px", padding: isMobile ? "4px 8px" : "6px 12px" }}
           >
             {getButtonText()}
           </Link>

@@ -81,7 +81,20 @@ const LoginModal: React.FC<LoginModalProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [loginSuccess, setLoginSuccess] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const router = useRouter();
+
+  // Détecter si c'est un écran mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // S'assurer que le composant est monté côté client
   useEffect(() => {
@@ -458,7 +471,10 @@ const LoginModal: React.FC<LoginModalProps> = ({
         <div
           className="modal-dialog modal-dialog-centered modal-lg"
           role="document"
-          style={{ maxWidth: "900px" }}
+          style={{ 
+            maxWidth: isMobile ? "95%" : "900px",
+            margin: isMobile ? "0.5rem" : "1.75rem auto"
+          }}
         >
           <div className="modal-content rounded-3 shadow-lg border-0 overflow-hidden">
             {/* Close Button - UN SEUL BOUTON */}
@@ -469,19 +485,19 @@ const LoginModal: React.FC<LoginModalProps> = ({
               disabled={loading}
               aria-label="Fermer"
               style={{
-                top: "1rem",
-                right: "1rem",
+                top: isMobile ? "0.75rem" : "1rem",
+                right: isMobile ? "0.75rem" : "1rem",
                 zIndex: 10,
                 backgroundColor: "rgba(255, 255, 255, 0.8)",
-                padding: "0.75rem",
+                padding: isMobile ? "0.5rem" : "0.75rem",
                 borderRadius: "50%",
-                width: "40px",
-                height: "40px",
+                width: isMobile ? "32px" : "40px",
+                height: isMobile ? "32px" : "40px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 border: "none",
-                fontSize: "1.25rem",
+                fontSize: isMobile ? "1rem" : "1.25rem",
                 lineHeight: 1,
                 opacity: 0.8,
               }}
@@ -498,135 +514,137 @@ const LoginModal: React.FC<LoginModalProps> = ({
             </button>
 
             <div className="row g-0">
-              {/* Colonne gauche - Background vert */}
-              <div
-                className="col-md-4 d-flex flex-column"
-                style={{
-                  backgroundColor: colors.oskar.green,
-                  color: "white",
-                  padding: "2rem",
-                }}
-              >
-                <div className="mb-4">
-                  <div className="d-flex justify-content-center mb-3">
-                    <div
-                      style={{
-                        width: "80px",
-                        height: "80px",
-                        backgroundColor: "white",
-                        borderRadius: "20px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-                      }}
-                    >
-                      <span
+              {/* Colonne gauche - Background vert - DISPARAÎT SUR MOBILE */}
+              {!isMobile && (
+                <div
+                  className="col-md-4 d-flex flex-column"
+                  style={{
+                    backgroundColor: colors.oskar.green,
+                    color: "white",
+                    padding: "2rem",
+                  }}
+                >
+                  <div className="mb-4">
+                    <div className="d-flex justify-content-center mb-3">
+                      <div
                         style={{
-                          color: colors.oskar.green,
-                          fontWeight: "bold",
-                          fontSize: "2rem",
+                          width: "80px",
+                          height: "80px",
+                          backgroundColor: "white",
+                          borderRadius: "20px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
                         }}
                       >
-                        O
-                      </span>
+                        <span
+                          style={{
+                            color: colors.oskar.green,
+                            fontWeight: "bold",
+                            fontSize: "2rem",
+                          }}
+                        >
+                          O
+                        </span>
+                      </div>
+                    </div>
+                    <h5 className="text-center fw-bold mb-3">
+                      Bienvenue sur OSKAR
+                    </h5>
+                    <p className="text-center mb-4" style={{ opacity: 0.9 }}>
+                      Connectez-vous à votre compte pour accéder à tous vos
+                      services
+                    </p>
+                  </div>
+
+                  {/* Avantages */}
+                  <div className="d-flex flex-column gap-3 mt-3">
+                    <div className="d-flex align-items-start gap-2">
+                      <div
+                        style={{
+                          width: "40px",
+                          height: "40px",
+                          backgroundColor: "rgba(255, 255, 255, 0.2)",
+                          borderRadius: "10px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <FontAwesomeIcon
+                          icon={faShieldHalved}
+                          style={{ fontSize: "16px" }}
+                        />
+                      </div>
+                      <div>
+                        <h6 className="fw-semibold mb-1">Accès sécurisé</h6>
+                        <p style={{ opacity: 0.8, fontSize: "0.875rem" }}>
+                          Votre compte est protégé par des mesures de sécurité
+                          avancées
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="d-flex align-items-start gap-2">
+                      <div
+                        style={{
+                          width: "40px",
+                          height: "40px",
+                          backgroundColor: "rgba(255, 255, 255, 0.2)",
+                          borderRadius: "10px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <FontAwesomeIcon
+                          icon={faUsers}
+                          style={{ fontSize: "16px" }}
+                        />
+                      </div>
+                      <div>
+                        <h6 className="fw-semibold mb-1">Communauté active</h6>
+                        <p style={{ opacity: 0.8, fontSize: "0.875rem" }}>
+                          Rejoignez des milliers d'utilisateurs actifs
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="d-flex align-items-start gap-2">
+                      <div
+                        style={{
+                          width: "40px",
+                          height: "40px",
+                          backgroundColor: "rgba(255, 255, 255, 0.2)",
+                          borderRadius: "10px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <FontAwesomeIcon
+                          icon={faBolt}
+                          style={{ fontSize: "16px" }}
+                        />
+                      </div>
+                      <div>
+                        <h6 className="fw-semibold mb-1">Accès rapide</h6>
+                        <p style={{ opacity: 0.8, fontSize: "0.875rem" }}>
+                          Connectez-vous en quelques secondes
+                        </p>
+                      </div>
                     </div>
                   </div>
-                  <h5 className="text-center fw-bold mb-3">
-                    Bienvenue sur OSKAR
-                  </h5>
-                  <p className="text-center mb-4" style={{ opacity: 0.9 }}>
-                    Connectez-vous à votre compte pour accéder à tous vos
-                    services
-                  </p>
                 </div>
+              )}
 
-                {/* Avantages */}
-                <div className="d-flex flex-column gap-3 mt-3">
-                  <div className="d-flex align-items-start gap-2">
-                    <div
-                      style={{
-                        width: "40px",
-                        height: "40px",
-                        backgroundColor: "rgba(255, 255, 255, 0.2)",
-                        borderRadius: "10px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                      }}
-                    >
-                      <FontAwesomeIcon
-                        icon={faShieldHalved}
-                        style={{ fontSize: "16px" }}
-                      />
-                    </div>
-                    <div>
-                      <h6 className="fw-semibold mb-1">Accès sécurisé</h6>
-                      <p style={{ opacity: 0.8, fontSize: "0.875rem" }}>
-                        Votre compte est protégé par des mesures de sécurité
-                        avancées
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="d-flex align-items-start gap-2">
-                    <div
-                      style={{
-                        width: "40px",
-                        height: "40px",
-                        backgroundColor: "rgba(255, 255, 255, 0.2)",
-                        borderRadius: "10px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                      }}
-                    >
-                      <FontAwesomeIcon
-                        icon={faUsers}
-                        style={{ fontSize: "16px" }}
-                      />
-                    </div>
-                    <div>
-                      <h6 className="fw-semibold mb-1">Communauté active</h6>
-                      <p style={{ opacity: 0.8, fontSize: "0.875rem" }}>
-                        Rejoignez des milliers d'utilisateurs actifs
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="d-flex align-items-start gap-2">
-                    <div
-                      style={{
-                        width: "40px",
-                        height: "40px",
-                        backgroundColor: "rgba(255, 255, 255, 0.2)",
-                        borderRadius: "10px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                      }}
-                    >
-                      <FontAwesomeIcon
-                        icon={faBolt}
-                        style={{ fontSize: "16px" }}
-                      />
-                    </div>
-                    <div>
-                      <h6 className="fw-semibold mb-1">Accès rapide</h6>
-                      <p style={{ opacity: 0.8, fontSize: "0.875rem" }}>
-                        Connectez-vous en quelques secondes
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Colonne droite - Formulaire */}
-              <div className="col-md-8">
-                <div className="p-4">
+              {/* Colonne droite - Formulaire - PREND TOUTE LA LARGEUR SUR MOBILE */}
+              <div className={isMobile ? "col-12" : "col-md-8"}>
+                <div className="p-4" style={{ padding: isMobile ? "1.5rem 1rem" : "2rem" }}>
                   <h5 className="modal-title w-100 text-center fs-4 fw-bold text-dark mb-4">
                     Connexion à OSKAR
                   </h5>
@@ -635,6 +653,7 @@ const LoginModal: React.FC<LoginModalProps> = ({
                     <div
                       className="alert alert-danger alert-dismissible fade show mb-4"
                       role="alert"
+                      style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}
                     >
                       <i className="fa-solid fa-exclamation-triangle me-2"></i>
                       {error}
@@ -655,6 +674,7 @@ const LoginModal: React.FC<LoginModalProps> = ({
                         backgroundColor: "#d1fae5",
                         borderColor: "#10b981",
                         color: "#065f46",
+                        fontSize: isMobile ? "0.9rem" : "1rem",
                       }}
                     >
                       <div className="d-flex align-items-center">
@@ -686,27 +706,17 @@ const LoginModal: React.FC<LoginModalProps> = ({
 
                   {!loginSuccess && (
                     <form onSubmit={handleLogin}>
-                      {/* Séparateur */}
-                      <div className="position-relative text-center mb-4">
-                        <hr className="w-100" />
-                        <span
-                          className="position-absolute top-50 start-50 translate-middle bg-white px-3 text-secondary"
-                          style={{ fontSize: "0.875rem" }}
-                        >
-                          ou utilisez vos identifiants
-                        </span>
-                      </div>
-
-                      {/* Email */}
-                      <div className="mb-4">
-                        <label className="form-label fw-semibold text-dark">
+                      {/* Email - CHAMPS RÉDUITS SUR MOBILE */}
+                      <div className="mb-3">
+                        <label className="form-label fw-semibold text-dark" style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}>
                           Adresse email <span className="text-danger">*</span>
                         </label>
                         <div className="input-group">
-                          <span className="input-group-text bg-white border-end-0">
+                          <span className="input-group-text bg-white border-end-0" style={{ padding: isMobile ? "0.5rem 0.75rem" : "0.75rem 1rem" }}>
                             <FontAwesomeIcon
                               icon={faEnvelope}
                               className="text-secondary"
+                              style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}
                             />
                           </span>
                           <input
@@ -724,18 +734,22 @@ const LoginModal: React.FC<LoginModalProps> = ({
                             required
                             disabled={loading}
                             autoComplete="email"
+                            style={{ 
+                              padding: isMobile ? "0.5rem 0.75rem" : "0.75rem 1rem",
+                              fontSize: isMobile ? "0.9rem" : "1rem"
+                            }}
                           />
                         </div>
                       </div>
 
-                      {/* Mot de passe */}
-                      <div className="mb-4">
-                        
+                      {/* Mot de passe - CHAMPS RÉDUITS SUR MOBILE */}
+                      <div className="mb-3">
                         <div className="input-group">
-                          <span className="input-group-text bg-white border-end-0">
+                          <span className="input-group-text bg-white border-end-0" style={{ padding: isMobile ? "0.5rem 0.75rem" : "0.75rem 1rem" }}>
                             <FontAwesomeIcon
                               icon={faLock}
                               className="text-secondary"
+                              style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}
                             />
                           </span>
                           <input
@@ -753,22 +767,31 @@ const LoginModal: React.FC<LoginModalProps> = ({
                             required
                             disabled={loading}
                             autoComplete="current-password"
+                            style={{ 
+                              padding: isMobile ? "0.5rem 0.75rem" : "0.75rem 1rem",
+                              fontSize: isMobile ? "0.9rem" : "1rem"
+                            }}
                           />
                           <button
                             type="button"
                             className="btn btn-outline-secondary border-start-0"
                             onClick={() => setShowPassword(!showPassword)}
                             disabled={loading}
+                            style={{ 
+                              padding: isMobile ? "0.5rem 0.75rem" : "0.75rem 1rem",
+                              fontSize: isMobile ? "0.9rem" : "1rem"
+                            }}
                           >
                             <FontAwesomeIcon
                               icon={showPassword ? faEyeSlash : faEye}
+                              style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}
                             />
                           </button>
                         </div>
                       </div>
 
-                      {/* Se souvenir de moi */}
-                      <div className="form-check mb-4">
+                      {/* Se souvenir de moi - TEXTE RÉDUIT SUR MOBILE */}
+                      <div className="form-check mb-3">
                         <input
                           className="form-check-input"
                           type="checkbox"
@@ -781,24 +804,27 @@ const LoginModal: React.FC<LoginModalProps> = ({
                             })
                           }
                           disabled={loading}
+                          style={{ width: isMobile ? "1rem" : "1.2rem", height: isMobile ? "1rem" : "1.2rem" }}
                         />
                         <label
                           className="form-check-label text-secondary"
                           htmlFor="rememberMe"
+                          style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}
                         >
                           Se souvenir de moi
                         </label>
                       </div>
 
-                      {/* Bouton de connexion */}
+                      {/* Bouton de connexion - PLUS PETIT SUR MOBILE */}
                       <button
                         type="submit"
-                        className="btn w-100 py-3 mb-3 fw-bold text-white"
+                        className="btn w-100 mb-3 fw-bold text-white"
                         style={{
                           backgroundColor: colors.oskar.green,
                           border: "none",
                           borderRadius: "10px",
-                          fontSize: "1rem",
+                          fontSize: isMobile ? "0.95rem" : "1rem",
+                          padding: isMobile ? "0.75rem" : "1rem",
                         }}
                         disabled={
                           loading || !loginData.email || !loginData.password
@@ -814,15 +840,16 @@ const LoginModal: React.FC<LoginModalProps> = ({
                             <FontAwesomeIcon
                               icon={faArrowRightToBracket}
                               className="me-2"
+                              style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}
                             />
                             Se connecter
                           </>
                         )}
                       </button>
 
-                      {/* Lien vers inscription */}
+                      {/* Lien vers inscription - TEXTE RÉDUIT SUR MOBILE */}
                       <div className="text-center pt-3 border-top">
-                        <span className="text-secondary me-1">
+                        <span className="text-secondary me-1" style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}>
                           Vous n'avez pas de compte ?
                         </span>
                         <button
@@ -830,7 +857,10 @@ const LoginModal: React.FC<LoginModalProps> = ({
                           className="btn btn-link p-0 text-decoration-none fw-semibold"
                           onClick={onSwitchToRegister}
                           disabled={loading}
-                          style={{ color: colors.oskar.green }}
+                          style={{ 
+                            color: colors.oskar.green,
+                            fontSize: isMobile ? "0.9rem" : "1rem"
+                          }}
                         >
                           S'inscrire
                         </button>
@@ -838,7 +868,7 @@ const LoginModal: React.FC<LoginModalProps> = ({
                     </form>
                   )}
 
-                  {/* Sécurité */}
+                  {/* Sécurité - TEXTE RÉDUIT SUR MOBILE */}
                   {!loginSuccess && (
                     <div className="mt-4 pt-3 border-top">
                       <div className="d-flex align-items-center gap-2">
@@ -847,7 +877,7 @@ const LoginModal: React.FC<LoginModalProps> = ({
                           className="text-success"
                           size="sm"
                         />
-                        <small className="text-muted">
+                        <small className="text-muted" style={{ fontSize: isMobile ? "0.8rem" : "0.875rem" }}>
                           Votre connexion est sécurisée avec un chiffrement SSL
                           256-bit
                         </small>
@@ -878,6 +908,23 @@ const LoginModal: React.FC<LoginModalProps> = ({
         .btn-close {
           background-image: none !important;
           opacity: 1 !important;
+        }
+
+        /* Styles responsifs supplémentaires */
+        @media (max-width: 576px) {
+          .modal-content {
+            max-height: 95vh;
+            overflow-y: auto;
+          }
+          
+          .form-label {
+            margin-bottom: 0.25rem;
+          }
+          
+          .input-group-text, .form-control, .btn-outline-secondary {
+            padding-top: 0.4rem !important;
+            padding-bottom: 0.4rem !important;
+          }
         }
       `}</style>
     </>

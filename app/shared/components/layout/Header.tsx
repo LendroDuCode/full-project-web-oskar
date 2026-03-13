@@ -775,7 +775,6 @@ const Header: FC = () => {
       });
     }
     
-    
     return links;
   };
 
@@ -821,19 +820,19 @@ const Header: FC = () => {
       >
         <div className="container-fluid px-2 px-sm-3 px-md-4 px-lg-5">
           <div className="d-flex align-items-center justify-content-between py-2 py-md-3">
-            {/* Logo et Bouton Menu Mobile */}
+            {/* Logo et Bouton Menu Mobile - Le bouton hamburger est caché sur desktop (d-lg-none) */}
             <div className="d-flex align-items-center flex-shrink-0">
               <button
-                className="btn btn-link border-0 p-0 me-2 me-sm-3 d-lg-none mobile-menu-toggle"
+                className="btn btn-link border-0 p-0 me-2 me-sm-3 mobile-menu-toggle d-lg-none"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 aria-label="Menu"
                 aria-expanded={mobileMenuOpen}
                 type="button"
                 style={{
                   color: colors.oskar.grey,
-                  fontSize: "1.2rem",
-                  width: "40px",
-                  height: "40px",
+                  fontSize: "var(--font-size-icon, 1rem)",
+                  width: "var(--size-icon, 36px)",
+                  height: "var(--size-icon, 36px)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -854,8 +853,8 @@ const Header: FC = () => {
                 <div
                   className="rounded d-flex align-items-center justify-content-center"
                   style={{
-                    width: "40px",
-                    height: "40px",
+                    width: "var(--size-logo, 40px)",
+                    height: "var(--size-logo, 40px)",
                     backgroundColor: colors.oskar.green,
                     transition: "background-color 0.3s",
                   }}
@@ -869,16 +868,16 @@ const Header: FC = () => {
                 >
                   <span
                     className="text-white fw-bold"
-                    style={{ fontSize: "1rem" }}
+                    style={{ fontSize: "var(--font-size-logo-letter, 1rem)" }}
                   >
                     O
                   </span>
                 </div>
                 <span
-                  className="fw-bold ms-2 d-none d-sm-inline"
+                  className="fw-bold ms-2"
                   style={{
                     color: colors.oskar.black,
-                    fontSize: "1.5rem",
+                    fontSize: "var(--font-size-logo, 1.5rem)",
                     transition: "font-size 0.2s",
                   }}
                 >
@@ -887,14 +886,13 @@ const Header: FC = () => {
               </Link>
             </div>
 
-            {/* ===== MODIFICATION PRINCIPALE ===== */}
-            {/* Navigation Desktop - Cachée sur mobile (≤ 991px) */}
+            {/* Navigation Desktop - Visible uniquement sur desktop (d-lg-block) */}
             <div className="flex-grow-1 mx-3 mx-xl-4 position-relative d-none d-lg-block">
               <nav
                 className="d-flex align-items-center justify-content-center"
                 style={{
                   flexWrap: "nowrap",
-                  gap: "0.35rem",
+                  gap: "var(--gap-nav, 0.35rem)",
                 }}
               >
                 {loadingCategories ? (
@@ -921,9 +919,9 @@ const Header: FC = () => {
                           transition: "color 0.3s",
                           color: getLinkColor(link),
                           fontWeight: isLinkActive(link) ? "600" : "400",
-                          fontSize: "0.75rem",
+                          fontSize: "var(--font-size-nav, 0.75rem)",
                           whiteSpace: "nowrap",
-                          padding: "0.4rem 0",
+                          padding: "var(--padding-nav, 0.4rem 0)",
                         }}
                         onMouseEnter={() => {
                           if (link.hasChildren) {
@@ -945,7 +943,7 @@ const Header: FC = () => {
                         {link.hasChildren && (
                           <i
                             className="fa-solid fa-chevron-down ms-1"
-                            style={{ fontSize: "0.55rem" }}
+                            style={{ fontSize: "var(--font-size-icon-small, 0.55rem)" }}
                           ></i>
                         )}
                         {isLinkActive(link) && !link.hasChildren && (
@@ -990,7 +988,7 @@ const Header: FC = () => {
                                 href={child.href}
                                 className="dropdown-item py-2 px-3"
                                 style={{
-                                  fontSize: "0.8rem",
+                                  fontSize: "var(--font-size-dropdown, 0.8rem)",
                                   color: colors.oskar.grey,
                                   transition: "all 0.2s",
                                   minHeight: "36px",
@@ -1022,21 +1020,21 @@ const Header: FC = () => {
               </nav>
             </div>
 
-            {/* Actions Desktop - Cachées sur mobile (≤ 991px) */}
+            {/* Actions Desktop - Visible uniquement sur desktop (d-none d-lg-flex) */}
             <div className="d-none d-lg-flex align-items-center flex-shrink-0 action-buttons">
               <Link href={isLoggedIn ? getUserMessagesUrl() : "#"}>
                 <button
                   className="btn btn-link border-0 position-relative me-2 me-xl-3 action-button"
                   style={{
                     transition: "color 0.3s",
-                    fontSize: "1rem",
+                    fontSize: "var(--font-size-icon, 1rem)",
                     color:
                       pathname.includes("/messages") ||
                       pathname.includes("/messagerie")
                         ? colors.oskar.green
                         : colors.oskar.grey,
-                    width: "36px",
-                    height: "36px",
+                    width: "var(--size-icon, 36px)",
+                    height: "var(--size-icon, 36px)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1070,13 +1068,13 @@ const Header: FC = () => {
                   className="btn btn-link border-0 me-2 me-xl-3 action-button"
                   style={{
                     transition: "color 0.3s",
-                    fontSize: "1rem",
+                    fontSize: "var(--font-size-icon, 1rem)",
                     color:
                       pathname === "/contact"
                         ? colors.oskar.green
                         : colors.oskar.grey,
-                    width: "36px",
-                    height: "36px",
+                    width: "var(--size-icon, 36px)",
+                    height: "var(--size-icon, 36px)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1103,13 +1101,13 @@ const Header: FC = () => {
                   className="btn btn-link border-0 me-3 me-xl-4 action-button"
                   style={{
                     transition: "color 0.3s",
-                    fontSize: "1rem",
+                    fontSize: "var(--font-size-icon, 1rem)",
                     color:
                       pathname === "/liste-favoris"
                         ? colors.oskar.green
                         : colors.oskar.grey,
-                    width: "36px",
-                    height: "36px",
+                    width: "var(--size-icon, 36px)",
+                    height: "var(--size-icon, 36px)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1131,7 +1129,7 @@ const Header: FC = () => {
                 </button>
               </Link>
 
-              {/* Compte utilisateur Desktop */}
+              {/* Compte utilisateur desktop */}
               {isLoggedIn ? (
                 <div
                   className="dropdown"
@@ -1160,8 +1158,8 @@ const Header: FC = () => {
                       <div
                         className="rounded-circle d-flex align-items-center justify-content-center"
                         style={{
-                          width: "36px",
-                          height: "36px",
+                          width: "var(--size-avatar, 36px)",
+                          height: "var(--size-avatar, 36px)",
                           backgroundColor: "#f3f4f6",
                         }}
                       >
@@ -1178,8 +1176,8 @@ const Header: FC = () => {
                       <div
                         className="rounded-circle overflow-hidden position-relative d-flex align-items-center justify-content-center"
                         style={{
-                          width: "36px",
-                          height: "36px",
+                          width: "var(--size-avatar, 36px)",
+                          height: "var(--size-avatar, 36px)",
                           border: `2px solid ${colors.oskar.green}`,
                           backgroundColor: hasValidAvatar() ? 'transparent' : colors.oskar.green,
                         }}
@@ -1196,7 +1194,7 @@ const Header: FC = () => {
                             onError={handleImageError}
                           />
                         ) : (
-                          <span className="text-white fw-bold" style={{ fontSize: '14px' }}>
+                          <span className="text-white fw-bold" style={{ fontSize: 'calc(var(--size-avatar, 36px) * 0.4)' }}>
                             {getUserInitials()}
                           </span>
                         )}
@@ -1369,10 +1367,10 @@ const Header: FC = () => {
                   className="btn btn-link border-0 action-button"
                   style={{
                     transition: "color 0.3s",
-                    fontSize: "1rem",
+                    fontSize: "var(--font-size-icon, 1rem)",
                     color: colors.oskar.grey,
-                    width: "36px",
-                    height: "36px",
+                    width: "var(--size-icon, 36px)",
+                    height: "var(--size-icon, 36px)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -1400,14 +1398,14 @@ const Header: FC = () => {
                       ? colors.oskar.greenHover
                       : colors.oskar.green,
                   color: "white",
-                  padding: "0.4rem 1rem",
+                  padding: "var(--padding-button, 0.4rem 1rem)",
                   fontWeight: 600,
                   borderRadius: "6px",
                   border: "none",
                   transition: "background-color 0.3s",
-                  fontSize: "0.75rem",
+                  fontSize: "var(--font-size-button, 0.75rem)",
                   whiteSpace: "nowrap",
-                  minHeight: "34px",
+                  minHeight: "var(--size-button, 34px)",
                 }}
                 onMouseEnter={() => setHoveredButton("publish")}
                 onMouseLeave={() => setHoveredButton(null)}
@@ -1415,81 +1413,17 @@ const Header: FC = () => {
                 onClick={handlePublishClick}
                 type="button"
               >
-                <i className="fa-solid fa-plus me-2" style={{ fontSize: "0.7rem" }}></i>
+                <i className="fa-solid fa-plus me-2" style={{ fontSize: "var(--font-size-icon-small, 0.7rem)" }}></i>
                 <span>Publier</span>
               </button>
-            </div>
-
-            {/* ===== ÉLÉMENTS MOBILES ===== */}
-            {/* Icône de connexion/utilisateur sur mobile - visible uniquement sur mobile */}
-            <div className="d-lg-none d-flex align-items-center">
-              {isLoggedIn ? (
-                <button
-                  className="btn btn-link border-0 p-0 me-2"
-                  onClick={() => setMobileMenuOpen(true)}
-                  style={{
-                    color: colors.oskar.grey,
-                    width: "40px",
-                    height: "40px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <div
-                    className="rounded-circle overflow-hidden"
-                    style={{
-                      width: "32px",
-                      height: "32px",
-                      border: `2px solid ${colors.oskar.green}`,
-                      backgroundColor: hasValidAvatar() ? 'transparent' : colors.oskar.green,
-                    }}
-                  >
-                    {hasValidAvatar() ? (
-                      <img
-                        src={getAvatarUrl()}
-                        alt={getUserFullName()}
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                        }}
-                        onError={handleImageError}
-                      />
-                    ) : (
-                      <div className="w-100 h-100 d-flex align-items-center justify-content-center">
-                        <span className="text-white fw-bold" style={{ fontSize: '12px' }}>
-                          {getUserInitials()}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </button>
-              ) : (
-                <button
-                  className="btn btn-link border-0 p-0 me-2"
-                  onClick={handleLoginClick}
-                  style={{
-                    color: colors.oskar.grey,
-                    fontSize: "1.2rem",
-                    width: "40px",
-                    height: "40px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <i className="fa-solid fa-user"></i>
-                </button>
-              )}
             </div>
           </div>
         </div>
       </header>
 
-      {/* Menu Mobile Plein Écran - CONTIENT TOUS LES ÉLÉMENTS */}
+      {/* Menu Mobile Plein Écran - Contient tous les éléments du header */}
       {mobileMenuOpen && (
-        <div className="d-lg-none">
+        <div className="d-lg-block">
           <div
             className="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50"
             style={{ zIndex: 999 }}
@@ -1549,63 +1483,145 @@ const Header: FC = () => {
               </button>
             </div>
 
-            <div className="p-2">
-              {/* LIENS DE NAVIGATION DANS LE MENU MOBILE */}
-              {navLinks.map((link, index) => (
-                <div key={`${link.name}-${index}-mobile-menu`}>
-                  <Link
-                    href={link.href}
-                    className={`d-flex align-items-center justify-content-between py-3 px-3 text-decoration-none`}
-                    onClick={() => setMobileMenuOpen(false)}
-                    style={{
-                      color: isLinkActive(link)
-                        ? colors.oskar.green
-                        : colors.oskar.grey,
-                      borderLeft: isLinkActive(link)
-                        ? `4px solid ${colors.oskar.green}`
-                        : "4px solid transparent",
-                      fontSize: "0.85rem",
-                      minHeight: "40px",
-                    }}
-                  >
-                    <span className={isLinkActive(link) ? "fw-semibold" : ""}>
-                      {link.name}
-                    </span>
-                    {link.hasChildren && (
-                      <i
-                        className="fa-solid fa-chevron-down text-muted"
-                        style={{ fontSize: "0.65rem" }}
-                      ></i>
-                    )}
-                  </Link>
-
-                  {link.hasChildren && link.children && (
-                    <div className="ps-4">
-                      {link.children.map((child, childIndex) => (
-                        <Link
-                          key={`${child.name}-${childIndex}`}
-                          href={child.href}
-                          className="d-block py-2 px-3 text-decoration-none"
-                          onClick={() => setMobileMenuOpen(false)}
-                          style={{
-                            color: colors.oskar.grey,
-                            fontSize: "0.8rem",
-                            minHeight: "36px",
-                          }}
-                        >
-                          <i
-                            className="fa-solid fa-angle-right me-2"
-                            style={{ fontSize: "0.6rem" }}
-                          ></i>
-                          {child.name}
-                        </Link>
-                      ))}
-                    </div>
-                  )}
+            {/* Actions mobiles - Icônes de messagerie, contact, favoris et connexion */}
+            <div className="p-3 border-bottom d-flex justify-content-around bg-white">
+              {/* Messagerie */}
+              <Link href={isLoggedIn ? getUserMessagesUrl() : "#"} onClick={() => !isLoggedIn && handleLoginClick()}>
+                <div className="d-flex flex-column align-items-center" style={{ color: colors.oskar.grey }}>
+                  <i className="fa-solid fa-envelope" style={{ fontSize: "1.2rem" }}></i>
+                  <small style={{ fontSize: "0.6rem" }}>Messages</small>
                 </div>
-              ))}
+              </Link>
 
-              {/* SECTION COMPTE UTILISATEUR DANS LE MENU MOBILE */}
+              {/* Contact */}
+              <Link href="/contact" onClick={() => setMobileMenuOpen(false)}>
+                <div className="d-flex flex-column align-items-center" style={{ color: colors.oskar.grey }}>
+                  <i className="fa-solid fa-phone" style={{ fontSize: "1.2rem" }}></i>
+                  <small style={{ fontSize: "0.6rem" }}>Contact</small>
+                </div>
+              </Link>
+
+              {/* Favoris */}
+              <Link href="/liste-favoris" onClick={() => setMobileMenuOpen(false)}>
+                <div className="d-flex flex-column align-items-center" style={{ color: colors.oskar.grey }}>
+                  <i className="fa-solid fa-heart" style={{ fontSize: "1.2rem" }}></i>
+                  <small style={{ fontSize: "0.6rem" }}>Favoris</small>
+                </div>
+              </Link>
+
+              {/* Profil / Connexion */}
+              {isLoggedIn ? (
+                <Link href={getUserProfileUrl()} onClick={() => setMobileMenuOpen(false)}>
+                  <div className="d-flex flex-column align-items-center" style={{ color: colors.oskar.green }}>
+                    <div
+                      className="rounded-circle overflow-hidden d-flex align-items-center justify-content-center"
+                      style={{
+                        width: "24px",
+                        height: "24px",
+                        border: `2px solid ${colors.oskar.green}`,
+                        backgroundColor: hasValidAvatar() ? 'transparent' : colors.oskar.green,
+                      }}
+                    >
+                      {hasValidAvatar() ? (
+                        <img
+                          src={getAvatarUrl()}
+                          alt={getUserFullName()}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                          }}
+                          onError={handleImageError}
+                        />
+                      ) : (
+                        <span className="text-white fw-bold" style={{ fontSize: '0.7rem' }}>
+                          {getUserInitials()}
+                        </span>
+                      )}
+                    </div>
+                    <small style={{ fontSize: "0.6rem" }}>Profil</small>
+                  </div>
+                </Link>
+              ) : (
+                <button
+                  className="btn btn-link p-0 border-0 d-flex flex-column align-items-center"
+                  onClick={() => {
+                    handleLoginClick();
+                    setMobileMenuOpen(false);
+                  }}
+                  style={{ color: colors.oskar.grey, background: 'none' }}
+                  type="button"
+                >
+                  <i className="fa-solid fa-user" style={{ fontSize: "1.2rem" }}></i>
+                  <small style={{ fontSize: "0.6rem" }}>Connexion</small>
+                </button>
+              )}
+            </div>
+
+            {/* Navigation - Catégories */}
+            <div className="p-2">
+              {loadingCategories ? (
+                <div className="p-3 text-center">
+                  <div className="spinner-border spinner-border-sm text-success" role="status">
+                    <span className="visually-hidden">Chargement...</span>
+                  </div>
+                </div>
+              ) : (
+                navLinks.map((link, index) => (
+                  <div key={`${link.name}-${index}-mobile-menu`}>
+                    <Link
+                      href={link.href}
+                      className={`d-flex align-items-center justify-content-between py-3 px-3 text-decoration-none`}
+                      onClick={() => setMobileMenuOpen(false)}
+                      style={{
+                        color: isLinkActive(link)
+                          ? colors.oskar.green
+                          : colors.oskar.grey,
+                        borderLeft: isLinkActive(link)
+                          ? `4px solid ${colors.oskar.green}`
+                          : "4px solid transparent",
+                        fontSize: "0.85rem",
+                        minHeight: "40px",
+                      }}
+                    >
+                      <span className={isLinkActive(link) ? "fw-semibold" : ""}>
+                        {link.name}
+                      </span>
+                      {link.hasChildren && (
+                        <i
+                          className="fa-solid fa-chevron-down text-muted"
+                          style={{ fontSize: "0.65rem" }}
+                        ></i>
+                      )}
+                    </Link>
+
+                    {link.hasChildren && link.children && (
+                      <div className="ps-4">
+                        {link.children.map((child, childIndex) => (
+                          <Link
+                            key={`${child.name}-${childIndex}`}
+                            href={child.href}
+                            className="d-block py-2 px-3 text-decoration-none"
+                            onClick={() => setMobileMenuOpen(false)}
+                            style={{
+                              color: colors.oskar.grey,
+                              fontSize: "0.8rem",
+                              minHeight: "36px",
+                            }}
+                          >
+                            <i
+                              className="fa-solid fa-angle-right me-2"
+                              style={{ fontSize: "0.6rem" }}
+                            ></i>
+                            {child.name}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+
               {isLoggedIn && (
                 <div className="mt-4 border-top pt-3">
                   <div className="px-3 mb-2">
@@ -1648,7 +1664,7 @@ const Header: FC = () => {
                     <span>Mon profil</span>
                   </Link>
 
-                  {/* ✅ LIEN VERS LES ANNONCES DANS LE MENU MOBILE */}
+                  {/* ✅ LIEN VERS LES ANNONCES DANS LE MENU MOBILE POUR TOUS LES TYPES */}
                   {canViewAnnonces() && (
                     <Link
                       href={getUserAnnoncesUrl()}
@@ -1685,40 +1701,6 @@ const Header: FC = () => {
                     <span>Messages</span>
                   </Link>
 
-                  <Link
-                    href="/contact"
-                    className="d-flex align-items-center py-3 px-3 text-decoration-none"
-                    onClick={() => setMobileMenuOpen(false)}
-                    style={{
-                      color: colors.oskar.grey,
-                      fontSize: "0.85rem",
-                      minHeight: "40px",
-                    }}
-                  >
-                    <i
-                      className="fa-solid fa-phone me-3"
-                      style={{ width: "16px", fontSize: "0.9rem" }}
-                    ></i>
-                    <span>Contact</span>
-                  </Link>
-
-                  <Link
-                    href="/liste-favoris"
-                    className="d-flex align-items-center py-3 px-3 text-decoration-none"
-                    onClick={() => setMobileMenuOpen(false)}
-                    style={{
-                      color: colors.oskar.grey,
-                      fontSize: "0.85rem",
-                      minHeight: "40px",
-                    }}
-                  >
-                    <i
-                      className="fa-solid fa-heart me-3"
-                      style={{ width: "16px", fontSize: "0.9rem" }}
-                    ></i>
-                    <span>Favoris</span>
-                  </Link>
-
                   <button
                     className="d-flex align-items-center py-3 px-3 w-100 text-start border-0 bg-transparent text-danger"
                     onClick={() => {
@@ -1739,76 +1721,30 @@ const Header: FC = () => {
                   </button>
                 </div>
               )}
+            </div>
 
-              {/* BOUTON PUBLIER DANS LE MENU MOBILE */}
-              <div className="p-3 mt-3">
-                <button
-                  className="btn w-100"
-                  style={{
-                    backgroundColor: colors.oskar.green,
-                    color: "white",
-                    borderRadius: "6px",
-                    border: "none",
-                    fontWeight: 600,
-                    padding: "0.6rem",
-                    fontSize: "0.8rem",
-                  }}
-                  onClick={() => {
-                    handlePublishClick();
-                    setMobileMenuOpen(false);
-                  }}
-                  type="button"
-                >
-                  <i className="fa-solid fa-plus me-2" style={{ fontSize: "0.7rem" }}></i>
-                  Publier une annonce
-                </button>
-              </div>
-
-              {/* LIENS DE CONNEXION/INSCRIPTION SI NON CONNECTÉ */}
-              {!isLoggedIn && (
-                <div className="p-3">
-                  <button
-                    className="btn w-100 mb-2"
-                    style={{
-                      backgroundColor: colors.oskar.green,
-                      color: "white",
-                      borderRadius: "6px",
-                      border: "none",
-                      fontWeight: 600,
-                      padding: "0.6rem",
-                      fontSize: "0.8rem",
-                    }}
-                    onClick={() => {
-                      handleLoginClick();
-                      setMobileMenuOpen(false);
-                    }}
-                    type="button"
-                  >
-                    <i className="fa-solid fa-right-to-bracket me-2"></i>
-                    Se connecter
-                  </button>
-                  <button
-                    className="btn w-100"
-                    style={{
-                      backgroundColor: "transparent",
-                      color: colors.oskar.green,
-                      borderRadius: "6px",
-                      border: `1px solid ${colors.oskar.green}`,
-                      fontWeight: 600,
-                      padding: "0.6rem",
-                      fontSize: "0.8rem",
-                    }}
-                    onClick={() => {
-                      // Ouvrir modal d'inscription
-                      setMobileMenuOpen(false);
-                    }}
-                    type="button"
-                  >
-                    <i className="fa-solid fa-user-plus me-2"></i>
-                    S'inscrire
-                  </button>
-                </div>
-              )}
+            {/* Bouton Publier dans le menu mobile */}
+            <div className="p-3 mt-3 border-top">
+              <button
+                className="btn w-100"
+                style={{
+                  backgroundColor: colors.oskar.green,
+                  color: "white",
+                  borderRadius: "6px",
+                  border: "none",
+                  fontWeight: 600,
+                  padding: "0.6rem",
+                  fontSize: "0.8rem",
+                }}
+                onClick={() => {
+                  handlePublishClick();
+                  setMobileMenuOpen(false);
+                }}
+                type="button"
+              >
+                <i className="fa-solid fa-plus me-2" style={{ fontSize: "0.7rem" }}></i>
+                Publier une annonce
+              </button>
             </div>
           </div>
         </div>
@@ -1862,6 +1798,230 @@ const Header: FC = () => {
           }
           100% {
             opacity: 0.6;
+          }
+        }
+
+        /* Variables CSS pour la réduction progressive */
+        :root {
+          --font-size-nav: 0.75rem;
+          --font-size-icon: 1rem;
+          --font-size-icon-small: 0.7rem;
+          --font-size-button: 0.75rem;
+          --font-size-logo: 1.5rem;
+          --font-size-logo-letter: 1rem;
+          --font-size-dropdown: 0.8rem;
+          --font-size-badge: 0.55rem;
+
+          --size-icon: 36px;
+          --size-avatar: 36px;
+          --size-logo: 40px;
+          --size-button: 34px;
+          --size-badge: 14px;
+
+          --padding-button: 0.4rem 1rem;
+          --padding-nav: 0.4rem 0;
+          --gap-nav: 0.35rem;
+        }
+
+        /* Réduction progressive sur les écrans moyens */
+        @media (max-width: 1400px) {
+          :root {
+            --font-size-nav: 0.7rem;
+            --font-size-icon: 0.95rem;
+            --font-size-logo: 1.4rem;
+            --size-icon: 34px;
+            --size-avatar: 34px;
+            --gap-nav: 0.3rem;
+          }
+        }
+
+        @media (max-width: 1200px) {
+          :root {
+            --font-size-nav: 0.65rem;
+            --font-size-icon: 0.9rem;
+            --font-size-logo: 1.3rem;
+            --font-size-logo-letter: 0.95rem;
+            --size-icon: 32px;
+            --size-avatar: 32px;
+            --size-logo: 38px;
+            --gap-nav: 0.25rem;
+          }
+        }
+
+        @media (max-width: 992px) {
+          :root {
+            --font-size-nav: 0.6rem;
+            --font-size-icon: 0.85rem;
+            --font-size-button: 0.7rem;
+            --font-size-logo: 1.2rem;
+            --font-size-logo-letter: 0.9rem;
+            --size-icon: 30px;
+            --size-avatar: 30px;
+            --size-logo: 36px;
+            --size-button: 30px;
+            --padding-button: 0.35rem 0.8rem;
+            --gap-nav: 0.2rem;
+          }
+        }
+
+        @media (max-width: 768px) {
+          :root {
+            --font-size-nav: 0.55rem;
+            --font-size-icon: 0.8rem;
+            --font-size-icon-small: 0.6rem;
+            --font-size-button: 0.65rem;
+            --font-size-logo: 1.1rem;
+            --font-size-logo-letter: 0.85rem;
+            --size-icon: 28px;
+            --size-avatar: 28px;
+            --size-logo: 34px;
+            --size-button: 28px;
+            --padding-button: 0.3rem 0.7rem;
+            --gap-nav: 0.15rem;
+          }
+        }
+
+        @media (max-width: 640px) {
+          :root {
+            --font-size-nav: 0.5rem;
+            --font-size-icon: 0.75rem;
+            --font-size-button: 0.6rem;
+            --font-size-logo: 1rem;
+            --font-size-logo-letter: 0.8rem;
+            --size-icon: 26px;
+            --size-avatar: 26px;
+            --size-logo: 32px;
+            --size-button: 26px;
+            --padding-button: 0.25rem 0.6rem;
+            --gap-nav: 0.1rem;
+          }
+        }
+
+        @media (max-width: 576px) {
+          :root {
+            --font-size-nav: 0.45rem;
+            --font-size-icon: 0.7rem;
+            --font-size-icon-small: 0.55rem;
+            --font-size-button: 0.55rem;
+            --font-size-logo: 0.9rem;
+            --font-size-logo-letter: 0.75rem;
+            --font-size-badge: 0.5rem;
+            --size-icon: 24px;
+            --size-avatar: 24px;
+            --size-logo: 30px;
+            --size-button: 24px;
+            --size-badge: 12px;
+            --padding-button: 0.2rem 0.5rem;
+            --gap-nav: 0.08rem;
+          }
+        }
+
+        @media (max-width: 480px) {
+          :root {
+            --font-size-nav: 0.4rem;
+            --font-size-icon: 0.65rem;
+            --font-size-button: 0.5rem;
+            --font-size-logo: 0.8rem;
+            --font-size-logo-letter: 0.7rem;
+            --size-icon: 22px;
+            --size-avatar: 22px;
+            --size-logo: 28px;
+            --size-button: 22px;
+            --padding-button: 0.15rem 0.4rem;
+            --gap-nav: 0.05rem;
+          }
+        }
+
+        @media (max-width: 400px) {
+          :root {
+            --font-size-nav: 0.35rem;
+            --font-size-icon: 0.6rem;
+            --font-size-button: 0.45rem;
+            --font-size-logo: 0.7rem;
+            --font-size-logo-letter: 0.65rem;
+            --size-icon: 20px;
+            --size-avatar: 20px;
+            --size-logo: 26px;
+            --size-button: 20px;
+            --padding-button: 0.1rem 0.3rem;
+          }
+        }
+
+        @media (max-width: 360px) {
+          :root {
+            --font-size-nav: 0.3rem;
+            --font-size-icon: 0.55rem;
+            --font-size-button: 0.4rem;
+            --font-size-logo: 0.6rem;
+            --font-size-logo-letter: 0.6rem;
+            --size-icon: 18px;
+            --size-avatar: 18px;
+            --size-logo: 24px;
+            --size-button: 18px;
+            --padding-button: 0.05rem 0.2rem;
+          }
+        }
+
+        /* Styles de base */
+        .nav-link {
+          font-size: var(--font-size-nav) !important;
+          padding: var(--padding-nav) !important;
+        }
+
+        .action-button {
+          width: var(--size-icon) !important;
+          height: var(--size-icon) !important;
+          font-size: var(--font-size-icon) !important;
+        }
+
+        .publish-button {
+          font-size: var(--font-size-button) !important;
+          padding: var(--padding-button) !important;
+          min-height: var(--size-button) !important;
+        }
+
+        .publish-button i {
+          font-size: var(--font-size-icon-small) !important;
+        }
+
+        /* Ultra large screens (4K) */
+        @media (min-width: 2560px) {
+          .container-fluid {
+            max-width: 2000px;
+            margin: 0 auto;
+          }
+        }
+
+        /* Large desktop */
+        @media (min-width: 1920px) and (max-width: 2559px) {
+          .container-fluid {
+            max-width: 1600px;
+            margin: 0 auto;
+          }
+        }
+
+        /* Standard desktop */
+        @media (min-width: 1200px) and (max-width: 1919px) {
+          .container-fluid {
+            max-width: 1200px;
+            margin: 0 auto;
+          }
+        }
+
+        /* Small desktop */
+        @media (min-width: 992px) and (max-width: 1199px) {
+          .container-fluid {
+            max-width: 960px;
+            margin: 0 auto;
+          }
+        }
+
+        /* Accessibility */
+        @media (prefers-reduced-motion: reduce) {
+          .btn,
+          .dropdown-item,
+          .nav-link {
+            transition: none !important;
           }
         }
 

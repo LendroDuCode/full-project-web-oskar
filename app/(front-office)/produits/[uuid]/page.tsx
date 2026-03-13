@@ -171,6 +171,7 @@ interface ProduitAPI {
   estPublie: boolean;
   estBloque: boolean;
   is_favoris: boolean;
+  favorite_id?: string; // ✅ AJOUT: ID du favori pour la suppression
   adminUuid: string | null;
   createdAt: string | null;
   updatedAt: string | null;
@@ -214,6 +215,7 @@ interface ProduitSimilaireAPI {
   estPublie: boolean;
   estBloque: boolean;
   is_favoris: boolean;
+  favorite_id?: string; // ✅ AJOUT: ID du favori pour la suppression
   adminUuid: string | null;
   createdAt: string | null;
   updatedAt: string | null;
@@ -256,6 +258,8 @@ interface Produit {
   boutique_uuid: string;
   createdAt: string;
   updatedAt: string;
+  is_favoris?: boolean;
+  favorite_id?: string; // ✅ AJOUT: Stocker l'ID du favori
   categorie?: {
     uuid: string;
     libelle: string;
@@ -276,6 +280,8 @@ interface ProduitSimilaire {
   note_moyenne: number;
   disponible: boolean;
   quantite: number;
+  is_favoris?: boolean;
+  favorite_id?: string; // ✅ AJOUT: Stocker l'ID du favori
   createur?: CreateurInfo;
   createurType?: string;
   vendeur_uuid: string;
@@ -561,6 +567,7 @@ export default function ProduitDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [quantite, setQuantite] = useState(1);
   const [favori, setFavori] = useState(false);
+  const [favoriteId, setFavoriteId] = useState<string | null>(null); // ✅ AJOUT: Stocker l'ID du favori
   const [showMoreComments, setShowMoreComments] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
   const [commentairesFetched, setCommentairesFetched] = useState(false);
@@ -589,7 +596,10 @@ export default function ProduitDetailPage() {
   // ✅ Détection du type d'appareil
   const [isMobile, setIsMobile] = useState(false);
 
+  // 🔴 Ref pour éviter les chargements multiples
   const initialLoadDone = useRef(false);
+  const commentsLoadDone = useRef(false);
+  const recentsLoadDone = useRef(false);
 
   // ✅ Détecter si c'est un appareil mobile
   useEffect(() => {
@@ -860,6 +870,8 @@ export default function ProduitDetailPage() {
       boutique_uuid: apiProduit.boutique_uuid,
       createdAt: apiProduit.createdAt || new Date().toISOString(),
       updatedAt: apiProduit.updatedAt || new Date().toISOString(),
+      is_favoris: apiProduit.is_favoris || false,
+      favorite_id: apiProduit.favorite_id, // ✅ Récupérer l'ID du favori
       ...(apiProduit.categorie && {
         categorie: {
           uuid: apiProduit.categorie.uuid,
@@ -902,6 +914,8 @@ export default function ProduitDetailPage() {
       boutique_uuid: apiSimilaire.boutique_uuid,
       nombre_favoris: apiSimilaire.nombreFavoris || 0,
       nombre_avis: apiSimilaire.nombre_avis || 0,
+      is_favoris: apiSimilaire.is_favoris || false,
+      favorite_id: apiSimilaire.favorite_id, // ✅ Récupérer l'ID du favori
       ...(apiSimilaire.createur && {
         createur: transformCreateurInfo(apiSimilaire.createur),
       }),
@@ -981,7 +995,7 @@ export default function ProduitDetailPage() {
   // CHARGEMENT DES DONNÉES
   // ============================================
   const fetchProduitsRecents = useCallback(async () => {
-    if (!uuid) return;
+    if (!uuid || recentsLoadDone.current) return;
 
     try {
       setLoadingRecents(true);
@@ -1013,6 +1027,8 @@ export default function ProduitDetailPage() {
           disponible: item.disponible || true,
           vendeur_uuid: item.vendeur_uuid || "",
           boutique_uuid: item.boutique_uuid || "",
+          is_favoris: item.is_favoris || false,
+          favorite_id: item.favorite_id,
           createur: item.createur
             ? transformCreateurInfo(item.createur)
             : undefined,
@@ -1024,6 +1040,7 @@ export default function ProduitDetailPage() {
         }));
 
         setProduitsRecents(transformed);
+        recentsLoadDone.current = true;
       }
     } catch (err) {
       console.warn("Erreur chargement produits récents:", err);
@@ -1034,7 +1051,7 @@ export default function ProduitDetailPage() {
   }, [uuid]);
 
   const fetchCommentaires = useCallback(async (produitUuid: string) => {
-    if (!produitUuid || commentairesFetched) return;
+    if (!produitUuid || commentairesFetched || commentsLoadDone.current) return;
 
     try {
       setLoadingComments(true);
@@ -1094,9 +1111,11 @@ export default function ProduitDetailPage() {
         }
 
         setCommentairesFetched(true);
+        commentsLoadDone.current = true;
       } else {
         setCommentaires([]);
         setCommentairesFetched(true);
+        commentsLoadDone.current = true;
       }
     } catch (err: any) {
       console.warn("⚠️ Erreur chargement commentaires:", err);
@@ -1108,16 +1127,14 @@ export default function ProduitDetailPage() {
       });
       setCommentaires([]);
       setCommentairesFetched(true);
+      commentsLoadDone.current = true;
     } finally {
       setLoadingComments(false);
     }
   }, []);
 
   const fetchProduitDetails = useCallback(async () => {
-    if (!uuid) return;
-
-    if (initialLoadDone.current) return;
-    initialLoadDone.current = true;
+    if (!uuid || initialLoadDone.current) return;
 
     try {
       setLoading(true);
@@ -1144,8 +1161,10 @@ export default function ProduitDetailPage() {
       if (isLoggedIn) {
         console.log("🔴 Produit is_favoris:", response.produit.is_favoris);
         setFavori(response.produit.is_favoris === true);
+        setFavoriteId(response.produit.favorite_id || null); // ✅ Stocker l'ID du favori
       } else {
         setFavori(false);
+        setFavoriteId(null);
       }
       setFavoriInitialized(true);
 
@@ -1183,6 +1202,8 @@ export default function ProduitDetailPage() {
 
       setImages(imageUrls.slice(0, 5));
       setImagePrincipale(imageUrls[0]);
+
+      initialLoadDone.current = true;
 
       fetchCommentaires(produitData.uuid);
       fetchProduitsRecents();
@@ -1438,6 +1459,7 @@ export default function ProduitDetailPage() {
     });
   };
 
+  // ✅ FONCTION CORRIGÉE POUR AJOUTER/SUPPRIMER DES FAVORIS (COMME DANS LA LISTE DES FAVORIS)
   const handleAddToFavorites = () => {
     requireAuth(async () => {
       if (!produit) return;
@@ -1445,22 +1467,31 @@ export default function ProduitDetailPage() {
       try {
         console.log(`🔄 ${favori ? "Retrait" : "Ajout"} aux favoris...`);
 
-        if (favori) {
-          const endpoint = API_ENDPOINTS.FAVORIS.REMOVE_PRODUIT(produit.uuid);
-          console.log(`📤 Appel API: DELETE ${endpoint}`);
-
-          await api.delete(endpoint);
+        if (favori && favoriteId) {
+          // ✅ Suppression avec l'ID du favori (comme dans la liste des favoris)
+          console.log(`🗑️ Suppression du favori: ${favoriteId}`);
+          await api.delete(`/favoris/${favoriteId}`);
+          
           setFavori(false);
+          setFavoriteId(null);
           showToast("success", "Produit retiré des favoris");
         } else {
+          // ✅ Ajout aux favoris
           const payload = {
             itemUuid: produit.uuid,
             type: "produit",
           };
           console.log(`📤 Appel API: POST ${API_ENDPOINTS.FAVORIS.ADD}`, payload);
 
-          const response = await api.post(API_ENDPOINTS.FAVORIS.ADD, payload);
+          const response = await api.post<any>(API_ENDPOINTS.FAVORIS.ADD, payload);
           console.log("✅ Réponse favoris:", response);
+          
+          // ✅ Récupérer l'ID du favori depuis la réponse
+          if (response && response.uuid) {
+            setFavoriteId(response.uuid);
+          } else if (response && response.data && response.data.uuid) {
+            setFavoriteId(response.data.uuid);
+          }
 
           setFavori(true);
           showToast("success", "Produit ajouté aux favoris");
@@ -1575,6 +1606,7 @@ export default function ProduitDetailPage() {
         );
 
         setCommentairesFetched(false);
+        commentsLoadDone.current = false;
         await fetchCommentaires(produit.uuid);
 
         setNewReview({
@@ -2382,6 +2414,14 @@ export default function ProduitDetailPage() {
                                   />
                                   <span>vente</span>
                                 </div>
+                                {item.is_favoris && (
+                                  <div className="position-absolute top-0 end-0 m-1">
+                                    <FontAwesomeIcon
+                                      icon={FaHeartSolid}
+                                      className="text-danger"
+                                    />
+                                  </div>
+                                )}
                               </div>
                             </div>
                             <div className="col-8">
@@ -2457,7 +2497,7 @@ export default function ProduitDetailPage() {
                   style={{ backgroundColor: "#28a745" }}
                 >
                   <FontAwesomeIcon icon={isMobile ? faPhone : faLaptop} className="me-2" />
-                  {isMobile ? "Appeler le vendeur" : "Voir le contact"}
+                  {isMobile ? "Appeler le vendeur" : "Contactez le vendeur"}
                 </button>
                 
                 <button
@@ -2821,6 +2861,14 @@ export default function ProduitDetailPage() {
                           <FontAwesomeIcon icon={faTag} className="me-1" />
                           <span>vente</span>
                         </div>
+                        {item.is_favoris && (
+                          <div className="position-absolute top-0 end-0 m-2">
+                            <FontAwesomeIcon
+                              icon={FaHeartSolid}
+                              className="text-danger"
+                            />
+                          </div>
+                        )}
                       </div>
                       <div className="card-body d-flex flex-column">
                         <h6 className="fw-bold text-dark mb-2 text-truncate">

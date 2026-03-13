@@ -26,7 +26,6 @@ import {
   faLock,
   faLockOpen,
   faInfoCircle,
-  faTags,
   faStore as faStoreSolid,
   faSpinner,
   faBug,
@@ -75,25 +74,13 @@ const buildImageUrl = (imagePath: string | null): string | null => {
   return `${apiUrl}${filesUrl}/${cleanPath}`;
 };
 
-// ============ TYPES ============
-interface TypeBoutique {
-  uuid: string;
-  code: string;
-  libelle: string;
-  description: string | null;
-  peut_vendre_produits: boolean;
-  peut_vendre_biens: boolean;
-  image: string | null;
-  image_key?: string;
-  statut: string;
-}
-
+// Dans votre fichier principal page.tsx, mettez à jour l'interface Boutique
 interface Boutique {
   is_deleted: false;
   deleted_at: null;
   id: number;
   uuid: string;
-  type_boutique_uuid: string;
+  type_boutique_uuid: string;        // AJOUTER
   nom: string;
   slug: string;
   description: string | null;
@@ -106,11 +93,24 @@ interface Boutique {
   statut: "en_review" | "actif" | "bloque" | "ferme";
   created_at: string;
   updated_at: string;
-  type_boutique: TypeBoutique;
+  type_boutique: TypeBoutique;        // AJOUTER
   vendeurUuid: string;
   agentUuid: string | null;
   est_bloque: boolean;
   est_ferme: boolean;
+}
+
+// Ajoutez aussi l'interface TypeBoutique si elle n'existe pas
+interface TypeBoutique {
+  uuid: string;
+  code: string;
+  libelle: string;
+  description: string | null;
+  peut_vendre_produits: boolean;
+  peut_vendre_biens: boolean;
+  image: string | null;
+  image_key?: string;
+  statut: string;
 }
 
 interface PaginatedResponse {
@@ -149,7 +149,6 @@ export default function ListeBoutiquesVendeur() {
   // États pour les filtres
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [typeFilter, setTypeFilter] = useState<string>("all");
   const [sortConfig, setSortConfig] = useState<{
     key: keyof Boutique;
     direction: "asc" | "desc";
@@ -162,9 +161,6 @@ export default function ListeBoutiquesVendeur() {
     total: 0,
     pages: 1,
   });
-
-  // États pour les types de boutique uniques (pour les filtres)
-  const [uniqueTypes, setUniqueTypes] = useState<TypeBoutique[]>([]);
 
   // ✅ Gestion des erreurs d'image
   const handleImageError = (
@@ -230,17 +226,6 @@ export default function ListeBoutiquesVendeur() {
       if (url) return url;
     }
 
-    return null;
-  };
-
-  // ✅ Obtenir l'URL de l'image du type de boutique
-  const getTypeImageUrl = (typeBoutique: TypeBoutique): string | null => {
-    if (typeBoutique.image_key) {
-      return buildImageUrl(typeBoutique.image_key);
-    }
-    if (typeBoutique.image) {
-      return buildImageUrl(typeBoutique.image);
-    }
     return null;
   };
 
@@ -487,25 +472,6 @@ export default function ListeBoutiquesVendeur() {
 
       setBoutiques(boutiquesData);
       setPagination(paginationData);
-
-      // Extraire les types de boutique uniques pour les filtres
-      if (boutiquesData.length > 0) {
-        const types = boutiquesData.reduce((acc: TypeBoutique[], boutique) => {
-          if (
-            boutique.type_boutique &&
-            !acc.find((t) => t.uuid === boutique.type_boutique.uuid)
-          ) {
-            acc.push(boutique.type_boutique);
-          }
-          return acc;
-        }, []);
-        setUniqueTypes(types);
-        console.log(
-          `🏷️ ${types.length} type(s) de boutique unique(s) trouvé(s)`,
-        );
-      } else {
-        setUniqueTypes([]);
-      }
     } catch (err: any) {
       console.error("❌ Erreur lors du chargement des boutiques:", err);
       console.error("📝 Détails de l'erreur:", {
@@ -613,13 +579,6 @@ export default function ListeBoutiquesVendeur() {
       });
     }
 
-    // Filtrage par type de boutique
-    if (typeFilter !== "all") {
-      result = result.filter(
-        (boutique) => boutique.type_boutique.uuid === typeFilter,
-      );
-    }
-
     // Tri
     if (sortConfig) {
       result.sort((a, b) => {
@@ -649,7 +608,7 @@ export default function ListeBoutiquesVendeur() {
     }
 
     return result;
-  }, [boutiques, searchTerm, statusFilter, typeFilter, sortConfig]);
+  }, [boutiques, searchTerm, statusFilter, sortConfig]);
 
   // Gestion des succès
   const handleSuccess = (message: string) => {
@@ -708,7 +667,6 @@ export default function ListeBoutiquesVendeur() {
 
       const formData = new FormData();
       formData.append("nom", data.nom);
-      formData.append("type_boutique_uuid", data.type_boutique_uuid);
 
       if (data.description) {
         formData.append("description", data.description);
@@ -736,7 +694,6 @@ export default function ListeBoutiquesVendeur() {
         endpoint: API_ENDPOINTS.BOUTIQUES.CREATE,
         data: {
           nom: data.nom,
-          type: data.type_boutique_uuid,
           hasLogo: !!data.logo,
           hasBanniere: !!data.banniere,
         },
@@ -804,7 +761,6 @@ export default function ListeBoutiquesVendeur() {
 
       const formData = new FormData();
       formData.append("nom", data.nom);
-      formData.append("type_boutique_uuid", data.type_boutique_uuid);
 
       if (data.description) {
         formData.append("description", data.description);
@@ -961,7 +917,6 @@ export default function ListeBoutiquesVendeur() {
   const resetFilters = () => {
     setSearchTerm("");
     setStatusFilter("all");
-    setTypeFilter("all");
     setSortConfig(null);
     setPagination((prev) => ({ ...prev, page: 1 }));
   };
@@ -975,10 +930,9 @@ export default function ListeBoutiquesVendeur() {
     }
 
     const csvContent = [
-      ["Nom", "Type", "Statut", "Slug", "Date création", "Bloqué", "Fermé"],
+      ["Nom", "Statut", "Slug", "Date création", "Bloqué", "Fermé"],
       ...boutiques.map((boutique) => [
         `"${boutique.nom || ""}"`,
-        boutique.type_boutique?.libelle || "N/A",
         boutique.statut,
         boutique.slug,
         formatDate(boutique.created_at),
@@ -1015,9 +969,8 @@ export default function ListeBoutiquesVendeur() {
       bloquees: boutiques.filter((b) => b.est_bloque || b.statut === "bloque")
         .length,
       fermees: boutiques.filter((b) => b.est_ferme).length,
-      typesCount: uniqueTypes.length,
     };
-  }, [boutiques, uniqueTypes]);
+  }, [boutiques]);
 
   // Affichage du chargement d'authentification
   if (authLoading) {
@@ -1084,6 +1037,7 @@ export default function ListeBoutiquesVendeur() {
         loading={actionLoading}
         onClose={() => setShowCreateModal(false)}
         onCreate={handleCreateBoutique}
+        vendeurData={null}
       />
 
       <EditBoutiqueModal
@@ -1109,8 +1063,6 @@ export default function ListeBoutiquesVendeur() {
       />
 
       <div className="container-fluid p-3 p-md-4">
-
-
         {/* En-tête de la page */}
         <div className="row mb-4">
           <div className="col-12">
@@ -1144,7 +1096,7 @@ export default function ListeBoutiquesVendeur() {
                   <span className="d-none d-md-inline">Rafraîchir</span>
                 </button>
 
-         
+      
 
                 <button
                   onClick={handleOpenCreateModal}
@@ -1278,15 +1230,15 @@ export default function ListeBoutiquesVendeur() {
                   </div>
                   <div className="col-md-3 col-sm-6">
                     <div className="d-flex align-items-center gap-3">
-                      <div className="bg-info bg-opacity-10 rounded-circle p-3">
+                      <div className="bg-danger bg-opacity-10 rounded-circle p-3">
                         <FontAwesomeIcon
-                          icon={faTags}
-                          className="text-info fs-4"
+                          icon={faBan}
+                          className="text-danger fs-4"
                         />
                       </div>
                       <div>
-                        <h3 className="mb-0 fw-bold">{stats.typesCount}</h3>
-                        <small className="text-muted">Types différents</small>
+                        <h3 className="mb-0 fw-bold">{stats.bloquees}</h3>
+                        <small className="text-muted">Bloquées</small>
                       </div>
                     </div>
                   </div>
@@ -1302,7 +1254,7 @@ export default function ListeBoutiquesVendeur() {
             <div className="card border-0 shadow-sm">
               <div className="card-body">
                 <div className="row g-3">
-                  <div className="col-md-4">
+                  <div className="col-md-6">
                     <div className="input-group">
                       <span className="input-group-text bg-white border-end-0">
                         <FontAwesomeIcon
@@ -1324,7 +1276,7 @@ export default function ListeBoutiquesVendeur() {
                     </div>
                   </div>
 
-                  <div className="col-md-3">
+                  <div className="col-md-4">
                     <div className="input-group">
                       <span className="input-group-text bg-white border-end-0">
                         <FontAwesomeIcon
@@ -1350,28 +1302,6 @@ export default function ListeBoutiquesVendeur() {
                     </div>
                   </div>
 
-                  <div className="col-md-3">
-                    <div className="input-group">
-                      <span className="input-group-text bg-white border-end-0">
-                        <FontAwesomeIcon icon={faTags} className="text-muted" />
-                      </span>
-                      <select
-                        className="form-select border-start-0 ps-0"
-                        value={typeFilter}
-                        onChange={(e) => setTypeFilter(e.target.value)}
-                        disabled={uniqueTypes.length === 0 || !isAuthenticated}
-                      >
-                        <option value="all">Tous les types</option>
-                        {uniqueTypes.map((type) => (
-                          <option key={type.uuid} value={type.uuid}>
-                            {type.libelle}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-            
                 </div>
 
                 {/* Résultats de recherche */}
@@ -1399,19 +1329,6 @@ export default function ListeBoutiquesVendeur() {
                                   : statusFilter === "bloque"
                                     ? "Bloqué"
                                     : "Fermé"}
-                            </strong>
-                            "
-                          </>
-                        )}
-                        {typeFilter !== "all" && uniqueTypes.length > 0 && (
-                          <>
-                            {" "}
-                            de type "
-                            <strong>
-                              {
-                                uniqueTypes.find((t) => t.uuid === typeFilter)
-                                  ?.libelle
-                              }
                             </strong>
                             "
                           </>
@@ -1469,13 +1386,7 @@ export default function ListeBoutiquesVendeur() {
                             <FontAwesomeIcon icon={faPlus} className="me-2" />
                             Créer ma première boutique
                           </button>
-                          <button
-                            onClick={checkApiResponse}
-                            className="btn btn-outline-info"
-                          >
-                            <FontAwesomeIcon icon={faBug} className="me-2" />
-                            Vérifier l'API
-                          </button>
+                        
                         </div>
                       )}
                     </div>
@@ -1489,7 +1400,6 @@ export default function ListeBoutiquesVendeur() {
                           <small className="text-muted">
                             {filteredBoutiques.length} boutique(s) trouvée(s)
                           </small>
-                        
                         </div>
                         <div className="dropdown">
                           <button
@@ -1563,7 +1473,7 @@ export default function ListeBoutiquesVendeur() {
                             <th style={{ width: "80px" }}>
                               <span className="fw-semibold">Logo</span>
                             </th>
-                            <th style={{ width: "200px" }}>
+                            <th style={{ width: "250px" }}>
                               <button
                                 className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
                                 onClick={() => requestSort("nom")}
@@ -1572,9 +1482,6 @@ export default function ListeBoutiquesVendeur() {
                                 Nom de la boutique
                                 {getSortIcon("nom")}
                               </button>
-                            </th>
-                            <th style={{ width: "150px" }}>
-                              <span className="fw-semibold">Type</span>
                             </th>
                             <th style={{ width: "120px" }}>
                               <button
@@ -1658,11 +1565,6 @@ export default function ListeBoutiquesVendeur() {
                                       {boutique.description.substring(0, 50)}...
                                     </small>
                                   )}
-                                </td>
-                                <td>
-                                  <span className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25">
-                                    {boutique.type_boutique?.libelle || "N/A"}
-                                  </span>
                                 </td>
                                 <td>
                                   <BoutiqueStatusBadge

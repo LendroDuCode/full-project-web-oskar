@@ -47,6 +47,7 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
   onRegisterSuccess,
   onSwitchToVendeur,
 }) => {
+  const [isMobile, setIsMobile] = useState(false);
   const [formData, setFormData] = useState<UserFormData>({
     nom: "",
     prenoms: "",
@@ -66,6 +67,18 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState(0);
   const [phoneError, setPhoneError] = useState<string | null>(null);
+
+  // Détection de l'écran mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Calcul de la force du mot de passe
   useEffect(() => {
@@ -306,15 +319,15 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
     e.currentTarget.style.boxShadow = "none";
   };
 
-  // Styles avec typage CSSProperties
+  // Styles avec typage CSSProperties - ADAPTÉS AU MOBILE
   const inputStyle: CSSProperties = {
     width: "100%",
-    padding: "0.75rem",
+    padding: isMobile ? "0.6rem" : "0.75rem",
     border: "1px solid #d1d5db",
     borderRadius: "0.5rem",
     outline: "none",
     transition: "all 0.2s",
-    fontSize: "0.875rem",
+    fontSize: isMobile ? "0.85rem" : "0.875rem",
   };
 
   const passwordToggleStyle: CSSProperties = {
@@ -333,7 +346,7 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
     display: "flex",
     justifyContent: "space-between",
     marginBottom: "0.25rem",
-    fontSize: "0.75rem",
+    fontSize: isMobile ? "0.7rem" : "0.75rem",
     color: "#6b7280",
   };
 
@@ -351,7 +364,7 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
 
   const errorTextStyle: CSSProperties = {
     color: "#ef4444",
-    fontSize: "0.75rem",
+    fontSize: isMobile ? "0.7rem" : "0.75rem",
     marginTop: "0.25rem",
   };
 
@@ -359,22 +372,23 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
     display: "flex",
     alignItems: "flex-start",
     gap: "0.75rem",
-    padding: "1rem",
+    padding: isMobile ? "0.75rem" : "1rem",
     borderRadius: "0.5rem",
     backgroundColor: "#f9fafb",
     marginTop: "0.5rem",
   };
 
   const checkboxStyle: CSSProperties = {
-    height: "1.25rem",
-    width: "1.25rem",
+    height: isMobile ? "1.1rem" : "1.25rem",
+    width: isMobile ? "1.1rem" : "1.25rem",
     borderRadius: "0.25rem",
     border: "2px solid #d1d5db",
     accentColor: "#16a34a",
+    flexShrink: 0,
   };
 
   const termsLabelStyle: CSSProperties = {
-    fontSize: "0.875rem",
+    fontSize: isMobile ? "0.8rem" : "0.875rem",
     color: "#4b5563",
     lineHeight: "1.5",
   };
@@ -390,9 +404,9 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
     backgroundColor: "#16a34a",
     color: "white",
     fontWeight: "bold",
-    padding: "1rem",
+    padding: isMobile ? "0.85rem" : "1rem",
     borderRadius: "0.5rem",
-    fontSize: "1rem",
+    fontSize: isMobile ? "0.95rem" : "1rem",
     border: "none",
     cursor: "pointer",
     transition: "all 0.3s",
@@ -415,7 +429,7 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
     border: "none",
     cursor: "pointer",
     padding: 0,
-    fontSize: "0.875rem",
+    fontSize: isMobile ? "0.85rem" : "0.875rem",
   };
 
   return (
@@ -435,13 +449,13 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: "1rem",
+          gap: isMobile ? "0.75rem" : "1rem",
         }}
       >
-        <div style={{ marginBottom: "1.5rem" }}>
+        <div style={{ marginBottom: isMobile ? "1rem" : "1.5rem" }}>
           <h2
             style={{
-              fontSize: "1.5rem",
+              fontSize: isMobile ? "1.3rem" : "1.5rem",
               fontWeight: "bold",
               color: "#1f2937",
               marginBottom: "0.5rem",
@@ -449,7 +463,7 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
           >
             Créer un compte utilisateur
           </h2>
-          <p style={{ color: "#6b7280", fontSize: "0.875rem" }}>
+          <p style={{ color: "#6b7280", fontSize: isMobile ? "0.85rem" : "0.875rem" }}>
             Remplissez les informations pour créer votre compte
           </p>
         </div>
@@ -461,7 +475,7 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
               borderRadius: "0.5rem",
               backgroundColor: "#fef2f2",
               border: "1px solid #fecaca",
-              fontSize: "0.875rem",
+              fontSize: isMobile ? "0.85rem" : "0.875rem",
               color: "#dc2626",
               display: "flex",
               alignItems: "center",
@@ -476,18 +490,18 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "1rem",
+            gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+            gap: isMobile ? "0.75rem" : "1rem",
           }}
         >
           <div>
             <label
               style={{
                 display: "block",
-                fontSize: "0.875rem",
+                fontSize: isMobile ? "0.85rem" : "0.875rem",
                 fontWeight: 600,
                 color: "#374151",
-                marginBottom: "0.5rem",
+                marginBottom: "0.4rem",
               }}
             >
               Prénom *
@@ -511,10 +525,10 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
             <label
               style={{
                 display: "block",
-                fontSize: "0.875rem",
+                fontSize: isMobile ? "0.85rem" : "0.875rem",
                 fontWeight: 600,
                 color: "#374151",
-                marginBottom: "0.5rem",
+                marginBottom: "0.4rem",
               }}
             >
               Nom *
@@ -539,10 +553,10 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
           <label
             style={{
               display: "block",
-              fontSize: "0.875rem",
+              fontSize: isMobile ? "0.85rem" : "0.875rem",
               fontWeight: 600,
               color: "#374151",
-              marginBottom: "0.5rem",
+              marginBottom: "0.4rem",
             }}
           >
             Email *
@@ -565,18 +579,18 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "1rem",
+            gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+            gap: isMobile ? "0.75rem" : "1rem",
           }}
         >
           <div>
             <label
               style={{
                 display: "block",
-                fontSize: "0.875rem",
+                fontSize: isMobile ? "0.85rem" : "0.875rem",
                 fontWeight: 600,
                 color: "#374151",
-                marginBottom: "0.5rem",
+                marginBottom: "0.4rem",
               }}
             >
               Téléphone *
@@ -598,7 +612,7 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
             {phoneError && (
               <p style={errorTextStyle}>{phoneError}</p>
             )}
-            <small style={{ color: "#6b7280", fontSize: "0.75rem", marginTop: "0.25rem", display: "block" }}>
+            <small style={{ color: "#6b7280", fontSize: isMobile ? "0.7rem" : "0.75rem", marginTop: "0.25rem", display: "block" }}>
               Format: +225 07 09 18 18 64 (10 chiffres)
             </small>
           </div>
@@ -607,10 +621,10 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
             <label
               style={{
                 display: "block",
-                fontSize: "0.875rem",
+                fontSize: isMobile ? "0.85rem" : "0.875rem",
                 fontWeight: 600,
                 color: "#374151",
-                marginBottom: "0.5rem",
+                marginBottom: "0.4rem",
               }}
             >
               Ville *
@@ -634,18 +648,18 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "1rem",
+            gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+            gap: isMobile ? "0.75rem" : "1rem",
           }}
         >
           <div>
             <label
               style={{
                 display: "block",
-                fontSize: "0.875rem",
+                fontSize: isMobile ? "0.85rem" : "0.875rem",
                 fontWeight: 600,
                 color: "#374151",
-                marginBottom: "0.5rem",
+                marginBottom: "0.4rem",
               }}
             >
               Mot de passe *
@@ -680,7 +694,7 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
             {formData.mot_de_passe && (
               <div style={{ marginTop: "0.5rem" }}>
                 <div style={passwordStrengthHeaderStyle}>
-                  <span>Force du mot de passe:</span>
+                  <span>Force:</span>
                   <span style={{ color: getPasswordStrengthColor() }}>
                     {getPasswordStrengthText()}
                   </span>
@@ -707,13 +721,13 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
             <label
               style={{
                 display: "block",
-                fontSize: "0.875rem",
+                fontSize: isMobile ? "0.85rem" : "0.875rem",
                 fontWeight: 600,
                 color: "#374151",
-                marginBottom: "0.5rem",
+                marginBottom: "0.4rem",
               }}
             >
-              Confirmer le mot de passe *
+              Confirmer *
             </label>
             <div style={{ position: "relative" }}>
               <input
@@ -786,18 +800,22 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
           {loading ? (
             <>
               <FontAwesomeIcon icon={faSpinner} spin />
-              Création en cours...
+              <span style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}>
+                Création en cours...
+              </span>
             </>
           ) : (
             <>
               <FontAwesomeIcon icon={faCheckCircle} />
-              Créer mon compte
+              <span style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}>
+                Créer mon compte
+              </span>
             </>
           )}
         </button>
 
         <div style={loginLinkContainerStyle}>
-          <p>
+          <p style={{ fontSize: isMobile ? "0.85rem" : "0.875rem" }}>
             Déjà un compte ?{" "}
             <button
               type="button"

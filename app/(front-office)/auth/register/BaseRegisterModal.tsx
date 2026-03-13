@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faXmark, faStore, faUser } from "@fortawesome/free-solid-svg-icons";
 
@@ -25,6 +25,20 @@ const BaseRegisterModal: React.FC<BaseRegisterModalProps> = ({
   title,
   subtitle,
 }) => {
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Détection de l'écran mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   // Gestion du scroll
   useEffect(() => {
     if (visible) {
@@ -75,9 +89,9 @@ const BaseRegisterModal: React.FC<BaseRegisterModalProps> = ({
           zIndex: 10000,
           overflowY: "auto",
           display: "flex",
-          alignItems: "center",
+          alignItems: isMobile ? "flex-start" : "center",
           justifyContent: "center",
-          padding: "1rem",
+          padding: isMobile ? "0.5rem" : "1rem",
         }}
       >
         <div
@@ -86,13 +100,14 @@ const BaseRegisterModal: React.FC<BaseRegisterModalProps> = ({
             borderRadius: "1rem",
             boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.2)",
             width: "100%",
-            maxWidth: "1000px",
+            maxWidth: isMobile ? "100%" : "1000px",
             overflow: "hidden",
             position: "relative",
             display: "flex",
-            flexDirection: "row",
-            minHeight: "500px",
-            maxHeight: "90vh",
+            flexDirection: isMobile ? "column" : "row",
+            minHeight: isMobile ? "auto" : "500px",
+            maxHeight: isMobile ? "95vh" : "90vh",
+            margin: isMobile ? "0" : "auto",
           }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -101,11 +116,11 @@ const BaseRegisterModal: React.FC<BaseRegisterModalProps> = ({
             disabled={loading}
             style={{
               position: "absolute",
-              top: "1rem",
-              right: "1rem",
+              top: isMobile ? "0.75rem" : "1rem",
+              right: isMobile ? "0.75rem" : "1rem",
               zIndex: 10,
-              width: "2rem",
-              height: "2rem",
+              width: isMobile ? "2rem" : "2rem",
+              height: isMobile ? "2rem" : "2rem",
               backgroundColor: "#f3f4f6",
               borderRadius: "50%",
               display: "flex",
@@ -119,194 +134,201 @@ const BaseRegisterModal: React.FC<BaseRegisterModalProps> = ({
           >
             <FontAwesomeIcon
               icon={faXmark}
-              style={{ color: "#4b5563", fontSize: "1rem" }}
+              style={{ color: "#4b5563", fontSize: isMobile ? "1rem" : "1rem" }}
             />
           </button>
 
-          {/* Panneau gauche - avec stopPropagation */}
-          <div
-            style={{
-              flex: "0 0 40%",
-              backgroundColor: accountType === "vendeur" ? "#0ea5e9" : "#16a34a",
-              color: "white",
-              padding: "2rem",
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "center",
-              position: "relative",
-              overflow: "hidden",
-              cursor: "default",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
+          {/* Panneau gauche - DISPARAÎT SUR MOBILE */}
+          {!isMobile && (
             <div
               style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundImage: `radial-gradient(circle at 20% 80%, rgba(255,255,255,0.1) 0%, transparent 50%)`,
-                zIndex: 0,
+                flex: "0 0 40%",
+                background: accountType === "vendeur" 
+                  ? "linear-gradient(135deg, #e6f7e6 0%, #d4eed4 100%)"
+                  : "linear-gradient(135deg, #e6f7e6 0%, #d4eed4 100%)",
+                color: "#1e293b",
+                padding: "2rem",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+                position: "relative",
+                overflow: "hidden",
+                cursor: "default",
               }}
-            />
-
-            <div style={{ position: "relative", zIndex: 1 }}>
+              onClick={(e) => e.stopPropagation()}
+            >
               <div
                 style={{
-                  marginBottom: "2rem",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "1rem",
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundImage: `radial-gradient(circle at 20% 80%, rgba(74, 222, 128, 0.2) 0%, transparent 50%)`,
+                  zIndex: 0,
                 }}
-              >
-                <div
-                  style={{
-                    width: "4rem",
-                    height: "4rem",
-                    backgroundColor: "white",
-                    borderRadius: "1rem",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.2)",
-                  }}
-                >
-                  <span
-                    style={{
-                      color: accountType === "vendeur" ? "#0ea5e9" : "#16a34a",
-                      fontWeight: "bold",
-                      fontSize: "1.5rem",
-                    }}
-                  >
-                    OS
-                  </span>
-                </div>
-                <div>
-                  <h2
-                    style={{
-                      fontSize: "1.5rem",
-                      fontWeight: "bold",
-                      margin: 0,
-                    }}
-                  >
-                    OskarStore
-                  </h2>
-                  <p
-                    style={{
-                      opacity: 0.9,
-                      fontSize: "0.875rem",
-                      margin: 0,
-                    }}
-                  >
-                    {accountType === "vendeur"
-                      ? "Plateforme de vente"
-                      : "Marketplace"}
-                  </p>
-                </div>
-              </div>
+              />
 
-              {onAccountTypeChange && (
+              <div style={{ position: "relative", zIndex: 1 }}>
                 <div
                   style={{
                     marginBottom: "2rem",
-                    backgroundColor: "rgba(255, 255, 255, 0.1)",
-                    borderRadius: "0.75rem",
-                    padding: "0.5rem",
                     display: "flex",
-                    backdropFilter: "blur(10px)",
+                    alignItems: "center",
+                    gap: "1rem",
                   }}
                 >
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onAccountTypeChange("utilisateur");
-                    }}
+                  <div
                     style={{
-                      flex: 1,
-                      padding: "0.75rem",
-                      backgroundColor:
-                        accountType === "utilisateur" ? "white" : "transparent",
-                      color: accountType === "utilisateur" ? "#16a34a" : "white",
-                      border: "none",
-                      borderRadius: "0.5rem",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      transition: "all 0.2s",
+                      width: "4rem",
+                      height: "4rem",
+                      backgroundColor: "white",
+                      borderRadius: "1rem",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      gap: "0.5rem",
-                      fontSize: "0.875rem",
+                      boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1)",
                     }}
                   >
-                    <FontAwesomeIcon icon={faUser} />
-                    <span>Particulier</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onAccountTypeChange("vendeur");
-                    }}
-                    style={{
-                      flex: 1,
-                      padding: "0.75rem",
-                      backgroundColor:
-                        accountType === "vendeur" ? "white" : "transparent",
-                      color: accountType === "vendeur" ? "#0ea5e9" : "white",
-                      border: "none",
-                      borderRadius: "0.5rem",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      transition: "all 0.2s",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "0.5rem",
-                      fontSize: "0.875rem",
-                    }}
-                  >
-                    <FontAwesomeIcon icon={faStore} />
-                    <span>Proféssionnel</span>
-                  </button>
+                    <span
+                      style={{
+                        color: "#16a34a",
+                        fontWeight: "bold",
+                        fontSize: "1.5rem",
+                      }}
+                    >
+                      OS
+                    </span>
+                  </div>
+                  <div>
+                    <h2
+                      style={{
+                        fontSize: "1.5rem",
+                        fontWeight: "bold",
+                        margin: 0,
+                        color: "#1e293b",
+                      }}
+                    >
+                      OskarStore
+                    </h2>
+                    <p
+                      style={{
+                        opacity: 0.8,
+                        fontSize: "0.875rem",
+                        margin: 0,
+                        color: "#334155",
+                      }}
+                    >
+                      {accountType === "vendeur"
+                        ? "Plateforme de vente"
+                        : "Marketplace"}
+                    </p>
+                  </div>
                 </div>
-              )}
 
-              <h1
-                style={{
-                  fontSize: "1.75rem",
-                  fontWeight: "bold",
-                  marginBottom: "1rem",
-                }}
-              >
-                {title || (accountType === "vendeur"
-                  ? "Devenez vendeur sur OskarStore"
-                  : "Rejoignez notre communauté")}
-              </h1>
-              <p
-                style={{
-                  fontSize: "0.875rem",
-                  color: accountType === "vendeur" ? "#bae6fd" : "#bbf7d0",
-                  marginBottom: "2rem",
-                  lineHeight: "1.6",
-                }}
-              >
-                {subtitle || (accountType === "vendeur"
-                  ? "Créez votre boutique en ligne, atteignez des milliers de clients et gérez vos ventes simplement."
-                  : "Découvrez des produits uniques, échangez avec la communauté et profitez d'une expérience shopping exceptionnelle.")}
-              </p>
+                {onAccountTypeChange && (
+                  <div
+                    style={{
+                      marginBottom: "2rem",
+                      backgroundColor: "rgba(22, 163, 74, 0.1)",
+                      borderRadius: "0.75rem",
+                      padding: "0.5rem",
+                      display: "flex",
+                      backdropFilter: "blur(10px)",
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAccountTypeChange("utilisateur");
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: "0.75rem",
+                        backgroundColor:
+                          accountType === "utilisateur" ? "#16a34a" : "transparent",
+                        color: accountType === "utilisateur" ? "white" : "#166534",
+                        border: "none",
+                        borderRadius: "0.5rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        transition: "all 0.2s",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "0.5rem",
+                        fontSize: "0.875rem",
+                      }}
+                    >
+                      <FontAwesomeIcon icon={faUser} />
+                      <span>Particulier</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAccountTypeChange("vendeur");
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: "0.75rem",
+                        backgroundColor:
+                          accountType === "vendeur" ? "#16a34a" : "transparent",
+                        color: accountType === "vendeur" ? "white" : "#166534",
+                        border: "none",
+                        borderRadius: "0.5rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        transition: "all 0.2s",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "0.5rem",
+                        fontSize: "0.875rem",
+                      }}
+                    >
+                      <FontAwesomeIcon icon={faStore} />
+                      <span>Professionnel</span>
+                    </button>
+                  </div>
+                )}
+
+                <h1
+                  style={{
+                    fontSize: "1.75rem",
+                    fontWeight: "bold",
+                    marginBottom: "1rem",
+                    color: "#1e293b",
+                  }}
+                >
+                  {title || (accountType === "vendeur"
+                    ? "Devenez vendeur sur OskarStore"
+                    : "Rejoignez notre communauté")}
+                </h1>
+                <p
+                  style={{
+                    fontSize: "0.875rem",
+                    color: "#334155",
+                    marginBottom: "2rem",
+                    lineHeight: "1.6",
+                  }}
+                >
+                  {subtitle || (accountType === "vendeur"
+                    ? "Créez votre boutique en ligne, atteignez des milliers de clients et gérez vos ventes simplement."
+                    : "Découvrez des produits uniques, échangez avec la communauté et profitez d'une expérience shopping exceptionnelle.")}
+                </p>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Panneau droit */}
+          {/* Panneau droit - PREND TOUTE LA LARGEUR SUR MOBILE */}
           <div
             style={{
-              flex: "0 0 60%",
-              padding: "2rem",
+              flex: isMobile ? "1" : "0 0 60%",
+              padding: isMobile ? "1.5rem 1rem" : "2rem",
               overflowY: "auto",
-              maxHeight: "90vh",
+              maxHeight: isMobile ? "95vh" : "90vh",
             }}
           >
             {children}

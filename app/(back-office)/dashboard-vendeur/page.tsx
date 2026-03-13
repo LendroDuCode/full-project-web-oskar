@@ -1311,23 +1311,7 @@ export default function VendeurDashboard() {
         </div>
 
         <div className="row g-3 g-md-4 mb-4">
-          <div className="col-xl-3 col-lg-4 col-md-6">
-            <StatCard
-              title="Valeur du stock"
-              value={formatPrix(stats?.revenusTotaux || 0)}
-              icon={faMoneyBillWave}
-              color="success"
-            />
-          </div>
-
-          <div className="col-xl-3 col-lg-4 col-md-6">
-            <StatCard
-              title="Avis"
-              value={stats?.totalAvis || 0}
-              icon={faStar}
-              color="warning"
-            />
-          </div>
+     
 
           <div className="col-xl-3 col-lg-4 col-md-6">
             <StatCard

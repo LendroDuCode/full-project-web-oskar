@@ -18,17 +18,6 @@ import {
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 
-interface TypeBoutique {
-  uuid: string;
-  code: string;
-  libelle: string;
-  description: string | null;
-  peut_vendre_produits: boolean;
-  peut_vendre_biens: boolean;
-  image: string;
-  statut: string;
-}
-
 interface CreateBoutiqueModalProps {
   show: boolean;
   loading: boolean;
@@ -51,7 +40,6 @@ const CreateBoutiqueModal = ({
     banniere: null as File | null,
   });
 
-  const [loadingTypes, setLoadingTypes] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [bannierePreview, setBannierePreview] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -165,7 +153,16 @@ const CreateBoutiqueModal = ({
 
       if (vendeurData?.vendeurId) {
         submitData.append("vendeur_uuid", vendeurData.vendeurId);
+      } else if (vendeurData?.uuid) {
+        submitData.append("vendeur_uuid", vendeurData.uuid);
       }
+
+      console.log("📤 Envoi des données:", {
+        nom: formData.nom,
+        hasLogo: !!formData.logo,
+        hasBanniere: !!formData.banniere,
+        vendeurId: vendeurData?.vendeurId || vendeurData?.uuid
+      });
 
       // Appeler la fonction onCreate du parent
       await onCreate(submitData);

@@ -21,6 +21,7 @@ import {
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 
+// Types harmonisés avec ceux de la page
 interface TypeBoutique {
   uuid: string;
   code: string;
@@ -28,7 +29,7 @@ interface TypeBoutique {
   description: string | null;
   peut_vendre_produits: boolean;
   peut_vendre_biens: boolean;
-  image: string | null; // Changé pour accepter null
+  image: string | null;
   image_key?: string;
   statut: string;
 }
@@ -73,6 +74,7 @@ const EditBoutiqueModal = ({
   onClose,
   onUpdate,
 }: EditBoutiqueModalProps) => {
+  const [isMobile, setIsMobile] = useState(false);
   const [formData, setFormData] = useState({
     nom: "",
     type_boutique_uuid: "",
@@ -90,6 +92,18 @@ const EditBoutiqueModal = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showOriginalLogo, setShowOriginalLogo] = useState(true);
   const [showOriginalBanniere, setShowOriginalBanniere] = useState(true);
+
+  // Détection de l'écran mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Fonction pour construire l'URL d'une image
   const buildImageUrl = (imagePath: string | null): string | null => {
@@ -316,7 +330,7 @@ const EditBoutiqueModal = ({
                 icon={faStore}
                 className="position-absolute"
                 style={{
-                  fontSize: "180px",
+                  fontSize: isMobile ? "120px" : "180px",
                   top: "50%",
                   left: "50%",
                   transform: "translate(-50%, -50%) rotate(-10deg)",
@@ -327,13 +341,13 @@ const EditBoutiqueModal = ({
             <div className="position-relative z-1 w-100">
               <div className="d-flex align-items-center justify-content-between w-100">
                 <div>
-                  <h5 className="modal-title fw-bold d-flex align-items-center gap-3">
-                    <div className="bg-white bg-opacity-25 rounded-circle p-3">
-                      <FontAwesomeIcon icon={faEdit} className="fs-4" />
+                  <h5 className="modal-title fw-bold d-flex align-items-center gap-2 gap-md-3" style={{ fontSize: isMobile ? "1rem" : "1.25rem" }}>
+                    <div className="bg-white bg-opacity-25 rounded-circle p-2 p-md-3">
+                      <FontAwesomeIcon icon={faEdit} className={isMobile ? "fs-6" : "fs-4"} />
                     </div>
                     <div>
                       <span>Modifier la boutique</span>
-                      <p className="mb-0 text-white text-opacity-90 small fw-normal">
+                      <p className="mb-0 text-white text-opacity-90 small fw-normal" style={{ fontSize: isMobile ? "0.7rem" : "0.8rem" }}>
                         {boutique.nom} • Créée le{" "}
                         {formatDate(boutique.created_at)}
                       </p>
@@ -342,7 +356,7 @@ const EditBoutiqueModal = ({
                 </div>
                 <button
                   type="button"
-                  className="btn-close btn-close-white bg-white bg-opacity-25 rounded-circle p-2"
+                  className="btn-close btn-close-white bg-white bg-opacity-25 rounded-circle p-1 p-md-2"
                   onClick={handleClose}
                   disabled={loading}
                   aria-label="Fermer"
@@ -355,19 +369,19 @@ const EditBoutiqueModal = ({
             <div className="modal-body p-0">
               {/* Informations principales */}
               <div
-                className="p-4"
+                className="p-3 p-md-4"
                 style={{
                   background:
                     "linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)",
                 }}
               >
-                <div className="row g-4">
+                <div className="row g-3 g-md-4">
                   <div className="col-lg-8">
                     <div className="card border-0 shadow-sm h-100">
-                      <div className="card-body">
-                        <h6 className="fw-bold mb-3 text-dark d-flex align-items-center gap-2">
+                      <div className="card-body p-3 p-md-4">
+                        <h6 className="fw-bold mb-2 mb-md-3 text-dark d-flex align-items-center gap-2">
                           <div
-                            className="bg-yellow bg-opacity-10 rounded-circle p-2"
+                            className="bg-yellow bg-opacity-10 rounded-circle p-1 p-md-2"
                             style={{
                               backgroundColor: "rgba(251, 191, 36, 0.1)",
                             }}
@@ -375,24 +389,24 @@ const EditBoutiqueModal = ({
                             <FontAwesomeIcon
                               icon={faInfoCircle}
                               className="text-yellow"
-                              style={{ color: "#fbbf24" }}
+                              style={{ color: "#fbbf24", fontSize: isMobile ? "0.8rem" : "1rem" }}
                             />
                           </div>
-                          <span>Informations principales</span>
+                          <span style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}>Informations principales</span>
                         </h6>
 
-                        <div className="row g-3">
+                        <div className="row g-2 g-md-3">
                           <div className="col-md-6">
-                            <label className="form-label fw-semibold text-dark">
+                            <label className="form-label fw-semibold text-dark" style={{ fontSize: isMobile ? "0.8rem" : "0.875rem" }}>
                               Nom de la boutique{" "}
                               <span className="text-danger">*</span>
                             </label>
                             <div className="input-group">
-                              <span className="input-group-text bg-white border-end-0">
+                              <span className="input-group-text bg-white border-end-0" style={{ padding: isMobile ? "0.3rem 0.5rem" : "0.375rem 0.75rem" }}>
                                 <FontAwesomeIcon
                                   icon={faStore}
                                   className="text-yellow"
-                                  style={{ color: "#fbbf24" }}
+                                  style={{ color: "#fbbf24", fontSize: isMobile ? "0.8rem" : "1rem" }}
                                 />
                               </span>
                               <input
@@ -410,26 +424,27 @@ const EditBoutiqueModal = ({
                                 }}
                                 required
                                 disabled={loading}
+                                style={{ fontSize: isMobile ? "0.8rem" : "0.875rem", padding: isMobile ? "0.3rem 0.5rem" : "0.375rem 0.75rem" }}
                               />
                             </div>
                             {errors.nom && (
-                              <div className="invalid-feedback d-block">
+                              <div className="invalid-feedback d-block" style={{ fontSize: isMobile ? "0.7rem" : "0.75rem" }}>
                                 {errors.nom}
                               </div>
                             )}
                           </div>
 
                           <div className="col-md-6">
-                            <label className="form-label fw-semibold text-dark">
+                            <label className="form-label fw-semibold text-dark" style={{ fontSize: isMobile ? "0.8rem" : "0.875rem" }}>
                               Type de boutique{" "}
                               <span className="text-danger">*</span>
                             </label>
                             <div className="input-group">
-                              <span className="input-group-text bg-white border-end-0">
+                              <span className="input-group-text bg-white border-end-0" style={{ padding: isMobile ? "0.3rem 0.5rem" : "0.375rem 0.75rem" }}>
                                 <FontAwesomeIcon
                                   icon={faTag}
                                   className="text-yellow"
-                                  style={{ color: "#fbbf24" }}
+                                  style={{ color: "#fbbf24", fontSize: isMobile ? "0.8rem" : "1rem" }}
                                 />
                               </span>
                               <select
@@ -445,6 +460,7 @@ const EditBoutiqueModal = ({
                                 }}
                                 required
                                 disabled={loading || loadingTypes}
+                                style={{ fontSize: isMobile ? "0.8rem" : "0.875rem", padding: isMobile ? "0.3rem 0.5rem" : "0.375rem 0.75rem" }}
                               >
                                 <option value="">
                                   Sélectionner un type...
@@ -463,11 +479,11 @@ const EditBoutiqueModal = ({
                                     icon={faSpinner}
                                     spin
                                     className="text-yellow"
-                                    style={{ color: "#fbbf24" }}
+                                    style={{ color: "#fbbf24", fontSize: isMobile ? "0.7rem" : "0.8rem" }}
                                   />
                                   <small
                                     className="text-yellow"
-                                    style={{ color: "#fbbf24" }}
+                                    style={{ color: "#fbbf24", fontSize: isMobile ? "0.7rem" : "0.75rem" }}
                                   >
                                     Chargement des types...
                                   </small>
@@ -475,27 +491,27 @@ const EditBoutiqueModal = ({
                               </div>
                             )}
                             {errors.type && (
-                              <div className="invalid-feedback d-block">
+                              <div className="invalid-feedback d-block" style={{ fontSize: isMobile ? "0.7rem" : "0.75rem" }}>
                                 {errors.type}
                               </div>
                             )}
                           </div>
 
                           <div className="col-12">
-                            <label className="form-label fw-semibold text-dark">
+                            <label className="form-label fw-semibold text-dark" style={{ fontSize: isMobile ? "0.8rem" : "0.875rem" }}>
                               Description
                             </label>
                             <div className="input-group">
-                              <span className="input-group-text bg-white align-items-start border-end-0 pt-3">
+                              <span className="input-group-text bg-white align-items-start border-end-0 pt-3" style={{ padding: isMobile ? "0.3rem 0.5rem" : "0.375rem 0.75rem" }}>
                                 <FontAwesomeIcon
                                   icon={faFileAlt}
                                   className="text-yellow"
-                                  style={{ color: "#fbbf24" }}
+                                  style={{ color: "#fbbf24", fontSize: isMobile ? "0.8rem" : "1rem" }}
                                 />
                               </span>
                               <textarea
                                 className="form-control border-start-0"
-                                rows={4}
+                                rows={isMobile ? 3 : 4}
                                 placeholder="Décrivez votre boutique en détail..."
                                 value={formData.description}
                                 onChange={(e) =>
@@ -505,14 +521,18 @@ const EditBoutiqueModal = ({
                                   })
                                 }
                                 disabled={loading}
-                                style={{ minHeight: "120px" }}
+                                style={{ 
+                                  minHeight: isMobile ? "80px" : "120px",
+                                  fontSize: isMobile ? "0.8rem" : "0.875rem",
+                                  padding: isMobile ? "0.3rem 0.5rem" : "0.375rem 0.75rem"
+                                }}
                               />
                             </div>
                             <div className="d-flex justify-content-between mt-2">
-                              <small className="text-muted">
+                              <small className="text-muted" style={{ fontSize: isMobile ? "0.65rem" : "0.7rem" }}>
                                 Présentez votre boutique aux clients
                               </small>
-                              <small className="text-muted">
+                              <small className="text-muted" style={{ fontSize: isMobile ? "0.65rem" : "0.7rem" }}>
                                 {formData.description.length}/1000 caractères
                               </small>
                             </div>
@@ -524,10 +544,10 @@ const EditBoutiqueModal = ({
 
                   <div className="col-lg-4">
                     <div className="card border-0 shadow-sm h-100">
-                      <div className="card-body">
-                        <h6 className="fw-bold mb-3 text-dark d-flex align-items-center gap-2">
+                      <div className="card-body p-3 p-md-4">
+                        <h6 className="fw-bold mb-2 mb-md-3 text-dark d-flex align-items-center gap-2">
                           <div
-                            className="bg-yellow bg-opacity-10 rounded-circle p-2"
+                            className="bg-yellow bg-opacity-10 rounded-circle p-1 p-md-2"
                             style={{
                               backgroundColor: "rgba(251, 191, 36, 0.1)",
                             }}
@@ -535,21 +555,21 @@ const EditBoutiqueModal = ({
                             <FontAwesomeIcon
                               icon={faPalette}
                               className="text-yellow"
-                              style={{ color: "#fbbf24" }}
+                              style={{ color: "#fbbf24", fontSize: isMobile ? "0.8rem" : "1rem" }}
                             />
                           </div>
-                          <span>Identité visuelle</span>
+                          <span style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}>Identité visuelle</span>
                         </h6>
 
                         {/* Logo */}
-                        <div className="mb-4">
-                          <label className="form-label fw-semibold text-dark mb-2">
+                        <div className="mb-3 mb-md-4">
+                          <label className="form-label fw-semibold text-dark mb-1 mb-md-2" style={{ fontSize: isMobile ? "0.8rem" : "0.875rem" }}>
                             Logo de la boutique
                           </label>
                           <div className="position-relative">
                             <div
-                              className={`border ${errors.logo ? "border-danger" : "border-dashed"} rounded-3 p-3 text-center bg-white`}
-                              style={{ minHeight: "200px" }}
+                              className={`border ${errors.logo ? "border-danger" : "border-dashed"} rounded-3 p-2 p-md-3 text-center bg-white`}
+                              style={{ minHeight: isMobile ? "150px" : "200px" }}
                             >
                               {logoPreview ? (
                                 <div className="position-relative">
@@ -557,14 +577,14 @@ const EditBoutiqueModal = ({
                                     src={logoPreview}
                                     alt="Logo"
                                     className="img-fluid rounded shadow-sm"
-                                    style={{ maxHeight: "150px" }}
+                                    style={{ maxHeight: isMobile ? "100px" : "150px" }}
                                     onError={(e) => {
                                       // Si l'image échoue à charger, afficher un placeholder
                                       (e.target as HTMLImageElement).src =
                                         `https://via.placeholder.com/150/fbbf24/ffffff?text=Logo`;
                                     }}
                                   />
-                                  <div className="mt-3 d-flex gap-2 justify-content-center">
+                                  <div className="mt-2 mt-md-3 d-flex gap-1 gap-md-2 justify-content-center">
                                     <button
                                       type="button"
                                       className="btn btn-sm btn-outline-danger"
@@ -572,10 +592,12 @@ const EditBoutiqueModal = ({
                                         resetToOriginalImage("logo")
                                       }
                                       disabled={loading || showOriginalLogo}
+                                      style={{ fontSize: isMobile ? "0.7rem" : "0.8rem", padding: isMobile ? "0.2rem 0.4rem" : "0.25rem 0.5rem" }}
                                     >
                                       <FontAwesomeIcon
                                         icon={faUndo}
                                         className="me-1"
+                                        style={{ fontSize: isMobile ? "0.6rem" : "0.7rem" }}
                                       />
                                       Rétablir
                                     </button>
@@ -588,10 +610,12 @@ const EditBoutiqueModal = ({
                                           ?.click()
                                       }
                                       disabled={loading}
+                                      style={{ fontSize: isMobile ? "0.7rem" : "0.8rem", padding: isMobile ? "0.2rem 0.4rem" : "0.25rem 0.5rem" }}
                                     >
                                       <FontAwesomeIcon
                                         icon={faSyncAlt}
                                         className="me-1"
+                                        style={{ fontSize: isMobile ? "0.6rem" : "0.7rem" }}
                                       />
                                       Changer
                                     </button>
@@ -601,9 +625,10 @@ const EditBoutiqueModal = ({
                                 <div className="d-flex flex-column align-items-center justify-content-center h-100">
                                   <FontAwesomeIcon
                                     icon={faCamera}
-                                    className="fs-1 text-muted mb-3"
+                                    className="text-muted mb-2"
+                                    style={{ fontSize: isMobile ? "1.5rem" : "2rem" }}
                                   />
-                                  <p className="text-muted mb-2">
+                                  <p className="text-muted mb-2" style={{ fontSize: isMobile ? "0.7rem" : "0.8rem" }}>
                                     Aucun logo sélectionné
                                   </p>
                                   <input
@@ -625,11 +650,14 @@ const EditBoutiqueModal = ({
                                         : "pointer",
                                       borderColor: "#fbbf24",
                                       color: "#fbbf24",
+                                      fontSize: isMobile ? "0.7rem" : "0.8rem",
+                                      padding: isMobile ? "0.2rem 0.5rem" : "0.25rem 0.75rem"
                                     }}
                                   >
                                     <FontAwesomeIcon
                                       icon={faImage}
                                       className="me-1"
+                                      style={{ fontSize: isMobile ? "0.6rem" : "0.7rem" }}
                                     />
                                     {boutique.logo
                                       ? "Changer le logo"
@@ -639,15 +667,16 @@ const EditBoutiqueModal = ({
                               )}
                             </div>
                             {errors.logo && (
-                              <div className="invalid-feedback d-block mt-2">
+                              <div className="invalid-feedback d-block mt-2" style={{ fontSize: isMobile ? "0.7rem" : "0.75rem" }}>
                                 {errors.logo}
                               </div>
                             )}
                             {showOriginalLogo && boutique.logo && (
-                              <small className="text-muted d-block mt-2">
+                              <small className="text-muted d-block mt-2" style={{ fontSize: isMobile ? "0.65rem" : "0.7rem" }}>
                                 <FontAwesomeIcon
                                   icon={faInfoCircle}
                                   className="me-1"
+                                  style={{ fontSize: isMobile ? "0.6rem" : "0.7rem" }}
                                 />
                                 Logo original conservé
                               </small>
@@ -657,13 +686,13 @@ const EditBoutiqueModal = ({
 
                         {/* Bannière */}
                         <div>
-                          <label className="form-label fw-semibold text-dark mb-2">
+                          <label className="form-label fw-semibold text-dark mb-1 mb-md-2" style={{ fontSize: isMobile ? "0.8rem" : "0.875rem" }}>
                             Bannière
                           </label>
                           <div className="position-relative">
                             <div
-                              className={`border ${errors.banniere ? "border-danger" : "border-dashed"} rounded-3 p-3 text-center bg-white`}
-                              style={{ minHeight: "120px" }}
+                              className={`border ${errors.banniere ? "border-danger" : "border-dashed"} rounded-3 p-2 p-md-3 text-center bg-white`}
+                              style={{ minHeight: isMobile ? "100px" : "120px" }}
                             >
                               {bannierePreview ? (
                                 <div className="position-relative">
@@ -672,7 +701,7 @@ const EditBoutiqueModal = ({
                                     alt="Bannière"
                                     className="img-fluid rounded shadow-sm"
                                     style={{
-                                      maxHeight: "100px",
+                                      maxHeight: isMobile ? "70px" : "100px",
                                       width: "100%",
                                       objectFit: "cover",
                                     }}
@@ -682,7 +711,7 @@ const EditBoutiqueModal = ({
                                         `https://via.placeholder.com/400x100/fbbf24/ffffff?text=Bannière`;
                                     }}
                                   />
-                                  <div className="mt-3 d-flex gap-2 justify-content-center">
+                                  <div className="mt-2 mt-md-3 d-flex gap-1 gap-md-2 justify-content-center">
                                     <button
                                       type="button"
                                       className="btn btn-sm btn-outline-danger"
@@ -690,10 +719,12 @@ const EditBoutiqueModal = ({
                                         resetToOriginalImage("banniere")
                                       }
                                       disabled={loading || showOriginalBanniere}
+                                      style={{ fontSize: isMobile ? "0.7rem" : "0.8rem", padding: isMobile ? "0.2rem 0.4rem" : "0.25rem 0.5rem" }}
                                     >
                                       <FontAwesomeIcon
                                         icon={faUndo}
                                         className="me-1"
+                                        style={{ fontSize: isMobile ? "0.6rem" : "0.7rem" }}
                                       />
                                       Rétablir
                                     </button>
@@ -708,10 +739,12 @@ const EditBoutiqueModal = ({
                                           ?.click()
                                       }
                                       disabled={loading}
+                                      style={{ fontSize: isMobile ? "0.7rem" : "0.8rem", padding: isMobile ? "0.2rem 0.4rem" : "0.25rem 0.5rem" }}
                                     >
                                       <FontAwesomeIcon
                                         icon={faSyncAlt}
                                         className="me-1"
+                                        style={{ fontSize: isMobile ? "0.6rem" : "0.7rem" }}
                                       />
                                       Changer
                                     </button>
@@ -721,9 +754,10 @@ const EditBoutiqueModal = ({
                                 <div className="d-flex flex-column align-items-center justify-content-center h-100">
                                   <FontAwesomeIcon
                                     icon={faImage}
-                                    className="fs-1 text-muted mb-2"
+                                    className="text-muted mb-2"
+                                    style={{ fontSize: isMobile ? "1.2rem" : "1.5rem" }}
                                   />
-                                  <p className="text-muted mb-2 small">
+                                  <p className="text-muted mb-2 small" style={{ fontSize: isMobile ? "0.7rem" : "0.8rem" }}>
                                     Bannière optionnelle
                                   </p>
                                   <input
@@ -745,11 +779,14 @@ const EditBoutiqueModal = ({
                                         : "pointer",
                                       borderColor: "#fbbf24",
                                       color: "#fbbf24",
+                                      fontSize: isMobile ? "0.7rem" : "0.8rem",
+                                      padding: isMobile ? "0.2rem 0.5rem" : "0.25rem 0.75rem"
                                     }}
                                   >
                                     <FontAwesomeIcon
                                       icon={faImage}
                                       className="me-1"
+                                      style={{ fontSize: isMobile ? "0.6rem" : "0.7rem" }}
                                     />
                                     {boutique.banniere
                                       ? "Changer la bannière"
@@ -759,15 +796,16 @@ const EditBoutiqueModal = ({
                               )}
                             </div>
                             {errors.banniere && (
-                              <div className="invalid-feedback d-block mt-2">
+                              <div className="invalid-feedback d-block mt-2" style={{ fontSize: isMobile ? "0.7rem" : "0.75rem" }}>
                                 {errors.banniere}
                               </div>
                             )}
                             {showOriginalBanniere && boutique.banniere && (
-                              <small className="text-muted d-block mt-2">
+                              <small className="text-muted d-block mt-2" style={{ fontSize: isMobile ? "0.65rem" : "0.7rem" }}>
                                 <FontAwesomeIcon
                                   icon={faInfoCircle}
                                   className="me-1"
+                                  style={{ fontSize: isMobile ? "0.6rem" : "0.7rem" }}
                                 />
                                 Bannière originale conservée
                               </small>
@@ -781,31 +819,31 @@ const EditBoutiqueModal = ({
               </div>
 
               {/* Conditions et politiques */}
-              <div className="p-4 border-top">
-                <h6 className="fw-bold mb-3 text-dark d-flex align-items-center gap-2">
+              <div className="p-3 p-md-4 border-top">
+                <h6 className="fw-bold mb-2 mb-md-3 text-dark d-flex align-items-center gap-2">
                   <div
-                    className="bg-yellow bg-opacity-10 rounded-circle p-2"
+                    className="bg-yellow bg-opacity-10 rounded-circle p-1 p-md-2"
                     style={{ backgroundColor: "rgba(251, 191, 36, 0.1)" }}
                   >
                     <FontAwesomeIcon
                       icon={faClipboardCheck}
                       className="text-yellow"
-                      style={{ color: "#fbbf24" }}
+                      style={{ color: "#fbbf24", fontSize: isMobile ? "0.8rem" : "1rem" }}
                     />
                   </div>
-                  <span>Conditions et politiques</span>
+                  <span style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}>Conditions et politiques</span>
                 </h6>
 
-                <div className="row g-4">
+                <div className="row g-3 g-md-4">
                   <div className="col-md-6">
                     <div className="card border-0 shadow-sm h-100">
-                      <div className="card-body">
-                        <label className="form-label fw-semibold text-dark">
+                      <div className="card-body p-3 p-md-4">
+                        <label className="form-label fw-semibold text-dark" style={{ fontSize: isMobile ? "0.8rem" : "0.875rem" }}>
                           Politique de retour
                         </label>
                         <textarea
                           className="form-control"
-                          rows={5}
+                          rows={isMobile ? 3 : 5}
                           placeholder="Décrivez votre politique de retour et d'échange..."
                           value={formData.politique_retour}
                           onChange={(e) =>
@@ -815,13 +853,16 @@ const EditBoutiqueModal = ({
                             })
                           }
                           disabled={loading}
-                          style={{ minHeight: "150px" }}
+                          style={{ 
+                            minHeight: isMobile ? "100px" : "150px",
+                            fontSize: isMobile ? "0.8rem" : "0.875rem"
+                          }}
                         />
                         <div className="d-flex justify-content-between mt-2">
-                          <small className="text-muted">
+                          <small className="text-muted" style={{ fontSize: isMobile ? "0.65rem" : "0.7rem" }}>
                             Informations importantes pour vos clients
                           </small>
-                          <small className="text-muted">
+                          <small className="text-muted" style={{ fontSize: isMobile ? "0.65rem" : "0.7rem" }}>
                             {formData.politique_retour.length}/2000 caractères
                           </small>
                         </div>
@@ -831,13 +872,13 @@ const EditBoutiqueModal = ({
 
                   <div className="col-md-6">
                     <div className="card border-0 shadow-sm h-100">
-                      <div className="card-body">
-                        <label className="form-label fw-semibold text-dark">
+                      <div className="card-body p-3 p-md-4">
+                        <label className="form-label fw-semibold text-dark" style={{ fontSize: isMobile ? "0.8rem" : "0.875rem" }}>
                           Conditions d'utilisation
                         </label>
                         <textarea
                           className="form-control"
-                          rows={5}
+                          rows={isMobile ? 3 : 5}
                           placeholder="Décrivez les conditions générales d'utilisation..."
                           value={formData.conditions_utilisation}
                           onChange={(e) =>
@@ -847,13 +888,16 @@ const EditBoutiqueModal = ({
                             })
                           }
                           disabled={loading}
-                          style={{ minHeight: "150px" }}
+                          style={{ 
+                            minHeight: isMobile ? "100px" : "150px",
+                            fontSize: isMobile ? "0.8rem" : "0.875rem"
+                          }}
                         />
                         <div className="d-flex justify-content-between mt-2">
-                          <small className="text-muted">
+                          <small className="text-muted" style={{ fontSize: isMobile ? "0.65rem" : "0.7rem" }}>
                             Règles et conditions de votre boutique
                           </small>
-                          <small className="text-muted">
+                          <small className="text-muted" style={{ fontSize: isMobile ? "0.65rem" : "0.7rem" }}>
                             {formData.conditions_utilisation.length}/2000
                             caractères
                           </small>
@@ -864,26 +908,25 @@ const EditBoutiqueModal = ({
                 </div>
 
                 {/* Conseils */}
-                <div className="mt-4">
-                  <div className="alert alert-light border shadow-sm">
-                    <div className="d-flex align-items-start gap-3">
+                <div className="mt-3 mt-md-4">
+                  <div className="alert alert-light border shadow-sm p-2 p-md-3">
+                    <div className="d-flex align-items-start gap-2 gap-md-3">
                       <FontAwesomeIcon
                         icon={faInfoCircle}
                         className="text-yellow mt-1"
-                        style={{ color: "#fbbf24" }}
+                        style={{ color: "#fbbf24", fontSize: isMobile ? "0.8rem" : "1rem" }}
                       />
                       <div>
-                        <small className="fw-semibold d-block mb-1">
+                        <small className="fw-semibold d-block mb-1" style={{ fontSize: isMobile ? "0.7rem" : "0.8rem" }}>
                           Conseils pour une bonne boutique :
                         </small>
-                        <small className="text-muted d-block">
-                          • Des images de qualité augmentent la confiance des
-                          clients
+                        <small className="text-muted d-block" style={{ fontSize: isMobile ? "0.65rem" : "0.7rem" }}>
+                          • Des images de qualité augmentent la confiance des clients
                         </small>
-                        <small className="text-muted d-block">
+                        <small className="text-muted d-block" style={{ fontSize: isMobile ? "0.65rem" : "0.7rem" }}>
                           • Des conditions claires réduisent les litiges
                         </small>
-                        <small className="text-muted d-block">
+                        <small className="text-muted d-block" style={{ fontSize: isMobile ? "0.65rem" : "0.7rem" }}>
                           • Une description complète améliore le référencement
                         </small>
                       </div>
@@ -895,49 +938,54 @@ const EditBoutiqueModal = ({
 
             {/* Footer */}
             <div
-              className="modal-footer border-0 p-4"
+              className="modal-footer border-0 p-3 p-md-4"
               style={{
                 background: "linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)",
                 borderTop: "1px solid rgba(0,0,0,0.1)",
               }}
             >
-              <div className="d-flex justify-content-between align-items-center w-100">
+              <div className="d-flex flex-column flex-md-row justify-content-between align-items-center w-100 gap-2 gap-md-0">
                 <div>
                   <button
                     type="button"
-                    className="btn btn-outline-secondary btn-lg d-flex align-items-center gap-2"
+                    className="btn btn-outline-secondary btn-sm btn-md d-flex align-items-center gap-2"
                     onClick={handleClose}
                     disabled={loading}
+                    style={{ fontSize: isMobile ? "0.8rem" : "1rem", padding: isMobile ? "0.3rem 0.8rem" : "0.5rem 1rem" }}
                   >
-                    <FontAwesomeIcon icon={faTimes} />
+                    <FontAwesomeIcon icon={faTimes} style={{ fontSize: isMobile ? "0.7rem" : "0.9rem" }} />
                     Annuler
                   </button>
                 </div>
 
-                <div className="d-flex gap-3">
+                <div className="d-flex gap-2 gap-md-3">
                   <button
                     type="button"
-                    className="btn btn-outline-warning btn-lg d-flex align-items-center gap-2"
+                    className="btn btn-outline-warning btn-sm btn-md d-flex align-items-center gap-2"
                     onClick={resetForm}
                     disabled={loading}
                     style={{
                       borderColor: "#fbbf24",
                       color: "#fbbf24",
+                      fontSize: isMobile ? "0.8rem" : "1rem",
+                      padding: isMobile ? "0.3rem 0.8rem" : "0.5rem 1rem"
                     }}
                   >
-                    <FontAwesomeIcon icon={faUndo} />
+                    <FontAwesomeIcon icon={faUndo} style={{ fontSize: isMobile ? "0.7rem" : "0.9rem" }} />
                     Réinitialiser
                   </button>
 
                   <button
                     type="submit"
-                    className="btn btn-warning btn-lg d-flex align-items-center gap-2 shadow"
+                    className="btn btn-warning btn-sm btn-md d-flex align-items-center gap-2 shadow"
                     disabled={loading || loadingTypes}
                     style={{
                       background:
                         "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
                       border: "none",
-                      minWidth: "180px",
+                      minWidth: isMobile ? "140px" : "180px",
+                      fontSize: isMobile ? "0.8rem" : "1rem",
+                      padding: isMobile ? "0.3rem 0.8rem" : "0.5rem 1rem"
                     }}
                   >
                     {loading ? (
@@ -946,13 +994,14 @@ const EditBoutiqueModal = ({
                           icon={faSpinner}
                           spin
                           className="me-2"
+                          style={{ fontSize: isMobile ? "0.7rem" : "0.9rem" }}
                         />
                         Mise à jour...
                       </>
                     ) : (
                       <>
-                        <FontAwesomeIcon icon={faCheck} className="me-2" />
-                        Enregistrer les modifications
+                        <FontAwesomeIcon icon={faCheck} className="me-2" style={{ fontSize: isMobile ? "0.7rem" : "0.9rem" }} />
+                        Enregistrer
                       </>
                     )}
                   </button>
@@ -1051,6 +1100,21 @@ const EditBoutiqueModal = ({
         .invalid-feedback {
           font-size: 0.85rem;
           margin-top: 0.25rem;
+        }
+
+        /* Media queries pour mobile */
+        @media (max-width: 768px) {
+          .modal-dialog {
+            margin: 0.5rem;
+          }
+          
+          .modal-content {
+            border-radius: 15px;
+          }
+          
+          .btn-sm {
+            font-size: 0.8rem;
+          }
         }
       `}</style>
     </div>

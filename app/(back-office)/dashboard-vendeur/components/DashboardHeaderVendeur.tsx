@@ -906,20 +906,7 @@ export default function DashboardHeaderVendeur({
                         <span>Favoris</span>
                       </button>
 
-                      {/* Paramètres */}
-                      <button
-                        onClick={handleSettingsClick}
-                        onKeyDown={(e) => handleKeyDown(e, handleSettingsClick)}
-                        className="btn btn-link text-dark text-decoration-none d-flex align-items-center gap-2 w-100 px-3 py-2 hover-bg-light"
-                        role="menuitem"
-                      >
-                        <i
-                          className="fa-solid fa-cog text-muted"
-                          style={{ width: "20px" }}
-                          aria-hidden="true"
-                        ></i>
-                        <span>Paramètres</span>
-                      </button>
+                      
 
                       <div className="border-top my-2" role="separator"></div>
 

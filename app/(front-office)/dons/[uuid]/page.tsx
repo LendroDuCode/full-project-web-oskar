@@ -149,6 +149,7 @@ interface DonAPI {
   etoiles_vides: number;
   repartition_notes: any | null;
   is_favoris: boolean;
+  favorite_id?: string; // ✅ AJOUT: ID du favori pour la suppression
   createur: CreateurInfo;
   createurType: "utilisateur" | "vendeur";
   categorie: Categorie | null;
@@ -191,6 +192,7 @@ interface DonSimilaireAPI {
   demi_etoile: number;
   etoiles_vides: number;
   is_favoris: boolean;
+  favorite_id?: string;
   createur?: CreateurInfo;
 }
 
@@ -223,6 +225,7 @@ interface Don {
   note_moyenne: number;
   nombre_avis: number;
   is_favoris: boolean;
+  favorite_id?: string; // ✅ AJOUT: Stocker l'ID du favori
   createur?: CreateurInfo;
   createurType?: "utilisateur" | "vendeur";
   categorie: Categorie | null;
@@ -242,6 +245,8 @@ interface DonSimilaire {
   quantite: number;
   note_moyenne: number;
   nombre_avis: number;
+  is_favoris?: boolean;
+  favorite_id?: string;
   createur?: CreateurInfo;
 }
 
@@ -544,7 +549,7 @@ const ContactModal = ({
           <div className="modal-header border-0 pb-0">
             <h5 className="modal-title fw-bold">
               <FontAwesomeIcon icon={faUser} className="me-2 text-success" />
-              Contacter le donateur
+              Contactez le donateur
             </h5>
             <button
               type="button"
@@ -614,8 +619,6 @@ const ContactModal = ({
                 </div>
               </div>
             )}
-
-          
 
             {/* Boutons d'action rapide */}
             <div className="row g-3 mt-3">
@@ -766,6 +769,7 @@ export default function DonDetailPage() {
   const [loadingRecents, setLoadingRecents] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [favori, setFavori] = useState(false);
+  const [favoriteId, setFavoriteId] = useState<string | null>(null); // ✅ AJOUT: Stocker l'ID du favori
   const [showMoreComments, setShowMoreComments] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
   const [commentairesFetched, setCommentairesFetched] = useState(false);
@@ -966,6 +970,7 @@ export default function DonDetailPage() {
       note_moyenne: apiDon.note_moyenne || 0,
       nombre_avis: apiDon.nombre_avis || 0,
       is_favoris: apiDon.is_favoris || false,
+      favorite_id: apiDon.favorite_id, // ✅ Récupérer l'ID du favori
       ...(apiDon.createur && {
         createur: transformCreateurInfo(apiDon.createur),
       }),
@@ -996,6 +1001,8 @@ export default function DonDetailPage() {
       quantite: apiSimilaire.quantite || 1,
       note_moyenne: apiSimilaire.note_moyenne || 0,
       nombre_avis: apiSimilaire.nombre_avis || 0,
+      is_favoris: apiSimilaire.is_favoris || false,
+      favorite_id: apiSimilaire.favorite_id,
       ...(apiSimilaire.createur && {
         createur: transformCreateurInfo(apiSimilaire.createur),
       }),
@@ -1066,6 +1073,8 @@ export default function DonDetailPage() {
           quantite: item.quantite || 1,
           note_moyenne: item.note_moyenne || 0,
           nombre_avis: item.nombre_avis || 0,
+          is_favoris: item.is_favoris || false,
+          favorite_id: item.favorite_id,
           ...(item.createur && {
             createur: transformCreateurInfo(item.createur),
           }),
@@ -1191,6 +1200,7 @@ export default function DonDetailPage() {
       setDon(donData);
       setDonsSimilaires(similairesData);
       setFavori(response.don.is_favoris || false);
+      setFavoriteId(response.don.favorite_id || null); // ✅ Stocker l'ID du favori
 
       if (response.don.createur) {
         const createurData = transformCreateurInfo(response.don.createur);
@@ -1432,22 +1442,35 @@ export default function DonDetailPage() {
     });
   };
 
+  // ✅ FONCTION CORRIGÉE POUR AJOUTER/SUPPRIMER DES FAVORIS (COMME DANS LA LISTE DES FAVORIS)
   const handleAddToFavorites = () => {
     requireAuth(async () => {
       if (!don) return;
 
       try {
-        if (favori) {
-          const endpoint = API_ENDPOINTS.FAVORIS.REMOVE_DON(don.uuid);
-          await api.delete(endpoint);
+        if (favori && favoriteId) {
+          // ✅ Suppression avec l'ID du favori (comme dans la liste des favoris)
+          console.log(`🗑️ Suppression du favori: ${favoriteId}`);
+          await api.delete(`/favoris/${favoriteId}`);
           setFavori(false);
+          setFavoriteId(null);
           showToast("success", "Don retiré des favoris");
         } else {
+          // ✅ Ajout aux favoris
+          console.log("➕ Ajout aux favoris:", don.uuid);
           const payload = {
             itemUuid: don.uuid,
             type: "don",
           };
-          await api.post(API_ENDPOINTS.FAVORIS.ADD, payload);
+          const response = await api.post<any>(API_ENDPOINTS.FAVORIS.ADD, payload);
+          
+          // ✅ Récupérer l'ID du favori depuis la réponse
+          if (response && response.uuid) {
+            setFavoriteId(response.uuid);
+          } else if (response && response.data && response.data.uuid) {
+            setFavoriteId(response.data.uuid);
+          }
+          
           setFavori(true);
           showToast("success", "Don ajouté aux favoris");
         }
@@ -1792,13 +1815,16 @@ export default function DonDetailPage() {
                   <span>don</span>
                 </div>
                 {don.prix === null && (
-                  <div
-                    className="position-absolute top-0 start-0 m-3 bg-success text-white px-4 py-2 rounded-pill fw-semibold d-flex align-items-center gap-2"
-                    style={{ marginLeft: "100px" }}
-                  >
-                    <FontAwesomeIcon icon={faHandHoldingHeart} />
-                    <span>gratuit</span>
-                  </div>
+        <div
+  className="position-absolute top-0 start-0 m-3 px-4 py-2 rounded-pill fw-semibold d-flex align-items-center gap-2 text-white"
+  style={{ 
+    marginLeft: "100px",
+    backgroundColor: "#8b5cf6" // Violet
+  }}
+>
+  <FontAwesomeIcon icon={faHandHoldingHeart} />
+  <span>gratuit</span>
+</div>
                 )}
                 {images.length > 1 && (
                   <>
@@ -2305,6 +2331,14 @@ export default function DonDetailPage() {
                                   />
                                   <span>don</span>
                                 </div>
+                                {item.is_favoris && (
+                                  <div className="position-absolute top-0 end-0 m-1">
+                                    <FontAwesomeIcon
+                                      icon={FaHeartSolid}
+                                      className="text-danger"
+                                    />
+                                  </div>
+                                )}
                               </div>
                             </div>
                             <div className="col-8">
@@ -2385,7 +2419,7 @@ export default function DonDetailPage() {
                   className="btn btn-success btn-lg fw-bold text-white py-4"
                 >
                   <FontAwesomeIcon icon={faHandHoldingHeart} className="me-2" />
-                  {don.disponible ? "Je suis intéressé(e)" : "Contacter le donateur"}
+                  {don.disponible ? "Je suis intéressé(e)" : "Contactez le donateur"}
                 </button>
                 
                 <button
@@ -2597,6 +2631,14 @@ export default function DonDetailPage() {
                           <FontAwesomeIcon icon={faGift} className="me-1" />
                           <span>don</span>
                         </div>
+                        {item.is_favoris && (
+                          <div className="position-absolute top-0 end-0 m-2">
+                            <FontAwesomeIcon
+                              icon={FaHeartSolid}
+                              className="text-danger"
+                            />
+                          </div>
+                        )}
                       </div>
                       <div className="card-body d-flex flex-column">
                         <h6 className="fw-bold text-dark mb-2 text-truncate">

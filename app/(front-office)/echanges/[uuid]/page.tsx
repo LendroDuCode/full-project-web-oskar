@@ -155,6 +155,7 @@ interface EchangeAPI {
   etoiles_vides: number;
   repartition_notes: any | null;
   is_favoris: boolean;
+  favorite_id?: string; // ✅ AJOUT: ID du favori pour la suppression
   createur: CreateurInfo;
   createurType: "utilisateur" | "vendeur";
   categorie: Categorie | null;
@@ -188,6 +189,7 @@ interface EchangeSimilaireAPI {
   demi_etoile: number;
   etoiles_vides: number;
   is_favoris: boolean;
+  favorite_id?: string; // ✅ AJOUT: ID du favori pour la suppression
   createdAt: string | null;
   updatedAt: string;
   categorie: Categorie | null;
@@ -227,6 +229,7 @@ interface Echange {
   note_moyenne: number;
   nombre_avis: number;
   is_favoris: boolean;
+  favorite_id?: string; // ✅ AJOUT: Stocker l'ID du favori
   createur?: CreateurInfo;
   createurType?: "utilisateur" | "vendeur";
   categorie: Categorie | null;
@@ -248,6 +251,8 @@ interface EchangeSimilaire {
   quantite: number;
   note_moyenne: number;
   nombre_avis: number;
+  is_favoris?: boolean;
+  favorite_id?: string; // ✅ AJOUT: Stocker l'ID du favori
   categorie: Categorie | null;
   createur?: CreateurInfo;
 }
@@ -644,6 +649,7 @@ export default function EchangeDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [quantite, setQuantite] = useState(1);
   const [favori, setFavori] = useState(false);
+  const [favoriteId, setFavoriteId] = useState<string | null>(null); // ✅ AJOUT: Stocker l'ID du favori
   const [showMoreComments, setShowMoreComments] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
   const [commentairesFetched, setCommentairesFetched] = useState(false);
@@ -670,6 +676,11 @@ export default function EchangeDetailPage() {
   const [showPublishModal, setShowPublishModal] = useState(false);
   // ✅ Détection du type d'appareil
   const [isMobile, setIsMobile] = useState(false);
+
+  // 🔴 Ref pour éviter les chargements multiples
+  const initialLoadDone = useRef(false);
+  const commentsLoadDone = useRef(false);
+  const recentsLoadDone = useRef(false);
 
   // ✅ Détecter si c'est un appareil mobile
   useEffect(() => {
@@ -883,6 +894,7 @@ export default function EchangeDetailPage() {
       note_moyenne: apiEchange.note_moyenne || 0,
       nombre_avis: apiEchange.nombre_avis || 0,
       is_favoris: apiEchange.is_favoris || false,
+      favorite_id: apiEchange.favorite_id, // ✅ Récupérer l'ID du favori
       ...(apiEchange.createur && {
         createur: transformCreateurInfo(apiEchange.createur),
       }),
@@ -910,6 +922,8 @@ export default function EchangeDetailPage() {
       quantite: apiSimilaire.quantite || 1,
       note_moyenne: apiSimilaire.note_moyenne || 0,
       nombre_avis: apiSimilaire.nombre_avis || 0,
+      is_favoris: apiSimilaire.is_favoris || false,
+      favorite_id: apiSimilaire.favorite_id, // ✅ Récupérer l'ID du favori
       categorie: apiSimilaire.categorie,
       ...(apiSimilaire.createur && {
         createur: transformCreateurInfo(apiSimilaire.createur),
@@ -958,6 +972,8 @@ export default function EchangeDetailPage() {
   // CHARGEMENT DES DONNÉES
   // ============================================
   const fetchEchangesRecents = useCallback(async () => {
+    if (!uuid || recentsLoadDone.current) return;
+
     try {
       setLoadingRecents(true);
 
@@ -985,6 +1001,8 @@ export default function EchangeDetailPage() {
           quantite: item.quantite || 1,
           note_moyenne: item.note_moyenne || 0,
           nombre_avis: item.nombre_avis || 0,
+          is_favoris: item.is_favoris || false,
+          favorite_id: item.favorite_id,
           categorie: item.categorie || null,
           ...(item.createur && {
             createur: transformCreateurInfo(item.createur),
@@ -992,6 +1010,7 @@ export default function EchangeDetailPage() {
         }));
 
         setEchangesRecents(transformed);
+        recentsLoadDone.current = true;
       }
     } catch (err) {
       console.warn("Erreur chargement échanges récents:", err);
@@ -1004,7 +1023,7 @@ export default function EchangeDetailPage() {
   // ? FONCTION FETCH COMMENTAIRES AMÉLIORÉE
   const fetchCommentaires = useCallback(
     async (echangeUuid: string) => {
-      if (!echangeUuid || commentairesFetched) return;
+      if (!echangeUuid || commentairesFetched || commentsLoadDone.current) return;
 
       try {
         setLoadingComments(true);
@@ -1074,10 +1093,12 @@ export default function EchangeDetailPage() {
           }
 
           setCommentairesFetched(true);
+          commentsLoadDone.current = true;
         } else {
           console.log("ℹ️ Aucun commentaire trouvé");
           setCommentaires([]);
           setCommentairesFetched(true);
+          commentsLoadDone.current = true;
         }
       } catch (err: any) {
         console.warn("⚠️ Erreur chargement commentaires:", err);
@@ -1091,6 +1112,7 @@ export default function EchangeDetailPage() {
         });
         setCommentaires([]);
         setCommentairesFetched(true);
+        commentsLoadDone.current = true;
       } finally {
         setLoadingComments(false);
       }
@@ -1099,7 +1121,7 @@ export default function EchangeDetailPage() {
   );
 
   const fetchEchangeDetails = useCallback(async () => {
-    if (!uuid) return;
+    if (!uuid || initialLoadDone.current) return;
 
     try {
       setLoading(true);
@@ -1122,6 +1144,7 @@ export default function EchangeDetailPage() {
       setEchangesSimilaires(similairesData);
 
       setFavori(response.echange.is_favoris || false);
+      setFavoriteId(response.echange.favorite_id || null); // ✅ Stocker l'ID du favori
 
       if (response.echange.createur) {
         const createurData = transformCreateurInfo(response.echange.createur);
@@ -1145,6 +1168,8 @@ export default function EchangeDetailPage() {
       setImages(imageUrls.slice(0, 5));
       setImagePrincipale(imageUrls[0]);
 
+      initialLoadDone.current = true;
+
       fetchCommentaires(echangeData.uuid);
       fetchEchangesRecents();
     } catch (err: any) {
@@ -1167,10 +1192,10 @@ export default function EchangeDetailPage() {
   }, [uuid, fetchCommentaires, fetchEchangesRecents]);
 
   useEffect(() => {
-    if (uuid && loading && !echange) {
+    if (uuid && !initialLoadDone.current) {
       fetchEchangeDetails();
     }
-  }, [uuid, fetchEchangeDetails, loading, echange]);
+  }, [uuid, fetchEchangeDetails]);
 
   // ============================================
   // FONCTIONS D'AFFICHAGE
@@ -1406,7 +1431,7 @@ export default function EchangeDetailPage() {
     });
   };
 
-  // ? FONCTION POUR LES FAVORIS - AVEC AUTH
+  // ✅ FONCTION CORRIGÉE POUR AJOUTER/SUPPRIMER DES FAVORIS (COMME DANS LA LISTE DES FAVORIS)
   const handleAddToFavorites = () => {
     requireAuth(async () => {
       if (!echange) return;
@@ -1414,23 +1439,31 @@ export default function EchangeDetailPage() {
       try {
         console.log(`📢 ${favori ? "Retrait" : "Ajout"} aux favoris...`);
 
-        if (favori) {
-          const endpoint = API_ENDPOINTS.FAVORIS.REMOVE_ECHANGE(echange.uuid);
-          console.log(`📡 Appel API: DELETE ${endpoint}`);
-
-          await api.delete(endpoint);
+        if (favori && favoriteId) {
+          // ✅ Suppression avec l'ID du favori (comme dans la liste des favoris)
+          console.log(`🗑️ Suppression du favori: ${favoriteId}`);
+          await api.delete(`/favoris/${favoriteId}`);
 
           setFavori(false);
+          setFavoriteId(null);
           showToast("success", "Échange retiré des favoris");
         } else {
+          // ✅ Ajout aux favoris
           const payload = {
             itemUuid: echange.uuid,
             type: "echange",
           };
           console.log(`📡 Appel API: POST ${API_ENDPOINTS.FAVORIS.ADD}`, payload);
 
-          const response = await api.post(API_ENDPOINTS.FAVORIS.ADD, payload);
+          const response = await api.post<any>(API_ENDPOINTS.FAVORIS.ADD, payload);
           console.log("✅ Réponse favoris:", response);
+          
+          // ✅ Récupérer l'ID du favori depuis la réponse
+          if (response && response.uuid) {
+            setFavoriteId(response.uuid);
+          } else if (response && response.data && response.data.uuid) {
+            setFavoriteId(response.data.uuid);
+          }
 
           setFavori(true);
           showToast("success", "Échange ajouté aux favoris");
@@ -1545,6 +1578,7 @@ export default function EchangeDetailPage() {
         );
 
         setCommentairesFetched(false);
+        commentsLoadDone.current = false;
         await fetchCommentaires(echange.uuid);
 
         setNewReview({
@@ -2368,6 +2402,14 @@ export default function EchangeDetailPage() {
                                   />
                                   <span>échange</span>
                                 </div>
+                                {item.is_favoris && (
+                                  <div className="position-absolute top-0 end-0 m-1">
+                                    <FontAwesomeIcon
+                                      icon={FaHeartSolid}
+                                      className="text-danger"
+                                    />
+                                  </div>
+                                )}
                               </div>
                             </div>
                             <div className="col-8">
@@ -2458,7 +2500,7 @@ export default function EchangeDetailPage() {
                   {echange.disponible
                     ? isMobile
                       ? "Appeler le créateur"
-                      : "Voir le contact"
+                      : "Contactez le vendeur"
                     : "Non disponible"}
                 </button>
                 <button
@@ -2703,6 +2745,14 @@ export default function EchangeDetailPage() {
                           />
                           <span>échange</span>
                         </div>
+                        {item.is_favoris && (
+                          <div className="position-absolute top-0 end-0 m-2">
+                            <FontAwesomeIcon
+                              icon={FaHeartSolid}
+                              className="text-danger"
+                            />
+                          </div>
+                        )}
                       </div>
                       <div className="card-body d-flex flex-column">
                         <h6 className="fw-bold text-dark mb-2 text-truncate">
