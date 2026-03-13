@@ -761,19 +761,6 @@ export default function DonDetailPage() {
               <FontAwesomeIcon icon={faShareAlt} className="me-2" />
               Partager
             </button>
-            <button
-              className="btn btn-outline-secondary btn-lg"
-              style={{
-                borderRadius: "12px",
-                padding: "12px 24px",
-                borderWidth: "2px",
-              }}
-              onClick={handlePrint}
-              disabled={actionLoading}
-            >
-              <FontAwesomeIcon icon={faPrint} className="me-2" />
-              Imprimer
-            </button>
           </div>
         </div>
       </div>

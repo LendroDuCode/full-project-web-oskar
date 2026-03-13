@@ -1161,15 +1161,6 @@ export default function ProductDetailPage() {
                     </div>
                   )}
                 </div>
-                <div className="text-end">
-                  <div className="d-flex align-items-center gap-2 mb-2">
-                    {renderStars(product.note_moyenne || 0)}
-                    <span className="fw-bold">
-                      ({product.nombre_avis || 0})
-                    </span>
-                  </div>
-                  <div className="text-muted small">Note moyenne</div>
-                </div>
               </div>
 
               {/* Statistiques rapides */}
