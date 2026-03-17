@@ -30,10 +30,10 @@ export default function ContactPage() {
       <ContactHero />
       <ContactMethods />
       <ContactFormSection />
-      <MapSection />
+      {/* <MapSection /> */}
       <FAQSection />
-      <EmergencyContactSection />
-      <TestimonialsSection />
+      {/* <EmergencyContactSection /> */}
+      {/* <TestimonialsSection /> */}
       <CTASection />
     </div>
   );

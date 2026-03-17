@@ -245,7 +245,7 @@ export default function FAQSection({
         </div>
 
         {/* Lien vers le centre d'aide */}
-        {showHelpCenterLink && (
+        {/* {showHelpCenterLink && (
           <div className="text-center mt-5">
             <div className="card border-0 bg-success bg-opacity-10">
               <div className="card-body p-4">
@@ -274,10 +274,10 @@ export default function FAQSection({
               </div>
             </div>
           </div>
-        )}
+        )} */}
 
         {/* Statistiques de support */}
-        <div className="row justify-content-center mt-5 pt-4 border-top">
+        {/* <div className="row justify-content-center mt-5 pt-4 border-top">
           <div className="col-lg-8">
             <div className="row text-center">
               <div className="col-md-4 mb-3 mb-md-0">
@@ -314,7 +314,7 @@ export default function FAQSection({
               </div>
             </div>
           </div>
-        </div>
+        </div> */}
       </div>
 
       <style jsx>{`
