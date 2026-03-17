@@ -349,7 +349,7 @@ const LoadingSkeleton = () => (
     <table className="table table-hover mb-0">
       <thead className="table-light">
         <tr>
-          {[...Array(8)].map((_, i) => (
+          {[...Array(7)].map((_, i) => (
             <th key={i}>
               <div
                 className="placeholder placeholder-wave"
@@ -362,7 +362,7 @@ const LoadingSkeleton = () => (
       <tbody>
         {[...Array(5)].map((_, i) => (
           <tr key={i}>
-            {[...Array(8)].map((_, j) => (
+            {[...Array(7)].map((_, j) => (
               <td key={j}>
                 <div
                   className="placeholder placeholder-wave"
@@ -1640,7 +1640,7 @@ export default function BoutiquesPage() {
           {/* Filtres et recherche */}
           <div className="p-4 border-bottom bg-light-subtle">
             <div className="row g-3">
-              <div className="col-md-3">
+              <div className="col-md-4">
                 <div className="input-group">
                   <span className="input-group-text bg-white border-end-0">
                     <FontAwesomeIcon icon={faSearch} className="text-muted" />
@@ -1854,7 +1854,7 @@ export default function BoutiquesPage() {
                       <th style={{ width: "60px" }} className="text-center">
                         #
                       </th>
-                      <th style={{ width: "200px" }}>
+                      <th style={{ width: "250px" }}>
                         <button
                           className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
                           onClick={() => requestSort("nom")}
@@ -1862,15 +1862,6 @@ export default function BoutiquesPage() {
                           <FontAwesomeIcon icon={faStore} className="me-1" />
                           Nom de la boutique
                           {getSortIcon("nom")}
-                        </button>
-                      </th>
-                      <th style={{ width: "150px" }}>
-                        <button
-                          className="btn btn-link p-0 text-decoration-none fw-semibold text-dark border-0 bg-transparent"
-                          onClick={() => requestSort("type_boutique")}
-                        >
-                          Type
-                          {getSortIcon("type_boutique")}
                         </button>
                       </th>
                       <th style={{ width: "120px" }}>
@@ -1892,7 +1883,7 @@ export default function BoutiquesPage() {
                           {getSortIcon("created_at")}
                         </button>
                       </th>
-                      <th style={{ width: "200px" }} className="text-center">
+                      <th style={{ width: "150px" }} className="text-center">
                         Actions
                       </th>
                     </tr>
@@ -1966,11 +1957,6 @@ export default function BoutiquesPage() {
                               )}
                             </div>
                           </div>
-                        </td>
-                        <td>
-                          <TypeBoutiqueBadge
-                            typeBoutique={boutique.type_boutique}
-                          />
                         </td>
                         <td>
                           <BoutiqueImage
@@ -2056,63 +2042,6 @@ export default function BoutiquesPage() {
                             >
                               <FontAwesomeIcon icon={faEye} />
                             </button>
-                            <button
-                              className="btn btn-outline-warning"
-                              title="Modifier"
-                              onClick={() => {
-                                setInfoMessage(
-                                  "Fonctionnalité en développement",
-                                );
-                                setTimeout(() => setInfoMessage(null), 3000);
-                              }}
-                              disabled={loading || boutique.is_deleted}
-                            >
-                              <FontAwesomeIcon icon={faEdit} />
-                            </button>
-                            {boutique.statut === "actif" ? (
-                              <button
-                                className="btn btn-outline-secondary"
-                                title="Désactiver"
-                                onClick={() =>
-                                  handleAction("deactivate", boutique)
-                                }
-                                disabled={loading || bulkActionLoading}
-                              >
-                                <FontAwesomeIcon icon={faBan} />
-                              </button>
-                            ) : (
-                              <button
-                                className="btn btn-outline-success"
-                                title="Activer"
-                                onClick={() =>
-                                  handleAction("activate", boutique)
-                                }
-                                disabled={loading || bulkActionLoading}
-                              >
-                                <FontAwesomeIcon icon={faCheckCircle} />
-                              </button>
-                            )}
-                            {boutique.est_bloque ? (
-                              <button
-                                className="btn btn-outline-success"
-                                title="Débloquer"
-                                onClick={() =>
-                                  handleAction("unblock", boutique)
-                                }
-                                disabled={loading || bulkActionLoading}
-                              >
-                                <FontAwesomeIcon icon={faLockOpen} />
-                              </button>
-                            ) : (
-                              <button
-                                className="btn btn-outline-warning"
-                                title="Bloquer"
-                                onClick={() => handleAction("block", boutique)}
-                                disabled={loading || bulkActionLoading}
-                              >
-                                <FontAwesomeIcon icon={faLock} />
-                              </button>
-                            )}
                             <button
                               className="btn btn-outline-danger"
                               title="Supprimer"

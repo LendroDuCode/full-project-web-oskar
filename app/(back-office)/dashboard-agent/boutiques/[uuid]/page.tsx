@@ -22,7 +22,6 @@ import {
   ButtonToolbar,
   InputGroup,
   Pagination,
-  Modal,
 } from "react-bootstrap";
 import {
   FaArrowLeft,
@@ -35,7 +34,6 @@ import {
   FaCalendarCheck,
   FaLink,
   FaStore,
-  FaImage,
   FaBoxOpen,
   FaStar,
   FaHeart,
@@ -74,6 +72,8 @@ import {
   FaLockOpen,
 } from "react-icons/fa";
 import { buildImageUrl } from "@/app/shared/utils/image-utils";
+import { api } from "@/lib/api-client";
+import ConfirmModal from "../../annonces/components/ConfirmModal";
 
 interface TypeBoutique {
   uuid: string;
@@ -142,6 +142,16 @@ interface ApiResponse {
   data?: any;
 }
 
+// Type pour les actions de confirmation
+interface ConfirmAction {
+  show: boolean;
+  type: "delete" | "block" | "unblock" | "publish" | "unpublish" | "restore";
+  uuid?: string;
+  produitLibelle?: string;
+  bulk?: boolean;
+  count?: number;
+}
+
 const BoutiqueDetail: React.FC = () => {
   const router = useRouter();
   const [id, setId] = useState<string | null>(null);
@@ -153,13 +163,11 @@ const BoutiqueDetail: React.FC = () => {
   const [searchProduct, setSearchProduct] = useState("");
   const [productSort, setProductSort] = useState("nom");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [confirmAction, setConfirmAction] = useState<{
-    title: string;
-    message: string;
-    action: () => Promise<void>;
-  } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction>({
+    show: false,
+    type: "delete",
+  });
   const [alert, setAlert] = useState<{
     type: "success" | "error" | "warning" | "info";
     message: string;
@@ -320,33 +328,16 @@ const BoutiqueDetail: React.FC = () => {
       const endpoint = API_ENDPOINTS.BOUTIQUES.DETAIL(boutiqueId);
       console.log("📡 Appel API:", endpoint);
 
-      const response = await fetch(endpoint, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error("Boutique non trouvée");
-        } else if (response.status === 401) {
-          throw new Error("Non autorisé - Veuillez vous reconnecter");
-        } else if (response.status === 403) {
-          throw new Error("Accès interdit");
-        } else {
-          throw new Error(`Erreur HTTP: ${response.status}`);
-        }
-      }
-
-      const data = await response.json();
-      const boutiqueData = data.data || data;
+      // Utiliser api.get au lieu de fetch
+      const response = await api.get<any>(endpoint);
+      
+      const boutiqueData = response.data || response;
       setBoutique(boutiqueData);
       setError(null);
 
       console.log("✅ Boutique chargée:", boutiqueData.nom);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Une erreur est survenue");
+    } catch (err: any) {
+      setError(err.message || "Une erreur est survenue");
       console.error("❌ Erreur lors du chargement:", err);
     } finally {
       setLoading(false);
@@ -363,12 +354,26 @@ const BoutiqueDetail: React.FC = () => {
   };
 
   const showConfirmation = (
-    title: string,
-    message: string,
-    action: () => Promise<void>,
+    type: ConfirmAction["type"],
+    uuid?: string,
+    produitLibelle?: string,
+    bulk: boolean = false,
+    count?: number
   ) => {
-    setConfirmAction({ title, message, action });
+    setConfirmAction({
+      show: true,
+      type,
+      uuid,
+      produitLibelle,
+      bulk,
+      count: count || (bulk ? selectedProducts.length : 1),
+    });
     setShowConfirmModal(true);
+  };
+
+  const handleConfirmClose = () => {
+    setShowConfirmModal(false);
+    setConfirmAction({ ...confirmAction, show: false });
   };
 
   const handleProductSelect = (productUuid: string) => {
@@ -526,65 +531,25 @@ const BoutiqueDetail: React.FC = () => {
     }
   };
 
-  const handleApiResponse = async (
-    response: Response,
-  ): Promise<ApiResponse> => {
-    const contentLength = response.headers.get("content-length");
-    if (contentLength === "0" || response.status === 204) {
-      return { success: true, message: "Opération réussie" };
-    }
-
-    try {
-      const text = await response.text();
-      if (!text || text.trim() === "") {
-        return { success: true, message: "Opération réussie" };
-      }
-      return JSON.parse(text);
-    } catch (err) {
-      if (response.ok) {
-        return { success: true, message: "Opération réussie" };
-      }
-      throw new Error(
-        `Erreur de parsing JSON: ${err instanceof Error ? err.message : "Réponse invalide"}`,
-      );
-    }
-  };
-
+  // ✅ ACTIONS INDIVIDUELLES AVEC CONFIRMATION - UTILISATION DE API
   const handleDeleteProduct = async (productUuid: string) => {
     try {
       setActionLoading(productUuid);
+      handleConfirmClose();
 
-      const response = await fetch(
-        `${API_ENDPOINTS.PRODUCTS.DELETE(productUuid)}`,
-        {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        },
+      // Utiliser api.delete au lieu de fetch
+      await api.delete(API_ENDPOINTS.PRODUCTS.DELETE(productUuid));
+      
+      showAlert("success", "Produit supprimé avec succès");
+      removeProductFromList(productUuid);
+      setSelectedProducts((prev) =>
+        prev.filter((uuid) => uuid !== productUuid),
       );
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `Erreur HTTP: ${response.status}`);
-      }
-
-      const result = await handleApiResponse(response);
-
-      if (result.success) {
-        showAlert("success", "Produit supprimé avec succès");
-        removeProductFromList(productUuid);
-        setSelectedProducts((prev) =>
-          prev.filter((uuid) => uuid !== productUuid),
-        );
-      } else {
-        throw new Error(result.message || "Erreur lors de la suppression");
-      }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erreur détaillée:", err);
       showAlert(
         "error",
-        err instanceof Error ? err.message : "Erreur lors de la suppression",
+        err.message || "Erreur lors de la suppression",
       );
     } finally {
       setActionLoading(null);
@@ -594,36 +559,24 @@ const BoutiqueDetail: React.FC = () => {
   const handleRestoreProduct = async (productUuid: string) => {
     try {
       setActionLoading(productUuid);
+      handleConfirmClose();
 
       const endpoint =
         API_ENDPOINTS.PRODUCTS.RESTORE?.(productUuid) ||
         `/produits/${productUuid}/restore`;
-      const response = await fetch(endpoint, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`);
+      
+      // Utiliser api.patch au lieu de fetch
+      await api.patch(endpoint, {});
+      
+      showAlert("success", "Produit restauré avec succès");
+      if (id) {
+        await fetchBoutiqueData(id);
       }
-
-      const result = await handleApiResponse(response);
-
-      if (result.success) {
-        showAlert("success", "Produit restauré avec succès");
-        if (id) {
-          await fetchBoutiqueData(id);
-        }
-      } else {
-        throw new Error(result.message || "Erreur lors de la restauration");
-      }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erreur détaillée:", err);
       showAlert(
         "error",
-        err instanceof Error ? err.message : "Erreur lors de la restauration",
+        err.message || "Erreur lors de la restauration",
       );
     } finally {
       setActionLoading(null);
@@ -633,37 +586,22 @@ const BoutiqueDetail: React.FC = () => {
   const handlePublishProduct = async (productUuid: string) => {
     try {
       setActionLoading(productUuid);
+      handleConfirmClose();
 
-      const endpoint =
-        API_ENDPOINTS.PRODUCTS.PUBLISH?.(productUuid) ||
-        `/produits/${productUuid}/publish`;
-      const response = await fetch(endpoint, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ estPublie: true }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`);
+      const endpoint = API_ENDPOINTS.PRODUCTS.PUBLLIER;
+      
+      // Utiliser api.post au lieu de fetch
+      await api.post(endpoint, { productUuid, est_publie: true });
+      
+      showAlert("success", "Produit publié avec succès");
+      if (id) {
+        await fetchBoutiqueData(id);
       }
-
-      const result = await handleApiResponse(response);
-
-      if (result.success) {
-        showAlert("success", "Produit publié avec succès");
-        if (id) {
-          await fetchBoutiqueData(id);
-        }
-      } else {
-        throw new Error(result.message || "Erreur lors de la publication");
-      }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erreur détaillée:", err);
       showAlert(
         "error",
-        err instanceof Error ? err.message : "Erreur lors de la publication",
+        err.message || "Erreur lors de la publication",
       );
     } finally {
       setActionLoading(null);
@@ -673,37 +611,22 @@ const BoutiqueDetail: React.FC = () => {
   const handleUnpublishProduct = async (productUuid: string) => {
     try {
       setActionLoading(productUuid);
+      handleConfirmClose();
 
-      const endpoint =
-        API_ENDPOINTS.PRODUCTS.UNPUBLISH?.(productUuid) ||
-        `/produits/${productUuid}/unpublish`;
-      const response = await fetch(endpoint, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ estPublie: false }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`);
+      const endpoint = API_ENDPOINTS.PRODUCTS.PUBLLIER;
+      
+      // Utiliser api.post au lieu de fetch
+      await api.post(endpoint, { productUuid, est_publie: false });
+      
+      showAlert("success", "Produit dépublié avec succès");
+      if (id) {
+        await fetchBoutiqueData(id);
       }
-
-      const result = await handleApiResponse(response);
-
-      if (result.success) {
-        showAlert("success", "Produit dépublié avec succès");
-        if (id) {
-          await fetchBoutiqueData(id);
-        }
-      } else {
-        throw new Error(result.message || "Erreur lors de la dépublication");
-      }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erreur détaillée:", err);
       showAlert(
         "error",
-        err instanceof Error ? err.message : "Erreur lors de la dépublication",
+        err.message || "Erreur lors de la dépublication",
       );
     } finally {
       setActionLoading(null);
@@ -713,37 +636,22 @@ const BoutiqueDetail: React.FC = () => {
   const handleBlockProduct = async (productUuid: string) => {
     try {
       setActionLoading(productUuid);
+      handleConfirmClose();
 
-      const endpoint =
-        API_ENDPOINTS.PRODUCTS.BLOCK?.(productUuid) ||
-        `/produits/${productUuid}/block`;
-      const response = await fetch(endpoint, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ estBloque: true }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`);
+      const endpoint = API_ENDPOINTS.PRODUCTS.BLOQUE_PRODUITS;
+      
+      // Utiliser api.post au lieu de fetch
+      await api.post(endpoint, { productUuid, est_bloque: true });
+      
+      showAlert("success", "Produit bloqué avec succès");
+      if (id) {
+        await fetchBoutiqueData(id);
       }
-
-      const result = await handleApiResponse(response);
-
-      if (result.success) {
-        showAlert("success", "Produit bloqué avec succès");
-        if (id) {
-          await fetchBoutiqueData(id);
-        }
-      } else {
-        throw new Error(result.message || "Erreur lors du blocage");
-      }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erreur détaillée:", err);
       showAlert(
         "error",
-        err instanceof Error ? err.message : "Erreur lors du blocage",
+        err.message || "Erreur lors du blocage",
       );
     } finally {
       setActionLoading(null);
@@ -753,106 +661,138 @@ const BoutiqueDetail: React.FC = () => {
   const handleUnblockProduct = async (productUuid: string) => {
     try {
       setActionLoading(productUuid);
+      handleConfirmClose();
 
-      const endpoint =
-        API_ENDPOINTS.PRODUCTS.UNBLOCK?.(productUuid) ||
-        `/produits/${productUuid}/unblock`;
-      const response = await fetch(endpoint, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ estBloque: false }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`);
+      const endpoint = API_ENDPOINTS.PRODUCTS.BLOQUE_PRODUITS;
+      
+      // Utiliser api.post au lieu de fetch
+      await api.post(endpoint, { productUuid, est_bloque: false });
+      
+      showAlert("success", "Produit débloqué avec succès");
+      if (id) {
+        await fetchBoutiqueData(id);
       }
-
-      const result = await handleApiResponse(response);
-
-      if (result.success) {
-        showAlert("success", "Produit débloqué avec succès");
-        if (id) {
-          await fetchBoutiqueData(id);
-        }
-      } else {
-        throw new Error(result.message || "Erreur lors du déblocage");
-      }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erreur détaillée:", err);
       showAlert(
         "error",
-        err instanceof Error ? err.message : "Erreur lors du déblocage",
+        err.message || "Erreur lors du déblocage",
       );
     } finally {
       setActionLoading(null);
     }
   };
 
+  // ✅ ACTIONS EN MASSE
   const handleDeleteSelected = () => {
     if (selectedProducts.length === 0) return;
 
-    showConfirmation(
-      "Supprimer les produits sélectionnés",
-      `Êtes-vous sûr de vouloir supprimer ${selectedProducts.length} produit(s) ? Cette action est irréversible.`,
-      async () => {
-        try {
-          for (const productUuid of selectedProducts) {
-            await handleDeleteProduct(productUuid);
-          }
-          setSelectedProducts([]);
-          setShowConfirmModal(false);
-        } catch (err) {
-          console.error("Erreur lors de la suppression multiple:", err);
-          showAlert("error", "Erreur lors de la suppression multiple");
-        }
-      },
-    );
+    showConfirmation("delete", undefined, undefined, true, selectedProducts.length);
   };
 
   const handleRestoreSelected = () => {
     if (selectedProducts.length === 0) return;
 
-    showConfirmation(
-      "Restaurer les produits sélectionnés",
-      `Êtes-vous sûr de vouloir restaurer ${selectedProducts.length} produit(s) ?`,
-      async () => {
-        try {
-          const restorePromises = selectedProducts.map((productUuid) =>
-            handleRestoreProduct(productUuid),
-          );
-          await Promise.all(restorePromises);
-          setSelectedProducts([]);
-          setShowConfirmModal(false);
-        } catch (err) {
-          console.error("Erreur lors de la restauration multiple:", err);
-          showAlert("error", "Erreur lors de la restauration multiple");
-        }
-      },
-    );
+    showConfirmation("restore", undefined, undefined, true, selectedProducts.length);
   };
 
   const handlePublishSelected = () => {
     if (selectedProducts.length === 0) return;
 
-    showConfirmation(
-      "Publier les produits sélectionnés",
-      `Êtes-vous sûr de vouloir publier ${selectedProducts.length} produit(s) ?`,
-      async () => {
-        try {
-          const publishPromises = selectedProducts.map((productUuid) =>
-            handlePublishProduct(productUuid),
-          );
-          await Promise.all(publishPromises);
-          setSelectedProducts([]);
-          setShowConfirmModal(false);
-        } catch (err) {
-          console.error("Erreur lors de la publication multiple:", err);
-          showAlert("error", "Erreur lors de la publication multiple");
+    showConfirmation("publish", undefined, undefined, true, selectedProducts.length);
+  };
+
+  const handleUnpublishSelected = () => {
+    if (selectedProducts.length === 0) return;
+
+    showConfirmation("unpublish", undefined, undefined, true, selectedProducts.length);
+  };
+
+  const handleBlockSelected = () => {
+    if (selectedProducts.length === 0) return;
+
+    showConfirmation("block", undefined, undefined, true, selectedProducts.length);
+  };
+
+  const handleUnblockSelected = () => {
+    if (selectedProducts.length === 0) return;
+
+    showConfirmation("unblock", undefined, undefined, true, selectedProducts.length);
+  };
+
+  const executeBulkAction = async () => {
+    if (!confirmAction.bulk || selectedProducts.length === 0) return;
+
+    setActionLoading("bulk");
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const productUuid of selectedProducts) {
+      try {
+        switch (confirmAction.type) {
+          case "delete":
+            await api.delete(API_ENDPOINTS.PRODUCTS.DELETE(productUuid));
+            successCount++;
+            break;
+
+          case "restore":
+            const restoreEndpoint = API_ENDPOINTS.PRODUCTS.RESTORE?.(productUuid) ||
+              `/produits/${productUuid}/restore`;
+            await api.patch(restoreEndpoint, {});
+            successCount++;
+            break;
+
+          case "publish":
+            await api.post(API_ENDPOINTS.PRODUCTS.PUBLLIER, { 
+              productUuid, 
+              est_publie: true 
+            });
+            successCount++;
+            break;
+
+          case "unpublish":
+            await api.post(API_ENDPOINTS.PRODUCTS.PUBLLIER, { 
+              productUuid, 
+              est_publie: false 
+            });
+            successCount++;
+            break;
+
+          case "block":
+            await api.post(API_ENDPOINTS.PRODUCTS.BLOQUE_PRODUITS, { 
+              productUuid, 
+              est_bloque: true 
+            });
+            successCount++;
+            break;
+
+          case "unblock":
+            await api.post(API_ENDPOINTS.PRODUCTS.BLOQUE_PRODUITS, { 
+              productUuid, 
+              est_bloque: false 
+            });
+            successCount++;
+            break;
         }
-      },
-    );
+      } catch (err) {
+        console.error(`Erreur pour ${productUuid}:`, err);
+        errorCount++;
+      }
+    }
+
+    if (errorCount === 0) {
+      showAlert("success", `${successCount}/${selectedProducts.length} produit(s) traités avec succès`);
+    } else {
+      showAlert("warning", `${successCount} succès, ${errorCount} échec(s)`);
+    }
+
+    if (id) {
+      await fetchBoutiqueData(id);
+    }
+
+    setSelectedProducts([]);
+    setActionLoading(null);
+    handleConfirmClose();
   };
 
   const calculateStats = () => {
@@ -1134,39 +1074,85 @@ const BoutiqueDetail: React.FC = () => {
           </div>
         )}
 
-        {/* Modal de confirmation */}
-        <Modal
+        {/* Modal de confirmation moderne */}
+        <ConfirmModal
           show={showConfirmModal}
-          onHide={() => setShowConfirmModal(false)}
-          centered
-          className="modal-confirm"
-        >
-          <Modal.Header closeButton className="border-0 pb-0">
-            <Modal.Title className="d-flex align-items-center text-warning">
-              <FaExclamationTriangle className="me-2" />
-              {confirmAction?.title || "Confirmation"}
-            </Modal.Title>
-          </Modal.Header>
-          <Modal.Body className="px-4 py-3">
-            <p className="fs-5 mb-0">{confirmAction?.message}</p>
-          </Modal.Body>
-          <Modal.Footer className="border-0 pt-0">
-            <Button
-              variant="secondary"
-              onClick={() => setShowConfirmModal(false)}
-              className="px-4"
-            >
-              Annuler
-            </Button>
-            <Button
-              variant="danger"
-              onClick={() => confirmAction?.action()}
-              className="px-4"
-            >
-              Confirmer
-            </Button>
-          </Modal.Footer>
-        </Modal>
+          type={confirmAction.type}
+          title={
+            confirmAction.type === "delete" ? "Supprimer le(s) produit(s) ?" :
+            confirmAction.type === "block" ? "Bloquer le(s) produit(s) ?" :
+            confirmAction.type === "unblock" ? "Débloquer le(s) produit(s) ?" :
+            confirmAction.type === "publish" ? "Publier le(s) produit(s) ?" :
+            confirmAction.type === "unpublish" ? "Dépublier le(s) produit(s) ?" :
+            confirmAction.type === "restore" ? "Restaurer le(s) produit(s) ?" :
+            "Confirmer l'action"
+          }
+          message={
+            confirmAction.type === "delete" ? 
+              confirmAction.bulk ?
+                `Êtes-vous sûr de vouloir supprimer définitivement ${confirmAction.count} produit(s) ? Cette action est irréversible.` :
+                `Êtes-vous sûr de vouloir supprimer définitivement "${confirmAction.produitLibelle}" ? Cette action est irréversible.` :
+            confirmAction.type === "block" ? 
+              confirmAction.bulk ?
+                `Êtes-vous sûr de vouloir bloquer ${confirmAction.count} produit(s) ? Ils ne seront plus visibles.` :
+                `Êtes-vous sûr de vouloir bloquer "${confirmAction.produitLibelle}" ? Il ne sera plus visible.` :
+            confirmAction.type === "unblock" ? 
+              confirmAction.bulk ?
+                `Êtes-vous sûr de vouloir débloquer ${confirmAction.count} produit(s) ? Ils seront de nouveau visibles.` :
+                `Êtes-vous sûr de vouloir débloquer "${confirmAction.produitLibelle}" ? Il sera de nouveau visible.` :
+            confirmAction.type === "publish" ? 
+              confirmAction.bulk ?
+                `Êtes-vous sûr de vouloir publier ${confirmAction.count} produit(s) ? Ils seront visibles par tous.` :
+                `Êtes-vous sûr de vouloir publier "${confirmAction.produitLibelle}" ? Il sera visible par tous.` :
+            confirmAction.type === "unpublish" ? 
+              confirmAction.bulk ?
+                `Êtes-vous sûr de vouloir dépublier ${confirmAction.count} produit(s) ? Ils ne seront plus visibles.` :
+                `Êtes-vous sûr de vouloir dépublier "${confirmAction.produitLibelle}" ? Il ne sera plus visible.` :
+            confirmAction.type === "restore" ? 
+              confirmAction.bulk ?
+                `Êtes-vous sûr de vouloir restaurer ${confirmAction.count} produit(s) ?` :
+                `Êtes-vous sûr de vouloir restaurer "${confirmAction.produitLibelle}" ?` :
+            "Voulez-vous continuer ?"
+          }
+          confirmText={
+            confirmAction.type === "delete" ? "Supprimer" :
+            confirmAction.type === "block" ? "Bloquer" :
+            confirmAction.type === "unblock" ? "Débloquer" :
+            confirmAction.type === "publish" ? "Publier" :
+            confirmAction.type === "unpublish" ? "Dépublier" :
+            confirmAction.type === "restore" ? "Restaurer" :
+            "Confirmer"
+          }
+          cancelText="Annuler"
+          onConfirm={() => {
+            if (confirmAction.bulk) {
+              executeBulkAction();
+            } else if (confirmAction.uuid) {
+              switch (confirmAction.type) {
+                case "delete":
+                  handleDeleteProduct(confirmAction.uuid);
+                  break;
+                case "restore":
+                  handleRestoreProduct(confirmAction.uuid);
+                  break;
+                case "publish":
+                  handlePublishProduct(confirmAction.uuid);
+                  break;
+                case "unpublish":
+                  handleUnpublishProduct(confirmAction.uuid);
+                  break;
+                case "block":
+                  handleBlockProduct(confirmAction.uuid);
+                  break;
+                case "unblock":
+                  handleUnblockProduct(confirmAction.uuid);
+                  break;
+              }
+            }
+          }}
+          onCancel={handleConfirmClose}
+          itemCount={confirmAction.count}
+        />
 
         {/* Contenu principal */}
         <Container fluid className="px-4 py-3 bg-light min-vh-100">
@@ -1217,7 +1203,6 @@ const BoutiqueDetail: React.FC = () => {
                   </div>
                 </div>
               </Col>
-             
             </Row>
           </div>
 
@@ -1509,7 +1494,7 @@ const BoutiqueDetail: React.FC = () => {
                             onClick={handleDeleteSelected}
                             disabled={actionLoading !== null}
                           >
-                            {actionLoading ? (
+                            {actionLoading === "bulk" ? (
                               <Spinner
                                 animation="border"
                                 size="sm"
@@ -1521,29 +1506,46 @@ const BoutiqueDetail: React.FC = () => {
                             Supprimer ({selectedProducts.length})
                           </Button>
                           <Button
-                            variant="outline-success"
+                            variant="outline-warning"
                             className="d-flex align-items-center"
-                            onClick={handleRestoreSelected}
+                            onClick={handleBlockSelected}
                             disabled={actionLoading !== null}
                           >
-                            {actionLoading ? (
+                            {actionLoading === "bulk" ? (
                               <Spinner
                                 animation="border"
                                 size="sm"
                                 className="me-2"
                               />
                             ) : (
-                              <FaUndo className="me-2" />
+                              <FaLock className="me-2" />
                             )}
-                            Restaurer ({selectedProducts.length})
+                            Bloquer ({selectedProducts.length})
                           </Button>
                           <Button
-                            variant="outline-primary"
-                            className="d-flex align-items-center rounded-end-3"
+                            variant="outline-info"
+                            className="d-flex align-items-center"
+                            onClick={handleUnblockSelected}
+                            disabled={actionLoading !== null}
+                          >
+                            {actionLoading === "bulk" ? (
+                              <Spinner
+                                animation="border"
+                                size="sm"
+                                className="me-2"
+                              />
+                            ) : (
+                              <FaLockOpen className="me-2" />
+                            )}
+                            Débloquer ({selectedProducts.length})
+                          </Button>
+                          <Button
+                            variant="outline-success"
+                            className="d-flex align-items-center"
                             onClick={handlePublishSelected}
                             disabled={actionLoading !== null}
                           >
-                            {actionLoading ? (
+                            {actionLoading === "bulk" ? (
                               <Spinner
                                 animation="border"
                                 size="sm"
@@ -1554,9 +1556,42 @@ const BoutiqueDetail: React.FC = () => {
                             )}
                             Publier ({selectedProducts.length})
                           </Button>
+                          <Button
+                            variant="outline-secondary"
+                            className="d-flex align-items-center"
+                            onClick={handleUnpublishSelected}
+                            disabled={actionLoading !== null}
+                          >
+                            {actionLoading === "bulk" ? (
+                              <Spinner
+                                animation="border"
+                                size="sm"
+                                className="me-2"
+                              />
+                            ) : (
+                              <FaEyeSlash className="me-2" />
+                            )}
+                            Dépublier ({selectedProducts.length})
+                          </Button>
+                          <Button
+                            variant="outline-primary"
+                            className="d-flex align-items-center rounded-end-3"
+                            onClick={handleRestoreSelected}
+                            disabled={actionLoading !== null}
+                          >
+                            {actionLoading === "bulk" ? (
+                              <Spinner
+                                animation="border"
+                                size="sm"
+                                className="me-2"
+                              />
+                            ) : (
+                              <FaUndo className="me-2" />
+                            )}
+                            Restaurer ({selectedProducts.length})
+                          </Button>
                         </ButtonGroup>
                       )}
-                    
                     </Col>
                   </Row>
                 </Card.Header>
@@ -1839,26 +1874,6 @@ const BoutiqueDetail: React.FC = () => {
                                           <FaEye />
                                         </Button>
                                       </OverlayTrigger>
-                                      <OverlayTrigger
-                                        placement="top"
-                                        overlay={<Tooltip>Modifier</Tooltip>}
-                                      >
-                                        <Button
-                                          variant="outline-warning"
-                                          size="sm"
-                                          className="rounded-circle"
-                                          onClick={() =>
-                                            router.push(
-                                              `/dashboard-agent/produits/edit/${produit.uuid}`,
-                                            )
-                                          }
-                                          disabled={
-                                            actionLoading === produit.uuid
-                                          }
-                                        >
-                                          <FaPencilAlt />
-                                        </Button>
-                                      </OverlayTrigger>
                                       {produit.estBloque ? (
                                         <OverlayTrigger
                                           placement="top"
@@ -1870,12 +1885,9 @@ const BoutiqueDetail: React.FC = () => {
                                             className="rounded-circle"
                                             onClick={() =>
                                               showConfirmation(
-                                                "Débloquer le produit",
-                                                `Êtes-vous sûr de vouloir débloquer "${produit.libelle}" ?`,
-                                                () =>
-                                                  handleUnblockProduct(
-                                                    produit.uuid,
-                                                  ),
+                                                "unblock",
+                                                produit.uuid,
+                                                produit.libelle,
                                               )
                                             }
                                             disabled={
@@ -1903,12 +1915,9 @@ const BoutiqueDetail: React.FC = () => {
                                             className="rounded-circle"
                                             onClick={() =>
                                               showConfirmation(
-                                                "Bloquer le produit",
-                                                `Êtes-vous sûr de vouloir bloquer "${produit.libelle}" ?`,
-                                                () =>
-                                                  handleBlockProduct(
-                                                    produit.uuid,
-                                                  ),
+                                                "block",
+                                                produit.uuid,
+                                                produit.libelle,
                                               )
                                             }
                                             disabled={
@@ -1937,12 +1946,9 @@ const BoutiqueDetail: React.FC = () => {
                                             className="rounded-circle"
                                             onClick={() =>
                                               showConfirmation(
-                                                "Dépublier le produit",
-                                                `Êtes-vous sûr de vouloir dépublié "${produit.libelle}" ?`,
-                                                () =>
-                                                  handleUnpublishProduct(
-                                                    produit.uuid,
-                                                  ),
+                                                "unpublish",
+                                                produit.uuid,
+                                                produit.libelle,
                                               )
                                             }
                                             disabled={
@@ -1970,12 +1976,9 @@ const BoutiqueDetail: React.FC = () => {
                                             className="rounded-circle"
                                             onClick={() =>
                                               showConfirmation(
-                                                "Publier le produit",
-                                                `Êtes-vous sûr de vouloir publier "${produit.libelle}" ?`,
-                                                () =>
-                                                  handlePublishProduct(
-                                                    produit.uuid,
-                                                  ),
+                                                "publish",
+                                                produit.uuid,
+                                                produit.libelle,
                                               )
                                             }
                                             disabled={
@@ -1993,38 +1996,67 @@ const BoutiqueDetail: React.FC = () => {
                                           </Button>
                                         </OverlayTrigger>
                                       )}
-                                      <OverlayTrigger
-                                        placement="top"
-                                        overlay={<Tooltip>Supprimer</Tooltip>}
-                                      >
-                                        <Button
-                                          variant="outline-danger"
-                                          size="sm"
-                                          className="rounded-circle"
-                                          onClick={() =>
-                                            showConfirmation(
-                                              "Supprimer le produit",
-                                              `Êtes-vous sûr de vouloir supprimer définitivement "${produit.libelle}" ? Cette action est irréversible.`,
-                                              () =>
-                                                handleDeleteProduct(
-                                                  produit.uuid,
-                                                ),
-                                            )
-                                          }
-                                          disabled={
-                                            actionLoading === produit.uuid
-                                          }
+                                      {produit.is_deleted ? (
+                                        <OverlayTrigger
+                                          placement="top"
+                                          overlay={<Tooltip>Restaurer</Tooltip>}
                                         >
-                                          {actionLoading === produit.uuid ? (
-                                            <Spinner
-                                              animation="border"
-                                              size="sm"
-                                            />
-                                          ) : (
-                                            <FaTrash />
-                                          )}
-                                        </Button>
-                                      </OverlayTrigger>
+                                          <Button
+                                            variant="outline-primary"
+                                            size="sm"
+                                            className="rounded-circle"
+                                            onClick={() =>
+                                              showConfirmation(
+                                                "restore",
+                                                produit.uuid,
+                                                produit.libelle,
+                                              )
+                                            }
+                                            disabled={
+                                              actionLoading === produit.uuid
+                                            }
+                                          >
+                                            {actionLoading === produit.uuid ? (
+                                              <Spinner
+                                                animation="border"
+                                                size="sm"
+                                              />
+                                            ) : (
+                                              <FaUndo />
+                                            )}
+                                          </Button>
+                                        </OverlayTrigger>
+                                      ) : (
+                                        <OverlayTrigger
+                                          placement="top"
+                                          overlay={<Tooltip>Supprimer</Tooltip>}
+                                        >
+                                          <Button
+                                            variant="outline-danger"
+                                            size="sm"
+                                            className="rounded-circle"
+                                            onClick={() =>
+                                              showConfirmation(
+                                                "delete",
+                                                produit.uuid,
+                                                produit.libelle,
+                                              )
+                                            }
+                                            disabled={
+                                              actionLoading === produit.uuid
+                                            }
+                                          >
+                                            {actionLoading === produit.uuid ? (
+                                              <Spinner
+                                                animation="border"
+                                                size="sm"
+                                              />
+                                            ) : (
+                                              <FaTrash />
+                                            )}
+                                          </Button>
+                                        </OverlayTrigger>
+                                      )}
                                     </div>
                                   </td>
                                 </tr>
@@ -2084,8 +2116,6 @@ const BoutiqueDetail: React.FC = () => {
 
             {/* Sidebar */}
             <Col lg={4}>
-             
-
               {/* Actions rapides */}
               <Card className="border-0 shadow-sm rounded-4 mb-4">
                 <Card.Header className="bg-white border-0 rounded-top-4 p-4">
@@ -2101,7 +2131,7 @@ const BoutiqueDetail: React.FC = () => {
                       className="text-start d-flex align-items-center p-3 rounded-3"
                       onClick={() =>
                         router.push(
-                          `/dashboard-agent/boutiques/statistiques/${boutique!.uuid}`,
+                          `/dashboard-agent/`,
                         )
                       }
                     >
@@ -2118,7 +2148,7 @@ const BoutiqueDetail: React.FC = () => {
                       className="text-start d-flex align-items-center p-3 rounded-3"
                       onClick={() =>
                         router.push(
-                          `/dashboard-agent/vendeurs/${boutique!.vendeurUuid}`,
+                          `/dashboard-agent/`,
                         )
                       }
                     >
@@ -2131,26 +2161,9 @@ const BoutiqueDetail: React.FC = () => {
                       </div>
                     </Button>
                     <Button
-                      variant="outline-warning"
-                      className="text-start d-flex align-items-center p-3 rounded-3"
-                      onClick={() =>
-                        router.push(
-                          `/dashboard-agent/boutiques/horaires/${boutique!.uuid}`,
-                        )
-                      }
-                    >
-                      <FaClock className="me-3 fs-5" />
-                      <div>
-                        <div className="fw-semibold">Modifier les horaires</div>
-                        <small className="text-muted">
-                          Jours et heures d'ouverture
-                        </small>
-                      </div>
-                    </Button>
-                    <Button
                       variant="outline-info"
                       className="text-start d-flex align-items-center p-3 rounded-3"
-                      onClick={() => router.push(`/dashboard-agent/categories`)}
+                      onClick={() => router.push(`/dashboard-agent/categories/liste`)}
                     >
                       <FaLayerGroup className="me-3 fs-5" />
                       <div>
@@ -2289,11 +2302,6 @@ const BoutiqueDetail: React.FC = () => {
           }
           .bg-gradient-warning {
             background: linear-gradient(135deg, #fff9f0 0%, #ffeed9 100%);
-          }
-          .modal-confirm .modal-content {
-            border-radius: 20px;
-            border: none;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
           }
         `}</style>
       </>

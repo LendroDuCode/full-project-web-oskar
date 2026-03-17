@@ -1,4 +1,3 @@
-// app/(back-office)/dashboard-utilisateur/annonces/components/DataTable.tsx
 "use client";
 
 import { useState, useMemo } from "react";
@@ -6,34 +5,31 @@ import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faEye,
-  faCheck,
-  faXmark,
-  faGlobe,
-  faLock,
-  faBoxOpen,
-  faUnlock,
-  faCalendarCheck,
-  faCalendarXmark,
   faTrash,
-  faEdit,
-  faTag,
-  faGift,
-  faArrowRightArrowLeft,
   faSpinner,
   faExclamationTriangle,
+  faBoxOpen,
+  faClock,
+  faCheckSquare,
+  faSquare,
   faChevronDown,
   faChevronUp,
   faListCheck,
-  faClock,
+  faTag,
+  faGift,
+  faArrowRightArrowLeft,
+  faGlobe,
   faBan,
+  faCheck,
+  faXmark,
+  faUnlock,
+  faLock,
 } from "@fortawesome/free-solid-svg-icons";
 import colors from "@/app/shared/constants/colors";
 import {
   formatPrice,
   formatRelativeTime,
   truncateText,
-  getStatusLabel,
-  getTypeLabel,
 } from "@/app/shared/utils/formatters";
 
 // ============================================
@@ -44,8 +40,8 @@ const buildImageUrl = (imagePath: string | null): string | null => {
 
   // Nettoyer le chemin des espaces indésirables
   let cleanPath = imagePath
-    .replace(/\s+/g, "") // Supprimer tous les espaces
-    .replace(/-/g, "-") // Normaliser les tirets
+    .replace(/\s+/g, "")
+    .replace(/-/g, "-")
     .trim();
 
   const apiUrl =
@@ -63,7 +59,6 @@ const buildImageUrl = (imagePath: string | null): string | null => {
 
   // ✅ CAS 2: Chemin avec %2F (déjà encodé)
   if (cleanPath.includes("%2F")) {
-    // Nettoyer les espaces autour de %2F
     const finalPath = cleanPath.replace(/%2F\s+/, "%2F");
     return `${apiUrl}${filesUrl}/${finalPath}`;
   }
@@ -87,26 +82,14 @@ interface AnnonceItem {
   estBloque?: boolean;
   category?: string;
   originalData?: any;
-  seller?: {
-    name: string;
-    avatar?: string;
-    avatar_key?: string;
-    isPro?: boolean;
-    type?: string;
-  };
 }
 
 interface DataTableProps {
   data: AnnonceItem[];
   loading?: boolean;
   error?: string | null;
-  onValidate?: (uuid: string, type: string) => void;
-  onReject?: (uuid: string, type: string) => void;
-  onPublish?: (uuid: string, type: string, publish: boolean) => void;
-  onBlock?: (uuid: string, type: string, block: boolean) => void;
   onDelete?: (uuid: string, type: string) => void;
   onView?: (uuid: string, type: string) => void;
-  onEdit?: (uuid: string, type: string) => void;
   onRefresh?: () => void;
   selectedItems?: Set<string>;
   onSelectionChange?: (selected: Set<string>) => void;
@@ -118,13 +101,8 @@ export default function DataTable({
   data,
   loading = false,
   error = null,
-  onValidate,
-  onReject,
-  onPublish,
-  onBlock,
   onDelete,
   onView,
-  onEdit,
   onRefresh,
   selectedItems = new Set(),
   onSelectionChange,
@@ -179,17 +157,8 @@ export default function DataTable({
     return configs[type as keyof typeof configs] || configs.produit;
   };
 
-  // ✅ FONCTION CORRIGÉE POUR LES STATUTS
   const getStatusConfig = (item: AnnonceItem) => {
     const statusLower = item.status?.toLowerCase() || "";
-
-    // Log pour déboguer
-    console.log(`🎯 Statut pour ${item.title}:`, {
-      status: item.status,
-      estPublie: item.estPublie,
-      estBloque: item.estBloque,
-      statusLower
-    });
 
     // ✅ PRIORITÉ 1: Bloqué (priorité absolue)
     if (item.estBloque === true) {
@@ -341,31 +310,8 @@ export default function DataTable({
         case "view":
           onView?.(uuid, type);
           break;
-        case "edit":
-          onEdit?.(uuid, type);
-          break;
-        case "validate":
-          onValidate?.(uuid, type);
-          break;
-        case "reject":
-          onReject?.(uuid, type);
-          break;
-        case "publish":
-          onPublish?.(uuid, type, true);
-          break;
-        case "unpublish":
-          onPublish?.(uuid, type, false);
-          break;
-        case "block":
-          onBlock?.(uuid, type, true);
-          break;
-        case "unblock":
-          onBlock?.(uuid, type, false);
-          break;
         case "delete":
-          if (confirm("Êtes-vous sûr de vouloir supprimer cette annonce ?")) {
-            onDelete?.(uuid, type);
-          }
+          onDelete?.(uuid, type);
           break;
       }
     } catch (error) {
@@ -459,7 +405,7 @@ export default function DataTable({
     <div
       className={`bg-white border border-light rounded-3 shadow-sm ${className}`}
     >
-      {/* Barre d'actions en masse */}
+      {/* Barre d'actions en masse - SIMPLIFIÉE */}
       {selectedItems.size > 0 && (
         <div
           className="px-4 py-3 border-bottom border-light"
@@ -477,57 +423,6 @@ export default function DataTable({
             </div>
 
             <div className="d-flex gap-2">
-              <button
-                type="button"
-                className="btn btn-sm d-flex align-items-center gap-2"
-                onClick={() => handleBulkAction("publish")}
-                style={{
-                  backgroundColor: colors.status.published,
-                  color: "white",
-                  border: "none",
-                  padding: "0.25rem 0.5rem",
-                  borderRadius: "4px",
-                  fontSize: "0.75rem",
-                }}
-              >
-                <FontAwesomeIcon icon={faGlobe} size="xs" />
-                Publier
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-sm d-flex align-items-center gap-2"
-                onClick={() => handleBulkAction("unpublish")}
-                style={{
-                  backgroundColor: colors.oskar.warning,
-                  color: "white",
-                  border: "none",
-                  padding: "0.25rem 0.5rem",
-                  borderRadius: "4px",
-                  fontSize: "0.75rem",
-                }}
-              >
-                <FontAwesomeIcon icon={faCalendarXmark} size="xs" />
-                Dépublier
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-sm d-flex align-items-center gap-2"
-                onClick={() => handleBulkAction("block")}
-                style={{
-                  backgroundColor: colors.status.blocked,
-                  color: "white",
-                  border: "none",
-                  padding: "0.25rem 0.5rem",
-                  borderRadius: "4px",
-                  fontSize: "0.75rem",
-                }}
-              >
-                <FontAwesomeIcon icon={faLock} size="xs" />
-                Bloquer
-              </button>
-
               <button
                 type="button"
                 className="btn btn-sm d-flex align-items-center gap-2"
@@ -602,12 +497,6 @@ export default function DataTable({
               const isSelected = selectedItems.has(item.uuid);
               const isProcessing = processingItems.has(item.uuid);
               const isExpanded = expandedItems.has(item.uuid);
-              const isPublished = item.estPublie === true;
-              const isBlocked = item.estBloque === true;
-              const isEnAttente = 
-                !isPublished && 
-                !isBlocked && 
-                (item.status?.toLowerCase().includes("attente") || !isPublished);
               const imageUrl = getImageUrl(item);
 
               return (
@@ -798,120 +687,6 @@ export default function DataTable({
                             <FontAwesomeIcon icon={faEye} size="xs" />
                           </button>
 
-                          {/* Valider (seulement en attente) */}
-                          {isEnAttente && onValidate && (
-                            <button
-                              type="button"
-                              className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
-                              onClick={() =>
-                                handleAction("validate", item.uuid, item.type)
-                              }
-                              title="Valider"
-                              style={{
-                                width: "28px",
-                                height: "28px",
-                                backgroundColor: `${colors.status.validated}15`,
-                                color: colors.status.validated,
-                                border: "none",
-                                borderRadius: "4px",
-                              }}
-                            >
-                              <FontAwesomeIcon icon={faCheck} size="xs" />
-                            </button>
-                          )}
-
-                          {/* Refuser (seulement en attente) */}
-                          {isEnAttente && onReject && (
-                            <button
-                              type="button"
-                              className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
-                              onClick={() =>
-                                handleAction("reject", item.uuid, item.type)
-                              }
-                              title="Refuser"
-                              style={{
-                                width: "28px",
-                                height: "28px",
-                                backgroundColor: `${colors.oskar.red}15`,
-                                color: colors.oskar.red,
-                                border: "none",
-                                borderRadius: "4px",
-                              }}
-                            >
-                              <FontAwesomeIcon icon={faXmark} size="xs" />
-                            </button>
-                          )}
-
-                          {/* Publier/Dépublier */}
-                          {onPublish && (
-                            <button
-                              type="button"
-                              className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
-                              onClick={() =>
-                                handleAction(
-                                  isPublished ? "unpublish" : "publish",
-                                  item.uuid,
-                                  item.type,
-                                )
-                              }
-                              title={isPublished ? "Dépublier" : "Publier"}
-                              style={{
-                                width: "28px",
-                                height: "28px",
-                                backgroundColor: isPublished
-                                  ? `${colors.oskar.warning}15`
-                                  : `${colors.status.published}15`,
-                                color: isPublished
-                                  ? colors.oskar.warning
-                                  : colors.status.published,
-                                border: "none",
-                                borderRadius: "4px",
-                              }}
-                            >
-                              <FontAwesomeIcon
-                                icon={
-                                  isPublished
-                                    ? faCalendarXmark
-                                    : faCalendarCheck
-                                }
-                                size="xs"
-                              />
-                            </button>
-                          )}
-
-                          {/* Bloquer/Débloquer */}
-                          {onBlock && (
-                            <button
-                              type="button"
-                              className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
-                              onClick={() =>
-                                handleAction(
-                                  isBlocked ? "unblock" : "block",
-                                  item.uuid,
-                                  item.type,
-                                )
-                              }
-                              title={isBlocked ? "Débloquer" : "Bloquer"}
-                              style={{
-                                width: "28px",
-                                height: "28px",
-                                backgroundColor: isBlocked
-                                  ? `${colors.oskar.green}15`
-                                  : `${colors.status.blocked}15`,
-                                color: isBlocked
-                                  ? colors.oskar.green
-                                  : colors.status.blocked,
-                                border: "none",
-                                borderRadius: "4px",
-                              }}
-                            >
-                              <FontAwesomeIcon
-                                icon={isBlocked ? faUnlock : faLock}
-                                size="xs"
-                              />
-                            </button>
-                          )}
-
                           {/* Supprimer */}
                           {onDelete && (
                             <button
@@ -931,28 +706,6 @@ export default function DataTable({
                               }}
                             >
                               <FontAwesomeIcon icon={faTrash} size="xs" />
-                            </button>
-                          )}
-
-                          {/* Éditer */}
-                          {onEdit && (
-                            <button
-                              type="button"
-                              className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
-                              onClick={() =>
-                                handleAction("edit", item.uuid, item.type)
-                              }
-                              title="Éditer"
-                              style={{
-                                width: "28px",
-                                height: "28px",
-                                backgroundColor: `${colors.oskar.secondary}15`,
-                                color: colors.oskar.secondary,
-                                border: "none",
-                                borderRadius: "4px",
-                              }}
-                            >
-                              <FontAwesomeIcon icon={faEdit} size="xs" />
                             </button>
                           )}
                         </>

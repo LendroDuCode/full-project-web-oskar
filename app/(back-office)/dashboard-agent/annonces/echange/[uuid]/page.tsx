@@ -547,7 +547,7 @@ export default function EchangeDetailPage() {
             "L'échange a été supprimé définitivement. Redirection vers la liste...",
           );
           setTimeout(() => {
-            router.push("/annonces");
+            router.push("/dashboard-agent/annonces");
           }, 2000);
         } catch (err: any) {
           console.error("Erreur lors de la suppression:", err);

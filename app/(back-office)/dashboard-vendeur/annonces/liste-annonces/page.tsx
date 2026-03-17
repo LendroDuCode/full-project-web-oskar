@@ -50,7 +50,6 @@ export default function AnnoncesPage() {
     type: string;
   } | null>(null);
 
-  // États pour le modal de confirmation de suppression
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{
     uuid: string;
@@ -59,13 +58,10 @@ export default function AnnoncesPage() {
   } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // ✅ Fonction pour transformer les données selon le type (CORRIGÉE)
   const transformAnnonceData = useCallback(
     (item: any, type: string): AnnonceData => {
-      // Déterminer correctement estBloque
       let estBloque = false;
       
-      // Vérifier toutes les sources possibles pour le statut bloqué
       if (item.estBloque === true || item.est_bloque === true) {
         estBloque = true;
       } else if (item.statut && typeof item.statut === 'string') {
@@ -75,7 +71,6 @@ export default function AnnoncesPage() {
         }
       }
 
-      // Déterminer correctement estPublie
       let estPublie = false;
       if (item.estPublie === true) {
         estPublie = true;
@@ -122,7 +117,6 @@ export default function AnnoncesPage() {
         originalData: item,
       };
 
-      // Traitement spécifique selon le type
       switch (type) {
         case "produit":
           return {
@@ -135,7 +129,6 @@ export default function AnnoncesPage() {
               boutique: item.boutique?.nom,
             },
           };
-
         case "don":
           return {
             ...baseData,
@@ -144,7 +137,6 @@ export default function AnnoncesPage() {
               type: "vendeur",
             },
           };
-
         case "echange":
           return {
             ...baseData,
@@ -153,7 +145,6 @@ export default function AnnoncesPage() {
               type: "vendeur",
             },
           };
-
         default:
           return baseData;
       }
@@ -161,43 +152,24 @@ export default function AnnoncesPage() {
     [],
   );
 
-  // ✅ Fonction pour extraire les items de la réponse (gère tous les formats)
   const extractItems = (response: any): any[] => {
     if (!response) return [];
-
-    // Si c'est déjà un tableau
     if (Array.isArray(response)) return response;
-
-    // Format: { data: [...] }
     if (response.data && Array.isArray(response.data)) return response.data;
-
-    // Format: { data: { produits: [...] } }
     if (response.data?.produits && Array.isArray(response.data.produits))
       return response.data.produits;
-
-    // Format: { data: { dons: [...] } }
     if (response.data?.dons && Array.isArray(response.data.dons))
       return response.data.dons;
-
-    // Format: { data: { echanges: [...] } }
     if (response.data?.echanges && Array.isArray(response.data.echanges))
       return response.data.echanges;
-
-    // Format: { produits: [...] }
     if (response.produits && Array.isArray(response.produits))
       return response.produits;
-
-    // Format: { dons: [...] }
     if (response.dons && Array.isArray(response.dons)) return response.dons;
-
-    // Format: { echanges: [...] }
     if (response.echanges && Array.isArray(response.echanges))
       return response.echanges;
-
     return [];
   };
 
-  // ✅ Fonction pour charger les données PUBLIÉES
   const fetchPublishedData = useCallback(
     async (type: string) => {
       try {
@@ -231,9 +203,7 @@ export default function AnnoncesPage() {
             break;
 
           case "produit":
-            const produits = await api.get(
-              API_ENDPOINTS.PRODUCTS.VENDEUR_PRODUCTS,
-            );
+            const produits = await api.get(API_ENDPOINTS.PRODUCTS.VENDEUR_PRODUCTS);
             const produitsData2 = extractItems(produits);
             data = produitsData2.map((item: any) =>
               transformAnnonceData(item, "produit"),
@@ -249,9 +219,7 @@ export default function AnnoncesPage() {
             break;
 
           case "echange":
-            const echanges = await api.get(
-              API_ENDPOINTS.ECHANGES.VENDEUR_ECHANGES,
-            );
+            const echanges = await api.get(API_ENDPOINTS.ECHANGES.VENDEUR_ECHANGES);
             const echangesData2 = extractItems(echanges);
             data = echangesData2.map((item: any) =>
               transformAnnonceData(item, "echange"),
@@ -275,7 +243,6 @@ export default function AnnoncesPage() {
     [transformAnnonceData],
   );
 
-  // ✅ Fonction pour charger les données BLOQUÉES
   const fetchBlockedData = useCallback(
     async (type: string) => {
       try {
@@ -326,9 +293,7 @@ export default function AnnoncesPage() {
             break;
 
           case "echange":
-            const echanges = await api.get(
-              API_ENDPOINTS.ECHANGES.VENDEUR_BLOCKED,
-            );
+            const echanges = await api.get(API_ENDPOINTS.ECHANGES.VENDEUR_BLOCKED);
             const echangesData2 = extractItems(echanges);
             data = echangesData2.map((item: any) =>
               transformAnnonceData(item, "echange"),
@@ -353,7 +318,6 @@ export default function AnnoncesPage() {
     [transformAnnonceData],
   );
 
-  // ✅ Fonction pour charger les données PUBLIÉES SPÉCIFIQUES (pour le statut "publie")
   const fetchPublishedSpecificData = useCallback(
     async (type: string) => {
       try {
@@ -369,14 +333,9 @@ export default function AnnoncesPage() {
                 api.get(API_ENDPOINTS.ECHANGES.LISTE_ECHANGES_PUBLIE_VENDEUR),
               ]);
 
-            // Traitement spécial car ces endpoints retournent des tableaux directement
-            const produitsData = Array.isArray(produitsResponse)
-              ? produitsResponse
-              : [];
+            const produitsData = Array.isArray(produitsResponse) ? produitsResponse : [];
             const donsData = Array.isArray(donsResponse) ? donsResponse : [];
-            const echangesData = Array.isArray(echangesResponse)
-              ? echangesResponse
-              : [];
+            const echangesData = Array.isArray(echangesResponse) ? echangesResponse : [];
 
             data = [
               ...produitsData.map((item: any) =>
@@ -392,9 +351,7 @@ export default function AnnoncesPage() {
             break;
 
           case "produit":
-            const produits = await api.get(
-              API_ENDPOINTS.PRODUCTS.LISTE_PRODUITS_PUBLIES_VENDEUR,
-            );
+            const produits = await api.get(API_ENDPOINTS.PRODUCTS.LISTE_PRODUITS_PUBLIES_VENDEUR);
             const produitsData2 = Array.isArray(produits) ? produits : [];
             data = produitsData2.map((item: any) =>
               transformAnnonceData(item, "produit"),
@@ -402,9 +359,7 @@ export default function AnnoncesPage() {
             break;
 
           case "don":
-            const dons = await api.get(
-              API_ENDPOINTS.DONS.LISTE_DON_PUBLIE_VENDEUR,
-            );
+            const dons = await api.get(API_ENDPOINTS.DONS.LISTE_DON_PUBLIE_VENDEUR);
             const donsData2 = Array.isArray(dons) ? dons : [];
             data = donsData2.map((item: any) =>
               transformAnnonceData(item, "don"),
@@ -412,9 +367,7 @@ export default function AnnoncesPage() {
             break;
 
           case "echange":
-            const echanges = await api.get(
-              API_ENDPOINTS.ECHANGES.LISTE_ECHANGES_PUBLIE_VENDEUR,
-            );
+            const echanges = await api.get(API_ENDPOINTS.ECHANGES.LISTE_ECHANGES_PUBLIE_VENDEUR);
             const echangesData2 = Array.isArray(echanges) ? echanges : [];
             data = echangesData2.map((item: any) =>
               transformAnnonceData(item, "echange"),
@@ -438,7 +391,6 @@ export default function AnnoncesPage() {
     [transformAnnonceData],
   );
 
-  // ✅ Fonction principale pour charger les données selon le type et le statut
   const fetchData = useCallback(
     async (type: string, status: string) => {
       if (status === "bloque") {
@@ -447,7 +399,6 @@ export default function AnnoncesPage() {
         await fetchPublishedSpecificData(type);
       } else if (status === "en-attente") {
         await fetchPublishedData(type);
-        // Filtrer pour ne garder que les annonces en attente
         setAnnonces((prev) => {
           const filtered = prev.filter(
             (item) =>
@@ -465,12 +416,10 @@ export default function AnnoncesPage() {
     [fetchPublishedData, fetchBlockedData, fetchPublishedSpecificData],
   );
 
-  // ✅ Effet pour charger les données quand les filtres changent
   useEffect(() => {
     fetchData(selectedType, selectedStatus);
   }, [selectedType, selectedStatus, fetchData]);
 
-  // ✅ Filtrer par recherche
   useEffect(() => {
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
@@ -493,48 +442,59 @@ export default function AnnoncesPage() {
     }
   }, [annonces, searchQuery]);
 
-  // ✅ Actions spécifiques pour vendeur
-  const handlePublish = useCallback(
-    async (uuid: string, type: string, publish: boolean) => {
-      try {
-        setError(null);
-        const endpoint = getPublishEndpoint(type, uuid, publish);
-
-        if (!endpoint) {
-          throw new Error(`Endpoint non défini pour le type: ${type}`);
-        }
-
-        await api.post(endpoint);
-
-        // Mise à jour optimiste de l'UI
-        setAnnonces((prev) =>
-          prev.map((item) =>
-            item.uuid === uuid ? { ...item, estPublie: publish } : item,
-          ),
-        );
-
-        // Rafraîchir les données
-        await fetchData(selectedType, selectedStatus);
-      } catch (err: any) {
-        console.error("Erreur lors de la publication:", err);
-        setError(err.response?.data?.message || "Erreur lors de l'opération");
-        alert(err.response?.data?.message || "Erreur lors de l'opération");
-      }
-    },
-    [fetchData, selectedType, selectedStatus],
-  );
-
+  // ✅ FONCTION DE BLOCAGE CORRIGÉE
   const handleBlock = useCallback(
     async (uuid: string, type: string, block: boolean) => {
       try {
         setError(null);
-        const endpoint = getBlockEndpoint(type, uuid, block);
-
-        if (!endpoint) {
-          throw new Error(`Endpoint non défini pour le type: ${type}`);
+        
+        // Déterminer le bon endpoint et le payload selon le type
+        let endpoint = "";
+        let payload: any = {};
+        
+        if (block) {
+          // Bloquer
+          switch (type) {
+            case "produit":
+              endpoint = API_ENDPOINTS.PRODUCTS.BLOQUE_PRODUITS;
+              payload = { productUuid: uuid, est_bloque: true };
+              break;
+            case "don":
+              endpoint = API_ENDPOINTS.DONS.BLOQUE_DON;
+              payload = { donUuid: uuid, est_bloque: true };
+              break;
+            case "echange":
+              endpoint = API_ENDPOINTS.ECHANGES.BLOQUER_ECHNAGE;
+              payload = { echangeUuid: uuid, est_bloque: true };
+              break;
+            default:
+              throw new Error(`Type non supporté: ${type}`);
+          }
+        } else {
+          // Débloquer
+          switch (type) {
+            case "produit":
+              endpoint = API_ENDPOINTS.PRODUCTS.BLOQUE_PRODUITS;
+              payload = { productUuid: uuid, est_bloque: false };
+              break;
+            case "don":
+              endpoint = API_ENDPOINTS.DONS.BLOQUE_DON;
+              payload = { donUuid: uuid, est_bloque: false };
+              break;
+            case "echange":
+              endpoint = API_ENDPOINTS.ECHANGES.BLOQUER_ECHNAGE;
+              payload = { echangeUuid: uuid, est_bloque: false };
+              break;
+            default:
+              throw new Error(`Type non supporté: ${type}`);
+          }
         }
 
-        await api.post(endpoint);
+        console.log(`📡 ${block ? 'Blocage' : 'Déblocage'} - Type: ${type}, UUID: ${uuid}`);
+        console.log('📡 Endpoint:', endpoint);
+        console.log('📡 Payload:', payload);
+        
+        await api.post(endpoint, payload);
 
         // Mise à jour optimiste de l'UI
         setAnnonces((prev) =>
@@ -545,8 +505,9 @@ export default function AnnoncesPage() {
 
         // Rafraîchir les données
         await fetchData(selectedType, selectedStatus);
+        
       } catch (err: any) {
-        console.error("Erreur lors du blocage:", err);
+        console.error("❌ Erreur lors du blocage:", err);
         setError(err.response?.data?.message || "Erreur lors de l'opération");
         alert(err.response?.data?.message || "Erreur lors de l'opération");
       }
@@ -554,7 +515,6 @@ export default function AnnoncesPage() {
     [fetchData, selectedType, selectedStatus],
   );
 
-  // ✅ Ouvrir le modal de confirmation de suppression
   const openDeleteModal = useCallback(
     (uuid: string, type: string, title: string) => {
       setItemToDelete({ uuid, type, title });
@@ -563,7 +523,6 @@ export default function AnnoncesPage() {
     [],
   );
 
-  // ✅ Confirmer la suppression
   const confirmDelete = useCallback(async () => {
     if (!itemToDelete) return;
 
@@ -580,7 +539,6 @@ export default function AnnoncesPage() {
 
       await api.delete(endpoint);
 
-      // Mise à jour optimiste de l'UI
       setAnnonces((prev) =>
         prev.filter((item) => item.uuid !== itemToDelete.uuid),
       );
@@ -588,7 +546,6 @@ export default function AnnoncesPage() {
         prev.filter((item) => item.uuid !== itemToDelete.uuid),
       );
 
-      // Fermer le modal
       setDeleteModalOpen(false);
       setItemToDelete(null);
     } catch (err: any) {
@@ -600,7 +557,6 @@ export default function AnnoncesPage() {
     }
   }, [itemToDelete]);
 
-  // ✅ Annuler la suppression
   const cancelDelete = useCallback(() => {
     setDeleteModalOpen(false);
     setItemToDelete(null);
@@ -615,23 +571,13 @@ export default function AnnoncesPage() {
   );
 
   const handleValidate = useCallback(async (uuid: string, type: string) => {
-    try {
-      console.log("Validation pour vendeur:", uuid, type);
-      alert("Fonctionnalité de validation non implémentée pour les vendeurs");
-    } catch (err) {
-      console.error("Erreur lors de la validation:", err);
-      alert("Erreur lors de la validation");
-    }
+    console.log("Validation pour vendeur:", uuid, type);
+    alert("Cette fonctionnalité n'est pas disponible pour les vendeurs");
   }, []);
 
   const handleReject = useCallback(async (uuid: string, type: string) => {
-    try {
-      console.log("Rejet pour vendeur:", uuid, type);
-      alert("Fonctionnalité de rejet non implémentée pour les vendeurs");
-    } catch (err) {
-      console.error("Erreur lors du rejet:", err);
-      alert("Erreur lors du rejet");
-    }
+    console.log("Rejet pour vendeur:", uuid, type);
+    alert("Cette fonctionnalité n'est pas disponible pour les vendeurs");
   }, []);
 
   const handleView = useCallback(
@@ -647,73 +593,6 @@ export default function AnnoncesPage() {
     },
     [filteredAnnonces],
   );
-
-  const handleEdit = useCallback((uuid: string, type: string) => {
-    console.log("Édition pour vendeur:", uuid, type);
-    alert("Fonctionnalité d'édition non implémentée pour les vendeurs");
-  }, []);
-
-  // ✅ Helper functions pour les endpoints
-  const getPublishEndpoint = (
-    type: string,
-    uuid: string,
-    publish: boolean,
-  ): string => {
-    if (publish) {
-      switch (type) {
-        case "produit":
-          return API_ENDPOINTS.PRODUCTS.PUBLISH(uuid);
-        case "don":
-          return API_ENDPOINTS.DONS.PUBLISH;
-        case "echange":
-          return API_ENDPOINTS.ECHANGES.PUBLISH;
-        default:
-          return "";
-      }
-    } else {
-      // Pour dépublication
-      switch (type) {
-        case "produit":
-          return API_ENDPOINTS.PRODUCTS.UNPUBLISH(uuid);
-        case "don":
-          return API_ENDPOINTS.DONS.UNPUBLISH(uuid);
-        case "echange":
-          return API_ENDPOINTS.ECHANGES.DETAIL_NON_PUBLIE(uuid);
-        default:
-          return "";
-      }
-    }
-  };
-
-  const getBlockEndpoint = (
-    type: string,
-    uuid: string,
-    block: boolean,
-  ): string => {
-    if (block) {
-      switch (type) {
-        case "produit":
-          return API_ENDPOINTS.PRODUCTS.BLOCK(uuid);
-        case "don":
-         // return API_ENDPOINTS.DONS.BLOCK(uuid);
-        case "echange":
-        //  return API_ENDPOINTS.ECHANGES.BLOCK(uuid);
-        default:
-          return "";
-      }
-    } else {
-      switch (type) {
-        case "produit":
-          return API_ENDPOINTS.PRODUCTS.UNBLOCK(uuid);
-        case "don":
-         // return API_ENDPOINTS.DONS.UNBLOCK(uuid);
-        case "echange":
-        //  return API_ENDPOINTS.ECHANGES.UNBLOCK(uuid);
-        default:
-          return "";
-      }
-    }
-  };
 
   const getDeleteEndpoint = (type: string, uuid: string): string => {
     switch (type) {
@@ -737,12 +616,6 @@ export default function AnnoncesPage() {
 
         for (const item of items) {
           switch (action) {
-            case "publish":
-              await handlePublish(item.uuid, item.type, true);
-              break;
-            case "unpublish":
-              await handlePublish(item.uuid, item.type, false);
-              break;
             case "block":
               await handleBlock(item.uuid, item.type, true);
               break;
@@ -761,7 +634,7 @@ export default function AnnoncesPage() {
         alert("Erreur lors de l'opération en masse");
       }
     },
-    [handlePublish, handleBlock, handleDelete],
+    [handleBlock, handleDelete],
   );
 
   const handleClearFilters = useCallback(() => {
@@ -775,7 +648,6 @@ export default function AnnoncesPage() {
     fetchData(selectedType, selectedStatus);
   }, [selectedType, selectedStatus, fetchData]);
 
-  // Indicateur de chargement combiné
   const isLoading = loading || isFetchingBlocked;
 
   return (
@@ -783,7 +655,6 @@ export default function AnnoncesPage() {
       className="container-fluid px-0"
       style={{ minHeight: "100vh", backgroundColor: colors.oskar.lightGrey }}
     >
-      {/* Barre de filtres */}
       <FilterBar
         selectedType={selectedType}
         selectedStatus={selectedStatus}
@@ -797,9 +668,7 @@ export default function AnnoncesPage() {
         selectedCount={selectedItems.size}
       />
 
-      {/* Contenu principal */}
       <div className="container-fluid px-4 py-4">
-        {/* En-tête */}
         <div className="d-flex justify-content-between align-items-center mb-4">
           <div>
             <h1
@@ -840,7 +709,6 @@ export default function AnnoncesPage() {
           </div>
         </div>
 
-        {/* Tableau ou état vide */}
         {filteredAnnonces.length > 0 ? (
           <>
             <DataTable
@@ -849,11 +717,9 @@ export default function AnnoncesPage() {
               error={error}
               onValidate={handleValidate}
               onReject={handleReject}
-              onPublish={handlePublish}
               onBlock={handleBlock}
               onDelete={handleDelete}
               onView={handleView}
-              onEdit={handleEdit}
               onRefresh={handleRefresh}
               selectedItems={selectedItems}
               onSelectionChange={setSelectedItems}
@@ -861,7 +727,6 @@ export default function AnnoncesPage() {
               className="mb-4"
             />
 
-            {/* Modal de visualisation */}
             {selectedAnnonce && (
               <ViewModal
                 isOpen={viewModalOpen}
@@ -873,13 +738,11 @@ export default function AnnoncesPage() {
                 type={selectedAnnonce.type as "produit" | "don" | "echange"}
                 onValidate={handleValidate}
                 onReject={handleReject}
-                onPublish={handlePublish}
                 onBlock={handleBlock}
                 onDelete={handleDelete}
               />
             )}
 
-            {/* Modal de confirmation de suppression */}
             <DeleteConfirmModal
               isOpen={deleteModalOpen}
               onClose={cancelDelete}

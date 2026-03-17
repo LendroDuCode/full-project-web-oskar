@@ -59,6 +59,8 @@ export const API_ENDPOINTS = {
       BLOCK: (uuid: string) => withBaseUrl(`/auth/vendeur/${uuid}/bloquer`),
       UNBLOCK: (uuid: string) => withBaseUrl(`/auth/vendeur/${uuid}/debloquer`),
       STATUS: (uuid: string) => withBaseUrl(`/auth/vendeur/${uuid}/status`),
+
+
     },
     UTILISATEUR: {
       LOGIN: withBaseUrl("/auth/utilisateur/login"),
@@ -119,6 +121,11 @@ export const API_ENDPOINTS = {
     RECUPERER_REGISTRE_COMMERCE_PAR_UUID: (uuid: string) => withBaseUrl(`/auth/vendeur/${uuid}/registre-commerce`),
     SUPPRIMER_REGISTRE_COMMERCE: (uuid: string) => withBaseUrl(`/auth/vendeur/${uuid}/registre-commerce`),
     EXPORT_DELETED_PDF: withBaseUrl("/admin/export-vendeurs-supprimes-pdf"),
+     VALIDER_CERTIFICAT: (uuid: string) => withBaseUrl(`/auth/${uuid}/valider`),
+      REJETER_CERTIFICAT: (uuid: string) => withBaseUrl(`/auth/${uuid}/rejeter`),
+      LISTE_VENDEUR_VALIDES: withBaseUrl(`/auth/valides`),
+      LISTE_VENDEUR_REJETES: withBaseUrl(`/auth/rejetes`),
+      LISTE_VENDEUR_EN_ATTENTE: withBaseUrl(`/auth/en-attente`),
   },
 
   // Admin

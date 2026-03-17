@@ -35,6 +35,16 @@ const DonForm: React.FC<DonFormProps> = ({
 
   const setDonData = (newData: any) => onChange(newData);
 
+  // S'assurer que la quantité est toujours à 1
+  useEffect(() => {
+    if (donData.quantite !== "1") {
+      setDonData({
+        ...donData,
+        quantite: "1",
+      });
+    }
+  }, [donData.quantite]);
+
   // Utiliser les catégories des props si disponibles, sinon les charger
   useEffect(() => {
     if (propCategories && propCategories.length > 0) {
@@ -134,6 +144,7 @@ const DonForm: React.FC<DonFormProps> = ({
       ...donData,
       categorie_uuid: categorieUuid,
       sous_categorie_uuid: "",
+      quantite: "1", // S'assurer que la quantité reste à 1
     });
 
     // Charger les sous-catégories
@@ -150,6 +161,7 @@ const DonForm: React.FC<DonFormProps> = ({
     setDonData({
       ...donData,
       sous_categorie_uuid: sousCategorieUuid,
+      quantite: "1", // S'assurer que la quantité reste à 1
     });
   };
 
@@ -211,7 +223,7 @@ const DonForm: React.FC<DonFormProps> = ({
                     style={{ fontSize: "1.1rem" }}
                     placeholder="Ex: Don de vêtements pour enfants"
                     value={donData.titre || ""}
-                    onChange={(e) => setDonData({ ...donData, titre: e.target.value })}
+                    onChange={(e) => setDonData({ ...donData, titre: e.target.value, quantite: "1" })}
                     required
                   />
                 </div>
@@ -227,7 +239,7 @@ const DonForm: React.FC<DonFormProps> = ({
                     rows={3}
                     placeholder="Décrivez l'objet que vous souhaitez donner..."
                     value={donData.description || ""}
-                    onChange={(e) => setDonData({ ...donData, description: e.target.value })}
+                    onChange={(e) => setDonData({ ...donData, description: e.target.value, quantite: "1" })}
                   />
                 </div>
 
@@ -244,28 +256,13 @@ const DonForm: React.FC<DonFormProps> = ({
                       style={{ fontSize: "1.1rem" }}
                       placeholder="Ex: Rue 12, Angré, Abidjan"
                       value={donData.lieu_retrait || ""}
-                      onChange={(e) => setDonData({ ...donData, lieu_retrait: e.target.value })}
+                      onChange={(e) => setDonData({ ...donData, lieu_retrait: e.target.value, quantite: "1" })}
                       required
                     />
                   </div>
                 </div>
 
-                {/* Quantité - Optionnelle */}
-                <div className="row g-4 mb-4">
-                  <div className="col-md-12">
-                    <label className="form-label fw-bold fs-5 mb-3" style={{ color: "#000000" }}>
-                      Quantité <span className="text-muted">(optionnelle, défaut: 1)</span>
-                    </label>
-                    <input
-                      type="number"
-                      className="form-control form-control-lg border border-secondary rounded-4 py-3 px-4"
-                      style={{ fontSize: "1.1rem" }}
-                      value={donData.quantite || 1}
-                      onChange={(e) => setDonData({ ...donData, quantite: e.target.value })}
-                      min="1"
-                    />
-                  </div>
-                </div>
+                {/* Champ Quantité - SUPPRIMÉ (valeur par défaut à 1) */}
               </div>
             </div>
           </div>
@@ -403,7 +400,6 @@ const DonForm: React.FC<DonFormProps> = ({
                               </option>
                             ))}
                           </select>
-                          {/* ✅ UNE SEULE ICÔNE DE SÉLECTION - POSITIONNÉE CORRECTEMENT */}
                           <div className="position-absolute end-0 top-0 h-100 d-flex align-items-center pe-4" style={{ pointerEvents: "none", zIndex: 2 }}>
                             <FontAwesomeIcon icon={faChevronDown} className="text-secondary" style={{ fontSize: "1rem" }} />
                           </div>
@@ -436,7 +432,6 @@ const DonForm: React.FC<DonFormProps> = ({
                                 </option>
                               ))}
                             </select>
-                            {/* ✅ UNE SEULE ICÔNE DE SÉLECTION - POSITIONNÉE CORRECTEMENT */}
                             <div className="position-absolute end-0 top-0 h-100 d-flex align-items-center pe-4" style={{ pointerEvents: "none", zIndex: 2 }}>
                               <FontAwesomeIcon icon={faChevronDown} className="text-secondary" style={{ fontSize: "1rem" }} />
                             </div>

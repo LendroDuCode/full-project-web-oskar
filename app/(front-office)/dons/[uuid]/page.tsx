@@ -13,7 +13,7 @@ import PublishAdModal from "@/app/(front-office)/publication-annonce/page";
 
 // Import des icônes FontAwesome
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faWhatsapp, faFacebookF } from "@fortawesome/free-brands-svg-icons";
+import { faWhatsapp, faFacebookF, faTiktok, faLinkedinIn } from "@fortawesome/free-brands-svg-icons";
 import {
   faUser,
   faEnvelope,
@@ -89,6 +89,8 @@ interface CreateurInfo {
   whatsapp_url?: string | null;
   twitter_url?: string | null;
   instagram_url?: string | null;
+  tiktok_url?: string | null;
+  linkedin_url?: string | null;
   est_verifie?: boolean;
   est_bloque?: boolean;
   userType?: string;
@@ -149,7 +151,7 @@ interface DonAPI {
   etoiles_vides: number;
   repartition_notes: any | null;
   is_favoris: boolean;
-  favorite_id?: string; // ✅ AJOUT: ID du favori pour la suppression
+  favorite_id?: string;
   createur: CreateurInfo;
   createurType: "utilisateur" | "vendeur";
   categorie: Categorie | null;
@@ -225,7 +227,7 @@ interface Don {
   note_moyenne: number;
   nombre_avis: number;
   is_favoris: boolean;
-  favorite_id?: string; // ✅ AJOUT: Stocker l'ID du favori
+  favorite_id?: string;
   createur?: CreateurInfo;
   createurType?: "utilisateur" | "vendeur";
   categorie: Categorie | null;
@@ -549,7 +551,7 @@ const ContactModal = ({
           <div className="modal-header border-0 pb-0">
             <h5 className="modal-title fw-bold">
               <FontAwesomeIcon icon={faUser} className="me-2 text-success" />
-              Contactez le donateur
+              Contacter
             </h5>
             <button
               type="button"
@@ -635,7 +637,7 @@ const ContactModal = ({
               )}
               {createur.telephone && (
                 <div className={isMobile ? "col-6" : "col-12"}>
-                  <button
+                  {/* <button
                     onClick={handleWhatsApp}
                     className="btn btn-outline-success w-100 py-3 d-flex align-items-center justify-content-center gap-2"
                     style={{ borderColor: "#25D366", color: "#25D366" }}
@@ -650,7 +652,7 @@ const ContactModal = ({
                   >
                     <FontAwesomeIcon icon={faWhatsapp} />
                     <span className="fw-semibold">WhatsApp</span>
-                  </button>
+                  </button> */}
                 </div>
               )}
             </div>
@@ -769,7 +771,7 @@ export default function DonDetailPage() {
   const [loadingRecents, setLoadingRecents] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [favori, setFavori] = useState(false);
-  const [favoriteId, setFavoriteId] = useState<string | null>(null); // ✅ AJOUT: Stocker l'ID du favori
+  const [favoriteId, setFavoriteId] = useState<string | null>(null);
   const [showMoreComments, setShowMoreComments] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
   const [commentairesFetched, setCommentairesFetched] = useState(false);
@@ -786,6 +788,7 @@ export default function DonDetailPage() {
     message: string;
   } | null>(null);
   const [showContactModal, setShowContactModal] = useState(false);
+  const [showShareMenu, setShowShareMenu] = useState(false);
   
   // ✅ État pour la modal de publication
   const [showPublishModal, setShowPublishModal] = useState(false);
@@ -929,6 +932,8 @@ export default function DonDetailPage() {
       whatsapp_url: apiCreateur.whatsapp_url || null,
       twitter_url: apiCreateur.twitter_url || null,
       instagram_url: apiCreateur.instagram_url || null,
+      tiktok_url: apiCreateur.tiktok_url || null,
+      linkedin_url: apiCreateur.linkedin_url || null,
       est_verifie: apiCreateur.est_verifie || false,
       est_bloque: apiCreateur.est_bloque || false,
       userType: apiCreateur.userType || apiCreateur.type || "utilisateur",
@@ -970,7 +975,7 @@ export default function DonDetailPage() {
       note_moyenne: apiDon.note_moyenne || 0,
       nombre_avis: apiDon.nombre_avis || 0,
       is_favoris: apiDon.is_favoris || false,
-      favorite_id: apiDon.favorite_id, // ✅ Récupérer l'ID du favori
+      favorite_id: apiDon.favorite_id,
       ...(apiDon.createur && {
         createur: transformCreateurInfo(apiDon.createur),
       }),
@@ -1200,7 +1205,7 @@ export default function DonDetailPage() {
       setDon(donData);
       setDonsSimilaires(similairesData);
       setFavori(response.don.is_favoris || false);
-      setFavoriteId(response.don.favorite_id || null); // ✅ Stocker l'ID du favori
+      setFavoriteId(response.don.favorite_id || null);
 
       if (response.don.createur) {
         const createurData = transformCreateurInfo(response.don.createur);
@@ -1337,6 +1342,53 @@ export default function DonDetailPage() {
   const noteStats = calculateNoteStats();
 
   // ============================================
+  // FONCTIONS DE PARTAGE SUR LES RÉSEAUX SOCIAUX
+  // ============================================
+  const handleShare = (platform: string) => {
+    if (!don) return;
+
+    const shareUrl = encodeURIComponent(window.location.href);
+    const shareTitle = encodeURIComponent(don.nom);
+    const shareDescription = encodeURIComponent(`Découvrez ce don sur OSKAR : ${don.nom} - ${don.prix === null ? "Gratuit" : formatPrice(don.prix)}`);
+    
+    let url = "";
+
+    switch (platform) {
+      case "facebook":
+        url = `https://www.facebook.com/sharer/sharer.php?u=${shareUrl}`;
+        break;
+      case "whatsapp":
+        url = `https://wa.me/?text=${shareDescription}%20${shareUrl}`;
+        break;
+      case "tiktok":
+        // TikTok utilise l'URL de partage standard
+        url = `https://www.tiktok.com/share?url=${shareUrl}`;
+        break;
+      case "linkedin":
+        url = `https://www.linkedin.com/sharing/share-offsite/?url=${shareUrl}`;
+        break;
+      default:
+        return;
+    }
+
+    window.open(url, "_blank", "noopener,noreferrer");
+    setShowShareMenu(false);
+  };
+
+  const handleCopyLink = () => {
+    navigator.clipboard
+      .writeText(window.location.href)
+      .then(() => {
+        showToast("success", "Lien copié dans le presse-papier !");
+        setShowShareMenu(false);
+      })
+      .catch((err) => {
+        console.error("Erreur copie lien:", err);
+        showToast("error", "Impossible de copier le lien.");
+      });
+  };
+
+  // ============================================
   // FONCTIONS D'ACTIONS - AVEC VÉRIFICATION D'AUTH
   // ============================================
   const showToast = (type: "success" | "error" | "info", message: string) => {
@@ -1442,21 +1494,19 @@ export default function DonDetailPage() {
     });
   };
 
-  // ✅ FONCTION CORRIGÉE POUR AJOUTER/SUPPRIMER DES FAVORIS (COMME DANS LA LISTE DES FAVORIS)
+  // ✅ FONCTION CORRIGÉE POUR AJOUTER/SUPPRIMER DES FAVORIS
   const handleAddToFavorites = () => {
     requireAuth(async () => {
       if (!don) return;
 
       try {
         if (favori && favoriteId) {
-          // ✅ Suppression avec l'ID du favori (comme dans la liste des favoris)
           console.log(`🗑️ Suppression du favori: ${favoriteId}`);
           await api.delete(`/favoris/${favoriteId}`);
           setFavori(false);
           setFavoriteId(null);
           showToast("success", "Don retiré des favoris");
         } else {
-          // ✅ Ajout aux favoris
           console.log("➕ Ajout aux favoris:", don.uuid);
           const payload = {
             itemUuid: don.uuid,
@@ -1464,7 +1514,6 @@ export default function DonDetailPage() {
           };
           const response = await api.post<any>(API_ENDPOINTS.FAVORIS.ADD, payload);
           
-          // ✅ Récupérer l'ID du favori depuis la réponse
           if (response && response.uuid) {
             setFavoriteId(response.uuid);
           } else if (response && response.data && response.data.uuid) {
@@ -1491,34 +1540,6 @@ export default function DonDetailPage() {
         showToast("error", errorMessage);
       }
     });
-  };
-
-  const handleShare = (platform: string) => {
-    if (!don) return;
-
-    const shareUrl = window.location.href;
-    const shareText = `Découvrez ce don sur OSKAR : ${don.nom}`;
-
-    const urls: { [key: string]: string } = {
-      facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`,
-      whatsapp: `https://wa.me/?text=${encodeURIComponent(shareText + " " + shareUrl)}`,
-    };
-
-    if (urls[platform]) {
-      window.open(urls[platform], "_blank", "noopener,noreferrer");
-    }
-  };
-
-  const handleCopyLink = () => {
-    navigator.clipboard
-      .writeText(window.location.href)
-      .then(() => {
-        showToast("success", "Lien copié dans le presse-papier !");
-      })
-      .catch((err) => {
-        console.error("Erreur copie lien:", err);
-        showToast("error", "Impossible de copier le lien.");
-      });
   };
 
   const handleLikeComment = (commentUuid: string) => {
@@ -1739,7 +1760,7 @@ export default function DonDetailPage() {
         </div>
       )}
 
-      {/* Modal de contact - MÊME DESIGN QUE LES ÉCHANGES */}
+      {/* Modal de contact */}
       <ContactModal
         show={showContactModal}
         onHide={() => setShowContactModal(false)}
@@ -1814,17 +1835,72 @@ export default function DonDetailPage() {
                   <FontAwesomeIcon icon={faGift} />
                   <span>don</span>
                 </div>
+                
+                {/* Bouton Partager */}
+                <div className="position-absolute top-0 start-50 translate-middle-x mt-3">
+                  <div className="btn-group" style={{ boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}>
+                    <button
+                      className="btn btn-light rounded-pill px-4 py-2 d-flex align-items-center gap-2"
+                      onClick={() => setShowShareMenu(!showShareMenu)}
+                    >
+                      <FontAwesomeIcon icon={faShareAlt} className="text-primary" />
+                      Partager
+                    </button>
+                    
+                    {showShareMenu && (
+                      <div className="position-absolute top-100 start-50 translate-middle-x mt-2 bg-white rounded-3 shadow-lg p-2" style={{ minWidth: "200px", zIndex: 10 }}>
+                        <button
+                          className="btn btn-link w-100 text-start text-decoration-none p-2 hover-bg-light rounded-2"
+                          onClick={() => handleShare("facebook")}
+                        >
+                          <FontAwesomeIcon icon={faFacebookF} className="text-primary me-2" />
+                          Facebook
+                        </button>
+                        <button
+                          className="btn btn-link w-100 text-start text-decoration-none p-2 hover-bg-light rounded-2"
+                          onClick={() => handleShare("whatsapp")}
+                        >
+                          <FontAwesomeIcon icon={faWhatsapp} className="text-success me-2" />
+                          WhatsApp
+                        </button>
+                        <button
+                          className="btn btn-link w-100 text-start text-decoration-none p-2 hover-bg-light rounded-2"
+                          onClick={() => handleShare("tiktok")}
+                        >
+                          <FontAwesomeIcon icon={faTiktok} className="text-dark me-2" />
+                          TikTok
+                        </button>
+                        <button
+                          className="btn btn-link w-100 text-start text-decoration-none p-2 hover-bg-light rounded-2"
+                          onClick={() => handleShare("linkedin")}
+                        >
+                          <FontAwesomeIcon icon={faLinkedinIn} className="text-info me-2" />
+                          LinkedIn
+                        </button>
+                        <div className="dropdown-divider"></div>
+                        <button
+                          className="btn btn-link w-100 text-start text-decoration-none p-2 hover-bg-light rounded-2"
+                          onClick={handleCopyLink}
+                        >
+                          <FontAwesomeIcon icon={faCopy} className="text-secondary me-2" />
+                          Copier le lien
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 {don.prix === null && (
-        <div
-  className="position-absolute top-0 start-0 m-3 px-4 py-2 rounded-pill fw-semibold d-flex align-items-center gap-2 text-white"
-  style={{ 
-    marginLeft: "100px",
-    backgroundColor: "#8b5cf6" // Violet
-  }}
->
-  <FontAwesomeIcon icon={faHandHoldingHeart} />
-  <span>gratuit</span>
-</div>
+                  <div
+                    className="position-absolute top-0 start-0 m-3 px-4 py-2 rounded-pill fw-semibold d-flex align-items-center gap-2 text-white"
+                    style={{ 
+                      marginLeft: "100px",
+                      backgroundColor: "#8b5cf6" // Violet
+                    }}
+                  >
+                    <FontAwesomeIcon icon={faHandHoldingHeart} />
+                    <span>gratuit</span>
+                  </div>
                 )}
                 {images.length > 1 && (
                   <>
@@ -1857,7 +1933,7 @@ export default function DonDetailPage() {
             </div>
 
             {/* Miniatures */}
-            {images.length > 1 && (
+            {/* {images.length > 1 && (
               <div className="row g-4 mb-4">
                 {images.map((img, index) => (
                   <div key={index} className="col">
@@ -1883,7 +1959,7 @@ export default function DonDetailPage() {
                   </div>
                 ))}
               </div>
-            )}
+            )} */}
 
             {/* Description */}
             <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
@@ -1965,7 +2041,7 @@ export default function DonDetailPage() {
             </div>
 
             {/* Localisation */}
-            <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
+            {/* <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
               <div className="mt-4 bg-info bg-opacity-10 border border-info rounded-4 p-4">
                 <div className="d-flex gap-3">
                   <FontAwesomeIcon
@@ -1983,7 +2059,7 @@ export default function DonDetailPage() {
                   </div>
                 </div>
               </div>
-            </div>
+            </div> */}
 
             {/* Avis et évaluations */}
             <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
@@ -2419,7 +2495,7 @@ export default function DonDetailPage() {
                   className="btn btn-success btn-lg fw-bold text-white py-4"
                 >
                   <FontAwesomeIcon icon={faHandHoldingHeart} className="me-2" />
-                  {don.disponible ? "Je suis intéressé(e)" : "Contactez le donateur"}
+                  {don.disponible ? "Je suis intéressé(e)" : "Contacter"}
                 </button>
                 
                 <button
@@ -2802,7 +2878,7 @@ export default function DonDetailPage() {
         </div>
       </section>
 
-      {/* CTA - MODIFIÉ POUR OUVRIR LA MODALE */}
+      {/* CTA */}
       <section className="bg-success text-white py-5">
         <div className="container text-center">
           <h2 className="display-5 fw-bold mb-3">
@@ -2813,7 +2889,6 @@ export default function DonDetailPage() {
             communauté
           </p>
           
-          {/* REMPLACÉ LE LINK PAR UN BOUTON AVEC ONCLICK */}
           <button
             onClick={handleOpenPublishModal}
             className="btn btn-light btn-lg px-5 py-4 fw-bold text-success"
@@ -2825,7 +2900,7 @@ export default function DonDetailPage() {
         </div>
       </section>
 
-      {/* MODAL DE PUBLICATION - AJOUTÉ À LA FIN */}
+      {/* MODAL DE PUBLICATION */}
       <PublishAdModal
         visible={showPublishModal}
         onHide={() => setShowPublishModal(false)}

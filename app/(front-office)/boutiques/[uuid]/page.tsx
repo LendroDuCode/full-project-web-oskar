@@ -6,7 +6,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
-import { buildImageUrl } from "@/app/shared/utils/image-utils"; // ✅ IMPORTATION DE buildImageUrl
+import { buildImageUrl } from "@/app/shared/utils/image-utils";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faStore,
@@ -420,7 +420,7 @@ export default function BoutiquePremium() {
         <div
           className="position-absolute top-0 start-0 w-100 h-100 bg-cover bg-center"
           style={{
-            backgroundImage: `url(${buildImageUrl(boutique.banniere)})`, // ✅ UTILISATION DE buildImageUrl
+            backgroundImage: `url(${buildImageUrl(boutique.banniere)})`,
             filter: "brightness(0.6)",
           }}
         />
@@ -434,7 +434,7 @@ export default function BoutiquePremium() {
                 <div className="me-4">
                   <div className="logo-container rounded-circle border-4 border-white shadow-lg eco-pulse">
                     <img
-                      src={buildImageUrl(boutique.logo)} // ✅ UTILISATION DE buildImageUrl
+                      src={buildImageUrl(boutique.logo)}
                       alt={boutique.nom}
                       className="img-fluid"
                       onError={(e) => {
@@ -588,8 +588,6 @@ export default function BoutiquePremium() {
             
             </div>
 
-            
-
             {/* Features */}
             <div className="card border-0 shadow-lg rounded-3 mt-4 eco-card hover-lift">
               <div className="card-body">
@@ -734,7 +732,7 @@ export default function BoutiquePremium() {
                                     }}
                                   >
                                     <img
-                                      src={buildImageUrl(produit.image)} // ✅ UTILISATION DE buildImageUrl
+                                      src={buildImageUrl(produit.image)}
                                       alt={produit.libelle}
                                       className="img-fluid w-100 h-100 object-fit-cover"
                                       onError={(e) => {
@@ -807,25 +805,6 @@ export default function BoutiquePremium() {
                                       <h4 className="text-success fw-bold mb-0">
                                         {formatPrice(produit.prix)}
                                       </h4>
-                                      <small className="text-muted">
-                                        {produit.quantite > 0 ? (
-                                          <span className="text-success">
-                                            <FontAwesomeIcon
-                                              icon={faCheckCircle}
-                                              className="me-1"
-                                            />
-                                            {produit.quantite} en stock
-                                          </span>
-                                        ) : (
-                                          <span className="text-danger">
-                                            <FontAwesomeIcon
-                                              icon={faExclamationTriangle}
-                                              className="me-1"
-                                            />
-                                            Rupture de stock
-                                          </span>
-                                        )}
-                                      </small>
                                     </div>
 
                                     <div className="d-flex gap-2">
@@ -839,7 +818,6 @@ export default function BoutiquePremium() {
                                         <FontAwesomeIcon icon={faEye} />
                                         <span className="ms-1">Voir</span>
                                       </button>
-                                    
                                     </div>
                                   </div>
                                 </div>

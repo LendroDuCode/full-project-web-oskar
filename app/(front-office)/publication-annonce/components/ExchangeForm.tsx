@@ -34,6 +34,16 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
 
   const setEchangeData = (newData: any) => onChange(newData);
 
+  // ✅ S'assurer que la quantité est toujours à 1
+  useEffect(() => {
+    if (echangeData.quantite !== "1") {
+      setEchangeData({
+        ...echangeData,
+        quantite: "1",
+      });
+    }
+  }, [echangeData.quantite]);
+
   // ✅ Fonction pour formater le prix avec séparateur de milliers
   const formatPrix = (value: string): string => {
     // Supprimer tous les caractères non numériques
@@ -63,6 +73,7 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
     setEchangeData({
       ...echangeData,
       prix: numericValue,
+      quantite: "1", // S'assurer que la quantité reste à 1
     });
   };
 
@@ -165,7 +176,8 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
       ...echangeData,
       categorie_uuid: categorieUuid,
       sous_categorie_uuid: "",
-      final_categorie_uuid: categorieUuid
+      final_categorie_uuid: categorieUuid,
+      quantite: "1", // S'assurer que la quantité reste à 1
     });
 
     // Charger les sous-catégories
@@ -183,7 +195,8 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
     setEchangeData({
       ...echangeData,
       sous_categorie_uuid: sousCategorieUuid,
-      final_categorie_uuid: sousCategorieUuid || echangeData.categorie_uuid
+      final_categorie_uuid: sousCategorieUuid || echangeData.categorie_uuid,
+      quantite: "1", // S'assurer que la quantité reste à 1
     });
   };
 
@@ -250,6 +263,7 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                         setEchangeData({
                           ...echangeData,
                           nomElementEchange: e.target.value,
+                          quantite: "1",
                         })
                       }
                       required
@@ -273,6 +287,7 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                         setEchangeData({
                           ...echangeData,
                           objetDemande: e.target.value,
+                          quantite: "1",
                         })
                       }
                       required
@@ -302,27 +317,7 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                   </div>
                 </div>
 
-                {/* Quantité - Optionnelle */}
-                <div className="row g-4 mb-4">
-                  <div className="col-md-12" style={{ minHeight: "100px" }}>
-                    <label className="form-label fw-bold fs-5 mb-3">
-                      Quantité <span className="text-muted">(optionnelle, défaut: 1)</span>
-                    </label>
-                    <input
-                      type="number"
-                      className="form-control form-control-lg border border-secondary rounded-4 py-3 px-4"
-                      style={{ fontSize: "1.1rem" }}
-                      value={echangeData.quantite || 1}
-                      onChange={(e) =>
-                        setEchangeData({
-                          ...echangeData,
-                          quantite: e.target.value,
-                        })
-                      }
-                      min="1"
-                    />
-                  </div>
-                </div>
+                {/* Champ Quantité - SUPPRIMÉ (valeur par défaut à 1) */}
 
                 {/* Message - Optionnel */}
                 <div className="mb-4" style={{ minHeight: "120px" }}>
@@ -339,6 +334,7 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                       setEchangeData({
                         ...echangeData,
                         message: e.target.value,
+                        quantite: "1",
                       })
                     }
                   />

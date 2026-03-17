@@ -15,7 +15,7 @@ import { UserInfo } from "../../publication-annonce/components/constantes/types"
 
 // Import des icônes FontAwesome
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faWhatsapp, faFacebookF } from "@fortawesome/free-brands-svg-icons";
+import { faWhatsapp, faFacebookF, faTiktok, faLinkedinIn } from "@fortawesome/free-brands-svg-icons";
 import {
   faUser,
   faEnvelope,
@@ -91,6 +91,8 @@ interface CreateurInfo {
   whatsapp_url?: string | null;
   twitter_url?: string | null;
   instagram_url?: string | null;
+  tiktok_url?: string | null;
+  linkedin_url?: string | null;
   est_verifie?: boolean;
   est_bloque?: boolean;
   userType?: string;
@@ -171,7 +173,7 @@ interface ProduitAPI {
   estPublie: boolean;
   estBloque: boolean;
   is_favoris: boolean;
-  favorite_id?: string; // ✅ AJOUT: ID du favori pour la suppression
+  favorite_id?: string;
   adminUuid: string | null;
   createdAt: string | null;
   updatedAt: string | null;
@@ -215,7 +217,7 @@ interface ProduitSimilaireAPI {
   estPublie: boolean;
   estBloque: boolean;
   is_favoris: boolean;
-  favorite_id?: string; // ✅ AJOUT: ID du favori pour la suppression
+  favorite_id?: string;
   adminUuid: string | null;
   createdAt: string | null;
   updatedAt: string | null;
@@ -259,7 +261,7 @@ interface Produit {
   createdAt: string;
   updatedAt: string;
   is_favoris?: boolean;
-  favorite_id?: string; // ✅ AJOUT: Stocker l'ID du favori
+  favorite_id?: string;
   categorie?: {
     uuid: string;
     libelle: string;
@@ -281,7 +283,7 @@ interface ProduitSimilaire {
   disponible: boolean;
   quantite: number;
   is_favoris?: boolean;
-  favorite_id?: string; // ✅ AJOUT: Stocker l'ID du favori
+  favorite_id?: string;
   createur?: CreateurInfo;
   createurType?: string;
   vendeur_uuid: string;
@@ -313,7 +315,6 @@ interface Boutique {
   conditions_utilisation?: string | null;
 }
 
-// Interface pour le commentaire API
 interface CommentaireAPI {
   is_deleted: boolean;
   deleted_at: string | null;
@@ -453,7 +454,6 @@ const SecureImage = ({
   }, [src, fallbackSrc]);
 
   const handleError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
-    // ✅ NE PAS LOGGER L'ERREUR POUR LES IMAGES PAR DÉFAUT
     if (currentSrc === fallbackSrc || currentSrc.includes("data:image")) {
       return;
     }
@@ -567,7 +567,7 @@ export default function ProduitDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [quantite, setQuantite] = useState(1);
   const [favori, setFavori] = useState(false);
-  const [favoriteId, setFavoriteId] = useState<string | null>(null); // ✅ AJOUT: Stocker l'ID du favori
+  const [favoriteId, setFavoriteId] = useState<string | null>(null);
   const [showMoreComments, setShowMoreComments] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
   const [commentairesFetched, setCommentairesFetched] = useState(false);
@@ -589,19 +589,14 @@ export default function ProduitDetailPage() {
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [favoriInitialized, setFavoriInitialized] = useState(false);
   
-  // ✅ État pour la modal d'appel
   const [showCallModal, setShowCallModal] = useState(false);
-  // ✅ État pour la modal de publication
   const [showPublishModal, setShowPublishModal] = useState(false);
-  // ✅ Détection du type d'appareil
   const [isMobile, setIsMobile] = useState(false);
 
-  // 🔴 Ref pour éviter les chargements multiples
   const initialLoadDone = useRef(false);
   const commentsLoadDone = useRef(false);
   const recentsLoadDone = useRef(false);
 
-  // ✅ Détecter si c'est un appareil mobile
   useEffect(() => {
     const checkMobile = () => {
       const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
@@ -612,7 +607,6 @@ export default function ProduitDetailPage() {
     checkMobile();
   }, []);
 
-  // Timer pour le toast
   useEffect(() => {
     if (toast?.show) {
       const timer = setTimeout(() => {
@@ -622,7 +616,6 @@ export default function ProduitDetailPage() {
     }
   }, [toast]);
 
-  // FAQ
   const faqs = [
     {
       question: "Comment contacter le vendeur ?",
@@ -822,6 +815,8 @@ export default function ProduitDetailPage() {
       whatsapp_url: apiCreateur.whatsapp_url || null,
       twitter_url: apiCreateur.twitter_url || null,
       instagram_url: apiCreateur.instagram_url || null,
+      tiktok_url: apiCreateur.tiktok_url || null,
+      linkedin_url: apiCreateur.linkedin_url || null,
       est_verifie: apiCreateur.est_verifie || false,
       est_bloque: apiCreateur.est_bloque || false,
       userType: apiCreateur.userType || apiCreateur.type || "utilisateur",
@@ -871,7 +866,7 @@ export default function ProduitDetailPage() {
       createdAt: apiProduit.createdAt || new Date().toISOString(),
       updatedAt: apiProduit.updatedAt || new Date().toISOString(),
       is_favoris: apiProduit.is_favoris || false,
-      favorite_id: apiProduit.favorite_id, // ✅ Récupérer l'ID du favori
+      favorite_id: apiProduit.favorite_id,
       ...(apiProduit.categorie && {
         categorie: {
           uuid: apiProduit.categorie.uuid,
@@ -915,7 +910,7 @@ export default function ProduitDetailPage() {
       nombre_favoris: apiSimilaire.nombreFavoris || 0,
       nombre_avis: apiSimilaire.nombre_avis || 0,
       is_favoris: apiSimilaire.is_favoris || false,
-      favorite_id: apiSimilaire.favorite_id, // ✅ Récupérer l'ID du favori
+      favorite_id: apiSimilaire.favorite_id,
       ...(apiSimilaire.createur && {
         createur: transformCreateurInfo(apiSimilaire.createur),
       }),
@@ -1161,7 +1156,7 @@ export default function ProduitDetailPage() {
       if (isLoggedIn) {
         console.log("🔴 Produit is_favoris:", response.produit.is_favoris);
         setFavori(response.produit.is_favoris === true);
-        setFavoriteId(response.produit.favorite_id || null); // ✅ Stocker l'ID du favori
+        setFavoriteId(response.produit.favorite_id || null);
       } else {
         setFavori(false);
         setFavoriteId(null);
@@ -1325,8 +1320,53 @@ export default function ProduitDetailPage() {
   const noteStats = calculateNoteStats();
 
   // ============================================
-  // FONCTIONS D'ACTIONS AVEC AUTH
+  // FONCTIONS DE PARTAGE SUR LES RÉSEAUX SOCIAUX
   // ============================================
+  const handleShare = (platform: string) => {
+    if (!produit) return;
+
+    const shareUrl = encodeURIComponent(window.location.href);
+    const shareTitle = encodeURIComponent(produit.libelle);
+    const shareDescription = encodeURIComponent(`Découvrez ce produit sur OSKAR : ${produit.libelle} - ${formatPrice(produit.prix)}`);
+    const shareImage = encodeURIComponent(produit.image || "");
+    
+    let url = "";
+
+    switch (platform) {
+      case "facebook":
+        url = `https://www.facebook.com/sharer/sharer.php?u=${shareUrl}`;
+        break;
+      case "whatsapp":
+        url = `https://wa.me/?text=${shareDescription}%20${shareUrl}`;
+        break;
+      case "tiktok":
+        // TikTok utilise l'URL de partage standard
+        url = `https://www.tiktok.com/share?url=${shareUrl}`;
+        break;
+      case "linkedin":
+        url = `https://www.linkedin.com/sharing/share-offsite/?url=${shareUrl}`;
+        break;
+      default:
+        return;
+    }
+
+    window.open(url, "_blank", "noopener,noreferrer");
+    setShowShareMenu(false);
+  };
+
+  const handleCopyLink = () => {
+    navigator.clipboard
+      .writeText(window.location.href)
+      .then(() => {
+        showToast("success", "Lien copié dans le presse-papier !");
+        setShowShareMenu(false);
+      })
+      .catch((err) => {
+        console.error("Erreur copie lien:", err);
+        showToast("error", "Impossible de copier le lien.");
+      });
+  };
+
   const showToast = (type: "success" | "error" | "info", message: string) => {
     setToast({ show: true, type, message });
   };
@@ -1339,7 +1379,6 @@ export default function ProduitDetailPage() {
     action();
   };
 
-  // ✅ Appel téléphonique avec détection mobile/desktop
   const handleCallVendeur = () => {
     requireAuth(() => {
       if (!createur || !createur.telephone) {
@@ -1350,10 +1389,8 @@ export default function ProduitDetailPage() {
       const phoneNumber = createur.telephone.replace(/\s/g, "");
 
       if (isMobile) {
-        // Sur mobile : appel direct
         window.location.href = `tel:${phoneNumber}`;
       } else {
-        // Sur desktop : ouvrir la modal
         setShowCallModal(true);
       }
     });
@@ -1419,7 +1456,6 @@ export default function ProduitDetailPage() {
     });
   };
 
-  // ✅ Envoyer un message via la messagerie
   const handleSendMessage = () => {
     requireAuth(() => {
       if (!createur) {
@@ -1459,7 +1495,6 @@ export default function ProduitDetailPage() {
     });
   };
 
-  // ✅ FONCTION CORRIGÉE POUR AJOUTER/SUPPRIMER DES FAVORIS (COMME DANS LA LISTE DES FAVORIS)
   const handleAddToFavorites = () => {
     requireAuth(async () => {
       if (!produit) return;
@@ -1468,7 +1503,6 @@ export default function ProduitDetailPage() {
         console.log(`🔄 ${favori ? "Retrait" : "Ajout"} aux favoris...`);
 
         if (favori && favoriteId) {
-          // ✅ Suppression avec l'ID du favori (comme dans la liste des favoris)
           console.log(`🗑️ Suppression du favori: ${favoriteId}`);
           await api.delete(`/favoris/${favoriteId}`);
           
@@ -1476,7 +1510,6 @@ export default function ProduitDetailPage() {
           setFavoriteId(null);
           showToast("success", "Produit retiré des favoris");
         } else {
-          // ✅ Ajout aux favoris
           const payload = {
             itemUuid: produit.uuid,
             type: "produit",
@@ -1486,7 +1519,6 @@ export default function ProduitDetailPage() {
           const response = await api.post<any>(API_ENDPOINTS.FAVORIS.ADD, payload);
           console.log("✅ Réponse favoris:", response);
           
-          // ✅ Récupérer l'ID du favori depuis la réponse
           if (response && response.uuid) {
             setFavoriteId(response.uuid);
           } else if (response && response.data && response.data.uuid) {
@@ -1513,37 +1545,6 @@ export default function ProduitDetailPage() {
         showToast("error", errorMessage);
       }
     });
-  };
-
-  const handleShare = (platform: string) => {
-    if (!produit) return;
-
-    const shareUrl = window.location.href;
-    const shareText = `Découvrez ce produit sur OSKAR : ${produit.libelle} - ${formatPrice(produit.prix)}`;
-
-    const urls: { [key: string]: string } = {
-      facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`,
-      whatsapp: `https://wa.me/?text=${encodeURIComponent(shareText + " " + shareUrl)}`,
-    };
-
-    if (urls[platform]) {
-      window.open(urls[platform], "_blank", "noopener,noreferrer");
-    }
-
-    setShowShareMenu(false);
-  };
-
-  const handleCopyLink = () => {
-    navigator.clipboard
-      .writeText(window.location.href)
-      .then(() => {
-        showToast("success", "Lien copié dans le presse-papier !");
-        setShowShareMenu(false);
-      })
-      .catch((err) => {
-        console.error("Erreur copie lien:", err);
-        showToast("error", "Impossible de copier le lien.");
-      });
   };
 
   const handleLikeComment = (commentUuid: string) => {
@@ -1653,7 +1654,6 @@ export default function ProduitDetailPage() {
     });
   };
 
-  // ✅ Gestionnaire pour ouvrir la modale de publication
   const handleOpenPublishModal = () => {
     if (!isLoggedIn) {
       openLoginModal();
@@ -1744,11 +1744,6 @@ export default function ProduitDetailPage() {
 
   const boutiqueStatut = boutique ? getStatutBadge(boutique.statut) : null;
 
-  const produitsAShow =
-    produitsSimilaires.length > 0
-      ? produitsSimilaires.slice(0, 4)
-      : produitsRecents.slice(0, 4);
-
   return (
     <div className="bg-light min-vh-100">
       {/* Toast notifications */}
@@ -1792,7 +1787,7 @@ export default function ProduitDetailPage() {
               <div className="modal-header border-0 pb-0">
                 <h5 className="modal-title fw-bold">
                   <FontAwesomeIcon icon={faPhone} className="text-success me-2" />
-                  Contacter le vendeur
+                  Contacter
                 </h5>
                 <button
                   type="button"
@@ -1834,7 +1829,7 @@ export default function ProduitDetailPage() {
                     <FontAwesomeIcon icon={faCopy} className="me-2" />
                     Copier le numéro
                   </button>
-                  <button
+                  {/* <button
                     className="btn btn-success px-4 py-2"
                     onClick={() => {
                       if (createur.telephone) {
@@ -1844,7 +1839,7 @@ export default function ProduitDetailPage() {
                   >
                     <FontAwesomeIcon icon={faWhatsapp} className="me-2" />
                     WhatsApp
-                  </button>
+                  </button> */}
                 </div>
               </div>
               <div className="modal-footer border-0 pt-0 justify-content-center">
@@ -1909,7 +1904,7 @@ export default function ProduitDetailPage() {
                   className="w-100 h-100 object-cover"
                 />
 
-                {/* 🔴 BOUTON FAVORI - UNIQUEMENT SI CONNECTÉ */}
+                {/* Bouton FAVORI - UNIQUEMENT SI CONNECTÉ */}
                 {isLoggedIn && favoriInitialized && (
                   <button
                     onClick={handleAddToFavorites}
@@ -1929,6 +1924,61 @@ export default function ProduitDetailPage() {
                     {produit.createurType === "vendeur" ? "Vente" : "Vente"}
                   </span>
                 </div>
+                
+                {/* Bouton Partager */}
+                <div className="position-absolute top-0 start-50 translate-middle-x mt-3">
+                  <div className="btn-group" style={{ boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}>
+                    <button
+                      className="btn btn-light rounded-pill px-4 py-2 d-flex align-items-center gap-2"
+                      onClick={() => setShowShareMenu(!showShareMenu)}
+                    >
+                      <FontAwesomeIcon icon={faShareAlt} className="text-primary" />
+                      Partager
+                    </button>
+                    
+                    {showShareMenu && (
+                      <div className="position-absolute top-100 start-50 translate-middle-x mt-2 bg-white rounded-3 shadow-lg p-2" style={{ minWidth: "200px", zIndex: 10 }}>
+                        <button
+                          className="btn btn-link w-100 text-start text-decoration-none p-2 hover-bg-light rounded-2"
+                          onClick={() => handleShare("facebook")}
+                        >
+                          <FontAwesomeIcon icon={faFacebookF} className="text-primary me-2" />
+                          Facebook
+                        </button>
+                        <button
+                          className="btn btn-link w-100 text-start text-decoration-none p-2 hover-bg-light rounded-2"
+                          onClick={() => handleShare("whatsapp")}
+                        >
+                          <FontAwesomeIcon icon={faWhatsapp} className="text-success me-2" />
+                          WhatsApp
+                        </button>
+                        <button
+                          className="btn btn-link w-100 text-start text-decoration-none p-2 hover-bg-light rounded-2"
+                          onClick={() => handleShare("tiktok")}
+                        >
+                          <FontAwesomeIcon icon={faTiktok} className="text-dark me-2" />
+                          TikTok
+                        </button>
+                        <button
+                          className="btn btn-link w-100 text-start text-decoration-none p-2 hover-bg-light rounded-2"
+                          onClick={() => handleShare("linkedin")}
+                        >
+                          <FontAwesomeIcon icon={faLinkedinIn} className="text-info me-2" />
+                          LinkedIn
+                        </button>
+                        <div className="dropdown-divider"></div>
+                        <button
+                          className="btn btn-link w-100 text-start text-decoration-none p-2 hover-bg-light rounded-2"
+                          onClick={handleCopyLink}
+                        >
+                          <FontAwesomeIcon icon={faCopy} className="text-secondary me-2" />
+                          Copier le lien
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 {images.length > 1 && (
                   <>
                     <button
@@ -1960,7 +2010,7 @@ export default function ProduitDetailPage() {
             </div>
 
             {/* Miniatures */}
-            {images.length > 1 && (
+            {/* {images.length > 1 && (
               <div className="row g-4 mb-4">
                 {images.map((img, index) => (
                   <div key={index} className="col">
@@ -1986,7 +2036,7 @@ export default function ProduitDetailPage() {
                   </div>
                 ))}
               </div>
-            )}
+            )} */}
 
             {/* Description */}
             <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
@@ -2002,7 +2052,7 @@ export default function ProduitDetailPage() {
               </div>
             </div>
 
-            {/* Spécifications techniques */}
+            {/* Spécifications techniques - SIMPLIFIÉES */}
             <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
               <h2 className="h2 fw-bold mb-4">Spécifications Techniques</h2>
               <div className="row">
@@ -2010,63 +2060,22 @@ export default function ProduitDetailPage() {
                   <div className="border-bottom py-3 d-flex justify-content-between">
                     <span className="text-muted">Marque</span>
                     <span className="fw-semibold">
-                      {produit.libelle.split(" ")[0] || "Samsung"}
+                      {produit.libelle.split(" ")[0] || "Non spécifiée"}
                     </span>
                   </div>
                   <div className="border-bottom py-3 d-flex justify-content-between">
                     <span className="text-muted">Modèle</span>
                     <span className="fw-semibold">{produit.libelle}</span>
                   </div>
-                  <div className="border-bottom py-3 d-flex justify-content-between">
+                  <div className="py-3 d-flex justify-content-between">
                     <span className="text-muted">État</span>
                     <span className="text-success fw-semibold">
                       {condition.text}
                     </span>
                   </div>
-                  <div className="border-bottom py-3 d-flex justify-content-between">
-                    <span className="text-muted">Couleur</span>
-                    <span className="fw-semibold">Gris Fantôme</span>
-                  </div>
-                  <div className="border-bottom py-3 d-flex justify-content-between">
-                    <span className="text-muted">Stockage</span>
-                    <span className="fw-semibold">128Go</span>
-                  </div>
-                  <div className="py-3 d-flex justify-content-between">
-                    <span className="text-muted">RAM</span>
-                    <span className="fw-semibold">8Go</span>
-                  </div>
-                </div>
-                <div className="col-md-6">
-                  <div className="border-bottom py-3 d-flex justify-content-between">
-                    <span className="text-muted">Taille de l'écran</span>
-                    <span className="fw-semibold">6,2 pouces</span>
-                  </div>
-                  <div className="border-bottom py-3 d-flex justify-content-between">
-                    <span className="text-muted">Batterie</span>
-                    <span className="fw-semibold">4000mAh</span>
-                  </div>
-                  <div className="border-bottom py-3 d-flex justify-content-between">
-                    <span className="text-muted">Caméra</span>
-                    <span className="fw-semibold">64MP + 12MP + 12MP</span>
-                  </div>
-                  <div className="border-bottom py-3 d-flex justify-content-between">
-                    <span className="text-muted">Système d'exploitation</span>
-                    <span className="fw-semibold">Android 13</span>
-                  </div>
-                  <div className="border-bottom py-3 d-flex justify-content-between">
-                    <span className="text-muted">Connectivité</span>
-                    <span className="fw-semibold">
-                      5G, WiFi 6, Bluetooth 5.0
-                    </span>
-                  </div>
-                  <div className="py-3 d-flex justify-content-between">
-                    <span className="text-muted">Garantie</span>
-                    <span className="fw-semibold">6 mois restants</span>
-                  </div>
                 </div>
               </div>
             </div>
-
 
             {/* Avis et évaluations - SECTION AMÉLIORÉE */}
             <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
@@ -2229,7 +2238,7 @@ export default function ProduitDetailPage() {
                     </div>
                   )}
 
-                  {/* ✅ LISTE DES COMMENTAIRES AMÉLIORÉE */}
+                  {/* LISTE DES COMMENTAIRES */}
                   {commentaires.length > 0 ? (
                     <div className="space-y-6">
                       {visibleComments.map((comment) => (
@@ -2328,7 +2337,6 @@ export default function ProduitDetailPage() {
                                       openLoginModal();
                                       return;
                                     }
-                                    // Fonction pour répondre au commentaire (à implémenter)
                                   }}
                                   style={{ fontSize: "0.9rem" }}
                                 >
@@ -2378,7 +2386,8 @@ export default function ProduitDetailPage() {
               )}
             </div>
 
-            {/* Articles Similaires */}
+            {/* ARTICLES SIMILAIRES - COMMENTÉ POUR LE MOMENT */}
+            {/*
             {produitsAShow.length > 0 && (
               <div
                 id="similar-items-section"
@@ -2462,6 +2471,7 @@ export default function ProduitDetailPage() {
                 </div>
               </div>
             )}
+            */}
           </div>
 
           {/* Colonne droite - Sidebar (4/12) */}
@@ -2479,9 +2489,9 @@ export default function ProduitDetailPage() {
                   <span className="text-muted">FCFA</span>
                 </div>
                 <div className="d-flex align-items-center gap-2">
-                  <span className="badge bg-success bg-opacity-10 text-success px-3 py-2 rounded-pill">
+                  {/* <span className="badge bg-success bg-opacity-10 text-success px-3 py-2 rounded-pill">
                     Négociable
-                  </span>
+                  </span> */}
                   <span className="small text-muted">
                     <FontAwesomeIcon icon={faClock} className="me-1" />
                     Publié {formatDate(produit.createdAt)}
@@ -2490,14 +2500,13 @@ export default function ProduitDetailPage() {
               </div>
 
               <div className="d-grid gap-3 mb-4">
-                {/* ✅ BOUTON APPEL - ADAPTÉ SELON L'APPAREIL */}
                 <button
                   onClick={handleCallVendeur}
                   className="btn btn-success btn-lg fw-bold text-white py-4"
                   style={{ backgroundColor: "#28a745" }}
                 >
                   <FontAwesomeIcon icon={isMobile ? faPhone : faLaptop} className="me-2" />
-                  {isMobile ? "Appeler le vendeur" : "Contactez le vendeur"}
+                  {isMobile ? "Appeler le vendeur" : "Contacter"}
                 </button>
                 
                 <button
@@ -2508,7 +2517,6 @@ export default function ProduitDetailPage() {
                   WhatsApp
                 </button>
                 
-                {/* ✅ MODIFIÉ : Bouton pour envoyer un message */}
                 <button
                   onClick={handleSendMessage}
                   className="btn btn-outline-warning btn-lg fw-bold py-4"
@@ -2518,7 +2526,6 @@ export default function ProduitDetailPage() {
                 </button>
               </div>
 
-              {/* 🔴 BOUTON FAVORI DANS LA SIDEBAR - UNIQUEMENT SI CONNECTÉ */}
               {isLoggedIn && favoriInitialized && (
                 <div className="border-top pt-4 mb-4">
                   <button
@@ -2534,9 +2541,8 @@ export default function ProduitDetailPage() {
                 </div>
               )}
 
-              {/* ✅ Informations de la boutique et du créateur */}
               <div className="bg-info bg-opacity-10 rounded-4 p-4 mb-4">
-                <div className="d-flex align-items-center gap-3 mb-3">
+                {/* <div className="d-flex align-items-center gap-3 mb-3">
                   <div className="bg-warning rounded-circle p-3">
                     <FontAwesomeIcon
                       icon={faShieldAlt}
@@ -2549,9 +2555,8 @@ export default function ProduitDetailPage() {
                       Identité vérifiée par OSKAR
                     </p>
                   </div>
-                </div>
+                </div> */}
 
-                {/* ✅ AFFICHAGE DE LA BOUTIQUE AVEC SON LOGO */}
                 {boutique && (
                   <div className="d-flex align-items-center gap-3 mt-3">
                     {boutique.logo ? (
@@ -2600,7 +2605,6 @@ export default function ProduitDetailPage() {
                   </div>
                 )}
 
-                {/* ✅ AFFICHAGE DU CRÉATEUR SI PAS DE BOUTIQUE */}
                 {!boutique && createur && (
                   <div className="d-flex align-items-center gap-3 mt-3">
                     {createur.avatar ? (
@@ -2648,7 +2652,6 @@ export default function ProduitDetailPage() {
                 )}
               </div>
 
-              {/* Informations produit */}
               <div className="small">
                 <div className="d-flex justify-content-between mb-2">
                   <span className="text-muted">ID de l'annonce</span>
@@ -2676,7 +2679,6 @@ export default function ProduitDetailPage() {
                 </div>
               </div>
 
-              {/* Bouton signaler */}
               <div className="border-top mt-4 pt-4">
                 <button
                   onClick={handleReportProduit}
@@ -2688,7 +2690,6 @@ export default function ProduitDetailPage() {
               </div>
             </div>
 
-            {/* ✅ Carte vendeur (fallback si pas de boutique) */}
             {!boutique && createur && (
               <div className="card border-0 shadow-lg rounded-4 p-4 mt-4">
                 <h5 className="fw-bold mb-4">Informations sur le vendeur</h5>
@@ -2773,7 +2774,6 @@ export default function ProduitDetailPage() {
               </div>
             )}
 
-            {/* Conseils de sécurité */}
             <div className="card bg-gradient-orange-red border-0 shadow-lg rounded-4 p-4 mt-4">
               <div className="d-flex align-items-center gap-3 mb-3">
                 <div className="bg-warning rounded-circle p-3">
@@ -3036,7 +3036,7 @@ export default function ProduitDetailPage() {
         </div>
       </section>
 
-      {/* CTA - MODIFIÉ POUR OUVRIR LA MODALE */}
+      {/* CTA */}
       <section className="bg-success text-white py-5">
         <div className="container text-center">
           <h2 className="display-5 fw-bold mb-3">
@@ -3047,7 +3047,6 @@ export default function ProduitDetailPage() {
             votre communauté
           </p>
           
-          {/* REMPLACÉ LE LINK PAR UN BOUTON AVEC ONCLICK */}
           <button
             onClick={handleOpenPublishModal}
             className="btn btn-light btn-lg px-5 py-4 fw-bold text-success"
@@ -3059,7 +3058,6 @@ export default function ProduitDetailPage() {
         </div>
       </section>
 
-      {/* MODAL DE PUBLICATION - AJOUTÉ À LA FIN */}
       <PublishAdModal
         visible={showPublishModal}
         onHide={() => setShowPublishModal(false)}

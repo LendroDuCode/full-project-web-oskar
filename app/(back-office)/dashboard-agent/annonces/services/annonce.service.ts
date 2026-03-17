@@ -57,7 +57,7 @@ class AnnonceService {
     this.apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://oskar-api.mysonec.pro';
     
     if (!this.isProduction) {
-      console.log("🔧 AnnonceService initialisé:", {
+      console.log("📦 AnnonceService initialisé:", {
         isProduction: this.isProduction,
         apiUrl: this.apiUrl,
         useProxy: process.env.NEXT_PUBLIC_USE_PROXY === 'true'
@@ -74,8 +74,8 @@ class AnnonceService {
    */
   async getTousProduits(): Promise<Annonce[]> {
     if (!this.isProduction) {
-      console.log("📡 [Produits] Chargement de tous les produits...");
-      console.log("🎯 Endpoint:", API_ENDPOINTS.PRODUCTS.ALL);
+      console.log("📦 [Produits] Chargement de tous les produits...");
+      console.log("📦 Endpoint:", API_ENDPOINTS.PRODUCTS.ALL);
     }
     
     const response = await api.get<any>(API_ENDPOINTS.PRODUCTS.ALL);
@@ -87,8 +87,8 @@ class AnnonceService {
    */
   async getProduitsPublies(): Promise<Annonce[]> {
     if (!this.isProduction) {
-      console.log("📡 [Produits] Chargement des produits publiés...");
-      console.log("🎯 Endpoint:", API_ENDPOINTS.PRODUCTS.LISTE_PRODUITS_PUBLIES);
+      console.log("📦 [Produits] Chargement des produits publiés...");
+      console.log("📦 Endpoint:", API_ENDPOINTS.PRODUCTS.LISTE_PRODUITS_PUBLIES);
     }
     
     const response = await api.get<any>(API_ENDPOINTS.PRODUCTS.LISTE_PRODUITS_PUBLIES);
@@ -100,8 +100,8 @@ class AnnonceService {
    */
   async getProduitsEnAttente(): Promise<Annonce[]> {
     if (!this.isProduction) {
-      console.log("📡 [Produits] Chargement des produits en attente...");
-      console.log("🎯 Endpoint:", API_ENDPOINTS.PRODUCTS.LISTE_PRODUITS_EN_ATTENTE);
+      console.log("📦 [Produits] Chargement des produits en attente...");
+      console.log("📦 Endpoint:", API_ENDPOINTS.PRODUCTS.LISTE_PRODUITS_EN_ATTENTE);
     }
     
     const response = await api.get<any>(API_ENDPOINTS.PRODUCTS.LISTE_PRODUITS_EN_ATTENTE);
@@ -113,8 +113,8 @@ class AnnonceService {
    */
   async getProduitsBloques(): Promise<Annonce[]> {
     if (!this.isProduction) {
-      console.log("📡 [Produits] Chargement des produits bloqués...");
-      console.log("🎯 Endpoint:", API_ENDPOINTS.PRODUCTS.LISTE_PRODUITS_BLOQUES);
+      console.log("📦 [Produits] Chargement des produits bloqués...");
+      console.log("📦 Endpoint:", API_ENDPOINTS.PRODUCTS.LISTE_PRODUITS_BLOQUES);
     }
     
     const response = await api.get<any>(API_ENDPOINTS.PRODUCTS.LISTE_PRODUITS_BLOQUES);
@@ -130,8 +130,8 @@ class AnnonceService {
    */
   async getTousDons(): Promise<Annonce[]> {
     if (!this.isProduction) {
-      console.log("📡 [Dons] Chargement de tous les dons...");
-      console.log("🎯 Endpoint:", API_ENDPOINTS.DONS.LIST);
+      console.log("📦 [Dons] Chargement de tous les dons...");
+      console.log("📦 Endpoint:", API_ENDPOINTS.DONS.LIST);
     }
     
     const response = await api.get<any>(API_ENDPOINTS.DONS.LIST);
@@ -143,8 +143,8 @@ class AnnonceService {
    */
   async getDonsPublies(): Promise<Annonce[]> {
     if (!this.isProduction) {
-      console.log("📡 [Dons] Chargement des dons publiés...");
-      console.log("🎯 Endpoint:", API_ENDPOINTS.DONS.LISTE_TOUS_DON_PUBLIE);
+      console.log("📦 [Dons] Chargement des dons publiés...");
+      console.log("📦 Endpoint:", API_ENDPOINTS.DONS.LISTE_TOUS_DON_PUBLIE);
     }
     
     const response = await api.get<any>(API_ENDPOINTS.DONS.LISTE_TOUS_DON_PUBLIE);
@@ -156,8 +156,8 @@ class AnnonceService {
    */
   async getDonsEnAttente(): Promise<Annonce[]> {
     if (!this.isProduction) {
-      console.log("📡 [Dons] Chargement des dons en attente...");
-      console.log("🎯 Endpoint:", API_ENDPOINTS.DONS.LISTE_TOUS_DON_EN_ATTENTE);
+      console.log("📦 [Dons] Chargement des dons en attente...");
+      console.log("📦 Endpoint:", API_ENDPOINTS.DONS.LISTE_TOUS_DON_EN_ATTENTE);
     }
     
     const response = await api.get<any>(API_ENDPOINTS.DONS.LISTE_TOUS_DON_EN_ATTENTE);
@@ -169,8 +169,8 @@ class AnnonceService {
    */
   async getDonsBloques(): Promise<Annonce[]> {
     if (!this.isProduction) {
-      console.log("📡 [Dons] Chargement des dons bloqués...");
-      console.log("🎯 Endpoint:", API_ENDPOINTS.DONS.LISTE_TOUS_DON_BLOQUES);
+      console.log("📦 [Dons] Chargement des dons bloqués...");
+      console.log("📦 Endpoint:", API_ENDPOINTS.DONS.LISTE_TOUS_DON_BLOQUES);
     }
     
     const response = await api.get<any>(API_ENDPOINTS.DONS.LISTE_TOUS_DON_BLOQUES);
@@ -186,8 +186,8 @@ class AnnonceService {
    */
   async getTousEchanges(): Promise<Annonce[]> {
     if (!this.isProduction) {
-      console.log("📡 [Échanges] Chargement de tous les échanges...");
-      console.log("🎯 Endpoint:", API_ENDPOINTS.ECHANGES.LIST);
+      console.log("📦 [Échanges] Chargement de tous les échanges...");
+      console.log("📦 Endpoint:", API_ENDPOINTS.ECHANGES.LIST);
     }
     
     const response = await api.get<any>(API_ENDPOINTS.ECHANGES.LIST);
@@ -199,8 +199,8 @@ class AnnonceService {
    */
   async getEchangesPublies(): Promise<Annonce[]> {
     if (!this.isProduction) {
-      console.log("📡 [Échanges] Chargement des échanges publiés...");
-      console.log("🎯 Endpoint:", API_ENDPOINTS.ECHANGES.LISTE_ECHANGES_PUBLIE);
+      console.log("📦 [Échanges] Chargement des échanges publiés...");
+      console.log("📦 Endpoint:", API_ENDPOINTS.ECHANGES.LISTE_ECHANGES_PUBLIE);
     }
     
     const response = await api.get<any>(API_ENDPOINTS.ECHANGES.LISTE_ECHANGES_PUBLIE);
@@ -212,8 +212,8 @@ class AnnonceService {
    */
   async getEchangesEnAttente(): Promise<Annonce[]> {
     if (!this.isProduction) {
-      console.log("📡 [Échanges] Chargement des échanges en attente...");
-      console.log("🎯 Endpoint:", API_ENDPOINTS.ECHANGES.LISTE_ECHANGES_EN_ATTENTE);
+      console.log("📦 [Échanges] Chargement des échanges en attente...");
+      console.log("📦 Endpoint:", API_ENDPOINTS.ECHANGES.LISTE_ECHANGES_EN_ATTENTE);
     }
     
     const response = await api.get<any>(API_ENDPOINTS.ECHANGES.LISTE_ECHANGES_EN_ATTENTE);
@@ -225,12 +225,189 @@ class AnnonceService {
    */
   async getEchangesBloques(): Promise<Annonce[]> {
     if (!this.isProduction) {
-      console.log("📡 [Échanges] Chargement des échanges bloqués...");
-      console.log("🎯 Endpoint:", API_ENDPOINTS.ECHANGES.LISTE_ECHANGES_BLOQUE);
+      console.log("📦 [Échanges] Chargement des échanges bloqués...");
+      console.log("📦 Endpoint:", API_ENDPOINTS.ECHANGES.LISTE_ECHANGES_BLOQUE);
     }
     
     const response = await api.get<any>(API_ENDPOINTS.ECHANGES.LISTE_ECHANGES_BLOQUE);
     return this.extractData(response);
+  }
+
+  // ============================================
+  // ACTIONS SUR LES ANNONCES
+  // ============================================
+
+  /**
+   * Valider une annonce
+   */
+  async validerAnnonce(uuid: string, type: string): Promise<any> {
+    if (!this.isProduction) {
+      console.log(`✅ Validation ${type}:`, uuid);
+    }
+
+    let endpoint = "";
+    switch (type) {
+      case "produit":
+        endpoint = `/produits/${uuid}/validate`;
+        break;
+      case "don":
+        endpoint = `/dons/${uuid}/validate`;
+        break;
+      case "echange":
+        endpoint = `/echanges/${uuid}/validate`;
+        break;
+      default:
+        throw new Error("Type d'annonce inconnu");
+    }
+
+    return await api.post(endpoint, {});
+  }
+
+  /**
+   * Rejeter une annonce (supprimer)
+   */
+  async rejeterAnnonce(uuid: string, type: string): Promise<any> {
+    if (!this.isProduction) {
+      console.log(`❌ Rejet ${type}:`, uuid);
+    }
+
+    let endpoint = "";
+    switch (type) {
+      case "produit":
+        endpoint = API_ENDPOINTS.PRODUCTS.DELETE(uuid);
+        break;
+      case "don":
+        endpoint = API_ENDPOINTS.DONS.DELETE(uuid);
+        break;
+      case "echange":
+        endpoint = API_ENDPOINTS.ECHANGES.DELETE(uuid);
+        break;
+      default:
+        throw new Error("Type d'annonce inconnu");
+    }
+
+    return await api.delete(endpoint);
+  }
+
+  /**
+   * Publier/Dépublier une annonce
+   */
+  async publierAnnonce(uuid: string, type: string, estPublie: boolean): Promise<any> {
+    if (!this.isProduction) {
+      console.log(`${estPublie ? "📢 Publication" : "🔇 Dépublication"} ${type}:`, uuid);
+    }
+
+    let endpoint = "";
+    let data: any = {};
+
+    switch (type) {
+      case "produit":
+        endpoint = API_ENDPOINTS.PRODUCTS.PUBLLIER;
+        data = { productUuid: uuid, est_publie: estPublie };
+        break;
+      case "don":
+        endpoint = API_ENDPOINTS.DONS.PUBLISH;
+        data = { donUuid: uuid, est_publie: estPublie };
+        break;
+      case "echange":
+        endpoint = API_ENDPOINTS.ECHANGES.PUBLISH;
+        data = { echangeUuid: uuid, est_publie: estPublie };
+        break;
+      default:
+        throw new Error("Type d'annonce inconnu");
+    }
+
+    return await api.post(endpoint, data);
+  }
+
+  /**
+   * Bloquer/Débloquer une annonce
+   */
+  async bloquerAnnonce(uuid: string, type: string, estBloque: boolean): Promise<any> {
+    if (!this.isProduction) {
+      console.log(`${estBloque ? "🔒 Blocage" : "🔓 Déblocage"} ${type}:`, uuid);
+    }
+
+    let endpoint = "";
+    let data: any = {};
+
+    switch (type) {
+      case "produit":
+        endpoint = API_ENDPOINTS.PRODUCTS.BLOQUE_PRODUITS;
+        data = { productUuid: uuid, est_bloque: estBloque };
+        break;
+      case "don":
+        endpoint = API_ENDPOINTS.DONS.BLOQUE_DON;
+        data = { donUuid: uuid, est_bloque: estBloque };
+        break;
+      case "echange":
+        endpoint = API_ENDPOINTS.ECHANGES.BLOQUER_ECHNAGE;
+        data = { echangeUuid: uuid, est_bloque: estBloque };
+        break;
+      default:
+        throw new Error("Type d'annonce inconnu");
+    }
+
+    return await api.post(endpoint, data);
+  }
+
+  /**
+   * Supprimer définitivement une annonce
+   * Version qui utilise le même pattern que la page de détail
+   */
+  async supprimerAnnonce(uuid: string, type: string): Promise<any> {
+    if (!this.isProduction) {
+      console.log(`🗑️ Suppression définitive ${type}:`, uuid);
+    }
+
+    let endpoint = "";
+    
+    // Utiliser le même pattern que dans les pages de détail
+    switch (type) {
+      case "produit":
+        endpoint = API_ENDPOINTS.PRODUCTS.DELETE(uuid);
+        break;
+      case "don":
+        endpoint = API_ENDPOINTS.DONS.DELETE(uuid);
+        console.log("📡 Endpoint don:", endpoint);
+        break;
+      case "echange":
+        endpoint = API_ENDPOINTS.ECHANGES.DELETE(uuid);
+        console.log("📡 Endpoint echange:", endpoint);
+        break;
+      default:
+        throw new Error("Type d'annonce inconnu");
+    }
+
+    console.log("📡 Appel DELETE vers:", endpoint);
+    return await api.delete(endpoint);
+  }
+
+  /**
+   * Supprimer définitivement une annonce (version de secours avec URL directe)
+   */
+  async supprimerAnnonceDirect(uuid: string, type: string): Promise<any> {
+    if (!this.isProduction) {
+      console.log(`🗑️ Suppression directe ${type}:`, uuid);
+    }
+
+    let endpoint = "";
+    switch (type) {
+      case "produit":
+        endpoint = `/produits/${uuid}`;
+        break;
+      case "don":
+        endpoint = `/dons/${uuid}`;
+        break;
+      case "echange":
+        endpoint = `/echanges/${uuid}`;
+        break;
+      default:
+        throw new Error("Type d'annonce inconnu");
+    }
+
+    console.log("📡 Appel DELETE direct vers:", endpoint);
+    return await api.delete(endpoint);
   }
 
   // ============================================
@@ -340,7 +517,7 @@ class AnnonceService {
     // Si c'est déjà un tableau
     if (Array.isArray(response)) {
       if (!this.isProduction) {
-        console.log(`✅ Données extraites: tableau de ${response.length} éléments`);
+        console.log(`📊 Données extraites: tableau de ${response.length} éléments`);
       }
       return response;
     }
@@ -348,7 +525,7 @@ class AnnonceService {
     // Si la réponse a une propriété 'data' qui est un tableau
     if (response.data && Array.isArray(response.data)) {
       if (!this.isProduction) {
-        console.log(`✅ Données extraites: response.data (${response.data.length} éléments)`);
+        console.log(`📊 Données extraites: response.data (${response.data.length} éléments)`);
       }
       return response.data;
     }
@@ -356,7 +533,7 @@ class AnnonceService {
     // Si la réponse a une propriété 'results' qui est un tableau
     if (response.results && Array.isArray(response.results)) {
       if (!this.isProduction) {
-        console.log(`✅ Données extraites: response.results (${response.results.length} éléments)`);
+        console.log(`📊 Données extraites: response.results (${response.results.length} éléments)`);
       }
       return response.results;
     }
@@ -364,7 +541,7 @@ class AnnonceService {
     // Si la réponse a une propriété 'items' qui est un tableau
     if (response.items && Array.isArray(response.items)) {
       if (!this.isProduction) {
-        console.log(`✅ Données extraites: response.items (${response.items.length} éléments)`);
+        console.log(`📊 Données extraites: response.items (${response.items.length} éléments)`);
       }
       return response.items;
     }
@@ -372,7 +549,7 @@ class AnnonceService {
     // Si la réponse a une propriété 'content' qui est un tableau
     if (response.content && Array.isArray(response.content)) {
       if (!this.isProduction) {
-        console.log(`✅ Données extraites: response.content (${response.content.length} éléments)`);
+        console.log(`📊 Données extraites: response.content (${response.content.length} éléments)`);
       }
       return response.content;
     }
@@ -380,7 +557,7 @@ class AnnonceService {
     // Si la réponse a une propriété 'annonces' qui est un tableau
     if (response.annonces && Array.isArray(response.annonces)) {
       if (!this.isProduction) {
-        console.log(`✅ Données extraites: response.annonces (${response.annonces.length} éléments)`);
+        console.log(`📊 Données extraites: response.annonces (${response.annonces.length} éléments)`);
       }
       return response.annonces;
     }
@@ -388,7 +565,7 @@ class AnnonceService {
     // Si la réponse a une propriété 'produits' qui est un tableau
     if (response.produits && Array.isArray(response.produits)) {
       if (!this.isProduction) {
-        console.log(`✅ Données extraites: response.produits (${response.produits.length} éléments)`);
+        console.log(`📊 Données extraites: response.produits (${response.produits.length} éléments)`);
       }
       return response.produits;
     }
@@ -396,7 +573,7 @@ class AnnonceService {
     // Si la réponse a une propriété 'dons' qui est un tableau
     if (response.dons && Array.isArray(response.dons)) {
       if (!this.isProduction) {
-        console.log(`✅ Données extraites: response.dons (${response.dons.length} éléments)`);
+        console.log(`📊 Données extraites: response.dons (${response.dons.length} éléments)`);
       }
       return response.dons;
     }
@@ -404,7 +581,7 @@ class AnnonceService {
     // Si la réponse a une propriété 'echanges' qui est un tableau
     if (response.echanges && Array.isArray(response.echanges)) {
       if (!this.isProduction) {
-        console.log(`✅ Données extraites: response.echanges (${response.echanges.length} éléments)`);
+        console.log(`📊 Données extraites: response.echanges (${response.echanges.length} éléments)`);
       }
       return response.echanges;
     }
@@ -413,7 +590,7 @@ class AnnonceService {
     if (response.success === true && response.data) {
       if (Array.isArray(response.data)) {
         if (!this.isProduction) {
-          console.log(`✅ Données extraites: response.data (${response.data.length} éléments)`);
+          console.log(`📊 Données extraites: response.data (${response.data.length} éléments)`);
         }
         return response.data;
       }
@@ -421,7 +598,7 @@ class AnnonceService {
     
     if (!this.isProduction) {
       console.warn("⚠️ Structure de réponse inattendue:", Object.keys(response));
-      console.warn("📦 Échantillon:", JSON.stringify(response).substring(0, 200) + "...");
+      console.warn("⚠️ Échantillon:", JSON.stringify(response).substring(0, 200) + "...");
     }
     
     return [];
@@ -435,7 +612,7 @@ class AnnonceService {
     status: "tous" | "publie" | "en-attente" | "bloque"
   ): Promise<Annonce[]> {
     if (!this.isProduction) {
-      console.log(`📊 Chargement par type="${type}", statut="${status}"`);
+      console.log(`📦 Chargement par type="${type}", statut="${status}"`);
     }
     
     // Si type = "tous", on charge tout et on combine
@@ -449,7 +626,7 @@ class AnnonceService {
       const result = [...produits, ...dons, ...echanges];
       
       if (!this.isProduction) {
-        console.log(`✅ Total combiné: ${result.length} annonces (produits:${produits.length}, dons:${dons.length}, echanges:${echanges.length})`);
+        console.log(`📊 Total combiné: ${result.length} annonces (produits:${produits.length}, dons:${dons.length}, echanges:${echanges.length})`);
       }
       
       return result;
@@ -485,11 +662,11 @@ class AnnonceService {
     };
 
     console.log("🔍 Test de connexion API - Début");
-    console.log("🌐 Environnement:", environment);
+    console.log("🔍 Environnement:", environment);
 
     try {
       // Tester un endpoint simple (produits publiés)
-      console.log("📡 Appel à:", API_ENDPOINTS.PRODUCTS.LISTE_PRODUITS_PUBLIES);
+      console.log("🔍 Appel à:", API_ENDPOINTS.PRODUCTS.LISTE_PRODUITS_PUBLIES);
       
       const startTime = Date.now();
       const response = await api.get(API_ENDPOINTS.PRODUCTS.LISTE_PRODUITS_PUBLIES);

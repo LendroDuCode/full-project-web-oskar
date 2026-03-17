@@ -101,6 +101,7 @@ interface Vendeur {
   statut_matrimonial_uuid: string | null;
   adminUuid: string | null;
   agentUuid: string | null;
+  boutiques_count?: number;
 }
 
 interface VendeursResponse {
@@ -139,13 +140,11 @@ interface AlertMessage {
 // ============================================
 
 interface FilterBarProps {
-  onAccountTypeChange?: (
-    type: "tous" | "particulier" | "professionnel",
-  ) => void;
+  onAccountTypeChange?: (type: "tous" | "professionnel") => void;
   onStatusChange?: (status: string) => void;
   onSearchChange?: (query: string) => void;
   className?: string;
-  defaultAccountType?: "tous" | "particulier" | "professionnel";
+  defaultAccountType?: "tous" | "professionnel";
   defaultStatus?: string;
   totalCount?: number;
   filteredCount?: number;
@@ -157,32 +156,31 @@ const FilterBar: React.FC<FilterBarProps> = ({
   onSearchChange,
   className = "",
   defaultAccountType = "tous",
-  defaultStatus = "en-attente",
+  defaultStatus = "tous",
   totalCount = 0,
   filteredCount = 0,
 }) => {
   const [activeAccountType, setActiveAccountType] = useState<
-    "tous" | "particulier" | "professionnel"
+    "tous" | "professionnel"
   >(defaultAccountType);
   const [selectedStatus, setSelectedStatus] = useState(defaultStatus);
   const [searchQuery, setSearchQuery] = useState("");
 
   const accountTypes = [
     { id: "tous", label: "Tous" },
-    { id: "particulier", label: "Particulier" },
     { id: "professionnel", label: "Professionnel" },
   ] as const;
 
   const statusOptions = [
     { value: "tous", label: "Tous les statuts" },
     { value: "en-attente", label: "En attente" },
-    { value: "verifie", label: "Vérifié" },
+    { value: "valides", label: "Validés" },
+    { value: "rejetes", label: "Rejetés" },
     { value: "bloque", label: "Bloqué" },
-    { value: "supprime", label: "Supprimé" },
   ];
 
   const handleAccountTypeClick = (
-    type: "tous" | "particulier" | "professionnel",
+    type: "tous" | "professionnel",
   ) => {
     setActiveAccountType(type);
     onAccountTypeChange?.(type);
@@ -716,7 +714,7 @@ interface VerificationWorkstationProps {
   vendeur: Vendeur | null;
   onClose: () => void;
   onValidate?: (uuid: string) => Promise<void>;
-  onReject?: (uuid: string, note?: string) => Promise<void>;
+  onReject?: (uuid: string) => Promise<void>;
   onBlock?: (uuid: string) => Promise<void>;
   showAlert?: (alert: AlertMessage) => void;
 }
@@ -731,15 +729,10 @@ const VerificationWorkstation: React.FC<VerificationWorkstationProps> = ({
 }) => {
   const [processing, setProcessing] = useState(false);
   const [imageError, setImageError] = useState(false);
-  const [rejectionNote, setRejectionNote] = useState("");
-  const [showRejectionForm, setShowRejectionForm] = useState(false);
-
-  // ✅ CORRECTION: Initialiser les comparaisons avec le statut "pending" par défaut
   const [comparisons, setComparisons] = useState<VerificationDetail["comparisons"]>([]);
 
   useEffect(() => {
     if (vendeur) {
-      // Initialiser les comparaisons avec le statut "pending"
       const initialComparisons: VerificationDetail["comparisons"] = [
         {
           field: "name",
@@ -771,9 +764,10 @@ const VerificationWorkstation: React.FC<VerificationWorkstationProps> = ({
         },
       ];
 
-      // Si le vendeur est déjà vérifié, mettre à jour les statuts en conséquence
       if (vendeur.est_verifie) {
         setComparisons(initialComparisons.map(c => ({ ...c, status: "match" })));
+      } else if (vendeur.status === "rejete") {
+        setComparisons(initialComparisons.map(c => ({ ...c, status: "mismatch" })));
       } else {
         setComparisons(initialComparisons);
       }
@@ -805,16 +799,14 @@ const VerificationWorkstation: React.FC<VerificationWorkstationProps> = ({
 
   const creationDate = formatDate(vendeur.date_creation);
 
-  // Note de vérification
   const getVerificationNote = () => {
-    const mismatches = comparisons.filter((c) => c.status === "mismatch");
-    if (mismatches.length > 0) {
-      return `Attention : ${mismatches.length} différence(s) détectée(s) entre les informations du profil et les documents fournis. Veuillez vérifier manuellement.`;
+    if (vendeur.status === "rejete") {
+      return "Ce vendeur a été rejeté. Vous pouvez toujours modifier son statut.";
     }
     if (vendeur.est_verifie) {
-      return "Ce compte a déjà été vérifié. Toutes les informations semblent correctes.";
+      return "Ce compte a déjà été vérifié. Vous pouvez toujours modifier son statut.";
     }
-    return "Toutes les informations sont en attente de vérification. Veuillez examiner les documents et valider ou rejeter la demande.";
+    return "Toutes les informations sont en attente de vérification.";
   };
 
   const getRegistreUrl = () => {
@@ -863,18 +855,14 @@ const VerificationWorkstation: React.FC<VerificationWorkstationProps> = ({
     }
   };
 
-  // ✅ CORRECTION: Fonction pour valider le vendeur
   const handleValidate = async () => {
     if (!onValidate) return;
     
     setProcessing(true);
     try {
-      // Mettre à jour tous les statuts des comparaisons à "match"
       setComparisons(prev => prev.map(c => ({ ...c, status: "match" })));
-      
       await onValidate(vendeur.uuid);
       
-      // Afficher une alerte de succès
       if (showAlert) {
         showAlert({
           type: "success",
@@ -898,23 +886,14 @@ const VerificationWorkstation: React.FC<VerificationWorkstationProps> = ({
     }
   };
 
-  // ✅ CORRECTION: Fonction pour rejeter le vendeur
   const handleReject = async () => {
     if (!onReject) return;
     
-    if (!showRejectionForm) {
-      setShowRejectionForm(true);
-      return;
-    }
-
     setProcessing(true);
     try {
-      // Mettre à jour tous les statuts des comparaisons à "mismatch"
       setComparisons(prev => prev.map(c => ({ ...c, status: "mismatch" })));
+      await onReject(vendeur.uuid);
       
-      await onReject(vendeur.uuid, rejectionNote);
-      
-      // Afficher une alerte d'information
       if (showAlert) {
         showAlert({
           type: "warning",
@@ -923,9 +902,6 @@ const VerificationWorkstation: React.FC<VerificationWorkstationProps> = ({
           visible: true,
         });
       }
-      
-      setShowRejectionForm(false);
-      setRejectionNote("");
     } catch (error) {
       console.error("Erreur lors du rejet:", error);
       if (showAlert) {
@@ -941,7 +917,6 @@ const VerificationWorkstation: React.FC<VerificationWorkstationProps> = ({
     }
   };
 
-  // ✅ CORRECTION: Fonction pour bloquer le vendeur
   const handleBlock = async () => {
     if (!onBlock) return;
     
@@ -949,7 +924,6 @@ const VerificationWorkstation: React.FC<VerificationWorkstationProps> = ({
     try {
       await onBlock(vendeur.uuid);
       
-      // Afficher une alerte
       if (showAlert) {
         showAlert({
           type: "danger",
@@ -1043,12 +1017,6 @@ const VerificationWorkstation: React.FC<VerificationWorkstationProps> = ({
           <p className="text-muted small mb-0">
             Demande soumise le {creationDate.date} à {creationDate.time}
           </p>
-          {vendeur.est_verifie && (
-            <p className="text-success small mt-2 d-flex align-items-center gap-2">
-              <FontAwesomeIcon icon={faCheckCircle} />
-              Ce compte a déjà été vérifié
-            </p>
-          )}
         </div>
 
         {/* Visualiseur de document */}
@@ -1109,7 +1077,6 @@ const VerificationWorkstation: React.FC<VerificationWorkstationProps> = ({
               </div>
             </div>
 
-            {/* Document image */}
             <div
               className="rounded-3 overflow-hidden mb-3"
               style={{
@@ -1216,7 +1183,6 @@ const VerificationWorkstation: React.FC<VerificationWorkstationProps> = ({
             })}
           </div>
 
-          {/* Note de vérification */}
           <div
             className="mt-4 p-3 rounded-3"
             style={{
@@ -1247,181 +1213,117 @@ const VerificationWorkstation: React.FC<VerificationWorkstationProps> = ({
           </div>
         </div>
 
-        {/* Formulaire de rejet */}
-        {showRejectionForm && (
-          <div className="bg-white rounded-3 p-4 shadow-sm mb-4">
-            <h4
-              className="fw-semibold mb-3"
-              style={{ color: colors.oskar.black }}
-            >
-              <FontAwesomeIcon icon={faTimesCircle} className="me-2 text-danger" />
-              Motif du rejet
-            </h4>
-            <div className="mb-3">
-              <textarea
-                className="form-control"
-                rows={4}
-                placeholder="Veuillez indiquer la raison du rejet..."
-                value={rejectionNote}
-                onChange={(e) => setRejectionNote(e.target.value)}
-                style={{
-                  borderColor: colors.oskar.lightGrey,
-                  borderRadius: "8px",
-                  resize: "vertical",
-                }}
-              />
-            </div>
-            <div className="d-flex gap-2 justify-content-end">
+        {/* Actions - TOUJOURS affichées pour tous les vendeurs */}
+        <div className="bg-white rounded-3 p-4 shadow-sm">
+          <h4 className="fw-semibold mb-3" style={{ color: colors.oskar.black }}>
+            Actions sur le compte
+          </h4>
+          <div className="row g-3">
+            <div className="col-md-4">
               <button
                 type="button"
-                className="btn btn-outline-secondary"
-                onClick={() => {
-                  setShowRejectionForm(false);
-                  setRejectionNote("");
-                }}
+                className="btn w-100 d-flex align-items-center justify-content-center gap-2"
+                onClick={handleValidate}
                 disabled={processing}
-              >
-                Annuler
-              </button>
-              <button
-                type="button"
-                className="btn btn-danger"
-                onClick={handleReject}
-                disabled={processing || !rejectionNote.trim()}
+                style={{
+                  backgroundColor: colors.oskar.green,
+                  color: "white",
+                  border: "none",
+                  padding: "0.75rem",
+                  fontWeight: "600",
+                  transition: "all 0.2s ease",
+                }}
+                onMouseEnter={(e) => {
+                  if (!processing) {
+                    e.currentTarget.style.backgroundColor = colors.oskar.greenHover;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!processing) {
+                    e.currentTarget.style.backgroundColor = colors.oskar.green;
+                  }
+                }}
               >
                 {processing ? (
-                  <>
-                    <span className="spinner-border spinner-border-sm me-2" />
-                    Traitement...
-                  </>
+                  <span className="spinner-border spinner-border-sm me-2" />
                 ) : (
                   <>
-                    <FontAwesomeIcon icon={faTimesCircle} className="me-2" />
-                    Confirmer le rejet
+                    <FontAwesomeIcon icon={faCheckCircle} />
+                    Valider
                   </>
                 )}
               </button>
             </div>
-          </div>
-        )}
-
-        {/* Actions */}
-        <div className="bg-white rounded-3 p-4 shadow-sm">
-          <div className="row g-3">
-            {!vendeur.est_verifie && !showRejectionForm && (
-              <>
-                <div className="col-md-6">
-                  <button
-                    type="button"
-                    className="btn w-100 d-flex align-items-center justify-content-center gap-2"
-                    onClick={() => setShowRejectionForm(true)}
-                    disabled={processing}
-                    style={{
-                      backgroundColor: "#EF4444",
-                      color: "white",
-                      border: "none",
-                      padding: "0.75rem",
-                      fontWeight: "600",
-                      transition: "all 0.2s ease",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!processing) {
-                        e.currentTarget.style.backgroundColor = "#DC2626";
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!processing) {
-                        e.currentTarget.style.backgroundColor = "#EF4444";
-                      }
-                    }}
-                  >
-                    {processing ? (
-                      <FontAwesomeIcon icon={faRefresh} spin />
-                    ) : (
-                      <>
-                        <FontAwesomeIcon icon={faTimesCircle} />
-                        Rejeter
-                      </>
-                    )}
-                  </button>
-                </div>
-                <div className="col-md-6">
-                  <button
-                    type="button"
-                    className="btn w-100 d-flex align-items-center justify-content-center gap-2"
-                    onClick={handleValidate}
-                    disabled={processing}
-                    style={{
-                      backgroundColor: colors.oskar.green,
-                      color: "white",
-                      border: "none",
-                      padding: "0.75rem",
-                      fontWeight: "600",
-                      transition: "all 0.2s ease",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!processing) {
-                        e.currentTarget.style.backgroundColor =
-                          colors.oskar.greenHover;
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!processing) {
-                        e.currentTarget.style.backgroundColor = colors.oskar.green;
-                      }
-                    }}
-                  >
-                    {processing ? (
-                      <FontAwesomeIcon icon={faRefresh} spin />
-                    ) : (
-                      <>
-                        <FontAwesomeIcon icon={faShieldAlt} />
-                        Valider & Certifier
-                      </>
-                    )}
-                  </button>
-                </div>
-              </>
-            )}
-
-            {vendeur.est_verifie && (
-              <div className="col-12">
-                <button
-                  type="button"
-                  className="btn w-100 d-flex align-items-center justify-content-center gap-2"
-                  onClick={handleBlock}
-                  disabled={processing}
-                  style={{
-                    backgroundColor: colors.oskar.orange,
-                    color: "white",
-                    border: "none",
-                    padding: "0.75rem",
-                    fontWeight: "600",
-                    transition: "all 0.2s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!processing) {
-                      e.currentTarget.style.backgroundColor =
-                        colors.oskar.orangeHover;
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!processing) {
-                      e.currentTarget.style.backgroundColor = colors.oskar.orange;
-                    }
-                  }}
-                >
-                  {processing ? (
-                    <FontAwesomeIcon icon={faRefresh} spin />
-                  ) : (
-                    <>
-                      <FontAwesomeIcon icon={faLock} />
-                      Bloquer le compte
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
+            <div className="col-md-4">
+              <button
+                type="button"
+                className="btn w-100 d-flex align-items-center justify-content-center gap-2"
+                onClick={handleReject}
+                disabled={processing}
+                style={{
+                  backgroundColor: "#EF4444",
+                  color: "white",
+                  border: "none",
+                  padding: "0.75rem",
+                  fontWeight: "600",
+                  transition: "all 0.2s ease",
+                }}
+                onMouseEnter={(e) => {
+                  if (!processing) {
+                    e.currentTarget.style.backgroundColor = "#DC2626";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!processing) {
+                    e.currentTarget.style.backgroundColor = "#EF4444";
+                  }
+                }}
+              >
+                {processing ? (
+                  <span className="spinner-border spinner-border-sm me-2" />
+                ) : (
+                  <>
+                    <FontAwesomeIcon icon={faTimesCircle} />
+                    Rejeter
+                  </>
+                )}
+              </button>
+            </div>
+            <div className="col-md-4">
+              <button
+                type="button"
+                className="btn w-100 d-flex align-items-center justify-content-center gap-2"
+                onClick={handleBlock}
+                disabled={processing}
+                style={{
+                  backgroundColor: colors.oskar.orange,
+                  color: "white",
+                  border: "none",
+                  padding: "0.75rem",
+                  fontWeight: "600",
+                  transition: "all 0.2s ease",
+                }}
+                onMouseEnter={(e) => {
+                  if (!processing) {
+                    e.currentTarget.style.backgroundColor = colors.oskar.orangeHover;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!processing) {
+                    e.currentTarget.style.backgroundColor = colors.oskar.orange;
+                  }
+                }}
+              >
+                {processing ? (
+                  <span className="spinner-border spinner-border-sm me-2" />
+                ) : (
+                  <>
+                    <FontAwesomeIcon icon={faLock} />
+                    Bloquer
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1440,17 +1342,15 @@ export default function VendeursList() {
   const [selectedVendeur, setSelectedVendeur] = useState<Vendeur | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("tous");
-  const [filterType, setFilterType] = useState<"tous" | "particulier" | "professionnel">("tous");
+  const [filterType, setFilterType] = useState<"tous" | "professionnel">("tous");
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
   
-  // État pour le registre de commerce
   const [selectedRegistre, setSelectedRegistre] = useState<{
     url: string;
     vendeurName: string;
   } | null>(null);
   const [showRegistre, setShowRegistre] = useState(false);
 
-  // État pour les alertes
   const [alert, setAlert] = useState<AlertMessage>({
     type: "info",
     title: "",
@@ -1458,32 +1358,50 @@ export default function VendeursList() {
     visible: false,
   });
 
-  // Charger les vendeurs
   useEffect(() => {
     const fetchVendeurs = async () => {
       try {
         setLoading(true);
         setError(null);
-        console.log("🟡 Chargement des vendeurs...");
 
-        const response = await api.get<VendeursResponse>(
-          API_ENDPOINTS.ADMIN.VENDEURS.LIST
-        );
+        let endpoint = "";
+        
+        switch (filterStatus) {
+          case "en-attente":
+            endpoint = API_ENDPOINTS.VENDEURS.LISTE_VENDEUR_EN_ATTENTE;
+            break;
+          case "valides":
+            endpoint = API_ENDPOINTS.VENDEURS.LISTE_VENDEUR_VALIDES;
+            break;
+          case "rejetes":
+            endpoint = API_ENDPOINTS.VENDEURS.LISTE_VENDEUR_REJETES;
+            break;
+          default:
+            endpoint = API_ENDPOINTS.ADMIN.VENDEURS.LIST;
+        }
 
-        console.log("🟢 Réponse vendeurs:", response);
+        const response = await api.get<any>(endpoint);
 
         let vendeursData: Vendeur[] = [];
+        
         if (Array.isArray(response)) {
           vendeursData = response;
         } else if (response && Array.isArray(response.data)) {
           vendeursData = response.data;
         } else if (response && response.data && Array.isArray(response.data)) {
           vendeursData = response.data;
+        } else if (response && response.data && response.data.data && Array.isArray(response.data.data)) {
+          vendeursData = response.data.data;
         }
+
+        vendeursData = vendeursData.map(v => ({
+          ...v,
+          status: v.status || (v.est_verifie ? "valide" : v.est_bloque ? "bloque" : "en-attente")
+        }));
 
         setVendeurs(vendeursData);
       } catch (err: any) {
-        console.error("🔴 Erreur chargement vendeurs:", err);
+        console.error("Erreur chargement vendeurs:", err);
         setError(err.message || "Impossible de charger la liste des vendeurs");
       } finally {
         setLoading(false);
@@ -1491,29 +1409,24 @@ export default function VendeursList() {
     };
 
     fetchVendeurs();
-  }, []);
+  }, [filterStatus]);
 
-  // Fonction pour afficher une alerte
   const showAlert = (alertData: Omit<AlertMessage, "visible">) => {
     setAlert({
       ...alertData,
       visible: true,
     });
 
-    // Auto-fermeture après 5 secondes
     setTimeout(() => {
       setAlert(prev => ({ ...prev, visible: false }));
     }, 5000);
   };
 
-  // Fermer l'alerte
   const closeAlert = () => {
     setAlert(prev => ({ ...prev, visible: false }));
   };
 
-  // Filtrer les vendeurs
   const filteredVendeurs = vendeurs.filter((vendeur) => {
-    // Filtre par recherche
     const searchMatch =
       searchTerm === "" ||
       vendeur.nom?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1525,27 +1438,12 @@ export default function VendeursList() {
 
     if (!searchMatch) return false;
 
-    // Filtre par type
     if (filterType !== "tous") {
-      const typeMatch = 
-        (filterType === "professionnel" && vendeur.type?.toLowerCase() === "professionnel") ||
-        (filterType === "particulier" && vendeur.type?.toLowerCase() !== "professionnel");
+      const typeMatch = filterType === "professionnel" && vendeur.type?.toLowerCase() === "professionnel";
       if (!typeMatch) return false;
     }
 
-    // Filtre par statut
-    switch (filterStatus) {
-      case "en-attente":
-        return !vendeur.est_verifie && !vendeur.est_bloque && !vendeur.deleted_at;
-      case "verifie":
-        return vendeur.est_verifie && !vendeur.deleted_at;
-      case "bloque":
-        return vendeur.est_bloque && !vendeur.deleted_at;
-      case "supprime":
-        return !!vendeur.deleted_at;
-      default:
-        return true;
-    }
+    return true;
   });
 
   const getAvatarUrl = (vendeur: Vendeur) => {
@@ -1594,57 +1492,97 @@ export default function VendeursList() {
     setSelectedVendeur(null);
   };
 
-  // ✅ CORRECTION: Actions avec mise à jour de l'état local
   const handleValidate = async (uuid: string) => {
-    console.log("Valider vendeur:", uuid);
-    
-    // Mettre à jour l'état local
-    setVendeurs(prev => 
-      prev.map(v => 
-        v.uuid === uuid ? { ...v, est_verifie: true } : v
-      )
-    );
+    try {
+      const endpoint = `/auth/${uuid}/valider`;
+      await api.patch(endpoint, {});
+      
+      setVendeurs(prev => 
+        prev.map(v => 
+          v.uuid === uuid ? { ...v, est_verifie: true, status: "valide" } : v
+        )
+      );
 
-    // Mettre à jour le vendeur sélectionné si c'est le même
-    if (selectedVendeur?.uuid === uuid) {
-      setSelectedVendeur(prev => prev ? { ...prev, est_verifie: true } : null);
+      if (selectedVendeur?.uuid === uuid) {
+        setSelectedVendeur(prev => prev ? { ...prev, est_verifie: true, status: "valide" } : null);
+      }
+
+      showAlert({
+        type: "success",
+        title: "Vérification réussie !",
+        message: `Le vendeur a été validé avec succès.`,
+      });
+      
+    } catch (error: any) {
+      console.error("Erreur validation:", error);
+      showAlert({
+        type: "danger",
+        title: "Erreur",
+        message: error.message || "Impossible de valider le vendeur",
+      });
     }
-
-    // Ici, vous appelleriez votre API réelle
-    // await api.post(API_ENDPOINTS.ADMIN.VENDEURS.VALIDATE(uuid));
   };
 
-  const handleReject = async (uuid: string, note?: string) => {
-    console.log("Rejeter vendeur:", uuid, "Note:", note);
-    
-    // Mettre à jour l'état local (vous pouvez définir un champ "est_rejete" si nécessaire)
-    setVendeurs(prev => 
-      prev.map(v => 
-        v.uuid === uuid ? { ...v, est_verifie: false } : v
-      )
-    );
+  const handleReject = async (uuid: string) => {
+    try {
+      const endpoint = `/auth/${uuid}/rejeter`;
+      await api.patch(endpoint, {});
+      
+      setVendeurs(prev => 
+        prev.map(v => 
+          v.uuid === uuid ? { ...v, est_verifie: false, status: "rejete" } : v
+        )
+      );
 
-    // Ici, vous appelleriez votre API réelle
-    // await api.post(API_ENDPOINTS.ADMIN.VENDEURS.REJECT(uuid), { reason: note });
+      if (selectedVendeur?.uuid === uuid) {
+        setSelectedVendeur(prev => prev ? { ...prev, est_verifie: false, status: "rejete" } : null);
+      }
+
+      showAlert({
+        type: "warning",
+        title: "Demande rejetée",
+        message: `Le vendeur a été rejeté.`,
+      });
+      
+    } catch (error: any) {
+      console.error("Erreur rejet:", error);
+      showAlert({
+        type: "danger",
+        title: "Erreur",
+        message: error.message || "Impossible de rejeter le vendeur",
+      });
+    }
   };
 
   const handleBlock = async (uuid: string) => {
-    console.log("Bloquer vendeur:", uuid);
-    
-    // Mettre à jour l'état local
-    setVendeurs(prev => 
-      prev.map(v => 
-        v.uuid === uuid ? { ...v, est_bloque: true } : v
-      )
-    );
+    try {
+      const endpoint = API_ENDPOINTS.VENDEURS.BLOCK(uuid);
+      await api.post(endpoint, {});
+      
+      setVendeurs(prev => 
+        prev.map(v => 
+          v.uuid === uuid ? { ...v, est_bloque: true, status: "bloque" } : v
+        )
+      );
 
-    // Mettre à jour le vendeur sélectionné si c'est le même
-    if (selectedVendeur?.uuid === uuid) {
-      setSelectedVendeur(prev => prev ? { ...prev, est_bloque: true } : null);
+      if (selectedVendeur?.uuid === uuid) {
+        setSelectedVendeur(prev => prev ? { ...prev, est_bloque: true, status: "bloque" } : null);
+      }
+
+      showAlert({
+        type: "danger",
+        title: "Compte bloqué",
+        message: `Le compte a été bloqué.`,
+      });
+      
+    } catch (error: any) {
+      console.error("Erreur blocage:", error);
+      showAlert({
+        type: "danger",
+        title: "Erreur",
+        message: error.message || "Impossible de bloquer le vendeur",
+      });
     }
-
-    // Ici, vous appelleriez votre API réelle
-    // await api.post(API_ENDPOINTS.ADMIN.VENDEURS.BLOCK(uuid));
   };
 
   const getStatusBadge = (vendeur: Vendeur) => {
@@ -1664,12 +1602,20 @@ export default function VendeursList() {
         label: "Bloqué",
       };
     }
-    if (vendeur.est_verifie) {
+    if (vendeur.est_verifie || vendeur.status === "valide") {
       return {
         bg: "#D1FAE5",
         color: "#065F46",
         icon: faCheckCircle,
         label: "Vérifié",
+      };
+    }
+    if (vendeur.status === "rejete") {
+      return {
+        bg: "#FEE2E2",
+        color: "#991B1B",
+        icon: faTimesCircle,
+        label: "Rejeté",
       };
     }
     return {
@@ -1681,40 +1627,34 @@ export default function VendeursList() {
   };
 
   const getTypeBadge = (type: string) => {
-    switch (type?.toLowerCase()) {
-      case "professionnel":
-        return { bg: "#FEF3C7", color: "#92400E", label: "Professionnel", icon: faStore };
-      default:
-        return { bg: colors.oskar.lightGrey, color: colors.oskar.grey, label: "Particulier", icon: faUser };
+    if (type?.toLowerCase() === "professionnel") {
+      return { bg: "#FEF3C7", color: "#92400E", label: "Professionnel", icon: faStore };
     }
+    return { bg: colors.oskar.lightGrey, color: colors.oskar.grey, label: "Particulier", icon: faUser };
   };
 
   return (
     <main style={{ fontFamily: "Arial, sans-serif" }}>
-      {/* Alerte globale */}
       {alert.visible && (
         <div className="container-fluid px-4 pt-4">
           <Alert alert={alert} onClose={closeAlert} />
         </div>
       )}
 
-      {/* Filter Bar */}
       <FilterBar
         onAccountTypeChange={setFilterType}
         onStatusChange={setFilterStatus}
         onSearchChange={setSearchTerm}
         totalCount={vendeurs.length}
         filteredCount={filteredVendeurs.length}
+        defaultStatus={filterStatus}
       />
 
-      {/* Main Content - Two Panels Layout */}
       <div className="d-flex" style={{ height: "calc(100vh - 180px)" }}>
-        {/* Left Panel - Queue List */}
         <section
           className="bg-white border-end border-light d-flex flex-column"
           style={{ width: "450px", minWidth: "450px" }}
         >
-          {/* Header */}
           <div className="px-4 py-3 border-bottom border-light">
             <div className="d-flex align-items-center justify-content-between">
               <h3
@@ -1738,7 +1678,6 @@ export default function VendeursList() {
             </div>
           </div>
 
-          {/* Queue List */}
           <div className="flex-grow-1 overflow-auto p-3">
             {loading ? (
               <div className="text-center py-5">
@@ -1770,6 +1709,32 @@ export default function VendeursList() {
                   <FontAwesomeIcon icon={faRefresh} className="me-2" />
                   Réessayer
                 </button>
+              </div>
+            ) : filteredVendeurs.length === 0 ? (
+              <div className="text-center py-5">
+                <div className="mb-3">
+                  <div
+                    className="rounded-circle mx-auto d-flex align-items-center justify-content-center"
+                    style={{
+                      width: "64px",
+                      height: "64px",
+                      backgroundColor: colors.oskar.lightGrey,
+                      color: colors.oskar.grey,
+                      fontSize: "1.5rem",
+                    }}
+                  >
+                    <FontAwesomeIcon icon={faUserSlash} />
+                  </div>
+                </div>
+                <h5
+                  className="fw-semibold mb-2"
+                  style={{ color: colors.oskar.black }}
+                >
+                  Aucun vendeur trouvé
+                </h5>
+                <p className="text-muted mb-0 small">
+                  Essayez de modifier vos filtres de recherche
+                </p>
               </div>
             ) : (
               <div className="d-flex flex-column gap-3">
@@ -1921,40 +1886,11 @@ export default function VendeursList() {
                     </div>
                   );
                 })}
-
-                {filteredVendeurs.length === 0 && (
-                  <div className="text-center py-5">
-                    <div className="mb-3">
-                      <div
-                        className="rounded-circle mx-auto d-flex align-items-center justify-content-center"
-                        style={{
-                          width: "64px",
-                          height: "64px",
-                          backgroundColor: colors.oskar.lightGrey,
-                          color: colors.oskar.grey,
-                          fontSize: "1.5rem",
-                        }}
-                      >
-                        <FontAwesomeIcon icon={faUserSlash} />
-                      </div>
-                    </div>
-                    <h5
-                      className="fw-semibold mb-2"
-                      style={{ color: colors.oskar.black }}
-                    >
-                      Aucun vendeur trouvé
-                    </h5>
-                    <p className="text-muted mb-0 small">
-                      Essayez de modifier vos filtres de recherche
-                    </p>
-                  </div>
-                )}
               </div>
             )}
           </div>
         </section>
 
-        {/* Right Panel - Verification Workstation */}
         {selectedVendeur ? (
           <VerificationWorkstation
             vendeur={selectedVendeur}
@@ -1987,14 +1923,13 @@ export default function VendeursList() {
                 Sélectionnez un vendeur
               </h4>
               <p className="text-muted mb-0" style={{ maxWidth: "400px" }}>
-                Cliquez sur un vendeur dans la file d'attente pour afficher ses détails et procéder à la vérification
+                Cliquez sur un vendeur dans la file d'attente pour afficher ses détails
               </p>
             </div>
           </section>
         )}
       </div>
 
-      {/* Registre Preview Panel */}
       {showRegistre && selectedRegistre && (
         <RegistrePreview
           registreUrl={selectedRegistre.url}

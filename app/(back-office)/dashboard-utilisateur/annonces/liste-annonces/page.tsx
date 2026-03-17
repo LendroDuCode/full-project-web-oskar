@@ -8,6 +8,8 @@ import FilterBar from "../components/FilterBar";
 import DataTable from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
 import ViewModal from "../components/ViewModal";
+import CustomAlert from "../components/CustomAlert";
+import DeleteConfirmModal from "../components/DeleteConfirmModal";
 
 interface AnnonceData {
   uuid: string;
@@ -31,6 +33,7 @@ export default function AnnoncesPage() {
   const [filteredAnnonces, setFilteredAnnonces] = useState<AnnonceData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState("tous");
   const [selectedStatus, setSelectedStatus] = useState("tous");
   const [searchQuery, setSearchQuery] = useState("");
@@ -46,6 +49,15 @@ export default function AnnoncesPage() {
   const [showViewModal, setShowViewModal] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [fullDetails, setFullDetails] = useState<any>(null);
+
+  // États pour la modal de confirmation de suppression
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<{
+    uuid: string;
+    type: string;
+    title: string;
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // ✅ Récupérer l'UUID de l'utilisateur connecté
   useEffect(() => {
@@ -176,7 +188,7 @@ export default function AnnoncesPage() {
       }
     }
 
-    // ✅ Déterminer le statut général (TRÈS IMPORTANT)
+    // ✅ Déterminer le statut général
     let status = "en-attente"; // Par défaut
     
     if (estBloque) {
@@ -272,7 +284,57 @@ export default function AnnoncesPage() {
     setFullDetails(null);
   }, []);
 
-  // ✅ CHARGER LES DONNÉES - VERSION CORRIGÉE
+  // ✅ Ouvrir le modal de confirmation de suppression
+  const openDeleteModal = useCallback(
+    (uuid: string, type: string, title: string) => {
+      setItemToDelete({ uuid, type, title });
+      setShowDeleteModal(true);
+    },
+    [],
+  );
+
+  // ✅ Annuler la suppression
+  const cancelDelete = useCallback(() => {
+    setShowDeleteModal(false);
+    setItemToDelete(null);
+  }, []);
+
+  // ✅ Confirmer la suppression
+  const confirmDelete = useCallback(async () => {
+    if (!itemToDelete) return;
+
+    try {
+      setIsDeleting(true);
+      let endpoint = "";
+      switch (itemToDelete.type) {
+        case "produit":
+          endpoint = API_ENDPOINTS.PRODUCTS.DELETE(itemToDelete.uuid);
+          break;
+        case "don":
+          endpoint = API_ENDPOINTS.DONS.DELETE(itemToDelete.uuid);
+          break;
+        case "echange":
+          endpoint = API_ENDPOINTS.ECHANGES.DELETE(itemToDelete.uuid);
+          break;
+      }
+      if (endpoint) {
+        await api.delete(endpoint);
+        setSuccessMessage("Annonce supprimée avec succès");
+        setTimeout(() => setSuccessMessage(null), 3000);
+        await fetchData(selectedType, selectedStatus);
+      }
+    } catch (err: any) {
+      console.error("Erreur lors de la suppression:", err);
+      setError(err.response?.data?.message || "Erreur lors de la suppression");
+      setTimeout(() => setError(null), 5000);
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteModal(false);
+      setItemToDelete(null);
+    }
+  }, [itemToDelete, selectedType, selectedStatus]);
+
+  // ✅ CHARGER LES DONNÉES
   const fetchData = useCallback(async (type: string, status: string) => {
     try {
       setLoading(true);
@@ -401,7 +463,7 @@ export default function AnnoncesPage() {
       setLoading(false);
       setIsFetchingBlocked(false);
     }
-  }, []);
+  }, [transformAnnonceData]);
 
   // ✅ Effet pour charger les données quand les filtres changent
   useEffect(() => {
@@ -428,133 +490,61 @@ export default function AnnoncesPage() {
     }
   }, [annonces, searchQuery]);
 
-  // ✅ Actions
-  const handleValidate = useCallback(
-    async (uuid: string, type: string) => {
-      try {
-        console.log("Validation:", uuid, type);
-        await fetchData(selectedType, selectedStatus);
-      } catch (err) {
-        console.error("Erreur lors de la validation:", err);
-        alert("Erreur lors de la validation");
-      }
-    },
-    [selectedType, selectedStatus, fetchData],
-  );
-
-  const handleReject = useCallback(
-    async (uuid: string, type: string) => {
-      try {
-        console.log("Rejet:", uuid, type);
-        await fetchData(selectedType, selectedStatus);
-      } catch (err) {
-        console.error("Erreur lors du rejet:", err);
-        alert("Erreur lors du rejet");
-      }
-    },
-    [selectedType, selectedStatus, fetchData],
-  );
-
-  const handlePublish = useCallback(
-    async (uuid: string, type: string, publish: boolean) => {
-      try {
-        console.log(`${publish ? "Publication" : "Dépublication"}:`, uuid, type);
-        const endpoint = publish 
-          ? API_ENDPOINTS.PRODUCTS.PUBLISH(uuid) 
-          : API_ENDPOINTS.PRODUCTS.UNPUBLISH(uuid);
-        if (endpoint) {
-          await api.post(endpoint);
-          alert(`Annonce ${publish ? "publiée" : "dépubliée"} avec succès`);
-          await fetchData(selectedType, selectedStatus);
-        }
-      } catch (err: any) {
-        console.error("Erreur lors de l'opération:", err);
-        alert(err.response?.data?.message || "Erreur lors de l'opération");
-      }
-    },
-    [selectedType, selectedStatus, fetchData],
-  );
-
-  const handleBlock = useCallback(
-    async (uuid: string, type: string, block: boolean) => {
-      try {
-        console.log(`${block ? "Blocage" : "Déblocage"}:`, uuid, type);
-        const endpoint = block 
-          ? API_ENDPOINTS.PRODUCTS.BLOCK(uuid) 
-          : API_ENDPOINTS.PRODUCTS.UNBLOCK(uuid);
-        if (endpoint) {
-          await api.post(endpoint);
-          alert(`Annonce ${block ? "bloquée" : "débloquée"} avec succès`);
-          await fetchData(selectedType, selectedStatus);
-        }
-      } catch (err: any) {
-        console.error("Erreur lors de l'opération:", err);
-        alert(err.response?.data?.message || "Erreur lors de l'opération");
-      }
-    },
-    [selectedType, selectedStatus, fetchData],
-  );
-
+  // ✅ Supprimer (appelé depuis DataTable)
   const handleDelete = useCallback(
-    async (uuid: string, type: string) => {
-      if (!confirm("Êtes-vous sûr de vouloir supprimer cette annonce ?")) return;
-      try {
-        console.log("Suppression:", uuid, type);
-        let endpoint = "";
-        switch (type) {
-          case "produit":
-            endpoint = API_ENDPOINTS.PRODUCTS.DELETE(uuid);
-            break;
-          case "don":
-            endpoint = API_ENDPOINTS.DONS.DELETE(uuid);
-            break;
-          case "echange":
-            endpoint = API_ENDPOINTS.ECHANGES.DELETE(uuid);
-            break;
-        }
-        if (endpoint) {
-          await api.delete(endpoint);
-          alert("Annonce supprimée avec succès");
-          await fetchData(selectedType, selectedStatus);
-        }
-      } catch (err: any) {
-        console.error("Erreur lors de la suppression:", err);
-        alert(err.response?.data?.message || "Erreur lors de la suppression");
-      }
+    (uuid: string, type: string) => {
+      const annonce = annonces.find((a) => a.uuid === uuid && a.type === type);
+      openDeleteModal(uuid, type, annonce?.title || "cette annonce");
     },
-    [selectedType, selectedStatus, fetchData],
+    [annonces, openDeleteModal],
   );
 
+  // ✅ Actions en masse (simplifiées - seulement suppression)
   const handleBulkAction = useCallback(
     async (action: string, items: AnnonceData[]) => {
       try {
-        console.log(`Action en masse "${action}" sur ${items.length} items`);
-        for (const item of items) {
-          switch (action) {
-            case "publish":
-              await handlePublish(item.uuid, item.type, true);
-              break;
-            case "unpublish":
-              await handlePublish(item.uuid, item.type, false);
-              break;
-            case "block":
-              await handleBlock(item.uuid, item.type, true);
-              break;
-            case "unblock":
-              await handleBlock(item.uuid, item.type, false);
-              break;
-            case "delete":
-              await handleDelete(item.uuid, item.type);
-              break;
-          }
+        if (action !== "delete") {
+          setError("Cette action n'est pas disponible pour les utilisateurs");
+          setTimeout(() => setError(null), 3000);
+          return;
         }
-        setSelectedItems(new Set());
-      } catch (err) {
+
+        if (items.length === 1) {
+          // Si un seul élément, utiliser la modal normale
+          handleDelete(items[0].uuid, items[0].type);
+        } else {
+          // Si plusieurs, confirmation
+          if (!confirm(`Voulez-vous vraiment supprimer ${items.length} annonces ?`)) return;
+          
+          for (const item of items) {
+            let endpoint = "";
+            switch (item.type) {
+              case "produit":
+                endpoint = API_ENDPOINTS.PRODUCTS.DELETE(item.uuid);
+                break;
+              case "don":
+                endpoint = API_ENDPOINTS.DONS.DELETE(item.uuid);
+                break;
+              case "echange":
+                endpoint = API_ENDPOINTS.ECHANGES.DELETE(item.uuid);
+                break;
+            }
+            if (endpoint) {
+              await api.delete(endpoint);
+            }
+          }
+          setSuccessMessage(`${items.length} annonce(s) supprimée(s) avec succès`);
+          setTimeout(() => setSuccessMessage(null), 3000);
+          await fetchData(selectedType, selectedStatus);
+          setSelectedItems(new Set());
+        }
+      } catch (err: any) {
         console.error("Erreur lors de l'action en masse:", err);
-        alert("Erreur lors de l'opération en masse");
+        setError(err.response?.data?.message || "Erreur lors de l'opération");
+        setTimeout(() => setError(null), 5000);
       }
     },
-    [handlePublish, handleBlock, handleDelete],
+    [handleDelete, fetchData, selectedType, selectedStatus],
   );
 
   const handleClearFilters = useCallback(() => {
@@ -575,6 +565,25 @@ export default function AnnoncesPage() {
       className="container-fluid px-0"
       style={{ minHeight: "100vh", backgroundColor: colors.oskar.lightGrey }}
     >
+      {/* Alertes flottantes */}
+      {error && (
+        <CustomAlert
+          type="danger"
+          title="Erreur"
+          message={error}
+          onClose={() => setError(null)}
+        />
+      )}
+
+      {successMessage && (
+        <CustomAlert
+          type="success"
+          title="Succès"
+          message={successMessage}
+          onClose={() => setSuccessMessage(null)}
+        />
+      )}
+
       <FilterBar
         selectedType={selectedType}
         selectedStatus={selectedStatus}
@@ -630,10 +639,6 @@ export default function AnnoncesPage() {
             data={filteredAnnonces}
             loading={isLoading}
             error={error}
-            onValidate={handleValidate}
-            onReject={handleReject}
-            onPublish={handlePublish}
-            onBlock={handleBlock}
             onDelete={handleDelete}
             onView={handleView}
             onRefresh={handleRefresh}
@@ -663,6 +668,17 @@ export default function AnnoncesPage() {
         )}
       </div>
 
+      {/* Modal de confirmation de suppression */}
+      <DeleteConfirmModal
+        isOpen={showDeleteModal}
+        onClose={cancelDelete}
+        onConfirm={confirmDelete}
+        itemTitle={itemToDelete?.title || ""}
+        itemType={itemToDelete?.type || ""}
+        isDeleting={isDeleting}
+      />
+
+      {/* Modal de visualisation */}
       <ViewModal
         show={showViewModal}
         onClose={handleCloseModal}

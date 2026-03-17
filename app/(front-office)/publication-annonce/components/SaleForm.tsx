@@ -132,6 +132,16 @@ const VenteForm: React.FC<VenteFormProps> = ({
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [isVendeur, setIsVendeur] = useState(false);
 
+  // ✅ S'assurer que la quantité est toujours à 1
+  useEffect(() => {
+    if (venteData.quantite !== "1") {
+      onChange({
+        ...venteData,
+        quantite: "1",
+      });
+    }
+  }, [venteData.quantite]);
+
   // Fonction pour formater le prix avec séparateur de milliers
   const formatPrix = (value: string): string => {
     const numbers = value.replace(/\D/g, '');
@@ -149,7 +159,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
     const formatted = formatPrix(e.target.value);
     e.target.value = formatted;
     const numericValue = extractNumericValue(formatted);
-    onChange({ ...venteData, prix: numericValue });
+    onChange({ ...venteData, prix: numericValue, quantite: "1" });
   };
 
   // Récupérer le type d'utilisateur
@@ -222,6 +232,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
             ...venteData,
             boutiqueUuid: premiereBoutique.uuid,
             boutiqueNom: premiereBoutique.nom,
+            quantite: "1",
           });
 
           if (externalOnBoutiqueChange) {
@@ -266,6 +277,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
             ...venteData,
             boutiqueUuid: premiereBoutique.uuid,
             boutiqueNom: premiereBoutique.nom,
+            quantite: "1",
           });
 
           if (externalOnBoutiqueChange) {
@@ -376,7 +388,8 @@ const VenteForm: React.FC<VenteFormProps> = ({
       ...venteData,
       categorie_uuid: categorieUuid,
       sous_categorie_uuid: "",
-      final_categorie_uuid: categorieUuid
+      final_categorie_uuid: categorieUuid,
+      quantite: "1",
     });
 
     if (selectedCategory?.enfants && selectedCategory.enfants.length > 0) {
@@ -392,7 +405,8 @@ const VenteForm: React.FC<VenteFormProps> = ({
     onChange({
       ...venteData,
       sous_categorie_uuid: sousCategorieUuid,
-      final_categorie_uuid: sousCategorieUuid || venteData.categorie_uuid
+      final_categorie_uuid: sousCategorieUuid || venteData.categorie_uuid,
+      quantite: "1",
     });
   };
 
@@ -404,11 +418,24 @@ const VenteForm: React.FC<VenteFormProps> = ({
       ...venteData,
       boutiqueUuid: uuid,
       boutiqueNom: selectedBoutique?.nom || "",
+      quantite: "1",
     });
 
     if (externalOnBoutiqueChange) {
       externalOnBoutiqueChange(uuid);
     }
+  };
+
+  const handleLibelleChange = (e: ChangeEvent<HTMLInputElement>) => {
+    onChange({ ...venteData, libelle: e.target.value, quantite: "1" });
+  };
+
+  const handleDescriptionChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
+    onChange({ ...venteData, description: e.target.value, quantite: "1" });
+  };
+
+  const handleConditionChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    onChange({ ...venteData, condition: e.target.value, quantite: "1" });
   };
 
   const renderVenteStep2 = () => {
@@ -454,6 +481,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
         )}
 
         <div className="row g-4">
+          {/* Colonne principale - Formulaire */}
           <div className="col-lg-8">
             <div className="card border shadow-lg rounded-4 mb-4 hover-shadow transition-all">
               <div className="card-header bg-white border-bottom py-4 px-4 rounded-top-4">
@@ -582,9 +610,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
                       style={{ fontSize: "1.1rem" }}
                       placeholder="Ex: Casque Audio Sony WH-1000XM5"
                       value={venteData.libelle}
-                      onChange={(e) =>
-                        onChange({ ...venteData, libelle: e.target.value })
-                      }
+                      onChange={handleLibelleChange}
                       required
                     />
                     {validationErrors.libelle && (
@@ -628,23 +654,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
                   </div>
                 </div>
 
-                <div className="row g-4 mb-4">
-                  <div className="col-md-12" style={{ minHeight: "100px" }}>
-                    <label className="form-label fw-bold fs-5 mb-3">
-                      Quantité <span className="text-muted">(optionnelle, défaut: 1)</span>
-                    </label>
-                    <input
-                      type="number"
-                      className="form-control form-control-lg border border-secondary rounded-4 py-3 px-4"
-                      style={{ fontSize: "1.1rem" }}
-                      value={venteData.quantite || 1}
-                      onChange={(e) =>
-                        onChange({ ...venteData, quantite: e.target.value })
-                      }
-                      min="1"
-                    />
-                  </div>
-                </div>
+                {/* Champ Quantité - SUPPRIMÉ (valeur par défaut à 1) */}
 
                 <div className="mb-4" style={{ minHeight: "200px" }}>
                   <label className="form-label fw-bold fs-5 mb-3">
@@ -656,9 +666,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
                     rows={4}
                     placeholder="Décrivez votre produit en détail..."
                     value={venteData.description}
-                    onChange={(e) =>
-                      onChange({ ...venteData, description: e.target.value })
-                    }
+                    onChange={handleDescriptionChange}
                   />
                   {validationErrors.description && (
                     <div className="text-danger mt-2 d-flex align-items-center">
@@ -884,9 +892,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
                         paddingRight: "3rem"
                       }}
                       value={venteData.condition}
-                      onChange={(e) =>
-                        onChange({ ...venteData, condition: e.target.value })
-                      }
+                      onChange={handleConditionChange}
                     >
                       {conditions.map((cond) => (
                         <option key={cond.value} value={cond.value} className="py-2">

@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
-import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { buildImageUrl } from "@/app/shared/utils/image-utils";
 import { annonceService, Annonce } from "./services/annonce.service";
 import FilterBar from "./components/FilterBar";
@@ -90,13 +89,13 @@ export default function Annonces() {
     toast.info(
       <div style={{ padding: "8px" }}>
         <div style={{ fontWeight: "bold", marginBottom: "10px", fontSize: "1.1rem" }}>
-          📋 {totalCount} annonce(s) en attente de publication
+          📢 {totalCount} annonce(s) en attente de publication
         </div>
 
         {groupedByType.produits.length > 0 && (
           <div style={{ marginBottom: "8px", padding: "5px", background: "#f3f4f6", borderRadius: "6px" }}>
             <span style={{ color: "#10b981", fontWeight: "600" }}>
-              📦 Produits: {groupedByType.produits.length}
+              🏷️ Produits: {groupedByType.produits.length}
             </span>
           </div>
         )}
@@ -236,7 +235,7 @@ export default function Annonces() {
   // Chargement initial et quand les filtres changent
   useEffect(() => {
     fetchAllData(true);
-  }, [selectedType, selectedStatus]); // ← Recharger quand les filtres changent
+  }, [selectedType, selectedStatus]); // Recharger quand les filtres changent
 
   // Polling pour détecter les nouveaux items
   useEffect(() => {
@@ -282,7 +281,7 @@ export default function Annonces() {
     });
   }, [allData, searchQuery]);
 
-  // ✅ FONCTION POUR OBTENIR L'URL DE L'IMAGE
+  // FONCTION POUR OBTENIR L'URL DE L'IMAGE
   const getItemImageUrl = useCallback((item: Annonce): string => {
     if (!item) return `https://via.placeholder.com/64?text=?`;
     
@@ -353,31 +352,12 @@ export default function Annonces() {
   const handleValidate = useCallback(
     async (id: string, type: string) => {
       try {
-        console.log("Validation:", id, type);
-
-        let endpoint = "";
-        let data = { uuid: id };
-
-        switch (type) {
-          case "produit":
-            endpoint = API_ENDPOINTS.PRODUCTS.PUBLLIER;
-            break;
-          case "don":
-            endpoint = API_ENDPOINTS.DONS.PUBLISH;
-            break;
-          case "echange":
-            endpoint = API_ENDPOINTS.ECHANGES.PUBLISH;
-            break;
-        }
-
-        if (endpoint) {
-          await api.post(endpoint, data);
-          toast.success("✅ Annonce validée avec succès");
-          await fetchAllData(false);
-        }
-      } catch (err) {
+        await annonceService.validerAnnonce(id, type);
+        await fetchAllData(false);
+        toast.success("✅ Annonce validée avec succès");
+      } catch (err: any) {
         console.error("Erreur lors de la validation:", err);
-        toast.error("❌ Impossible de valider l'annonce");
+        toast.error(`❌ ${err.message || "Impossible de valider l'annonce"}`);
       }
     },
     [fetchAllData],
@@ -386,30 +366,54 @@ export default function Annonces() {
   const handleReject = useCallback(
     async (id: string, type: string) => {
       try {
-        console.log("Rejet:", id, type);
-
-        let endpoint = "";
-
-        switch (type) {
-          case "produit":
-            endpoint = API_ENDPOINTS.PRODUCTS.DELETE(id);
-            break;
-          case "don":
-            endpoint = API_ENDPOINTS.DONS.DELETE(id);
-            break;
-          case "echange":
-            endpoint = API_ENDPOINTS.ECHANGES.DELETE(id);
-            break;
-        }
-
-        if (endpoint) {
-          await api.delete(endpoint);
-          toast.info("🗑️ Annonce rejetée");
-          await fetchAllData(false);
-        }
-      } catch (err) {
+        await annonceService.rejeterAnnonce(id, type);
+        await fetchAllData(false);
+        toast.info("❌ Annonce rejetée");
+      } catch (err: any) {
         console.error("Erreur lors du rejet:", err);
-        toast.error("❌ Impossible de rejeter l'annonce");
+        toast.error(`❌ ${err.message || "Impossible de rejeter l'annonce"}`);
+      }
+    },
+    [fetchAllData],
+  );
+
+  const handlePublish = useCallback(
+    async (id: string, type: string, estPublie: boolean) => {
+      try {
+        await annonceService.publierAnnonce(id, type, estPublie);
+        await fetchAllData(false);
+        toast.success(estPublie ? "📢 Annonce publiée" : "🔇 Annonce dépubliée");
+      } catch (err: any) {
+        console.error("Erreur lors de la publication:", err);
+        toast.error(`❌ ${err.message || "Impossible de modifier la publication"}`);
+      }
+    },
+    [fetchAllData],
+  );
+
+  const handleBlock = useCallback(
+    async (id: string, type: string, estBloque: boolean) => {
+      try {
+        await annonceService.bloquerAnnonce(id, type, estBloque);
+        await fetchAllData(false);
+        toast.success(estBloque ? "🔒 Annonce bloquée" : "🔓 Annonce débloquée");
+      } catch (err: any) {
+        console.error("Erreur lors du blocage:", err);
+        toast.error(`❌ ${err.message || "Impossible de modifier le blocage"}`);
+      }
+    },
+    [fetchAllData],
+  );
+
+  const handleDelete = useCallback(
+    async (id: string, type: string) => {
+      try {
+        await annonceService.supprimerAnnonce(id, type);
+        await fetchAllData(false);
+        toast.error("🗑️ Annonce supprimée définitivement");
+      } catch (err: any) {
+        console.error("Erreur lors de la suppression:", err);
+        toast.error(`❌ ${err.message || "Impossible de supprimer l'annonce"}`);
       }
     },
     [fetchAllData],
@@ -495,7 +499,7 @@ export default function Annonces() {
               <div className="d-flex gap-2">
                 {nonPublieCount.produits > 0 && (
                   <span className="badge bg-primary bg-opacity-10 text-primary px-3 py-2">
-                    📦 Produits: {nonPublieCount.produits}
+                    🏷️ Produits: {nonPublieCount.produits}
                   </span>
                 )}
                 {nonPublieCount.dons > 0 && (
@@ -548,7 +552,7 @@ export default function Annonces() {
               {searchQuery && ` pour "${searchQuery}"`}
               {selectedType !== "tous" && (
                 <span className="ms-2 badge bg-primary bg-opacity-10 text-primary px-3 py-2">
-                  Type: {selectedType}
+                  Type: {selectedType === "produit" ? "Produit" : selectedType === "don" ? "Don" : "Échange"}
                 </span>
               )}
               {selectedStatus !== "tous" && (
@@ -607,7 +611,7 @@ export default function Annonces() {
                              selectedStatus === "en-attente" ? "#f59e0b" :
                              selectedStatus === "bloque" ? "#ef4444" : "#6b7280",
                     }}>
-                      {selectedStatus === "publie" ? "✅ Publié" :
+                      {selectedStatus === "publie" ? "📢 Publié" :
                        selectedStatus === "en-attente" ? "⏳ En attente" :
                        selectedStatus === "bloque" ? "🔒 Bloqué" : selectedStatus}
                     </span>
@@ -620,7 +624,11 @@ export default function Annonces() {
                 onValidate={handleValidate}
                 onReject={handleReject}
                 onView={handleView}
+                onPublish={handlePublish}
+                onDelete={handleDelete}
+                onBlock={handleBlock}
                 hideVendeurColumn={true}
+                onDataChange={() => fetchAllData(false)}
               />
             </div>
           </div>

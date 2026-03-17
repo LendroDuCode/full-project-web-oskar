@@ -13,7 +13,12 @@ import PublishAdModal from "@/app/(front-office)/publication-annonce/page";
 
 // Import des icônes FontAwesome
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faWhatsapp, faFacebookF } from "@fortawesome/free-brands-svg-icons";
+import { 
+  faWhatsapp, 
+  faFacebookF, 
+  faTiktok, 
+  faLinkedinIn 
+} from "@fortawesome/free-brands-svg-icons";
 import {
   faUser,
   faEnvelope,
@@ -90,6 +95,8 @@ interface CreateurInfo {
   whatsapp_url?: string | null;
   twitter_url?: string | null;
   instagram_url?: string | null;
+  tiktok_url?: string | null;
+  linkedin_url?: string | null;
   est_verifie?: boolean;
   est_bloque?: boolean;
   userType?: string;
@@ -155,7 +162,7 @@ interface EchangeAPI {
   etoiles_vides: number;
   repartition_notes: any | null;
   is_favoris: boolean;
-  favorite_id?: string; // ✅ AJOUT: ID du favori pour la suppression
+  favorite_id?: string;
   createur: CreateurInfo;
   createurType: "utilisateur" | "vendeur";
   categorie: Categorie | null;
@@ -189,7 +196,7 @@ interface EchangeSimilaireAPI {
   demi_etoile: number;
   etoiles_vides: number;
   is_favoris: boolean;
-  favorite_id?: string; // ✅ AJOUT: ID du favori pour la suppression
+  favorite_id?: string;
   createdAt: string | null;
   updatedAt: string;
   categorie: Categorie | null;
@@ -229,7 +236,7 @@ interface Echange {
   note_moyenne: number;
   nombre_avis: number;
   is_favoris: boolean;
-  favorite_id?: string; // ✅ AJOUT: Stocker l'ID du favori
+  favorite_id?: string;
   createur?: CreateurInfo;
   createurType?: "utilisateur" | "vendeur";
   categorie: Categorie | null;
@@ -252,7 +259,7 @@ interface EchangeSimilaire {
   note_moyenne: number;
   nombre_avis: number;
   is_favoris?: boolean;
-  favorite_id?: string; // ✅ AJOUT: Stocker l'ID du favori
+  favorite_id?: string;
   categorie: Categorie | null;
   createur?: CreateurInfo;
 }
@@ -455,7 +462,6 @@ const formatPrice = (price: number | null): string => {
   if (price === 0) {
     return "Gratuit";
   }
-  // 🔥 CORRECTION: Supprimer les décimales et ajouter les séparateurs de milliers
   const priceInt = Math.floor(price);
   return (
     priceInt.toLocaleString("fr-FR", {
@@ -649,7 +655,7 @@ export default function EchangeDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [quantite, setQuantite] = useState(1);
   const [favori, setFavori] = useState(false);
-  const [favoriteId, setFavoriteId] = useState<string | null>(null); // ✅ AJOUT: Stocker l'ID du favori
+  const [favoriteId, setFavoriteId] = useState<string | null>(null);
   const [showMoreComments, setShowMoreComments] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
   const [commentairesFetched, setCommentairesFetched] = useState(false);
@@ -854,6 +860,8 @@ export default function EchangeDetailPage() {
       whatsapp_url: apiCreateur.whatsapp_url || null,
       twitter_url: apiCreateur.twitter_url || null,
       instagram_url: apiCreateur.instagram_url || null,
+      tiktok_url: apiCreateur.tiktok_url || null,
+      linkedin_url: apiCreateur.linkedin_url || null,
       est_verifie: apiCreateur.est_verifie || false,
       est_bloque: apiCreateur.est_bloque || false,
       userType: apiCreateur.userType || apiCreateur.type || "utilisateur",
@@ -894,7 +902,7 @@ export default function EchangeDetailPage() {
       note_moyenne: apiEchange.note_moyenne || 0,
       nombre_avis: apiEchange.nombre_avis || 0,
       is_favoris: apiEchange.is_favoris || false,
-      favorite_id: apiEchange.favorite_id, // ✅ Récupérer l'ID du favori
+      favorite_id: apiEchange.favorite_id,
       ...(apiEchange.createur && {
         createur: transformCreateurInfo(apiEchange.createur),
       }),
@@ -923,7 +931,7 @@ export default function EchangeDetailPage() {
       note_moyenne: apiSimilaire.note_moyenne || 0,
       nombre_avis: apiSimilaire.nombre_avis || 0,
       is_favoris: apiSimilaire.is_favoris || false,
-      favorite_id: apiSimilaire.favorite_id, // ✅ Récupérer l'ID du favori
+      favorite_id: apiSimilaire.favorite_id,
       categorie: apiSimilaire.categorie,
       ...(apiSimilaire.createur && {
         createur: transformCreateurInfo(apiSimilaire.createur),
@@ -931,11 +939,9 @@ export default function EchangeDetailPage() {
     };
   };
 
-  // ? FONCTION TRANSFORM COMMENTAIRE AMÉLIORÉE
   const transformCommentaireData = (
     apiCommentaire: CommentaireAPI,
   ): Commentaire => {
-    // Récupérer l'auteur (peut être dans auteur ou utilisateur selon la structure API)
     const auteur = apiCommentaire.auteur || apiCommentaire.utilisateur || null;
 
     let nomComplet = "Utilisateur";
@@ -948,7 +954,6 @@ export default function EchangeDetailPage() {
       nomComplet = `${prenom} ${nom}`.trim() || "Utilisateur";
     }
 
-    // Construire l'URL de l'avatar
     let avatarUrl = null;
     if (auteur?.avatar) {
       avatarUrl = normalizeImageUrl(auteur.avatar);
@@ -1020,38 +1025,28 @@ export default function EchangeDetailPage() {
     }
   }, [uuid]);
 
-  // ? FONCTION FETCH COMMENTAIRES AMÉLIORÉE
   const fetchCommentaires = useCallback(
     async (echangeUuid: string) => {
       if (!echangeUuid || commentairesFetched || commentsLoadDone.current) return;
 
       try {
         setLoadingComments(true);
-        console.log(
-          "📢 Chargement des commentaires pour l'échange:",
-          echangeUuid,
-        );
 
         const response = await api.get<CommentairesResponse>(
           API_ENDPOINTS.COMMENTAIRES.FIND_COMMENTS_ECHANGE_BY_UUID(echangeUuid),
         );
-
-        console.log("✅ Réponse commentaires:", response);
 
         if (response && response.commentaires) {
           const commentairesData = response.commentaires.map(
             transformCommentaireData,
           );
 
-          // Trier par date (plus récent d'abord)
           commentairesData.sort(
             (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
           );
 
-          console.log(`📊 ${commentairesData.length} commentaires chargés`);
           setCommentaires(commentairesData);
 
-          // Mettre à jour les stats
           if (response.stats) {
             setCommentairesStats({
               nombreCommentaires: response.stats.nombreCommentaires || 0,
@@ -1066,7 +1061,6 @@ export default function EchangeDetailPage() {
               },
             });
           } else {
-            // Calculer les stats manuellement si non fournies
             const totalNotes = commentairesData.reduce(
               (sum, c) => sum + c.note,
               0,
@@ -1095,7 +1089,6 @@ export default function EchangeDetailPage() {
           setCommentairesFetched(true);
           commentsLoadDone.current = true;
         } else {
-          console.log("ℹ️ Aucun commentaire trouvé");
           setCommentaires([]);
           setCommentairesFetched(true);
           commentsLoadDone.current = true;
@@ -1144,7 +1137,7 @@ export default function EchangeDetailPage() {
       setEchangesSimilaires(similairesData);
 
       setFavori(response.echange.is_favoris || false);
-      setFavoriteId(response.echange.favorite_id || null); // ✅ Stocker l'ID du favori
+      setFavoriteId(response.echange.favorite_id || null);
 
       if (response.echange.createur) {
         const createurData = transformCreateurInfo(response.echange.createur);
@@ -1285,13 +1278,56 @@ export default function EchangeDetailPage() {
     setToast({ show: true, type, message });
   };
 
-  // ? Vérification d'authentification pour toutes les actions
   const requireAuth = (action: () => void) => {
     if (!isLoggedIn) {
       openLoginModal();
       return;
     }
     action();
+  };
+
+  // ✅ GESTIONNAIRE POUR LE PARTAGE SUR LES RÉSEAUX SOCIAUX
+  const handleShare = (platform: string) => {
+    if (!echange) return;
+
+    const shareUrl = encodeURIComponent(window.location.href);
+    const shareTitle = encodeURIComponent(echange.nomElementEchange);
+    const shareDescription = encodeURIComponent(`Découvrez cet échange sur OSKAR : ${echange.nomElementEchange} - ${echange.typeEchange === 'produit' ? 'Produit' : 'Service'} à échanger`);
+    
+    let url = "";
+
+    switch (platform) {
+      case "facebook":
+        url = `https://www.facebook.com/sharer/sharer.php?u=${shareUrl}`;
+        break;
+      case "whatsapp":
+        url = `https://wa.me/?text=${shareDescription}%20${shareUrl}`;
+        break;
+      case "tiktok":
+        url = `https://www.tiktok.com/share?url=${shareUrl}`;
+        break;
+      case "linkedin":
+        url = `https://www.linkedin.com/sharing/share-offsite/?url=${shareUrl}`;
+        break;
+      default:
+        return;
+    }
+
+    window.open(url, "_blank", "noopener,noreferrer");
+    setShowShareMenu(false);
+  };
+
+  const handleCopyLink = () => {
+    navigator.clipboard
+      .writeText(window.location.href)
+      .then(() => {
+        showToast("success", "Lien copié dans le presse-papier !");
+        setShowShareMenu(false);
+      })
+      .catch((err) => {
+        console.error("Erreur copie lien:", err);
+        showToast("error", "Impossible de copier le lien.");
+      });
   };
 
   // ✅ Gestionnaire pour ouvrir la modale de publication
@@ -1303,7 +1339,7 @@ export default function EchangeDetailPage() {
     }
   };
 
-  // ✅ NOUVELLE FONCTION : Appel téléphonique direct
+  // ✅ FONCTION D'APPEL TÉLÉPHONIQUE
   const handleCallCreateur = () => {
     requireAuth(() => {
       if (!createur || !createur.telephone) {
@@ -1314,33 +1350,27 @@ export default function EchangeDetailPage() {
       const phoneNumber = createur.telephone.replace(/\s/g, "");
 
       if (isMobile) {
-        // Sur mobile : appel direct
         window.location.href = `tel:${phoneNumber}`;
       } else {
-        // Sur desktop : ouvrir la modal
         setShowCallModal(true);
       }
     });
   };
 
-  // 🔥 FONCTION WHATSAPP CORRIGÉE - PLUS JAMAIS GRISÉE
+  // ✅ FONCTION WHATSAPP
   const handleContactWhatsApp = () => {
     requireAuth(() => {
       if (!createur) return;
 
-      // Essayer d'obtenir le numéro de téléphone depuis différentes sources
       let phoneNumber = createur.telephone || createur.whatsapp_url || "";
 
-      // Nettoyer le numéro (garder seulement les chiffres)
       phoneNumber = phoneNumber.replace(/\D/g, "");
 
-      // Si pas de numéro, utiliser un format par défaut
       if (!phoneNumber) {
         showToast("info", "Le créateur n'a pas de numéro WhatsApp renseigné");
         return;
       }
 
-      // S'assurer que le numéro est au format international
       if (phoneNumber.startsWith("225")) {
         phoneNumber = `+${phoneNumber}`;
       } else if (!phoneNumber.startsWith("+")) {
@@ -1431,34 +1461,25 @@ export default function EchangeDetailPage() {
     });
   };
 
-  // ✅ FONCTION CORRIGÉE POUR AJOUTER/SUPPRIMER DES FAVORIS (COMME DANS LA LISTE DES FAVORIS)
+  // ✅ FONCTION POUR AJOUTER/SUPPRIMER DES FAVORIS
   const handleAddToFavorites = () => {
     requireAuth(async () => {
       if (!echange) return;
 
       try {
-        console.log(`📢 ${favori ? "Retrait" : "Ajout"} aux favoris...`);
-
         if (favori && favoriteId) {
-          // ✅ Suppression avec l'ID du favori (comme dans la liste des favoris)
-          console.log(`🗑️ Suppression du favori: ${favoriteId}`);
           await api.delete(`/favoris/${favoriteId}`);
-
           setFavori(false);
           setFavoriteId(null);
           showToast("success", "Échange retiré des favoris");
         } else {
-          // ✅ Ajout aux favoris
           const payload = {
             itemUuid: echange.uuid,
             type: "echange",
           };
-          console.log(`📡 Appel API: POST ${API_ENDPOINTS.FAVORIS.ADD}`, payload);
 
           const response = await api.post<any>(API_ENDPOINTS.FAVORIS.ADD, payload);
-          console.log("✅ Réponse favoris:", response);
           
-          // ✅ Récupérer l'ID du favori depuis la réponse
           if (response && response.uuid) {
             setFavoriteId(response.uuid);
           } else if (response && response.data && response.data.uuid) {
@@ -1469,7 +1490,7 @@ export default function EchangeDetailPage() {
           showToast("success", "Échange ajouté aux favoris");
         }
       } catch (err: any) {
-        console.error("❌ Erreur détaillée mise à jour favoris:", err);
+        console.error("Erreur mise à jour favoris:", err);
 
         let errorMessage = "Une erreur est survenue. Veuillez réessayer.";
 
@@ -1485,37 +1506,6 @@ export default function EchangeDetailPage() {
         showToast("error", errorMessage);
       }
     });
-  };
-
-  const handleShare = (platform: string) => {
-    if (!echange) return;
-
-    const shareUrl = window.location.href;
-    const shareText = `Découvrez cet échange sur OSKAR : ${echange.nomElementEchange}`;
-
-    const urls: { [key: string]: string } = {
-      facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`,
-      whatsapp: `https://wa.me/?text=${encodeURIComponent(shareText + " " + shareUrl)}`,
-    };
-
-    if (urls[platform]) {
-      window.open(urls[platform], "_blank", "noopener,noreferrer");
-    }
-
-    setShowShareMenu(false);
-  };
-
-  const handleCopyLink = () => {
-    navigator.clipboard
-      .writeText(window.location.href)
-      .then(() => {
-        showToast("success", "Lien copié dans le presse-papier !");
-        setShowShareMenu(false);
-      })
-      .catch((err) => {
-        console.error("Erreur copie lien:", err);
-        showToast("error", "Impossible de copier le lien.");
-      });
   };
 
   const handleLikeComment = (commentUuid: string) => {
@@ -1615,12 +1605,11 @@ export default function EchangeDetailPage() {
   };
 
   const handleInterest = () => {
-    handleCallCreateur(); // ✅ MAINTENANT : Appelle la fonction d'appel
+    handleCallCreateur();
   };
 
   const handleReplyToComment = (commentUuid: string) => {
     requireAuth(() => {
-      // Fonction pour répondre au commentaire (à implémenter)
       console.log("Répondre au commentaire:", commentUuid);
     });
   };
@@ -1741,7 +1730,7 @@ export default function EchangeDetailPage() {
         </div>
       )}
 
-      {/* ✅ MODAL D'APPEL POUR ORDINATEUR */}
+      {/* MODAL D'APPEL POUR ORDINATEUR */}
       {showCallModal && createur && (
         <div
           className="modal fade show d-block"
@@ -1753,7 +1742,7 @@ export default function EchangeDetailPage() {
               <div className="modal-header border-0 pb-0">
                 <h5 className="modal-title fw-bold">
                   <FontAwesomeIcon icon={faPhone} className="text-success me-2" />
-                  Contacter le créateur
+                  Contacter
                 </h5>
                 <button
                   type="button"
@@ -1794,7 +1783,7 @@ export default function EchangeDetailPage() {
                     <FontAwesomeIcon icon={faCopy} className="me-2" />
                     Copier le numéro
                   </button>
-                  <button
+                  {/* <button
                     className="btn btn-success px-4 py-2"
                     onClick={() => {
                       if (createur.telephone) {
@@ -1804,7 +1793,7 @@ export default function EchangeDetailPage() {
                   >
                     <FontAwesomeIcon icon={faWhatsapp} className="me-2" />
                     WhatsApp
-                  </button>
+                  </button> */}
                 </div>
               </div>
               <div className="modal-footer border-0 pt-0 justify-content-center">
@@ -1889,6 +1878,61 @@ export default function EchangeDetailPage() {
                   <FontAwesomeIcon icon={faExchangeAlt} />
                   <span>échange</span>
                 </div>
+                
+                {/* BOUTON PARTAGER AVEC MENU DÉROULANT */}
+                <div className="position-absolute top-0 start-50 translate-middle-x mt-3">
+                  <div className="btn-group" style={{ boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}>
+                    <button
+                      className="btn btn-light rounded-pill px-4 py-2 d-flex align-items-center gap-2"
+                      onClick={() => setShowShareMenu(!showShareMenu)}
+                    >
+                      <FontAwesomeIcon icon={faShareAlt} className="text-primary" />
+                      Partager
+                    </button>
+                    
+                    {showShareMenu && (
+                      <div className="position-absolute top-100 start-50 translate-middle-x mt-2 bg-white rounded-3 shadow-lg p-2" style={{ minWidth: "200px", zIndex: 10 }}>
+                        <button
+                          className="btn btn-link w-100 text-start text-decoration-none p-2 hover-bg-light rounded-2"
+                          onClick={() => handleShare("facebook")}
+                        >
+                          <FontAwesomeIcon icon={faFacebookF} className="text-primary me-2" />
+                          Facebook
+                        </button>
+                        <button
+                          className="btn btn-link w-100 text-start text-decoration-none p-2 hover-bg-light rounded-2"
+                          onClick={() => handleShare("whatsapp")}
+                        >
+                          <FontAwesomeIcon icon={faWhatsapp} className="text-success me-2" />
+                          WhatsApp
+                        </button>
+                        <button
+                          className="btn btn-link w-100 text-start text-decoration-none p-2 hover-bg-light rounded-2"
+                          onClick={() => handleShare("tiktok")}
+                        >
+                          <FontAwesomeIcon icon={faTiktok} className="text-dark me-2" />
+                          TikTok
+                        </button>
+                        <button
+                          className="btn btn-link w-100 text-start text-decoration-none p-2 hover-bg-light rounded-2"
+                          onClick={() => handleShare("linkedin")}
+                        >
+                          <FontAwesomeIcon icon={faLinkedinIn} className="text-info me-2" />
+                          LinkedIn
+                        </button>
+                        <div className="dropdown-divider"></div>
+                        <button
+                          className="btn btn-link w-100 text-start text-decoration-none p-2 hover-bg-light rounded-2"
+                          onClick={handleCopyLink}
+                        >
+                          <FontAwesomeIcon icon={faCopy} className="text-secondary me-2" />
+                          Copier le lien
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 {images.length > 1 && (
                   <>
                     <button
@@ -1920,7 +1964,7 @@ export default function EchangeDetailPage() {
             </div>
 
             {/* Miniatures */}
-            {images.length > 1 && (
+            {/* {images.length > 1 && (
               <div className="row g-4 mb-4">
                 {images.map((img, index) => (
                   <div key={index} className="col">
@@ -1946,7 +1990,7 @@ export default function EchangeDetailPage() {
                   </div>
                 ))}
               </div>
-            )}
+            )} */}
 
             {/* Description */}
             <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
@@ -1970,7 +2014,7 @@ export default function EchangeDetailPage() {
               </div>
             </div>
 
-            {/* Spécifications */}
+            {/* Spécifications - MODIFIÉ : Suppression des informations demandées */}
             <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
               <h2 className="h2 fw-bold mb-4">Détails de l'échange</h2>
               <div className="row">
@@ -1991,12 +2035,14 @@ export default function EchangeDetailPage() {
                     <span className="text-muted">Je recherche</span>
                     <span className="fw-semibold">{echange.objetDemande}</span>
                   </div>
-                  <div className="border-bottom py-3 d-flex justify-content-between">
+                </div>
+                <div className="col-md-6">
+                  {/* <div className="border-bottom py-3 d-flex justify-content-between">
                     <span className="text-muted">Quantité</span>
                     <span className="fw-semibold">
                       {formatNumber(echange.quantite)} unité(s)
                     </span>
-                  </div>
+                  </div> */}
                   {echange.categorie && (
                     <div className="border-bottom py-3 d-flex justify-content-between">
                       <span className="text-muted">Catégorie</span>
@@ -2005,44 +2051,16 @@ export default function EchangeDetailPage() {
                       </span>
                     </div>
                   )}
-                </div>
-                <div className="col-md-6">
-                  <div className="border-bottom py-3 d-flex justify-content-between">
-                    <span className="text-muted">Date de début</span>
-                    <span className="fw-semibold">
-                      {formatDate(echange.date_debut)}
-                    </span>
-                  </div>
-                  <div className="border-bottom py-3 d-flex justify-content-between">
-                    <span className="text-muted">Date de fin</span>
-                    <span className="fw-semibold">
-                      {formatDate(echange.date_fin)}
-                    </span>
-                  </div>
-                  <div className="border-bottom py-3 d-flex justify-content-between">
-                    <span className="text-muted">Lieu de rencontre</span>
-                    <span className="fw-semibold">
-                      {echange.lieu_rencontre}
-                    </span>
-                  </div>
-                  <div className="border-bottom py-3 d-flex justify-content-between">
-                    <span className="text-muted">Numéro</span>
-                    <span className="fw-semibold text-primary">
-                      {echange.numero}
-                    </span>
-                  </div>
-                  <div className="py-3 d-flex justify-content-between">
-                    <span className="text-muted">Statut</span>
-                    <span className={`fw-semibold text-${condition.color}`}>
-                      {condition.text}
-                    </span>
-                  </div>
+                  {/* <div className="py-3 d-flex justify-content-between">
+                    <span className="text-muted">Localisation</span>
+                    <span className="fw-semibold">{echange.localisation}</span>
+                  </div> */}
                 </div>
               </div>
             </div>
 
-            {/* Localisation */}
-            <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
+            {/* Conseils de sécurité */}
+            {/* <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
               <div className="mt-4 bg-info bg-opacity-10 border border-info rounded-4 p-4">
                 <div className="d-flex gap-3">
                   <FontAwesomeIcon
@@ -2060,9 +2078,9 @@ export default function EchangeDetailPage() {
                   </div>
                 </div>
               </div>
-            </div>
+            </div> */}
 
-            {/* Avis et évaluations - SECTION AMÉLIORÉE */}
+            {/* Avis et évaluations */}
             <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
               <h2 className="h2 fw-bold mb-4">Évaluations et Avis</h2>
 
@@ -2223,7 +2241,7 @@ export default function EchangeDetailPage() {
                     </div>
                   )}
 
-                  {/* ? LISTE DES COMMENTAIRES AMÉLIORÉE */}
+                  {/* LISTE DES COMMENTAIRES */}
                   {commentaires.length > 0 ? (
                     <div className="space-y-6">
                       {visibleComments.map((comment) => (
@@ -2490,7 +2508,7 @@ export default function EchangeDetailPage() {
               </div>
 
               <div className="d-grid gap-3 mb-4">
-                {/* ✅ BOUTON INTÉRESSÉ - ADAPTÉ SELON L'APPAREIL */}
+                {/* BOUTON INTÉRESSÉ */}
                 <button
                   onClick={handleInterest}
                   className="btn btn-warning btn-lg fw-bold text-white py-4"
@@ -2500,13 +2518,12 @@ export default function EchangeDetailPage() {
                   {echange.disponible
                     ? isMobile
                       ? "Appeler le créateur"
-                      : "Contactez le vendeur"
+                      : "Contacter"
                     : "Non disponible"}
                 </button>
                 <button
                   onClick={handleContactWhatsApp}
                   className="btn btn-success btn-lg fw-bold py-4"
-                  // 🔥 PLUS JAMAIS GRISÉ - Supprimé la condition disabled
                 >
                   <FontAwesomeIcon icon={faWhatsapp} className="me-2" />
                   WhatsApp
@@ -2568,7 +2585,6 @@ export default function EchangeDetailPage() {
                 <button 
                   onClick={() => requireAuth(() => {
                     if (window.confirm("Signaler cet échange comme inapproprié ?")) {
-                      // Logique de signalement à implémenter
                       showToast("info", "Fonctionnalité de signalement bientôt disponible");
                     }
                   })}
@@ -2916,7 +2932,7 @@ export default function EchangeDetailPage() {
         </div>
       </section>
 
-      {/* CTA - MODIFIÉ POUR OUVRIR LA MODALE */}
+      {/* CTA */}
       <section className="bg-success text-white py-5">
         <div className="container text-center">
           <h2 className="display-5 fw-bold mb-3">
@@ -2927,7 +2943,6 @@ export default function EchangeDetailPage() {
             votre communauté
           </p>
           
-          {/* REMPLACÉ LE LINK PAR UN BOUTON AVEC ONCLICK */}
           <button
             onClick={handleOpenPublishModal}
             className="btn btn-light btn-lg px-5 py-4 fw-bold text-success"
@@ -2939,7 +2954,7 @@ export default function EchangeDetailPage() {
         </div>
       </section>
 
-      {/* MODAL DE PUBLICATION - AJOUTÉ À LA FIN */}
+      {/* MODAL DE PUBLICATION */}
       <PublishAdModal
         visible={showPublishModal}
         onHide={() => setShowPublishModal(false)}

@@ -52,7 +52,7 @@ export default function ProfileVendeurPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [civilites, setCivilites] = useState<Civilité[]>([]);
-  const [activeTab, setActiveTab] = useState<"personal" | "security" | "registre">(
+  const [activeTab, setActiveTab] = useState<"personal" | "registre">(
     "personal",
   );
   const [formData, setFormData] = useState<ProfileData>({
@@ -572,7 +572,7 @@ export default function ProfileVendeurPage() {
                         Gestion du profil
                       </h1>
                       <p className="text-muted mb-0">
-                        Gérez vos informations personnelles, votre registre de commerce et vos paramètres de sécurité
+                        Gérez vos informations personnelles et votre registre de commerce
                       </p>
                     </div>
                     <div className="mt-3 mt-md-0">
@@ -589,7 +589,7 @@ export default function ProfileVendeurPage() {
               </div>
             </div>
 
-            {/* Onglets - AJOUT DE L'ONGLET REGISTRE */}
+            {/* Onglets - SUPPRIMÉ L'ONGLET SÉCURITÉ */}
             <div className="card border-0 shadow-sm mb-4">
               <div className="card-header bg-white border-0 p-0">
                 <ul className="nav nav-tabs nav-fill border-0">
@@ -609,15 +609,6 @@ export default function ProfileVendeurPage() {
                     >
                       <i className="fa-solid fa-file-pdf me-2"></i>
                       Registre de commerce
-                    </button>
-                  </li>
-                  <li className="nav-item">
-                    <button
-                      className={`nav-link ${activeTab === "security" ? "active" : ""}`}
-                      onClick={() => setActiveTab("security")}
-                    >
-                      <i className="fa-solid fa-shield-halved me-2"></i>
-                      Sécurité du compte
                     </button>
                   </li>
                 </ul>
@@ -1360,206 +1351,6 @@ export default function ProfileVendeurPage() {
                                 </li>
                                 <li>
                                   Une fois vérifié, votre statut de vendeur sera mis à jour
-                                </li>
-                              </ul>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Onglet Sécurité */}
-              <div
-                className={`tab-pane fade ${activeTab === "security" ? "show active" : ""}`}
-              >
-                <div className="row">
-                  <div className="col-12 col-md-6 mb-4">
-                    <div className="card border-0 shadow-sm h-100">
-                      <div className="card-header bg-white border-0 py-4">
-                        <h5 className="mb-0">
-                          <i className="fa-solid fa-key text-warning me-2"></i>
-                          Mot de passe
-                        </h5>
-                      </div>
-                      <div className="card-body p-4">
-                        <div className="d-flex align-items-center mb-4">
-                          <div className="bg-warning bg-opacity-10 p-3 rounded-circle me-3">
-                            <i className="fa-solid fa-shield-alt text-warning fa-2x"></i>
-                          </div>
-                          <div>
-                            <h6 className="fw-bold mb-1">
-                              Sécurité du mot de passe
-                            </h6>
-                            <p className="text-muted small mb-0">
-                              Dernière modification : Il y a 30 jours
-                            </p>
-                          </div>
-                        </div>
-                        <div
-                          className="progress mb-4"
-                          style={{ height: "10px" }}
-                        >
-                          <div
-                            className="progress-bar bg-success"
-                            role="progressbar"
-                            style={{ width: "85%" }}
-                            aria-valuenow={85}
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                          ></div>
-                        </div>
-                        <button
-                          onClick={() =>
-                            router.push(
-                              "/dashboard-vendeur/parametres/password",
-                            )
-                          }
-                          className="btn btn-warning w-100"
-                        >
-                          <i className="fa-solid fa-lock me-2"></i>
-                          Modifier le mot de passe
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-12 col-md-6 mb-4">
-                    <div className="card border-0 shadow-sm h-100">
-                      <div className="card-header bg-white border-0 py-4">
-                        <h5 className="mb-0">
-                          <i className="fa-solid fa-envelope-circle-check text-primary me-2"></i>
-                          Vérification email
-                        </h5>
-                      </div>
-                      <div className="card-body p-4">
-                        <div className="d-flex align-items-center mb-4">
-                          <div className="bg-primary bg-opacity-10 p-3 rounded-circle me-3">
-                            <i className="fa-solid fa-envelope-open-text text-primary fa-2x"></i>
-                          </div>
-                          <div>
-                            <h6 className="fw-bold mb-1">Email vérifié</h6>
-                            <p className="text-muted small mb-0">
-                              Votre email est confirmé et sécurisé
-                            </p>
-                          </div>
-                        </div>
-                        <div className="alert alert-success">
-                          <div className="d-flex align-items-center">
-                            <i className="fa-solid fa-check-circle me-3"></i>
-                            <div>
-                              <p className="mb-0 fw-medium">
-                                Email vérifié avec succès
-                              </p>
-                              <p className="mb-0 small">{formData.email}</p>
-                            </div>
-                          </div>
-                        </div>
-                        <button
-                          className="btn btn-outline-primary w-100"
-                          disabled
-                        >
-                          <i className="fa-solid fa-paper-plane me-2"></i>
-                          Renvoyer l'email de vérification
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-12">
-                    <div className="card border-0 shadow-sm">
-                      <div className="card-header bg-white border-0 py-4">
-                        <h5 className="mb-0">
-                          <i className="fa-solid fa-shield-halved text-danger me-2"></i>
-                          Sécurité avancée
-                        </h5>
-                      </div>
-                      <div className="card-body p-4">
-                        <div className="row">
-                          <div className="col-md-4 mb-3">
-                            <div className="card border h-100">
-                              <div className="card-body text-center p-4">
-                                <div className="bg-danger bg-opacity-10 p-3 rounded-circle d-inline-block mb-3">
-                                  <i className="fa-solid fa-mobile-screen-button text-danger fa-2x"></i>
-                                </div>
-                                <h6 className="fw-bold mb-2">
-                                  Authentification à deux facteurs
-                                </h6>
-                                <p className="text-muted small mb-3">
-                                  Ajoutez une couche de sécurité supplémentaire
-                                </p>
-                                <button
-                                  className="btn btn-outline-danger btn-sm"
-                                  disabled
-                                >
-                                  Activer
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="col-md-4 mb-3">
-                            <div className="card border h-100">
-                              <div className="card-body text-center p-4">
-                                <div className="bg-info bg-opacity-10 p-3 rounded-circle d-inline-block mb-3">
-                                  <i className="fa-solid fa-laptop-code text-info fa-2x"></i>
-                                </div>
-                                <h6 className="fw-bold mb-2">
-                                  Sessions actives
-                                </h6>
-                                <p className="text-muted small mb-3">
-                                  Gérez vos connexions actives
-                                </p>
-                                <button
-                                  className="btn btn-outline-info btn-sm"
-                                  disabled
-                                >
-                                  Voir les sessions
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="col-md-4 mb-3">
-                            <div className="card border h-100">
-                              <div className="card-body text-center p-4">
-                                <div className="bg-success bg-opacity-10 p-3 rounded-circle d-inline-block mb-3">
-                                  <i className="fa-solid fa-bell text-success fa-2x"></i>
-                                </div>
-                                <h6 className="fw-bold mb-2">
-                                  Alertes de sécurité
-                                </h6>
-                                <p className="text-muted small mb-3">
-                                  Recevez des notifications de sécurité
-                                </p>
-                                <button
-                                  className="btn btn-outline-success btn-sm"
-                                  disabled
-                                >
-                                  Configurer
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="alert alert-info mt-4">
-                          <div className="d-flex">
-                            <i className="fa-solid fa-circle-info fa-lg me-3 mt-1"></i>
-                            <div>
-                              <h6 className="alert-heading fw-bold mb-2">
-                                Conseils de sécurité
-                              </h6>
-                              <ul className="mb-0">
-                                <li>
-                                  Utilisez un mot de passe unique et complexe
-                                </li>
-                                <li>
-                                  Activez l'authentification à deux facteurs
-                                </li>
-                                <li>
-                                  Mettez régulièrement à jour vos informations
-                                  de sécurité
-                                </li>
-                                <li>
-                                  Vérifiez régulièrement vos sessions actives
                                 </li>
                               </ul>
                             </div>

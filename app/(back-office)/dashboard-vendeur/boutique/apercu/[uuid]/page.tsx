@@ -453,8 +453,6 @@ const BulkActionBar = ({
   selectedCount,
   totalCount,
   loading,
-  onPublish,
-  onUnpublish,
   onActivate,
   onDeactivate,
   onDelete,
@@ -463,8 +461,6 @@ const BulkActionBar = ({
   selectedCount: number;
   totalCount: number;
   loading: boolean;
-  onPublish: () => void;
-  onUnpublish: () => void;
   onActivate: () => void;
   onDeactivate: () => void;
   onDelete: () => void;
@@ -486,26 +482,6 @@ const BulkActionBar = ({
         </div>
 
         <div className="d-flex flex-wrap gap-2">
-          <button
-            className="btn btn-sm btn-success d-flex align-items-center gap-1"
-            onClick={onPublish}
-            disabled={loading}
-            title="Publier les produits sélectionnés"
-          >
-            <FontAwesomeIcon icon={faCloudUpload} />
-            <span className="d-none d-md-inline">Publier</span>
-          </button>
-
-          <button
-            className="btn btn-sm btn-secondary d-flex align-items-center gap-1"
-            onClick={onUnpublish}
-            disabled={loading}
-            title="Dépublier les produits sélectionnés"
-          >
-            <FontAwesomeIcon icon={faCloudDownload} />
-            <span className="d-none d-md-inline">Dépublier</span>
-          </button>
-
           <button
             className="btn btn-sm btn-success d-flex align-items-center gap-1"
             onClick={onActivate}
@@ -649,25 +625,19 @@ const BulkSelectionControls = ({
   );
 };
 
-// Composant de boutons d'actions visibles
+// Composant de boutons d'actions simplifié
 const ProductActionsButtons = ({
   product,
   isSelected,
   onView,
-  onEdit,
-  onPublish,
-  onUnpublish,
   onToggleAvailability,
-  onSelectProduct,
+  onDelete,
 }: {
   product: Produit;
   isSelected: boolean;
   onView: () => void;
-  onEdit: () => void;
-  onPublish: () => void;
-  onUnpublish: () => void;
   onToggleAvailability: () => void;
-  onSelectProduct: () => void;
+  onDelete: () => void;
 }) => {
   return (
     <div className="d-flex gap-1 flex-wrap">
@@ -681,38 +651,6 @@ const ProductActionsButtons = ({
         <FontAwesomeIcon icon={faEye} />
       </button>
 
-      {/* Bouton Modifier */}
-      <button
-        className="btn btn-sm btn-outline-warning d-flex align-items-center justify-content-center"
-        onClick={onEdit}
-        title="Modifier"
-        style={{ width: "36px", height: "36px" }}
-      >
-        <FontAwesomeIcon icon={faEdit} />
-      </button>
-
-      {/* Bouton Publier/Dépublier */}
-      {!product.estPublie && !product.estBloque ? (
-        <button
-          className="btn btn-sm btn-outline-success d-flex align-items-center justify-content-center"
-          onClick={onPublish}
-          title="Publier"
-          style={{ width: "36px", height: "36px" }}
-        >
-          <FontAwesomeIcon icon={faCloudUpload} />
-        </button>
-      ) : (
-        <button
-          className="btn btn-sm btn-outline-secondary d-flex align-items-center justify-content-center"
-          onClick={onUnpublish}
-          title="Dépublier"
-          disabled={!product.estPublie}
-          style={{ width: "36px", height: "36px" }}
-        >
-          <FontAwesomeIcon icon={faCloudDownload} />
-        </button>
-      )}
-
       {/* Bouton Activer/Désactiver */}
       <button
         className={`btn btn-sm ${product.disponible ? "btn-outline-warning" : "btn-outline-success"} d-flex align-items-center justify-content-center`}
@@ -725,67 +663,15 @@ const ProductActionsButtons = ({
         />
       </button>
 
-      {/* Bouton Sélectionner/Désélectionner */}
+      {/* Bouton Supprimer */}
       <button
-        className={`btn btn-sm ${isSelected ? "btn-danger" : "btn-outline-primary"} d-flex align-items-center justify-content-center`}
-        onClick={onSelectProduct}
-        title={isSelected ? "Désélectionner" : "Sélectionner"}
+        className="btn btn-sm btn-outline-danger d-flex align-items-center justify-content-center"
+        onClick={onDelete}
+        title="Supprimer"
         style={{ width: "36px", height: "36px" }}
       >
-        <FontAwesomeIcon icon={isSelected ? faTimes : faCheck} />
+        <FontAwesomeIcon icon={faTrash} />
       </button>
-
-      {/* Menu déroulant pour actions supplémentaires */}
-      <div className="dropdown">
-        <button
-          className="btn btn-sm btn-outline-secondary dropdown-toggle d-flex align-items-center justify-content-center"
-          type="button"
-          id={`more-actions-${product.uuid}`}
-          data-bs-toggle="dropdown"
-          aria-expanded="false"
-          title="Plus d'actions"
-          style={{ width: "36px", height: "36px" }}
-        >
-          <FontAwesomeIcon icon={faEllipsisH} />
-        </button>
-        <ul
-          className="dropdown-menu"
-          aria-labelledby={`more-actions-${product.uuid}`}
-        >
-          <li>
-            <button className="dropdown-item d-flex align-items-center gap-2">
-              <FontAwesomeIcon icon={faExternalLinkAlt} />
-              Voir en ligne
-            </button>
-          </li>
-          <li>
-            <button className="dropdown-item d-flex align-items-center gap-2">
-              <FontAwesomeIcon icon={faCopy} />
-              Dupliquer
-            </button>
-          </li>
-          <li>
-            <button className="dropdown-item d-flex align-items-center gap-2">
-              <FontAwesomeIcon icon={faQrcode} />
-              Générer QR Code
-            </button>
-          </li>
-          <li>
-            <hr className="dropdown-divider" />
-          </li>
-          <li>
-            <button
-              className="dropdown-item d-flex align-items-center gap-2 text-danger"
-              onClick={onSelectProduct}
-            >
-              <FontAwesomeIcon
-                icon={isSelected ? faCircleXmark : faCircleCheck}
-              />
-              {isSelected ? "Désélectionner" : "Sélectionner"}
-            </button>
-          </li>
-        </ul>
-      </div>
     </div>
   );
 };
@@ -1195,34 +1081,6 @@ export default function BoutiqueApercu() {
   };
 
   // Actions sur les produits
-  const handlePublishProduct = async (productUuid: string) => {
-    try {
-      await api.post(API_ENDPOINTS.PRODUCTS.PUBLLIER, {
-        produitUuid: productUuid,
-      });
-      handleSuccess("Produit publié avec succès !");
-    } catch (err: any) {
-      console.error("❌ Erreur publication:", err);
-      setError(err.response?.data?.message || "Erreur lors de la publication");
-      setTimeout(() => setError(null), 5000);
-    }
-  };
-
-  const handleUnpublishProduct = async (productUuid: string) => {
-    try {
-      await api.post(API_ENDPOINTS.PRODUCTS.PUBLLIER, {
-        produitUuid: productUuid,
-      });
-      handleSuccess("Produit dépublié avec succès !");
-    } catch (err: any) {
-      console.error("❌ Erreur dépublication:", err);
-      setError(
-        err.response?.data?.message || "Erreur lors de la dépublication",
-      );
-      setTimeout(() => setError(null), 5000);
-    }
-  };
-
   const handleToggleAvailability = async (
     productUuid: string,
     disponible: boolean,
@@ -1242,6 +1100,22 @@ export default function BoutiqueApercu() {
     } catch (err: any) {
       console.error("❌ Erreur disponibilité:", err);
       setError(err.response?.data?.message || "Erreur lors de la modification");
+      setTimeout(() => setError(null), 5000);
+    }
+  };
+
+  // Suppression d'un produit
+  const handleDeleteProduct = async (productUuid: string) => {
+    if (!confirm("Êtes-vous sûr de vouloir supprimer ce produit ?")) {
+      return;
+    }
+
+    try {
+      await api.delete(API_ENDPOINTS.PRODUCTS.DELETE(productUuid));
+      handleSuccess("Produit supprimé avec succès !");
+    } catch (err: any) {
+      console.error("❌ Erreur suppression:", err);
+      setError(err.response?.data?.message || "Erreur lors de la suppression");
       setTimeout(() => setError(null), 5000);
     }
   };
@@ -1317,85 +1191,6 @@ export default function BoutiqueApercu() {
   }, [selectedProducts, filteredProducts]);
 
   // Actions en masse
-  const handleBulkPublish = async () => {
-    if (selectedProducts.size === 0) {
-      setError("Veuillez sélectionner au moins un produit");
-      setTimeout(() => setError(null), 3000);
-      return;
-    }
-
-    try {
-      setBulkActionLoading(true);
-      const productUuids = Array.from(selectedProducts);
-
-      // Pour chaque produit sélectionné
-      for (const productUuid of productUuids) {
-        try {
-          await api.post(API_ENDPOINTS.PRODUCTS.PUBLLIER, {
-            produitUuid: productUuid,
-          });
-        } catch (err) {
-          console.error(`Erreur pour le produit ${productUuid}:`, err);
-        }
-      }
-
-      handleSuccess(
-        `${selectedProducts.size} produit(s) publié(s) avec succès !`,
-      );
-
-      // Rafraîchir la liste et réinitialiser la sélection
-      fetchBoutique();
-      handleClearSelection();
-    } catch (err: any) {
-      console.error("Erreur lors de la publication en masse:", err);
-      setError(
-        err.response?.data?.message || "Erreur lors de la publication en masse",
-      );
-      setTimeout(() => setError(null), 5000);
-    } finally {
-      setBulkActionLoading(false);
-    }
-  };
-
-  const handleBulkUnpublish = async () => {
-    if (selectedProducts.size === 0) {
-      setError("Veuillez sélectionner au moins un produit");
-      setTimeout(() => setError(null), 3000);
-      return;
-    }
-
-    try {
-      setBulkActionLoading(true);
-      const productUuids = Array.from(selectedProducts);
-
-      for (const productUuid of productUuids) {
-        try {
-          await api.post(API_ENDPOINTS.PRODUCTS.PUBLLIER, {
-            produitUuid: productUuid,
-          });
-        } catch (err) {
-          console.error(`Erreur pour le produit ${productUuid}:`, err);
-        }
-      }
-
-      handleSuccess(
-        `${selectedProducts.size} produit(s) dépublié(s) avec succès !`,
-      );
-
-      fetchBoutique();
-      handleClearSelection();
-    } catch (err: any) {
-      console.error("Erreur lors de la dépublication en masse:", err);
-      setError(
-        err.response?.data?.message ||
-          "Erreur lors de la dépublication en masse",
-      );
-      setTimeout(() => setError(null), 5000);
-    } finally {
-      setBulkActionLoading(false);
-    }
-  };
-
   const handleBulkActivate = async () => {
     if (selectedProducts.size === 0) {
       setError("Veuillez sélectionner au moins un produit");
@@ -1560,15 +1355,10 @@ export default function BoutiqueApercu() {
     handleClearSelection();
   }, [searchTerm, statusFilter, availabilityFilter]);
 
-  // Gestion de l'ouverture des modales View et Edit
+  // Gestion de l'ouverture des modales View
   const handleOpenViewModal = (product: Produit) => {
     setSelectedProduct(product);
     setShowViewModal(true);
-  };
-
-  const handleOpenEditModal = (product: Produit) => {
-    setSelectedProduct(product);
-    setShowEditModal(true);
   };
 
   if (loading) {
@@ -1609,18 +1399,6 @@ export default function BoutiqueApercu() {
   return (
     <>
       {/* Modales */}
-      {selectedProduct && (
-        <EditProductModal
-          isOpen={showEditModal}
-          product={adaptProductForModal(selectedProduct)}
-          onClose={() => {
-            setShowEditModal(false);
-            setSelectedProduct(null);
-          }}
-          onSuccess={() => handleSuccess("Produit modifié avec succès !")}
-        />
-      )}
-
       {selectedProduct && (
         <ViewProductModal
           isOpen={showViewModal}
@@ -1756,7 +1534,6 @@ export default function BoutiqueApercu() {
                   </p>
 
                   <div className="d-flex flex-wrap gap-3">
-                    
                     <div className="d-flex align-items-center gap-2">
                       <FontAwesomeIcon icon={faCalendar} />
                       <span>Créée le {formatDate(boutique.created_at)}</span>
@@ -1767,8 +1544,6 @@ export default function BoutiqueApercu() {
                     </div>
                   </div>
                 </div>
-
-               
               </div>
             </div>
           </div>
@@ -1838,14 +1613,12 @@ export default function BoutiqueApercu() {
                 </div>
               </div>
 
-              {/* Barre d'actions en masse */}
+              {/* Barre d'actions en masse - simplifiée */}
               {selectedProducts.size > 0 && (
                 <BulkActionBar
                   selectedCount={selectedProducts.size}
                   totalCount={filteredProducts.length}
                   loading={bulkActionLoading}
-                  onPublish={handleBulkPublish}
-                  onUnpublish={handleBulkUnpublish}
                   onActivate={handleBulkActivate}
                   onDeactivate={handleBulkDeactivate}
                   onDelete={handleBulkDelete}
@@ -1921,7 +1694,7 @@ export default function BoutiqueApercu() {
                   disabled={filteredProducts.length === 0 || bulkActionLoading}
                 />
 
-                {/* Liste des produits */}
+                {/* Liste des produits - Colonne STOCK SUPPRIMÉE */}
                 {filteredProducts.length === 0 ? (
                   <div className="text-center py-5">
                     <FontAwesomeIcon
@@ -1990,8 +1763,7 @@ export default function BoutiqueApercu() {
                           </th>
                           <th>Statut</th>
                           <th>Disponibilité</th>
-                          <th>Stock</th>
-                          <th style={{ width: "320px" }}>Actions</th>
+                          <th style={{ width: "180px" }}>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2087,33 +1859,19 @@ export default function BoutiqueApercu() {
                                   disponible={product.disponible}
                                 />
                               </td>
-                              <td>
-                                <span
-                                  className={`badge ${product.quantite > 0 ? "bg-success" : "bg-danger"}`}
-                                >
-                                  {product.quantite || 0}
-                                </span>
-                              </td>
                               <td onClick={(e) => e.stopPropagation()}>
                                 <ProductActionsButtons
                                   product={product}
                                   isSelected={isSelected}
                                   onView={() => handleOpenViewModal(product)}
-                                  onEdit={() => handleOpenEditModal(product)}
-                                  onPublish={() =>
-                                    handlePublishProduct(product.uuid)
-                                  }
-                                  onUnpublish={() =>
-                                    handleUnpublishProduct(product.uuid)
-                                  }
                                   onToggleAvailability={() =>
                                     handleToggleAvailability(
                                       product.uuid,
                                       !product.disponible,
                                     )
                                   }
-                                  onSelectProduct={() =>
-                                    handleSelectProduct(product.uuid)
+                                  onDelete={() =>
+                                    handleDeleteProduct(product.uuid)
                                   }
                                 />
                               </td>
@@ -2139,7 +1897,6 @@ export default function BoutiqueApercu() {
               </div>
               <div className="card-body">
                 <ul className="list-group list-group-flush">
-                 
                   <li className="list-group-item d-flex justify-content-between align-items-center border-0 px-0 py-2">
                     <span className="text-muted">Statut:</span>
                     <BoutiqueStatusBadge statut={boutique.statut} />
@@ -2152,12 +1909,11 @@ export default function BoutiqueApercu() {
                     <span className="text-muted">Modifiée le:</span>
                     <span>{formatDate(boutique.updated_at)}</span>
                   </li>
-                
                 </ul>
               </div>
             </div>
 
-            {/* Sélection multiple - Actions rapides */}
+            {/* Sélection multiple - Actions rapides simplifiées */}
             {selectedProducts.size > 0 && (
               <div className="card border-0 shadow-sm mt-4 border-primary">
                 <div className="card-header bg-white border-primary border-0 py-3">
@@ -2170,22 +1926,6 @@ export default function BoutiqueApercu() {
                   <div className="d-grid gap-2">
                     <button
                       className="btn btn-success d-flex align-items-center justify-content-center gap-2"
-                      onClick={handleBulkPublish}
-                      disabled={bulkActionLoading}
-                    >
-                      <FontAwesomeIcon icon={faCloudUpload} />
-                      Publier ({selectedProducts.size})
-                    </button>
-                    <button
-                      className="btn btn-secondary d-flex align-items-center justify-content-center gap-2"
-                      onClick={handleBulkUnpublish}
-                      disabled={bulkActionLoading}
-                    >
-                      <FontAwesomeIcon icon={faCloudDownload} />
-                      Dépublier ({selectedProducts.size})
-                    </button>
-                    <button
-                      className="btn btn-outline-success d-flex align-items-center justify-content-center gap-2"
                       onClick={handleBulkActivate}
                       disabled={bulkActionLoading}
                     >
@@ -2193,7 +1933,7 @@ export default function BoutiqueApercu() {
                       Activer ({selectedProducts.size})
                     </button>
                     <button
-                      className="btn btn-outline-warning d-flex align-items-center justify-content-center gap-2"
+                      className="btn btn-warning d-flex align-items-center justify-content-center gap-2"
                       onClick={handleBulkDeactivate}
                       disabled={bulkActionLoading}
                     >
@@ -2201,7 +1941,7 @@ export default function BoutiqueApercu() {
                       Désactiver ({selectedProducts.size})
                     </button>
                     <button
-                      className="btn btn-outline-danger d-flex align-items-center justify-content-center gap-2"
+                      className="btn btn-danger d-flex align-items-center justify-content-center gap-2"
                       onClick={() => setShowBulkDeleteModal(true)}
                       disabled={bulkActionLoading}
                     >
@@ -2214,8 +1954,6 @@ export default function BoutiqueApercu() {
             )}
           </div>
         </div>
-
-        
       </div>
 
       <style jsx>{`

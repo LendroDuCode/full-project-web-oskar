@@ -108,7 +108,6 @@ interface ProduitUtilisateur {
   estPublie: boolean;
   estBloque: boolean;
   disponible: boolean;
-  quantite: number;
   note_moyenne: number;
   nombre_avis: number;
   nombre_favoris: number;
@@ -416,7 +415,7 @@ const StatCard = ({
 };
 
 // ============================================
-// COMPOSANT PRODUIT CARD - CORRIGÉ
+// COMPOSANT PRODUIT CARD - MODIFIÉ (stock supprimé)
 // ============================================
 const ProduitCard = ({ produit }: { produit: ProduitUtilisateur }) => {
   const router = useRouter();
@@ -504,11 +503,7 @@ const ProduitCard = ({ produit }: { produit: ProduitUtilisateur }) => {
         <h5 className="fw-bold mb-3" style={{ color: colors.oskar.green }}>
           {formatPrice(produit.prix)}
         </h5>
-        <div className="d-flex justify-content-between align-items-center mt-auto">
-          <small className="text-muted">
-            <FontAwesomeIcon icon={faBox} className="me-1" />
-            Stock: {produit.quantite}
-          </small>
+        <div className="d-flex justify-content-end align-items-center mt-auto">
           <button
             className="btn btn-sm"
             style={{
@@ -879,7 +874,7 @@ export default function UtilisateurDetailPage() {
                       />
                       {isFollowing ? "Suivi" : "Suivre"}
                     </button>
-                    <button
+                    {/* <button
                       className="btn btn-outline-light px-4 py-2"
                       onClick={() =>
                         router.push(`/messages?user=${utilisateur.uuid}`)
@@ -887,7 +882,7 @@ export default function UtilisateurDetailPage() {
                     >
                       <FontAwesomeIcon icon={faEnvelope} className="me-2" />
                       Message
-                    </button>
+                    </button> */}
                   </>
                 ) : (
                   <button
@@ -1656,45 +1651,6 @@ export default function UtilisateurDetailPage() {
                 )}
               </div>
             </div>
-
-            {/* Section recommandations */}
-            {produitsPublies.length > 0 && (
-              <div className="card border-0 shadow-sm rounded-4">
-                <div className="card-body p-4">
-                  <div className="d-flex justify-content-between align-items-center mb-4">
-                    <h5
-                      className="fw-bold mb-0"
-                      style={{ color: colors.oskar.black }}
-                    >
-                      <FontAwesomeIcon
-                        icon={faStar}
-                        style={{ color: "#ffc107" }}
-                        className="me-2"
-                      />
-                      Produits recommandés
-                    </h5>
-                    <Link
-                      href={`/utilisateurs/${utilisateur.uuid}/produits`}
-                      className="btn btn-sm"
-                      style={{
-                        backgroundColor: `${colors.oskar.green}15`,
-                        color: colors.oskar.green,
-                        border: `1px solid ${colors.oskar.green}30`,
-                      }}
-                    >
-                      Voir tout
-                    </Link>
-                  </div>
-                  <div className="row g-4">
-                    {produitsPublies.slice(0, 2).map((produit) => (
-                      <div key={produit.uuid} className="col-md-6">
-                        <ProduitCard produit={produit} />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>

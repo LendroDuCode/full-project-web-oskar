@@ -44,17 +44,15 @@ import Pagination from "./components/modals/Pagination";
 const buildImageUrl = (imagePath: string | null): string | null => {
   if (!imagePath) return null;
 
-  // Nettoyer le chemin des espaces indésirables
   let cleanPath = imagePath
-    .replace(/\s+/g, "") // Supprimer tous les espaces
-    .replace(/-/g, "-") // Normaliser les tirets
+    .replace(/\s+/g, "")
+    .replace(/-/g, "-")
     .trim();
 
   const apiUrl =
     process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
   const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
 
-  // ✅ CAS 1: Déjà une URL complète
   if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
     if (cleanPath.includes("localhost")) {
       const productionUrl = apiUrl.replace(/\/api$/, "");
@@ -63,24 +61,20 @@ const buildImageUrl = (imagePath: string | null): string | null => {
     return cleanPath;
   }
 
-  // ✅ CAS 2: Chemin avec %2F (déjà encodé)
   if (cleanPath.includes("%2F")) {
-    // Nettoyer les espaces autour de %2F
     const finalPath = cleanPath.replace(/%2F\s+/, "%2F");
     return `${apiUrl}${filesUrl}/${finalPath}`;
   }
 
-  // ✅ CAS 3: Chemin simple
   return `${apiUrl}${filesUrl}/${cleanPath}`;
 };
 
-// Dans votre fichier principal page.tsx, mettez à jour l'interface Boutique
 interface Boutique {
   is_deleted: false;
   deleted_at: null;
   id: number;
   uuid: string;
-  type_boutique_uuid: string;        // AJOUTER
+  type_boutique_uuid: string;
   nom: string;
   slug: string;
   description: string | null;
@@ -93,14 +87,13 @@ interface Boutique {
   statut: "en_review" | "actif" | "bloque" | "ferme";
   created_at: string;
   updated_at: string;
-  type_boutique: TypeBoutique;        // AJOUTER
+  type_boutique: TypeBoutique;
   vendeurUuid: string;
   agentUuid: string | null;
   est_bloque: boolean;
   est_ferme: boolean;
 }
 
-// Ajoutez aussi l'interface TypeBoutique si elle n'existe pas
 interface TypeBoutique {
   uuid: string;
   code: string;
@@ -121,12 +114,9 @@ interface PaginatedResponse {
   totalPages: number;
 }
 
-// ============ PAGE PRINCIPALE ============
-
 export default function ListeBoutiquesVendeur() {
   const router = useRouter();
 
-  // États
   const [boutiques, setBoutiques] = useState<Boutique[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -137,7 +127,6 @@ export default function ListeBoutiquesVendeur() {
   const [showDebug, setShowDebug] = useState(false);
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
 
-  // États pour les modales
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -146,7 +135,6 @@ export default function ListeBoutiquesVendeur() {
   );
   const [actionLoading, setActionLoading] = useState(false);
 
-  // États pour les filtres
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortConfig, setSortConfig] = useState<{
@@ -154,7 +142,6 @@ export default function ListeBoutiquesVendeur() {
     direction: "asc" | "desc";
   } | null>(null);
 
-  // États pour la pagination
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 10,
@@ -162,14 +149,12 @@ export default function ListeBoutiquesVendeur() {
     pages: 1,
   });
 
-  // ✅ Gestion des erreurs d'image
   const handleImageError = (
     uuid: string,
     e: React.SyntheticEvent<HTMLImageElement, Event>,
   ) => {
     const target = e.currentTarget;
 
-    // Si l'URL contient localhost, essayer de la corriger
     if (target.src.includes("localhost")) {
       const productionUrl =
         process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
@@ -181,7 +166,6 @@ export default function ListeBoutiquesVendeur() {
       return;
     }
 
-    // Si l'URL contient des espaces, essayer de les nettoyer
     if (target.src.includes("%20")) {
       target.src = target.src.replace(/%20/g, "");
       return;
@@ -191,17 +175,14 @@ export default function ListeBoutiquesVendeur() {
     target.onerror = null;
   };
 
-  // ✅ Obtenir l'URL du logo
   const getLogoUrl = (boutique: Boutique): string | null => {
     if (imageErrors.has(boutique.uuid)) return null;
 
-    // Essayer d'abord avec logo_key
     if (boutique.logo_key) {
       const url = buildImageUrl(boutique.logo_key);
       if (url) return url;
     }
 
-    // Sinon avec logo
     if (boutique.logo) {
       const url = buildImageUrl(boutique.logo);
       if (url) return url;
@@ -210,17 +191,14 @@ export default function ListeBoutiquesVendeur() {
     return null;
   };
 
-  // ✅ Obtenir l'URL de la bannière
   const getBanniereUrl = (boutique: Boutique): string | null => {
     if (imageErrors.has(`${boutique.uuid}-banner`)) return null;
 
-    // Essayer d'abord avec banniere_key
     if (boutique.banniere_key) {
       const url = buildImageUrl(boutique.banniere_key);
       if (url) return url;
     }
 
-    // Sinon avec banniere
     if (boutique.banniere) {
       const url = buildImageUrl(boutique.banniere);
       if (url) return url;
@@ -229,7 +207,6 @@ export default function ListeBoutiquesVendeur() {
     return null;
   };
 
-  // Fonction pour vérifier si l'utilisateur est authentifié
   const checkAuthentication = useCallback(() => {
     try {
       const token =
@@ -262,7 +239,6 @@ export default function ListeBoutiquesVendeur() {
     }
   }, [router]);
 
-  // Fonction pour déconnecter l'utilisateur
   const clearAuthToken = useCallback(() => {
     if (typeof window !== "undefined") {
       localStorage.removeItem("oskar_token");
@@ -270,7 +246,6 @@ export default function ListeBoutiquesVendeur() {
     }
   }, []);
 
-  // Fonction de débogage pour vérifier l'API manuellement
   const checkApiResponse = async () => {
     try {
       setDebugInfo({ status: "loading", message: "Vérification en cours..." });
@@ -320,7 +295,6 @@ export default function ListeBoutiquesVendeur() {
         },
       });
 
-      // Essayer d'extraire les boutiques automatiquement
       let boutiquesData: Boutique[] = [];
 
       if (Array.isArray(data)) {
@@ -371,9 +345,7 @@ export default function ListeBoutiquesVendeur() {
     }
   };
 
-  // Charger les boutiques
   const fetchBoutiques = useCallback(async () => {
-    // Vérifier d'abord l'authentification
     if (!checkAuthentication()) {
       setAuthLoading(false);
       return;
@@ -402,7 +374,6 @@ export default function ListeBoutiquesVendeur() {
         pages: 1,
       };
 
-      // Cas 1: La réponse est directement un tableau
       if (Array.isArray(response)) {
         console.log("✅ Cas 1: Réponse est un tableau direct");
         boutiquesData = response;
@@ -411,7 +382,6 @@ export default function ListeBoutiquesVendeur() {
           response.length / paginationData.limit,
         );
       }
-      // Cas 2: La réponse a une propriété 'data' qui est un tableau
       else if (response && typeof response === "object" && "data" in response) {
         if (Array.isArray(response.data)) {
           console.log("✅ Cas 2: response.data est un tableau");
@@ -425,7 +395,6 @@ export default function ListeBoutiquesVendeur() {
               Math.ceil(response.data.length / (response.limit || 10)),
           };
         }
-        // Cas 3: response.data a une propriété qui est un tableau
         else if (response.data && typeof response.data === "object") {
           const possibleArrays = [
             "data",
@@ -452,7 +421,6 @@ export default function ListeBoutiquesVendeur() {
           }
         }
       }
-      // Cas 4: La réponse a une propriété 'success' et 'data'
       else if (response && response.success && Array.isArray(response.data)) {
         console.log(
           "✅ Cas 4: response.success et response.data est un tableau",
@@ -480,7 +448,6 @@ export default function ListeBoutiquesVendeur() {
         response: err.response,
       });
 
-      // Vérifier si c'est une erreur d'authentification
       if (
         err.status === 401 ||
         err.message?.includes("401") ||
@@ -506,14 +473,12 @@ export default function ListeBoutiquesVendeur() {
     }
   }, [checkAuthentication, router, clearAuthToken]);
 
-  // Charger les données au montage
   useEffect(() => {
     console.log("🚀 Initialisation page boutiques");
     checkAuthentication();
     fetchBoutiques();
   }, [fetchBoutiques, checkAuthentication]);
 
-  // Formater la date
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString);
@@ -527,7 +492,6 @@ export default function ListeBoutiquesVendeur() {
     }
   };
 
-  // Fonctions de tri
   const requestSort = (key: keyof Boutique) => {
     let direction: "asc" | "desc" = "asc";
     if (
@@ -551,11 +515,9 @@ export default function ListeBoutiquesVendeur() {
     );
   };
 
-  // Filtrer et trier les boutiques
   const filteredBoutiques = useMemo(() => {
     let result = [...boutiques];
 
-    // Filtrage par terme de recherche
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       result = result.filter(
@@ -566,7 +528,6 @@ export default function ListeBoutiquesVendeur() {
       );
     }
 
-    // Filtrage par statut
     if (statusFilter !== "all") {
       result = result.filter((boutique) => {
         if (statusFilter === "bloque") {
@@ -579,7 +540,6 @@ export default function ListeBoutiquesVendeur() {
       });
     }
 
-    // Tri
     if (sortConfig) {
       result.sort((a, b) => {
         const aValue = a[sortConfig.key];
@@ -610,19 +570,16 @@ export default function ListeBoutiquesVendeur() {
     return result;
   }, [boutiques, searchTerm, statusFilter, sortConfig]);
 
-  // Gestion des succès
   const handleSuccess = (message: string) => {
     setSuccessMessage(message);
     fetchBoutiques();
     setTimeout(() => setSuccessMessage(null), 3000);
   };
 
-  // Navigation vers les détails d'une boutique
   const handleViewBoutique = (boutiqueUuid: string) => {
     router.push(`/dashboard-vendeur/boutique/apercu/${boutiqueUuid}`);
   };
 
-  // Ouvrir modale de création
   const handleOpenCreateModal = () => {
     if (!isAuthenticated) {
       setError("Veuillez vous connecter pour créer une boutique");
@@ -632,7 +589,6 @@ export default function ListeBoutiquesVendeur() {
     setShowCreateModal(true);
   };
 
-  // Ouvrir modale d'édition
   const handleOpenEditModal = (boutique: Boutique) => {
     if (!isAuthenticated) {
       setError("Veuillez vous connecter pour modifier une boutique");
@@ -643,7 +599,6 @@ export default function ListeBoutiquesVendeur() {
     setShowEditModal(true);
   };
 
-  // Ouvrir modale de suppression
   const handleOpenDeleteModal = (boutique: Boutique) => {
     if (!isAuthenticated) {
       setError("Veuillez vous connecter pour supprimer une boutique");
@@ -654,10 +609,8 @@ export default function ListeBoutiquesVendeur() {
     setShowDeleteModal(true);
   };
 
-  // CRÉATION d'une boutique
   const handleCreateBoutique = async (data: any) => {
     try {
-      // Vérifier l'authentification
       if (!checkAuthentication()) {
         throw new Error("Authentification requise");
       }
@@ -706,20 +659,15 @@ export default function ListeBoutiquesVendeur() {
 
       console.log("✅ Boutique créée avec succès:", response);
 
-      // Fermer la modale
       setShowCreateModal(false);
-
-      // Afficher le message de succès
       setSuccessMessage("Boutique créée avec succès !");
 
-      // Recharger les boutiques après un court délai
       setTimeout(() => {
         fetchBoutiques();
       }, 500);
     } catch (err: any) {
       console.error("❌ Erreur création boutique:", err);
 
-      // Gestion spécifique des erreurs d'authentification
       if (
         err.status === 401 ||
         err.message?.includes("401") ||
@@ -746,12 +694,10 @@ export default function ListeBoutiquesVendeur() {
     }
   };
 
-  // MODIFICATION d'une boutique
   const handleUpdateBoutique = async (data: any) => {
     if (!selectedBoutique) return;
 
     try {
-      // Vérifier l'authentification
       if (!checkAuthentication()) {
         throw new Error("Authentification requise");
       }
@@ -817,12 +763,10 @@ export default function ListeBoutiquesVendeur() {
     }
   };
 
-  // SUPPRESSION d'une boutique
   const handleDeleteBoutique = async () => {
     if (!selectedBoutique) return;
 
     try {
-      // Vérifier l'authentification
       if (!checkAuthentication()) {
         throw new Error("Authentification requise");
       }
@@ -862,46 +806,6 @@ export default function ListeBoutiquesVendeur() {
     }
   };
 
-  // BLOQUER/DÉBLOQUER une boutique
-  const handleToggleBlockBoutique = async (boutique: Boutique) => {
-    try {
-      // Vérifier l'authentification
-      if (!checkAuthentication()) {
-        throw new Error("Authentification requise");
-      }
-
-      if (boutique.est_bloque) {
-        await api.put(API_ENDPOINTS.BOUTIQUES.UNBLOCK(boutique.uuid));
-        handleSuccess("Boutique débloquée avec succès !");
-      } else {
-        await api.put(API_ENDPOINTS.BOUTIQUES.BLOCK(boutique.uuid));
-        handleSuccess("Boutique bloquée avec succès !");
-      }
-    } catch (err: any) {
-      console.error("❌ Erreur changement statut:", err);
-
-      if (
-        err.status === 401 ||
-        err.message?.includes("401") ||
-        err.response?.status === 401 ||
-        err.message?.includes("Authentification")
-      ) {
-        setError("Session expirée. Veuillez vous reconnecter.");
-        setIsAuthenticated(false);
-        clearAuthToken();
-
-        setTimeout(() => {
-          router.push("/login");
-        }, 2000);
-      } else {
-        setError(err.message || "Erreur lors du changement de statut");
-      }
-
-      setTimeout(() => setError(null), 3000);
-    }
-  };
-
-  // Déconnexion
   const handleLogout = async () => {
     try {
       await api.post(API_ENDPOINTS.AUTH.VENDEUR.LOGOUT);
@@ -913,7 +817,6 @@ export default function ListeBoutiquesVendeur() {
     }
   };
 
-  // Réinitialiser les filtres
   const resetFilters = () => {
     setSearchTerm("");
     setStatusFilter("all");
@@ -921,7 +824,6 @@ export default function ListeBoutiquesVendeur() {
     setPagination((prev) => ({ ...prev, page: 1 }));
   };
 
-  // Export CSV
   const handleExport = () => {
     if (boutiques.length === 0) {
       setError("Aucune boutique à exporter");
@@ -960,19 +862,6 @@ export default function ListeBoutiquesVendeur() {
     handleSuccess("Export CSV réussi !");
   };
 
-  // Statistiques
-  const stats = useMemo(() => {
-    return {
-      total: boutiques.length,
-      actives: boutiques.filter((b) => b.statut === "actif").length,
-      enReview: boutiques.filter((b) => b.statut === "en_review").length,
-      bloquees: boutiques.filter((b) => b.est_bloque || b.statut === "bloque")
-        .length,
-      fermees: boutiques.filter((b) => b.est_ferme).length,
-    };
-  }, [boutiques]);
-
-  // Affichage du chargement d'authentification
   if (authLoading) {
     return (
       <div className="container-fluid p-5">
@@ -988,7 +877,6 @@ export default function ListeBoutiquesVendeur() {
     );
   }
 
-  // Si non authentifié
   if (!isAuthenticated) {
     return (
       <div className="container-fluid p-5">
@@ -1031,7 +919,6 @@ export default function ListeBoutiquesVendeur() {
 
   return (
     <>
-      {/* Modales */}
       <CreateBoutiqueModal
         show={showCreateModal}
         loading={actionLoading}
@@ -1096,16 +983,7 @@ export default function ListeBoutiquesVendeur() {
                   <span className="d-none d-md-inline">Rafraîchir</span>
                 </button>
 
-      
-
-                <button
-                  onClick={handleOpenCreateModal}
-                  className="btn btn-success d-flex align-items-center gap-2"
-                  disabled={!isAuthenticated}
-                >
-                  <FontAwesomeIcon icon={faPlus} />
-                  <span className="d-none d-md-inline">Nouvelle boutique</span>
-                </button>
+                {/* ✅ SUPPRIMÉ : Bouton "Nouvelle boutique" en haut */}
               </div>
             </div>
 
@@ -1180,73 +1058,7 @@ export default function ListeBoutiquesVendeur() {
           </div>
         </div>
 
-        {/* Statistiques */}
-        <div className="row mb-4">
-          <div className="col-12">
-            <div className="card border-0 shadow-sm">
-              <div className="card-body">
-                <div className="row g-3">
-                  <div className="col-md-3 col-sm-6">
-                    <div className="d-flex align-items-center gap-3">
-                      <div className="bg-primary bg-opacity-10 rounded-circle p-3">
-                        <FontAwesomeIcon
-                          icon={faStoreSolid}
-                          className="text-primary fs-4"
-                        />
-                      </div>
-                      <div>
-                        <h3 className="mb-0 fw-bold">{stats.total}</h3>
-                        <small className="text-muted">Total boutiques</small>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-3 col-sm-6">
-                    <div className="d-flex align-items-center gap-3">
-                      <div className="bg-success bg-opacity-10 rounded-circle p-3">
-                        <FontAwesomeIcon
-                          icon={faCheckCircle}
-                          className="text-success fs-4"
-                        />
-                      </div>
-                      <div>
-                        <h3 className="mb-0 fw-bold">{stats.actives}</h3>
-                        <small className="text-muted">Actives</small>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-3 col-sm-6">
-                    <div className="d-flex align-items-center gap-3">
-                      <div className="bg-warning bg-opacity-10 rounded-circle p-3">
-                        <FontAwesomeIcon
-                          icon={faClock}
-                          className="text-warning fs-4"
-                        />
-                      </div>
-                      <div>
-                        <h3 className="mb-0 fw-bold">{stats.enReview}</h3>
-                        <small className="text-muted">En revue</small>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="col-md-3 col-sm-6">
-                    <div className="d-flex align-items-center gap-3">
-                      <div className="bg-danger bg-opacity-10 rounded-circle p-3">
-                        <FontAwesomeIcon
-                          icon={faBan}
-                          className="text-danger fs-4"
-                        />
-                      </div>
-                      <div>
-                        <h3 className="mb-0 fw-bold">{stats.bloquees}</h3>
-                        <small className="text-muted">Bloquées</small>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* ✅ SUPPRIMÉ : Section des statistiques */}
 
         {/* Filtres et recherche */}
         <div className="row mb-4">
@@ -1302,6 +1114,7 @@ export default function ListeBoutiquesVendeur() {
                     </div>
                   </div>
 
+                  {/* ✅ SUPPRIMÉ : Bouton export */}
                 </div>
 
                 {/* Résultats de recherche */}
@@ -1386,7 +1199,6 @@ export default function ListeBoutiquesVendeur() {
                             <FontAwesomeIcon icon={faPlus} className="me-2" />
                             Créer ma première boutique
                           </button>
-                        
                         </div>
                       )}
                     </div>
@@ -1507,7 +1319,7 @@ export default function ListeBoutiquesVendeur() {
                               </button>
                             </th>
                             <th
-                              style={{ width: "160px" }}
+                              style={{ width: "120px" }}
                               className="text-center"
                             >
                               Actions
@@ -1612,26 +1424,7 @@ export default function ListeBoutiquesVendeur() {
                                     >
                                       <FontAwesomeIcon icon={faEdit} />
                                     </button>
-                                    <button
-                                      className={`btn ${boutique.est_bloque ? "btn-outline-success" : "btn-outline-secondary"}`}
-                                      title={
-                                        boutique.est_bloque
-                                          ? "Débloquer"
-                                          : "Bloquer"
-                                      }
-                                      onClick={() =>
-                                        handleToggleBlockBoutique(boutique)
-                                      }
-                                      disabled={!isAuthenticated}
-                                    >
-                                      <FontAwesomeIcon
-                                        icon={
-                                          boutique.est_bloque
-                                            ? faLockOpen
-                                            : faBan
-                                        }
-                                      />
-                                    </button>
+                                    {/* ✅ SUPPRIMÉ : Bouton de blocage/déblocage */}
                                     <button
                                       className="btn btn-outline-danger"
                                       title="Supprimer"
@@ -1677,23 +1470,7 @@ export default function ListeBoutiquesVendeur() {
           </div>
         </div>
 
-        {/* Bouton flottant pour création rapide */}
-        {isAuthenticated && (
-          <button
-            onClick={handleOpenCreateModal}
-            className="btn btn-success rounded-circle shadow-lg position-fixed"
-            style={{
-              bottom: "30px",
-              right: "30px",
-              width: "60px",
-              height: "60px",
-              zIndex: 1000,
-            }}
-            title="Créer une nouvelle boutique"
-          >
-            <FontAwesomeIcon icon={faPlus} className="fs-5" />
-          </button>
-        )}
+        {/* ✅ SUPPRIMÉ : Bouton flottant pour création rapide */}
       </div>
 
       <style jsx>{`

@@ -32,8 +32,6 @@ import {
   formatPrice,
   formatRelativeTime,
   truncateText,
-  getStatusLabel,
-  getTypeLabel,
 } from "@/app/shared/utils/formatters";
 
 // ============================================
@@ -42,17 +40,15 @@ import {
 const buildImageUrl = (imagePath: string | null): string | null => {
   if (!imagePath) return null;
 
-  // Nettoyer le chemin des espaces indésirables
   let cleanPath = imagePath
-    .replace(/\s+/g, "") // Supprimer tous les espaces
-    .replace(/-/g, "-") // Normaliser les tirets
+    .replace(/\s+/g, "")
+    .replace(/-/g, "-")
     .trim();
 
   const apiUrl =
     process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
   const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
 
-  // ✅ CAS 1: Déjà une URL complète
   if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
     if (cleanPath.includes("localhost")) {
       const productionUrl = apiUrl.replace(/\/api$/, "");
@@ -61,14 +57,11 @@ const buildImageUrl = (imagePath: string | null): string | null => {
     return cleanPath;
   }
 
-  // ✅ CAS 2: Chemin avec %2F (déjà encodé)
   if (cleanPath.includes("%2F")) {
-    // Nettoyer les espaces autour de %2F
     const finalPath = cleanPath.replace(/%2F\s+/, "%2F");
     return `${apiUrl}${filesUrl}/${finalPath}`;
   }
 
-  // ✅ CAS 3: Chemin simple
   return `${apiUrl}${filesUrl}/${cleanPath}`;
 };
 
@@ -79,7 +72,7 @@ interface AnnonceItem {
   image: string;
   image_key?: string;
   type: "produit" | "don" | "echange";
-  status: string; // Statut provenant de l'API
+  status: string;
   date: string;
   price?: number | string | null;
   quantity?: number;
@@ -121,7 +114,7 @@ export default function DataTable({
   onValidate,
   onReject,
   onPublish,
-  onBlock,
+  onBlock, // Gardé pour compatibilité mais plus utilisé
   onDelete,
   onView,
   onEdit,
@@ -139,7 +132,6 @@ export default function DataTable({
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
 
-  // Utiliser useMemo pour optimiser les calculs
   const totalPages = useMemo(
     () => Math.ceil(data.length / itemsPerPage),
     [data.length, itemsPerPage],
@@ -179,9 +171,7 @@ export default function DataTable({
     return configs[type as keyof typeof configs] || configs.produit;
   };
 
-  // ✅ FONCTION CORRIGÉE POUR LES STATUTS PROVENANT DE L'API
   const getStatusConfig = (item: AnnonceItem) => {
-    // ✅ PRIORITÉ 1: Vérifier estBloque (true explicite)
     if (item.estBloque === true) {
       return {
         label: "Bloqué",
@@ -190,7 +180,6 @@ export default function DataTable({
       };
     }
 
-    // ✅ PRIORITÉ 2: Vérifier le statut "Bloqué" dans le texte
     const statusLower = item.status?.toLowerCase() || "";
     if (statusLower.includes("bloque") || statusLower.includes("bloqué")) {
       return {
@@ -200,7 +189,6 @@ export default function DataTable({
       };
     }
 
-    // ✅ PRIORITÉ 3: Vérifier estPublie (true explicite)
     if (item.estPublie === true) {
       return {
         label: "Publié",
@@ -209,7 +197,6 @@ export default function DataTable({
       };
     }
 
-    // ✅ PRIORITÉ 4: Vérifier le statut "Publié" dans le texte
     if (statusLower.includes("publie") || statusLower.includes("publié")) {
       return {
         label: "Publié",
@@ -218,7 +205,6 @@ export default function DataTable({
       };
     }
 
-    // ✅ PRIORITÉ 5: Vérifier le statut "En attente" dans le texte
     if (statusLower.includes("en-attente") || 
         statusLower.includes("en_attente") || 
         statusLower.includes("en attente") ||
@@ -230,7 +216,6 @@ export default function DataTable({
       };
     }
 
-    // ✅ PRIORITÉ 6: Vérifier le statut "Validé" dans le texte
     if (statusLower.includes("valide") || statusLower.includes("validé")) {
       return {
         label: "Validé",
@@ -239,7 +224,6 @@ export default function DataTable({
       };
     }
 
-    // ✅ PRIORITÉ 7: Vérifier le statut "Refusé" dans le texte
     if (statusLower.includes("refuse") || statusLower.includes("refusé")) {
       return {
         label: "Refusé",
@@ -248,16 +232,6 @@ export default function DataTable({
       };
     }
 
-    // ✅ PRIORITÉ 8: Vérifier le statut "Disponible" dans le texte
-    if (statusLower.includes("disponible")) {
-      return {
-        label: "Disponible",
-        color: colors.oskar.green,
-        icon: faCheck,
-      };
-    }
-
-    // ✅ PRIORITÉ 9: Si estPublie est explicitement false
     if (item.estPublie === false) {
       return {
         label: "Non publié",
@@ -266,7 +240,6 @@ export default function DataTable({
       };
     }
 
-    // ✅ PRIORITÉ 10: Valeur par défaut
     return {
       label: statusLower || "Inconnu",
       color: colors.oskar.grey,
@@ -274,14 +247,12 @@ export default function DataTable({
     };
   };
 
-  // ✅ Gestion des erreurs d'image
   const handleImageError = (
     uuid: string,
     e: React.SyntheticEvent<HTMLImageElement, Event>,
   ) => {
     const target = e.currentTarget;
 
-    // Si l'URL contient localhost, essayer de la corriger
     if (target.src.includes("localhost")) {
       const productionUrl =
         process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
@@ -293,7 +264,6 @@ export default function DataTable({
       return;
     }
 
-    // Si l'URL contient des espaces, essayer de les nettoyer
     if (target.src.includes("%20")) {
       target.src = target.src.replace(/%20/g, "");
       return;
@@ -303,40 +273,22 @@ export default function DataTable({
     target.onerror = null;
   };
 
-  // ✅ Obtenir l'URL de l'image
   const getImageUrl = (item: AnnonceItem): string => {
     if (imageErrors.has(item.uuid)) {
       return `https://via.placeholder.com/48?text=${item.title?.charAt(0) || "?"}`;
     }
 
-    // Essayer d'abord avec image_key
     if (item.image_key) {
       const url = buildImageUrl(item.image_key);
       if (url) return url;
     }
 
-    // Sinon avec image
     if (item.image) {
       const url = buildImageUrl(item.image);
       if (url) return url;
     }
 
     return `https://via.placeholder.com/48?text=${item.title?.charAt(0) || "?"}`;
-  };
-
-  // ✅ Obtenir l'URL de l'avatar du vendeur
-  const getSellerAvatarUrl = (item: AnnonceItem): string | null => {
-    if (!item.seller) return null;
-
-    if (item.seller.avatar_key) {
-      return buildImageUrl(item.seller.avatar_key);
-    }
-
-    if (item.seller.avatar) {
-      return buildImageUrl(item.seller.avatar);
-    }
-
-    return null;
   };
 
   const toggleSelectAll = () => {
@@ -397,10 +349,9 @@ export default function DataTable({
           onPublish?.(uuid, type, false);
           break;
         case "block":
-          onBlock?.(uuid, type, true);
-          break;
         case "unblock":
-          onBlock?.(uuid, type, false);
+          // Ne rien faire pour les actions de blocage
+          console.log("Action de blocage ignorée");
           break;
         case "delete":
           onDelete?.(uuid, type);
@@ -426,6 +377,13 @@ export default function DataTable({
     const selectedAnnonces = data.filter((item) =>
       selectedItems.has(item.uuid),
     );
+    
+    // Filtrer les actions de blocage
+    if (action === "block" || action === "unblock") {
+      alert("L'action de blocage n'est pas disponible pour les vendeurs");
+      return;
+    }
+    
     onBulkAction?.(action, selectedAnnonces);
   };
 
@@ -518,57 +476,6 @@ export default function DataTable({
               <button
                 type="button"
                 className="btn btn-sm d-flex align-items-center gap-2"
-                onClick={() => handleBulkAction("publish")}
-                style={{
-                  backgroundColor: colors.status.published,
-                  color: "white",
-                  border: "none",
-                  padding: "0.25rem 0.5rem",
-                  borderRadius: "4px",
-                  fontSize: "0.75rem",
-                }}
-              >
-                <FontAwesomeIcon icon={faGlobe} size="xs" />
-                Publier
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-sm d-flex align-items-center gap-2"
-                onClick={() => handleBulkAction("unpublish")}
-                style={{
-                  backgroundColor: colors.oskar.warning,
-                  color: "white",
-                  border: "none",
-                  padding: "0.25rem 0.5rem",
-                  borderRadius: "4px",
-                  fontSize: "0.75rem",
-                }}
-              >
-                <FontAwesomeIcon icon={faCalendarXmark} size="xs" />
-                Dépublier
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-sm d-flex align-items-center gap-2"
-                onClick={() => handleBulkAction("block")}
-                style={{
-                  backgroundColor: colors.status.blocked,
-                  color: "white",
-                  border: "none",
-                  padding: "0.25rem 0.5rem",
-                  borderRadius: "4px",
-                  fontSize: "0.75rem",
-                }}
-              >
-                <FontAwesomeIcon icon={faLock} size="xs" />
-                Bloquer
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-sm d-flex align-items-center gap-2"
                 onClick={() => handleBulkAction("delete")}
                 style={{
                   backgroundColor: colors.oskar.red,
@@ -640,8 +547,6 @@ export default function DataTable({
               const isSelected = selectedItems.has(item.uuid);
               const isProcessing = processingItems.has(item.uuid);
               const isExpanded = expandedItems.has(item.uuid);
-              const isPublished = item.estPublie === true;
-              const isBlocked = item.estBloque === true;
               const imageUrl = getImageUrl(item);
 
               return (
@@ -840,99 +745,7 @@ export default function DataTable({
                             <FontAwesomeIcon icon={faEye} size="xs" />
                           </button>
 
-                          {/* Éditer */}
-                          {onEdit && (
-                            <button
-                              type="button"
-                              className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
-                              onClick={() =>
-                                handleAction("edit", item.uuid, item.type)
-                              }
-                              title="Éditer"
-                              style={{
-                                width: "28px",
-                                height: "28px",
-                                backgroundColor: `${colors.oskar.secondary}15`,
-                                color: colors.oskar.secondary,
-                                border: "none",
-                                borderRadius: "4px",
-                              }}
-                            >
-                              <FontAwesomeIcon icon={faEdit} size="xs" />
-                            </button>
-                          )}
-
-                          {/* Publier/Dépublier */}
-                          {onPublish && (
-                            <button
-                              type="button"
-                              className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
-                              onClick={() =>
-                                handleAction(
-                                  isPublished ? "unpublish" : "publish",
-                                  item.uuid,
-                                  item.type,
-                                )
-                              }
-                              title={isPublished ? "Dépublier" : "Publier"}
-                              style={{
-                                width: "28px",
-                                height: "28px",
-                                backgroundColor: isPublished
-                                  ? `${colors.oskar.warning}15`
-                                  : `${colors.status.published}15`,
-                                color: isPublished
-                                  ? colors.oskar.warning
-                                  : colors.status.published,
-                                border: "none",
-                                borderRadius: "4px",
-                              }}
-                            >
-                              <FontAwesomeIcon
-                                icon={
-                                  isPublished
-                                    ? faCalendarXmark
-                                    : faCalendarCheck
-                                }
-                                size="xs"
-                              />
-                            </button>
-                          )}
-
-                          {/* Bloquer/Débloquer */}
-                          {onBlock && (
-                            <button
-                              type="button"
-                              className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
-                              onClick={() =>
-                                handleAction(
-                                  isBlocked ? "unblock" : "block",
-                                  item.uuid,
-                                  item.type,
-                                )
-                              }
-                              title={isBlocked ? "Débloquer" : "Bloquer"}
-                              style={{
-                                width: "28px",
-                                height: "28px",
-                                backgroundColor: isBlocked
-                                  ? `${colors.oskar.green}15`
-                                  : `${colors.status.blocked}15`,
-                                color: isBlocked
-                                  ? colors.oskar.green
-                                  : colors.status.blocked,
-                                border: "none",
-                                borderRadius: "4px",
-                              }}
-                            >
-                              <FontAwesomeIcon
-                                icon={isBlocked ? faUnlock : faLock}
-                                size="xs"
-                              />
-                            </button>
-                          )}
-
-                          {/* Supprimer */}
+                          {/* Supprimer - UNIQUEMENT CE BOUTON */}
                           {onDelete && (
                             <button
                               type="button"
