@@ -49,7 +49,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
   const [step, setStep] = useState(1);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
 
   // État pour les catégories
   const [categories, setCategories] = useState<Category[]>([]);
@@ -441,9 +441,9 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     }
   };
 
-  const showSuccessNotification = (message: string) => {
-    setSuccessMessage(message);
-    setTimeout(() => setSuccessMessage(null), 5000);
+  const showPendingNotification = (message: string) => {
+    setPendingMessage(message);
+    setTimeout(() => setPendingMessage(null), 5000);
   };
 
   const handleOpenCreateBoutique = () => {
@@ -785,20 +785,18 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       console.log(`✅ ${type} créé avec succès:`, result);
 
       resetForm();
-      showSuccessNotification(
-        `Votre ${
-          type === "don"
-            ? "don"
-            : type === "échange"
-              ? "échange"
-              : "annonce de vente"
-        } a été publié(e) avec succès !`,
+      
+      // Message indiquant que l'annonce est en attente de validation
+      const messageType = type === "don" ? "don" : type === "échange" ? "échange" : "annonce de vente";
+      showPendingNotification(
+        `Votre ${messageType} a été soumis avec succès et est en attente de validation par nos équipes. Vous serez notifié(e) dès qu'il sera approuvé.`
       );
 
       setTimeout(() => {
         onHide();
-        window.location.reload();
-      }, 1500);
+        // Optionnel: recharger la page après un délai plus long
+        // window.location.reload();
+      }, 3000);
     } catch (err: any) {
       console.error(`❌ Erreur publication ${type}:`, err);
 
@@ -1034,34 +1032,34 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
 
   return (
     <>
-      {successMessage && (
+      {pendingMessage && (
         <div
           className="position-fixed top-0 start-50 translate-middle-x mt-4"
           style={{ zIndex: 9999, maxWidth: "600px", width: "90%" }}
         >
           <div
-            className="alert alert-success border-0 shadow-lg d-flex align-items-center justify-content-between"
+            className="alert alert-warning border-0 shadow-lg d-flex align-items-center justify-content-between"
             role="alert"
             style={{
               borderRadius: "12px",
-              background: "linear-gradient(135deg, #34c759 0%, #30b0c7 100%)",
+              background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
               color: "white",
               padding: "1rem 1.5rem",
             }}
           >
             <div className="d-flex align-items-center">
               <div className="rounded-circle bg-white bg-opacity-25 p-2 me-3">
-                <FontAwesomeIcon icon={faCheckCircle} className="fs-4" />
+                <FontAwesomeIcon icon={faInfoCircle} className="fs-4" />
               </div>
               <div>
-                <h5 className="fw-bold mb-1">Succès !</h5>
-                <p className="mb-0 opacity-90">{successMessage}</p>
+                <h5 className="fw-bold mb-1">En attente de validation</h5>
+                <p className="mb-0 opacity-90">{pendingMessage}</p>
               </div>
             </div>
             <button
               type="button"
               className="btn-close btn-close-white opacity-75"
-              onClick={() => setSuccessMessage(null)}
+              onClick={() => setPendingMessage(null)}
               aria-label="Close"
               style={{ background: "transparent", border: "none" }}
             >
