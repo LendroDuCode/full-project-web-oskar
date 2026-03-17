@@ -490,80 +490,16 @@ export default function DataTable({
     }
   };
 
-  // ✅ VALIDATION
+  // ✅ VALIDATION - Supprimée
   const handleValidate = async (uuid: string, itemType: "produit" | "don" | "echange") => {
-    try {
-      setProcessing((prev) => new Set(prev).add(uuid));
-      
-      let endpoint = "";
-      
-      switch (itemType) {
-        case "produit":
-          endpoint = `/produits/${uuid}/validate`;
-          break;
-        case "don":
-          endpoint = `/dons/${uuid}/validate`;
-          break;
-        case "echange":
-          endpoint = `/echanges/${uuid}/validate`;
-          break;
-      }
-      
-      await api.post(endpoint, {});
-      toast.success("✅ Annonce validée avec succès");
-      
-      if (onDataChange) {
-        onDataChange();
-      }
-    } catch (err: any) {
-      console.error("Erreur lors de la validation:", err);
-      toast.error(`❌ Erreur: ${err.message || "Impossible de valider l'annonce"}`);
-    } finally {
-      setProcessing((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(uuid);
-        return newSet;
-      });
-      handleConfirmClose();
-    }
+    // Cette fonction est conservée pour la compatibilité des props mais n'est plus utilisée
+    console.warn("La fonction handleValidate n'est plus disponible");
   };
 
-  // ✅ REJET
+  // ✅ REJET - Supprimé
   const handleReject = async (uuid: string, itemType: "produit" | "don" | "echange") => {
-    try {
-      setProcessing((prev) => new Set(prev).add(uuid));
-      
-      let endpoint = "";
-      
-      switch (itemType) {
-        case "produit":
-          endpoint = API_ENDPOINTS.PRODUCTS.DELETE(uuid);
-          break;
-        case "don":
-          endpoint = API_ENDPOINTS.DONS.DELETE(uuid);
-          break;
-        case "echange":
-          endpoint = API_ENDPOINTS.ECHANGES.DELETE(uuid);
-          break;
-      }
-      
-      await api.delete(endpoint);
-      toast.info("❌ Annonce rejetée");
-      
-      if (onDataChange) {
-        onDataChange();
-      }
-    } catch (err: any) {
-      console.error("Erreur lors du rejet:", err);
-      toast.error(`❌ Erreur: ${err.message || "Impossible de rejeter l'annonce"}`);
-    } finally {
-      setProcessing((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(uuid);
-        return newSet;
-      });
-      handleConfirmClose();
-    }
+    // Cette fonction est conservée pour la compatibilité des props mais n'est plus utilisée
+    console.warn("La fonction handleReject n'est plus disponible");
   };
 
   // ✅ PUBLICATION/DÉPUBLICATION
@@ -650,11 +586,9 @@ export default function DataTable({
     }
   };
 
-  // ✅ ACTIONS EN MASSE
+  // ✅ ACTIONS EN MASSE (sans validation/rejet)
   const handleBulkAction = async (
     action:
-      | "validate"
-      | "reject"
       | "publish"
       | "unpublish"
       | "block"
@@ -679,17 +613,6 @@ export default function DataTable({
 
       try {
         switch (action) {
-          case "validate": {
-            let endpoint = "";
-            switch (item.type) {
-              case "produit": endpoint = `/produits/${uuid}/validate`; break;
-              case "don": endpoint = `/dons/${uuid}/validate`; break;
-              case "echange": endpoint = `/echanges/${uuid}/validate`; break;
-            }
-            await api.post(endpoint, {});
-            break;
-          }
-          case "reject":
           case "delete": {
             let endpoint = "";
             switch (item.type) {
@@ -897,20 +820,24 @@ export default function DataTable({
         cancelText="Annuler"
         onConfirm={() => {
           if (confirmAction.bulk) {
-            // Action en masse
-            const action = confirmAction.type;
-            handleBulkAction(action as any);
+            // Action en masse (sans validation/rejet)
+            const action = confirmAction.type as "publish" | "unpublish" | "block" | "unblock" | "delete"  | "validate" | "reject";
+            if (action === "validate" || action === "reject") {
+              console.warn("Les actions de validation/rejet ne sont plus disponibles");
+              handleConfirmClose();
+              return;
+            }
+            handleBulkAction(action);
           } else if (confirmAction.uuid && confirmAction.itemType) {
-            // Action individuelle
+            // Action individuelle (sans validation/rejet)
             switch (confirmAction.type) {
               case "delete":
                 handleDelete(confirmAction.uuid, confirmAction.itemType);
                 break;
               case "validate":
-                handleValidate(confirmAction.uuid, confirmAction.itemType);
-                break;
               case "reject":
-                handleReject(confirmAction.uuid, confirmAction.itemType);
+                console.warn("Les actions de validation/rejet ne sont plus disponibles");
+                handleConfirmClose();
                 break;
               case "publish":
                 handlePublish(confirmAction.uuid, confirmAction.itemType, true);
@@ -934,7 +861,7 @@ export default function DataTable({
       <div
         className={`bg-white rounded-3 border border-light overflow-hidden shadow-sm ${className}`}
       >
-        {/* Barre d'actions en masse */}
+        {/* Barre d'actions en masse (sans validation/rejet) */}
         {selectedItems.size > 0 && (
           <div className="bg-light p-3 border-bottom d-flex justify-content-between align-items-center">
             <div className="d-flex align-items-center gap-3">
@@ -943,28 +870,6 @@ export default function DataTable({
               </span>
 
               <div className="d-flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="btn btn-sm btn-outline-success"
-                  onClick={() => showConfirm("validate", undefined, undefined, true)}
-                  title="Valider la sélection"
-                  disabled={processing.size > 0}
-                >
-                  <FontAwesomeIcon icon={faCheckDouble} className="me-1" />
-                  Valider
-                </button>
-
-                <button
-                  type="button"
-                  className="btn btn-sm btn-outline-danger"
-                  onClick={() => showConfirm("reject", undefined, undefined, true)}
-                  title="Rejeter la sélection"
-                  disabled={processing.size > 0}
-                >
-                  <FontAwesomeIcon icon={faXmark} className="me-1" />
-                  Rejeter
-                </button>
-
                 <button
                   type="button"
                   className="btn btn-sm btn-outline-primary"
@@ -1083,7 +988,6 @@ export default function DataTable({
                 const statusBadge = getStatusBadge(row);
                 const isItemProcessing = isProcessing(row.uuid);
                 const isSelected = selectedItems.has(row.uuid);
-                const isEnAttente = !row.estPublie && !row.estBloque;
                 const imageUrl = getImageUrl(row);
 
                 return (
@@ -1217,46 +1121,6 @@ export default function DataTable({
                             >
                               <FontAwesomeIcon icon={faEye} size="xs" />
                             </button>
-
-                            {isEnAttente && (
-                              <>
-                                <button
-                                  type="button"
-                                  className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
-                                  style={{
-                                    width: "28px",
-                                    height: "28px",
-                                    backgroundColor: "rgba(16, 185, 129, 0.1)",
-                                    color: "#10B981",
-                                    border: "none",
-                                    borderRadius: "6px",
-                                  }}
-                                  onClick={() => showConfirm("validate", row.uuid, row.type)}
-                                  title="Valider"
-                                  disabled={isItemProcessing}
-                                >
-                                  <FontAwesomeIcon icon={faCheck} size="xs" />
-                                </button>
-
-                                <button
-                                  type="button"
-                                  className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
-                                  style={{
-                                    width: "28px",
-                                    height: "28px",
-                                    backgroundColor: "rgba(239, 68, 68, 0.1)",
-                                    color: "#EF4444",
-                                    border: "none",
-                                    borderRadius: "6px",
-                                  }}
-                                  onClick={() => showConfirm("reject", row.uuid, row.type)}
-                                  title="Rejeter"
-                                  disabled={isItemProcessing}
-                                >
-                                  <FontAwesomeIcon icon={faXmark} size="xs" />
-                                </button>
-                              </>
-                            )}
 
                             <button
                               type="button"
