@@ -1636,7 +1636,7 @@ function MessagesContent() {
     }
   }, [searchParams, vendeurProfile, router]);
 
-  // ============================================
+  
   // CHARGEMENT DU PROFIL
   // ============================================
   const fetchVendeurProfile = useCallback(async () => {
