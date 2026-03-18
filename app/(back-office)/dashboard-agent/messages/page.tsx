@@ -2083,9 +2083,7 @@ function MessagesContent() {
     [messages, messagesEnvoyes],
   );
 
-  // ============================================
-  // CHARGEMENT INITIAL
-  // ============================================
+
   useEffect(() => {
     isMounted.current = true;
 
