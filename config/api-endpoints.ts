@@ -440,22 +440,24 @@ export const API_ENDPOINTS = {
     EXPORT_PDF: withBaseUrl("/boutiques/boutique-export-pdf"),
   },
 
-  // Messages
-  MESSAGERIE: {
-    SEND: withBaseUrl("/messagerie/envoyer"),
-    RECEIVED: withBaseUrl("/messagerie/recus"),
-    SENT: withBaseUrl("/messagerie/envoyes"),
-    DETAIL: (uuid: string) => withBaseUrl(`/messagerie/message/${uuid}`),
-    MARK_READ: (uuid: string) => withBaseUrl(`/messagerie/marquer-lu/${uuid}`),
-    MARK_UNREAD: (uuid: string) =>
-      withBaseUrl(`/messagerie/marquer-non-lu/${uuid}`),
-    ARCHIVE: (uuid: string) => withBaseUrl(`/messagerie/archiver/${uuid}`),
-    REPLY: withBaseUrl("/messagerie/repondre"),
-    STATS: withBaseUrl("/messagerie/statistiques"),
-    PUBLIC_SEND: withBaseUrl("/messagerie/public/envoyer"),
-    DELETE: (uuid: string) => withBaseUrl(`/messagerie/supprimer/${uuid}`),
+   MESSAGERIE: {
+    SEND: '/messagerie/envoyer',
+    SEND_WITH_AUDIO: '/messagerie/envoyer-avec-note-vocale',
+    SEND_WITH_FILES: '/messagerie/envoyer-avec-pieces-jointes',
+    RECEIVED: '/messagerie/recus',
+    SENT: '/messagerie/envoyes',
+    MARK_READ: (id: string) => `/messagerie/marquer-lu/${id}`,
+    MARK_UNREAD: (id: string) => `/messagerie/marquer-non-lu/${id}`,
+    DELETE: (id: string) => `/messagerie/supprimer/${id}`,
+    ARCHIVE: (id: string) => `/messagerie/archiver/${id}`,
+    REPLY: '/messagerie/repondre',
+    STATS: '/messagerie/statistiques',
+    PUBLIC_SEND: '/messagerie/public/envoyer',
+    UPLOAD_PIECE_JOINTE: '/messagerie/upload/piece-jointe',
+    UPLOAD_MULTIPLE_PIECES_JOINTES: '/messagerie/upload/pieces-jointes',
+    UPLOAD_NOTE_VOCALE: '/messagerie/upload/note-vocale',
+    DELETE_PIECE_JOINTE: (key: string) => `/messagerie/piece-jointe/${encodeURIComponent(key)}`,
   },
-
   // Permissions
   PERMISSIONS: {
     LIST: withBaseUrl("/permissions"),

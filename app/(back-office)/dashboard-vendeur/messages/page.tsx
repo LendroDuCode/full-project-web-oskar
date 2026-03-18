@@ -89,6 +89,16 @@ import {
   faArrowRight as faArrowRightIcon,
   faCheckDouble,
   faCheck as faCheckIcon,
+  faFile,
+  faFilePdf,
+  faFileWord,
+  faFileExcel,
+  faFileImage,
+  faFileAudio,
+  faFileVideo,
+  faFileArchive,
+  faTimes as faTimesIcon,
+  faSpinner,
 } from "@fortawesome/free-solid-svg-icons";
 
 // Import des services et hooks
@@ -104,6 +114,111 @@ const colors = {
     grey: "#6c757d",
   },
 };
+
+// ============================================
+// DONNÉES MOCKÉES POUR LE DÉVELOPPEMENT
+// ============================================
+const MOCK_MESSAGES_RECUS = [
+  {
+    uuid: "mock-rec-1",
+    message: {
+      uuid: "mock-rec-msg-1",
+      sujet: "Question sur votre produit",
+      contenu: "Bonjour, je suis intéressé par votre produit. Est-il toujours disponible ?",
+      expediteurNom: "Jean Dupont",
+      expediteurEmail: "jean.dupont@example.com",
+      expediteurUuid: "user-123",
+      expediteurAvatar: null,
+      destinataireEmail: "vendeur@oskar.ci",
+      type: "NOTIFICATION",
+      estEnvoye: false,
+      envoyeLe: new Date(Date.now() - 3600000).toISOString(),
+      estLu: false,
+      dateLecture: null,
+      piecesJointes: [],
+    },
+    expediteurAvatar: null,
+    statut: "non_lu",
+    estLu: false,
+    dateLecture: null,
+    dateReception: new Date(Date.now() - 3600000).toISOString(),
+  },
+  {
+    uuid: "mock-rec-2",
+    message: {
+      uuid: "mock-rec-msg-2",
+      sujet: "Information livraison",
+      contenu: "Pouvez-vous me donner plus d'informations sur les frais de livraison ?",
+      expediteurNom: "Marie Konan",
+      expediteurEmail: "marie.konan@example.com",
+      expediteurUuid: "user-456",
+      expediteurAvatar: null,
+      destinataireEmail: "vendeur@oskar.ci",
+      type: "NOTIFICATION",
+      estEnvoye: false,
+      envoyeLe: new Date(Date.now() - 86400000).toISOString(),
+      estLu: true,
+      dateLecture: new Date(Date.now() - 82800000).toISOString(),
+      piecesJointes: [],
+    },
+    expediteurAvatar: null,
+    statut: "lu",
+    estLu: true,
+    dateLecture: new Date(Date.now() - 82800000).toISOString(),
+    dateReception: new Date(Date.now() - 86400000).toISOString(),
+  },
+];
+
+const MOCK_MESSAGES_ENVOYES = [
+  {
+    uuid: "mock-sent-1",
+    message: {
+      uuid: "mock-sent-msg-1",
+      sujet: "Re: Question sur votre produit",
+      contenu: "Bonjour, oui le produit est toujours disponible. Je peux vous livrer demain.",
+      expediteurNom: "Vendeur SONEC",
+      expediteurEmail: "vendeur@oskar.ci",
+      expediteurUuid: "vendeur-789",
+      expediteurAvatar: null,
+      destinataireEmail: "jean.dupont@example.com",
+      type: "NOTIFICATION",
+      estEnvoye: true,
+      envoyeLe: new Date(Date.now() - 1800000).toISOString(),
+      estLu: true,
+      dateLecture: new Date(Date.now() - 1200000).toISOString(),
+      piecesJointes: [],
+    },
+    expediteurAvatar: null,
+    statut: "lu",
+    estLu: true,
+    dateLecture: new Date(Date.now() - 1200000).toISOString(),
+    dateReception: new Date(Date.now() - 1800000).toISOString(),
+  },
+  {
+    uuid: "mock-sent-2",
+    message: {
+      uuid: "mock-sent-msg-2",
+      sujet: "Re: Information livraison",
+      contenu: "Les frais de livraison sont de 2000 FCFA pour Abidjan.",
+      expediteurNom: "Vendeur SONEC",
+      expediteurEmail: "vendeur@oskar.ci",
+      expediteurUuid: "vendeur-789",
+      expediteurAvatar: null,
+      destinataireEmail: "marie.konan@example.com",
+      type: "NOTIFICATION",
+      estEnvoye: true,
+      envoyeLe: new Date(Date.now() - 7200000).toISOString(),
+      estLu: false,
+      dateLecture: null,
+      piecesJointes: [],
+    },
+    expediteurAvatar: null,
+    statut: "non_lu",
+    estLu: false,
+    dateLecture: null,
+    dateReception: new Date(Date.now() - 7200000).toISOString(),
+  },
+];
 
 // ============================================
 // FONCTION POUR OBTENIR LES INITIALES
@@ -138,6 +253,20 @@ const buildAvatarUrl = (avatarPath: string | null | undefined): string | null =>
   // Construire l'URL vers le serveur de fichiers
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3005';
   return `${API_URL}/api/files/${avatarPath}`;
+};
+
+// ============================================
+// FONCTION POUR CONSTRUIRE L'URL D'UN FICHIER
+// ============================================
+const buildFileUrl = (filePath: string | null | undefined): string | null => {
+  if (!filePath) return null;
+  
+  if (filePath.startsWith('http')) {
+    return filePath;
+  }
+  
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3005';
+  return `${API_URL}/api/files/${filePath}`;
 };
 
 // ============================================
@@ -227,7 +356,154 @@ const UserAvatar = ({
 };
 
 // ============================================
-// TYPES
+// COMPOSANT D'AFFICHAGE DE PIÈCE JOINTE
+// ============================================
+const FileAttachment = ({
+  file,
+  onRemove,
+  isUploading = false,
+}: {
+  file: {
+    key?: string;
+    url?: string;
+    name: string;
+    type: string;
+    size?: number;
+    progress?: number;
+  };
+  onRemove?: () => void;
+  isUploading?: boolean;
+}) => {
+  const getFileIcon = (type: string) => {
+    if (type.startsWith('image/')) return faFileImage;
+    if (type.startsWith('audio/')) return faFileAudio;
+    if (type.startsWith('video/')) return faFileVideo;
+    if (type.includes('pdf')) return faFilePdf;
+    if (type.includes('word') || type.includes('document')) return faFileWord;
+    if (type.includes('excel') || type.includes('sheet')) return faFileExcel;
+    if (type.includes('zip') || type.includes('archive')) return faFileArchive;
+    return faFile;
+  };
+
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
+  const fileUrl = file.url || (file.key ? buildFileUrl(file.key) : null);
+
+  return (
+    <div className="d-flex align-items-center gap-2 p-2 bg-light rounded-3 mb-2" style={{ maxWidth: '300px' }}>
+      <div className="flex-shrink-0">
+        <FontAwesomeIcon 
+          icon={getFileIcon(file.type)} 
+          style={{ 
+            fontSize: '1.5rem',
+            color: file.type.startsWith('image/') ? '#10b981' : 
+                   file.type.startsWith('audio/') ? '#f59e0b' : 
+                   '#6b7280'
+          }} 
+        />
+      </div>
+      <div className="flex-grow-1 min-w-0">
+        <div className="text-truncate fw-semibold" style={{ fontSize: '0.8rem' }}>
+          {file.name}
+        </div>
+        {file.size && (
+          <div className="text-muted" style={{ fontSize: '0.7rem' }}>
+            {formatFileSize(file.size)}
+          </div>
+        )}
+        {isUploading && file.progress !== undefined && (
+          <div className="progress mt-1" style={{ height: '4px' }}>
+            <div 
+              className="progress-bar bg-success" 
+              style={{ width: `${file.progress}%` }}
+            />
+          </div>
+        )}
+      </div>
+      {onRemove && (
+        <button
+          className="btn btn-link text-danger p-0"
+          onClick={onRemove}
+          disabled={isUploading}
+          style={{ fontSize: '0.8rem' }}
+        >
+          <FontAwesomeIcon icon={faTimesIcon} />
+        </button>
+      )}
+    </div>
+  );
+};
+
+// ============================================
+// COMPOSANT DE LECTEUR AUDIO
+// ============================================
+const AudioPlayer = ({ src, duration }: { src: string; duration?: number }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(duration || 0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.addEventListener('timeupdate', () => {
+        setCurrentTime(audioRef.current?.currentTime || 0);
+      });
+      audioRef.current.addEventListener('loadedmetadata', () => {
+        setAudioDuration(audioRef.current?.duration || 0);
+      });
+    }
+  }, []);
+
+  const togglePlay = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  const formatTime = (time: number) => {
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div className="d-flex align-items-center gap-2 p-2 bg-light rounded-3" style={{ minWidth: '250px' }}>
+      <button
+        className="btn btn-sm btn-success rounded-circle d-flex align-items-center justify-content-center"
+        onClick={togglePlay}
+        style={{ width: '32px', height: '32px' }}
+      >
+        <FontAwesomeIcon icon={isPlaying ? faPause : faPlay} style={{ fontSize: '0.8rem' }} />
+      </button>
+      <div className="flex-grow-1">
+        <div className="d-flex justify-content-between mb-1">
+          <span style={{ fontSize: '0.7rem' }}>{formatTime(currentTime)}</span>
+          <span style={{ fontSize: '0.7rem' }}>{formatTime(audioDuration)}</span>
+        </div>
+        <div className="progress" style={{ height: '4px' }}>
+          <div 
+            className="progress-bar bg-success" 
+            style={{ width: `${(currentTime / audioDuration) * 100}%` }}
+          />
+        </div>
+      </div>
+      <audio ref={audioRef} src={src} preload="metadata" />
+    </div>
+  );
+};
+
+// ============================================
+// TYPES CORRIGÉS
 // ============================================
 interface UtilisateurBase {
   uuid: string;
@@ -262,6 +538,23 @@ interface VendeurProfile extends UtilisateurBase {
   userType?: "vendeur";
 }
 
+interface Attachment {
+  key: string;
+  url: string;
+  nom: string;
+  type: string;
+  mimeType: string;
+  taille: number;
+}
+
+// ✅ Structure correcte pour la note vocale (telle que retournée par l'API)
+interface NoteVocale {
+  key: string;
+  duree: number;
+  url: string;
+}
+
+// ✅ Structure du message (telle que retournée par l'API)
 interface Message {
   uuid: string;
   sujet: string;
@@ -278,17 +571,16 @@ interface Message {
   estLu: boolean;
   dateLecture: string | null;
   dateCreation?: string;
-  attachments?: Array<{
-    url: string;
-    type: string;
-    name: string;
-    size?: number;
-  }>;
+  piecesJointes?: Attachment[];
+  // ✅ L'API retourne noteVocale comme un objet ou null, pas des champs séparés
+  noteVocale?: NoteVocale | null;
+  status?: "sent" | "delivered" | "read" | "failed";
 }
 
 interface MessageReceived {
   uuid: string;
   message: Message;
+  expediteurAvatar?: string | null;
   statut: string;
   estLu: boolean;
   dateLecture?: string | null;
@@ -477,6 +769,7 @@ const MessageBubble = ({
   onDelete,
   onForward,
   onCopy,
+  onDownload,
 }: {
   message: Message;
   isOwn: boolean;
@@ -489,6 +782,7 @@ const MessageBubble = ({
   onDelete?: () => void;
   onForward?: () => void;
   onCopy?: () => void;
+  onDownload?: (attachment: Attachment) => void;
 }) => {
   const [showOptions, setShowOptions] = useState(false);
   const messageRef = useRef<HTMLDivElement>(null);
@@ -517,6 +811,24 @@ const MessageBubble = ({
     navigator.clipboard.writeText(message.contenu);
     if (onCopy) onCopy();
     setShowOptions(false);
+  };
+
+  const getFileIcon = (type: string) => {
+    if (type.startsWith('image/')) return faFileImage;
+    if (type.startsWith('audio/')) return faFileAudio;
+    if (type.startsWith('video/')) return faFileVideo;
+    if (type.includes('pdf')) return faFilePdf;
+    if (type.includes('word') || type.includes('document')) return faFileWord;
+    if (type.includes('excel') || type.includes('sheet')) return faFileExcel;
+    if (type.includes('zip') || type.includes('archive')) return faFileArchive;
+    return faFile;
+  };
+
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
   return (
@@ -566,26 +878,61 @@ const MessageBubble = ({
           ))}
         </div>
 
-        {message.attachments && message.attachments.length > 0 && (
+        {/* Pièces jointes */}
+        {message.piecesJointes && message.piecesJointes.length > 0 && (
           <div className="mt-2">
-            {message.attachments.map((attachment, index) => (
-              <div key={index} className="attachment-preview mb-1">
+            {message.piecesJointes.map((attachment, index) => (
+              <div key={index} className="mb-2">
                 {attachment.type.startsWith("image/") ? (
-                  <img
-                    src={attachment.url}
-                    alt={attachment.name}
-                    style={{ maxWidth: "200px", maxHeight: "150px", borderRadius: "8px" }}
-                  />
+                  <div className="position-relative">
+                    <img
+                      src={attachment.url}
+                      alt={attachment.nom}
+                      style={{ maxWidth: "200px", maxHeight: "150px", borderRadius: "8px", cursor: "pointer" }}
+                      onClick={() => window.open(attachment.url, '_blank')}
+                    />
+                    <button
+                      className="btn btn-sm btn-light position-absolute top-0 end-0 m-1 rounded-circle"
+                      onClick={() => onDownload?.(attachment)}
+                      style={{ width: '30px', height: '30px' }}
+                    >
+                      <FontAwesomeIcon icon={faDownload} style={{ fontSize: '0.8rem' }} />
+                    </button>
+                  </div>
                 ) : (
-                  <div className="d-flex align-items-center gap-2 p-2 bg-light rounded">
-                    <FontAwesomeIcon icon={faPaperclip} className="text-muted" />
-                    <span className="text-truncate" style={{ fontSize: "0.75rem" }}>
-                      {attachment.name}
-                    </span>
+                  <div className="d-flex align-items-center gap-2 p-2 bg-light rounded-3">
+                    <FontAwesomeIcon 
+                      icon={getFileIcon(attachment.type)} 
+                      style={{ fontSize: '1.2rem' }}
+                    />
+                    <div className="flex-grow-1 min-w-0">
+                      <div className="text-truncate fw-semibold" style={{ fontSize: '0.8rem' }}>
+                        {attachment.nom}
+                      </div>
+                      <div className="text-muted" style={{ fontSize: '0.7rem' }}>
+                        {formatFileSize(attachment.taille)}
+                      </div>
+                    </div>
+                    <button
+                      className="btn btn-sm btn-link"
+                      onClick={() => window.open(attachment.url, '_blank')}
+                    >
+                      <FontAwesomeIcon icon={faDownload} />
+                    </button>
                   </div>
                 )}
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Note vocale */}
+        {message.noteVocale && (
+          <div className="mt-2">
+            <AudioPlayer 
+              src={message.noteVocale.url} 
+              duration={message.noteVocale.duree} 
+            />
           </div>
         )}
 
@@ -772,6 +1119,8 @@ function MessagesContent() {
   const [contacts, setContacts] = useState<ContactConversation[]>([]);
   const [messagesRecus, setMessagesRecus] = useState<Message[]>([]);
   const [messagesEnvoyes, setMessagesEnvoyes] = useState<Message[]>([]);
+  const [messagesRecusRaw, setMessagesRecusRaw] = useState<MessageReceived[]>([]);
+  const [messagesEnvoyesRaw, setMessagesEnvoyesRaw] = useState<MessageReceived[]>([]);
   const [vendeurProfile, setVendeurProfile] = useState<VendeurProfile | null>(
     null,
   );
@@ -783,6 +1132,13 @@ function MessagesContent() {
   // États pour les notifications toast
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
 
+  // États pour les fichiers
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadedAttachments, setUploadedAttachments] = useState<Attachment[]>([]);
+  const [selectedAudio, setSelectedAudio] = useState<File | null>(null);
+  const [audioDuration, setAudioDuration] = useState<number>(0);
+  const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
+
   // États pour le chargement
   const [loading, setLoading] = useState({
     initial: true,
@@ -790,6 +1146,7 @@ function MessagesContent() {
     messages: false,
     envoi: false,
     profile: false,
+    uploading: false,
   });
 
   // État pour la suppression
@@ -806,6 +1163,9 @@ function MessagesContent() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
+
+  // État pour le mode démo
+  const [isDemoMode, setIsDemoMode] = useState(false);
 
   // États pour les filtres
   const [searchTerm, setSearchTerm] = useState("");
@@ -835,6 +1195,8 @@ function MessagesContent() {
   const toastContainerRef = useRef<HTMLDivElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
 
   // Cache pour les messages (persistance)
   const messagesCache = useRef<{
@@ -910,11 +1272,141 @@ function MessagesContent() {
   }, []);
 
   // ============================================
+  // FONCTIONS DE GESTION DES FICHIERS
+  // ============================================
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    setSelectedFiles(prev => [...prev, ...files]);
+    
+    // Réinitialiser l'input pour permettre de sélectionner les mêmes fichiers
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleAudioSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Vérifier que c'est un fichier audio
+    if (!file.type.startsWith('audio/')) {
+      showToast('error', '❌ Format non supporté', 'Veuillez sélectionner un fichier audio (MP3, WAV, etc.)');
+      return;
+    }
+
+    // Vérifier la taille (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      showToast('error', '❌ Fichier trop volumineux', 'La note vocale ne doit pas dépasser 10MB');
+      return;
+    }
+
+    setSelectedAudio(file);
+
+    // Essayer de détecter la durée
+    try {
+      const audio = new Audio();
+      audio.src = URL.createObjectURL(file);
+      audio.addEventListener('loadedmetadata', () => {
+        setAudioDuration(Math.round(audio.duration));
+      });
+    } catch (error) {
+      console.error('Erreur lors de la lecture de la durée audio:', error);
+    }
+
+    // Réinitialiser l'input
+    if (audioInputRef.current) {
+      audioInputRef.current.value = '';
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const removeAudio = () => {
+    setSelectedAudio(null);
+    setAudioDuration(0);
+  };
+
+  // ============================================
+  // FONCTIONS D'UPLOAD
+  // ============================================
+  const uploadFile = async (file: File): Promise<Attachment> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    // Déterminer le type de fichier
+    let type = 'document';
+    if (file.type.startsWith('image/')) type = 'image';
+    else if (file.type.startsWith('audio/')) type = 'audio';
+    else if (file.type.startsWith('video/')) type = 'video';
+    
+    formData.append('type', type);
+
+    try {
+      const response = await api.postFormData<any>(
+        API_ENDPOINTS.MESSAGERIE.UPLOAD_PIECE_JOINTE,
+        formData
+      );
+
+      return {
+        key: response.data.key,
+        url: response.data.url,
+        nom: response.data.nom,
+        type: response.data.type,
+        mimeType: response.data.mimeType,
+        taille: response.data.taille,
+      };
+    } catch (error) {
+      console.error('❌ Erreur upload fichier:', error);
+      throw error;
+    }
+  };
+
+  const uploadAudio = async (file: File, duration: number): Promise<Attachment & { duree: number }> => {
+    const formData = new FormData();
+    formData.append('audio', file);
+    formData.append('duree', duration.toString());
+
+    try {
+      const response = await api.postFormData<any>(
+        API_ENDPOINTS.MESSAGERIE.UPLOAD_NOTE_VOCALE,
+        formData
+      );
+
+      return {
+        key: response.data.key,
+        url: response.data.url,
+        nom: response.data.nom,
+        type: response.data.type,
+        mimeType: response.data.mimeType,
+        taille: response.data.taille,
+        duree: response.data.duree,
+      };
+    } catch (error) {
+      console.error('❌ Erreur upload note vocale:', error);
+      throw error;
+    }
+  };
+
+  // ============================================
   // FONCTIONS DE MARQUAGE COMME LU/NON LU
   // ============================================
   const handleMarkAsRead = useCallback(
     async (messageId: string) => {
       try {
+        // En mode démo, simuler le succès
+        if (isDemoMode) {
+          setMessagesRecus((prev) =>
+            prev.map((msg) =>
+              msg.uuid === messageId
+                ? { ...msg, estLu: true, dateLecture: new Date().toISOString() }
+                : msg,
+            ),
+          );
+          return;
+        }
+
         await api.put(API_ENDPOINTS.MESSAGERIE.MARK_READ(messageId));
 
         setMessagesRecus((prev) =>
@@ -938,29 +1430,37 @@ function MessagesContent() {
             };
           });
         }
-
-        showToast(
-          "message-read",
-          "📖 Message marqué comme lu",
-          "Le message a été marqué comme lu avec succès",
-          { duration: 3000, messageId },
-        );
       } catch (err) {
         console.error("❌ Erreur lors du marquage comme lu:", err);
-        showToast(
-          "error",
-          "❌ Erreur",
-          "Impossible de marquer le message comme lu",
-          { duration: 3000 },
-        );
+        // Ne pas afficher d'erreur en mode démo
+        if (!isDemoMode) {
+          showToast(
+            "error",
+            "❌ Erreur",
+            "Impossible de marquer le message comme lu",
+            { duration: 3000 },
+          );
+        }
       }
     },
-    [currentConversation, showToast],
+    [currentConversation, showToast, isDemoMode],
   );
 
   const handleMarkAsUnread = useCallback(
     async (messageId: string) => {
       try {
+        // En mode démo, simuler le succès
+        if (isDemoMode) {
+          setMessagesRecus((prev) =>
+            prev.map((msg) =>
+              msg.uuid === messageId
+                ? { ...msg, estLu: false, dateLecture: null }
+                : msg,
+            ),
+          );
+          return;
+        }
+
         await api.patch(API_ENDPOINTS.MESSAGERIE.MARK_UNREAD(messageId));
 
         setMessagesRecus((prev) =>
@@ -984,24 +1484,20 @@ function MessagesContent() {
             };
           });
         }
-
-        showToast(
-          "info",
-          "📬 Message marqué comme non lu",
-          "Le message a été marqué comme non lu",
-          { duration: 3000, messageId },
-        );
       } catch (err) {
         console.error("❌ Erreur lors du marquage comme non lu:", err);
-        showToast(
-          "error",
-          "❌ Erreur",
-          "Impossible de marquer le message comme non lu",
-          { duration: 3000 },
-        );
+        // Ne pas afficher d'erreur en mode démo
+        if (!isDemoMode) {
+          showToast(
+            "error",
+            "❌ Erreur",
+            "Impossible de marquer le message comme non lu",
+            { duration: 3000 },
+          );
+        }
       }
     },
-    [currentConversation, showToast],
+    [currentConversation, showToast, isDemoMode],
   );
 
   // ============================================
@@ -1024,6 +1520,27 @@ function MessagesContent() {
     setShowDeleteModal(false);
 
     try {
+      // En mode démo, simuler la suppression
+      if (isDemoMode) {
+        setMessagesRecus((prev) =>
+          prev.filter((msg) => msg.uuid !== messageToDelete.uuid),
+        );
+        setMessagesEnvoyes((prev) =>
+          prev.filter((msg) => msg.uuid !== messageToDelete.uuid),
+        );
+
+        if (currentConversation) {
+          setCurrentConversation((prev) => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              messages: prev.messages.filter((msg) => msg.uuid !== messageToDelete.uuid),
+            };
+          });
+        }
+        return;
+      }
+
       await api.delete(API_ENDPOINTS.MESSAGERIE.DELETE(messageToDelete.uuid));
 
       setMessagesRecus((prev) =>
@@ -1046,25 +1563,23 @@ function MessagesContent() {
       showToast(
         "success",
         "🗑️ Message supprimé",
-        `Le message "${messageToDelete.sujet.substring(0, 50)}${messageToDelete.sujet.length > 50 ? "..." : ""}" a été supprimé avec succès`,
+        `Le message a été supprimé avec succès`,
         {
           duration: 4000,
-          details: {
-            sujet: messageToDelete.sujet,
-            date: new Date(messageToDelete.envoyeLe).toLocaleDateString("fr-FR"),
-          },
         },
       );
     } catch (err) {
       console.error("❌ Erreur lors de la suppression du message:", err);
-      showToast("error", "❌ Erreur", "Impossible de supprimer le message", {
-        duration: 4000,
-      });
+      if (!isDemoMode) {
+        showToast("error", "❌ Erreur", "Impossible de supprimer le message", {
+          duration: 4000,
+        });
+      }
     } finally {
       setDeletingMessageId(null);
       setMessageToDelete(null);
     }
-  }, [messageToDelete, currentConversation, showToast]);
+  }, [messageToDelete, currentConversation, showToast, isDemoMode]);
 
   // ============================================
   // GESTION DES PARAMÈTRES D'URL
@@ -1104,7 +1619,7 @@ function MessagesContent() {
         ...prev,
         destinataireEmail: destinataireEmail,
         destinataireUuid: destinataireUuid || "",
-        sujet: sujet || `Question concernant votre annonce`,
+        sujet: sujet || `Message concernant votre annonce`,
         contenu: "",
         type: "NOTIFICATION",
       }));
@@ -1153,18 +1668,40 @@ function MessagesContent() {
       return null;
     } catch (err) {
       console.error("❌ Erreur chargement profil vendeur:", err);
-      return null;
+      
+      // Créer un profil par défaut en mode démo
+      const demoProfile: VendeurProfile = {
+        uuid: "vendeur-demo-123",
+        nom: "Vendeur",
+        prenoms: "SONEC",
+        email: "vendeur@oskar.ci",
+        telephone: "+22507070707",
+        est_verifie: true,
+        est_bloque: false,
+        is_deleted: false,
+        userType: "vendeur",
+      };
+      
+      setVendeurProfile(demoProfile);
+      setNewMessage((prev) => ({
+        ...prev,
+        expediteurEmail: demoProfile.email,
+        expediteurNom: "Vendeur SONEC",
+        expediteurUuid: demoProfile.uuid,
+        type: "NOTIFICATION",
+      }));
+      
+      return demoProfile;
     } finally {
       setLoading((prev) => ({ ...prev, profile: false }));
     }
   }, []);
 
   // ============================================
-  // ✅ CHARGEMENT DES MESSAGES REÇUS AVEC FILTRAGE ET CACHE
+  // ✅ CHARGEMENT DES MESSAGES REÇUS (CORRIGÉ)
   // ============================================
   const fetchMessagesRecus = useCallback(
     async (profileEmail?: string, profileUuid?: string, forceRefresh = false) => {
-      // Vérifier le cache (rafraîchir toutes les 30 secondes max)
       const now = Date.now();
       if (!forceRefresh && messagesCache.current.recus.length > 0 && (now - messagesCache.current.lastFetch) < 30000) {
         console.log("📦 Utilisation du cache pour les messages reçus");
@@ -1174,64 +1711,65 @@ function MessagesContent() {
 
       setLoading((prev) => ({ ...prev, messages: true }));
       try {
-        const response = await api.get<MessageReceived[]>(
-          API_ENDPOINTS.MESSAGERIE.RECEIVED,
-        );
+        let transformedMessages: Message[] = [];
 
-        console.log("📥 Messages reçus - Réponse API:", response);
+        try {
+          const response = await api.get<MessageReceived[]>(
+            API_ENDPOINTS.MESSAGERIE.RECEIVED,
+          );
 
-        if (!response || !Array.isArray(response) || response.length === 0) {
-          setMessagesRecus([]);
-          messagesCache.current.recus = [];
-          return;
+          console.log("📥 Messages reçus - Réponse API:", response);
+
+          if (response && Array.isArray(response) && response.length > 0) {
+            setMessagesRecusRaw(response);
+            
+            transformedMessages = response
+              .map((item: MessageReceived) => {
+                const messageData = item.message;
+                
+                if (!messageData || !messageData.uuid) {
+                  return null;
+                }
+
+                if (messageData.expediteurEmail === 'system@example.com') {
+                  return null;
+                }
+
+                const expediteurAvatar = item.expediteurAvatar || messageData.expediteurAvatar;
+                const avatarUrl = expediteurAvatar ? buildAvatarUrl(expediteurAvatar) : null;
+
+                return {
+                  ...messageData,
+                  expediteurAvatar: avatarUrl,
+                  piecesJointes: messageData.piecesJointes?.map((pj: any) => ({
+                    ...pj,
+                    url: buildFileUrl(pj.key) || pj.url,
+                  })),
+                  // ✅ CORRIGÉ : Utiliser l'objet noteVocale complet
+                  noteVocale: messageData.noteVocale ? {
+                    key: messageData.noteVocale.key,
+                    duree: messageData.noteVocale.duree || 0,
+                    url: buildFileUrl(messageData.noteVocale.key) || messageData.noteVocale.url,
+                  } : null,
+                  status: messageData.estLu ? "read" as const : "delivered" as const,
+                } as Message;
+              })
+              .filter((item): item is Message => item !== null);
+          }
+        } catch (err) {
+          console.log("ℹ️ Mode démo activé pour les messages reçus");
+          transformedMessages = MOCK_MESSAGES_RECUS.map(item => item.message as Message);
+          setIsDemoMode(true);
         }
 
-        const transformedMessages = response
-          .map((item: any) => {
-            const messageData = item.message || item;
-            
-            if (!messageData || !messageData.uuid) {
-              console.warn("⚠️ Message invalide ignoré:", messageData);
-              return null;
-            }
-
-            // ✅ FILTRAGE : Ignorer les messages système
-            if (messageData.expediteurEmail === 'system@example.com') {
-              console.log("🚫 Message système ignoré:", messageData.uuid);
-              return null;
-            }
-
-            const expediteurNom = messageData.expediteurNom || "Expéditeur inconnu";
-            const expediteurEmail = messageData.expediteurEmail || "";
-
-            return {
-              uuid: messageData.uuid,
-              sujet: messageData.sujet || "Sans sujet",
-              contenu: messageData.contenu || "",
-              expediteurNom,
-              expediteurEmail,
-              expediteurUuid: messageData.expediteurUuid,
-              expediteurAvatar: messageData.expediteurAvatar || null,
-              destinataireEmail: messageData.destinataireEmail || profileEmail || "",
-              destinataireUuid: messageData.destinataireUuid || profileUuid || "",
-              type: (messageData.type || "NOTIFICATION").toUpperCase(),
-              estEnvoye: false,
-              envoyeLe: messageData.envoyeLe || item.dateReception || new Date().toISOString(),
-              estLu: item.estLu === true || messageData.estLu === true,
-              dateLecture: item.dateLecture || messageData.dateLecture || null,
-            } as Message;
-          })
-          .filter((item): item is Message => item !== null);
-
-        console.log(`✅ ${transformedMessages.length} messages reçus valides après filtrage`);
+        console.log(`✅ ${transformedMessages.length} messages reçus chargés`);
         setMessagesRecus(transformedMessages);
         
-        // Mettre à jour le cache
         messagesCache.current.recus = transformedMessages;
         messagesCache.current.lastFetch = now;
 
         const unreadMessages = transformedMessages.filter((m) => !m.estLu);
-        if (unreadMessages.length > 0) {
+        if (unreadMessages.length > 0 && !isDemoMode) {
           showToast(
             "info",
             `📬 ${unreadMessages.length} message(s) non lu(s)`,
@@ -1240,16 +1778,18 @@ function MessagesContent() {
           );
         }
       } catch (err) {
-        console.error("❌ Erreur chargement messages reçus:", err);
+        console.error("❌ Erreur fatale chargement messages reçus:", err);
+        setMessagesRecus(MOCK_MESSAGES_RECUS.map(item => item.message as Message));
+        setIsDemoMode(true);
       } finally {
         setLoading((prev) => ({ ...prev, messages: false }));
       }
     },
-    [showToast],
+    [showToast, isDemoMode],
   );
 
   // ============================================
-  // ✅ CHARGEMENT DES MESSAGES ENVOYÉS AVEC FILTRAGE ET CACHE
+  // ✅ CHARGEMENT DES MESSAGES ENVOYÉS (CORRIGÉ)
   // ============================================
   const fetchMessagesEnvoyes = useCallback(
     async (
@@ -1258,7 +1798,6 @@ function MessagesContent() {
       profileUuid?: string,
       forceRefresh = false,
     ) => {
-      // Vérifier le cache
       const now = Date.now();
       if (!forceRefresh && messagesCache.current.envoyes.length > 0 && (now - messagesCache.current.lastFetch) < 30000) {
         console.log("📦 Utilisation du cache pour les messages envoyés");
@@ -1268,58 +1807,76 @@ function MessagesContent() {
 
       setLoading((prev) => ({ ...prev, messages: true }));
       try {
-        const response = await api.get<any[]>(API_ENDPOINTS.MESSAGERIE.SENT);
+        let formattedMessages: Message[] = [];
 
-        console.log("📤 Messages envoyés - Réponse API:", response);
+        try {
+          const response = await api.get<any[]>(API_ENDPOINTS.MESSAGERIE.SENT);
 
-        if (!response || !Array.isArray(response) || response.length === 0) {
-          setMessagesEnvoyes([]);
-          messagesCache.current.envoyes = [];
-          return;
+          console.log("📤 Messages envoyés - Réponse API:", response);
+
+          if (response && Array.isArray(response) && response.length > 0) {
+            setMessagesEnvoyesRaw(response as MessageReceived[]);
+            
+            formattedMessages = response
+              .map((item: any) => {
+                const messageData = item.message || item;
+                
+                if (!messageData || !messageData.uuid) {
+                  return null;
+                }
+
+                if (messageData.expediteurEmail === 'system@example.com') {
+                  return null;
+                }
+
+                const expediteurAvatar = messageData.expediteurAvatar || messageData.avatar;
+                const avatarUrl = expediteurAvatar ? buildAvatarUrl(expediteurAvatar) : null;
+
+                return {
+                  uuid: messageData.uuid,
+                  sujet: messageData.sujet || "Sans sujet",
+                  contenu: messageData.contenu || "",
+                  expediteurNom: messageData.expediteurNom || profileNom || "Vendeur SONEC",
+                  expediteurEmail: messageData.expediteurEmail || profileEmail || "",
+                  expediteurUuid: messageData.expediteurUuid || profileUuid || "",
+                  expediteurAvatar: avatarUrl,
+                  destinataireEmail: messageData.destinataireEmail || "",
+                  destinataireUuid: messageData.destinataireUuid || "",
+                  type: (messageData.type || "NOTIFICATION").toUpperCase(),
+                  estEnvoye: true,
+                  envoyeLe: messageData.envoyeLe || new Date().toISOString(),
+                  estLu: messageData.estLu === true,
+                  dateLecture: messageData.dateLecture || null,
+                  piecesJointes: messageData.piecesJointes?.map((pj: any) => ({
+                    ...pj,
+                    url: buildFileUrl(pj.key) || pj.url,
+                  })),
+                  // ✅ CORRIGÉ : Utiliser l'objet noteVocale complet
+                  noteVocale: messageData.noteVocale ? {
+                    key: messageData.noteVocale.key,
+                    duree: messageData.noteVocale.duree || 0,
+                    url: buildFileUrl(messageData.noteVocale.key) || messageData.noteVocale.url,
+                  } : null,
+                  status: messageData.estLu ? "read" as const : "sent" as const,
+                } as Message;
+              })
+              .filter((msg): msg is Message => msg !== null);
+          }
+        } catch (err) {
+          console.log("ℹ️ Mode démo activé pour les messages envoyés");
+          formattedMessages = MOCK_MESSAGES_ENVOYES.map(item => item.message as Message);
+          setIsDemoMode(true);
         }
 
-        const formattedMessages = response
-          .map((msg: any) => {
-            if (!msg || !msg.uuid) {
-              console.warn("⚠️ Message envoyé invalide ignoré:", msg);
-              return null;
-            }
-
-            // ✅ FILTRAGE : Ignorer les messages système
-            if (msg.expediteurEmail === 'system@example.com') {
-              console.log("🚫 Message système ignoré dans les envoyés:", msg.uuid);
-              return null;
-            }
-
-            const formattedMsg: Message = {
-              uuid: msg.uuid,
-              sujet: msg.sujet || "Sans sujet",
-              contenu: msg.contenu || "",
-              expediteurNom: msg.expediteurNom || profileNom || "Vendeur SONEC",
-              expediteurEmail: msg.expediteurEmail || profileEmail || "",
-              expediteurUuid: msg.expediteurUuid || profileUuid || "",
-              expediteurAvatar: msg.expediteurAvatar || null,
-              destinataireEmail: msg.destinataireEmail || "",
-              destinataireUuid: msg.destinataireUuid || "",
-              type: (msg.type || "NOTIFICATION").toUpperCase(),
-              estEnvoye: true,
-              envoyeLe: msg.envoyeLe || new Date().toISOString(),
-              estLu: msg.estLu === true,
-              dateLecture: msg.dateLecture || null,
-            };
-
-            return formattedMsg;
-          })
-          .filter((msg): msg is Message => msg !== null);
-
-        console.log(`✅ ${formattedMessages.length} messages envoyés valides après filtrage`);
+        console.log(`✅ ${formattedMessages.length} messages envoyés chargés`);
         setMessagesEnvoyes(formattedMessages);
         
-        // Mettre à jour le cache
         messagesCache.current.envoyes = formattedMessages;
         messagesCache.current.lastFetch = now;
       } catch (err) {
-        console.error("❌ Erreur chargement messages envoyés:", err);
+        console.error("❌ Erreur fatale chargement messages envoyés:", err);
+        setMessagesEnvoyes(MOCK_MESSAGES_ENVOYES.map(item => item.message as Message));
+        setIsDemoMode(true);
       } finally {
         setLoading((prev) => ({ ...prev, messages: false }));
       }
@@ -1332,7 +1889,6 @@ function MessagesContent() {
   // ============================================
   const handleRefresh = useCallback(() => {
     if (vendeurProfile) {
-      // Forcer le rafraîchissement en ignorant le cache
       fetchMessagesRecus(vendeurProfile.email, vendeurProfile.uuid, true);
       fetchMessagesEnvoyes(
         `${vendeurProfile.prenoms || ""} ${vendeurProfile.nom || ""}`.trim() ||
@@ -1348,7 +1904,7 @@ function MessagesContent() {
   }, [vendeurProfile, fetchMessagesRecus, fetchMessagesEnvoyes, showToast]);
 
   // ============================================
-  // ✅ CONSTRUCTION DES CONTACTS (uniquement avec les messages valides)
+  // CONSTRUCTION DES CONTACTS À PARTIR DES MESSAGES
   // ============================================
   const buildContactsFromMessages = useCallback(() => {
     if (!vendeurProfile) return;
@@ -1361,7 +1917,6 @@ function MessagesContent() {
 
       const contactsMap = new Map<string, ContactConversation>();
 
-      // Traiter les messages reçus (déjà filtrés)
       messagesRecus.forEach((msg) => {
         const email = msg.expediteurEmail;
         if (!email || email === vendeurProfile.email) return;
@@ -1401,7 +1956,6 @@ function MessagesContent() {
         }
       });
 
-      // Traiter les messages envoyés (déjà filtrés)
       messagesEnvoyes.forEach((msg) => {
         const email = msg.destinataireEmail;
         if (!email || email === vendeurProfile.email) return;
@@ -1450,7 +2004,7 @@ function MessagesContent() {
           return dateB - dateA;
         });
 
-      console.log(`✅ ${contactsArray.length} contacts trouvés dans les messages`);
+      console.log(`✅ ${contactsArray.length} contacts trouvés`);
       setContacts(contactsArray);
     } catch (err) {
       console.error("❌ Erreur construction contacts:", err);
@@ -1475,30 +2029,42 @@ function MessagesContent() {
         if (!isMounted) return;
 
         if (profile) {
-          await fetchMessagesRecus(profile.email, profile.uuid);
-          await fetchMessagesEnvoyes(
-            `${profile.prenoms || ""} ${profile.nom || ""}`.trim() ||
-              "Vendeur SONEC",
-            profile.email,
-            profile.uuid,
-          );
+          await Promise.all([
+            fetchMessagesRecus(profile.email, profile.uuid),
+            fetchMessagesEnvoyes(
+              `${profile.prenoms || ""} ${profile.nom || ""}`.trim() ||
+                "Vendeur SONEC",
+              profile.email,
+              profile.uuid,
+            ),
+          ]);
         }
 
         hasLoadedInitialData.current = true;
         isInitialLoad.current = false;
 
-        showToast(
-          "success",
-          "✅ Messagerie chargée",
-          "Votre messagerie est prête",
-          { duration: 3000 },
-        );
+        if (!isDemoMode) {
+          showToast(
+            "success",
+            "✅ Messagerie chargée",
+            "Votre messagerie est prête",
+            { duration: 3000 },
+          );
+        } else {
+          showToast(
+            "info",
+            "🎮 Mode démo actif",
+            "Certains messages sont des données de démonstration",
+            { duration: 5000 },
+          );
+        }
       } catch (err) {
         console.error("❌ Erreur chargement initial:", err);
+        setIsDemoMode(true);
         showToast(
-          "error",
-          "❌ Erreur de chargement",
-          "Impossible de charger la messagerie",
+          "info",
+          "🎮 Mode démo actif",
+          "Utilisation de données de démonstration",
           { duration: 5000 },
         );
       } finally {
@@ -1555,7 +2121,7 @@ function MessagesContent() {
   }, [vendeurProfile, loading.initial, handleUrlParams]);
 
   // ============================================
-  // STATISTIQUES (basées uniquement sur les messages valides)
+  // STATISTIQUES
   // ============================================
   const stats = useMemo(
     () => ({
@@ -1568,7 +2134,7 @@ function MessagesContent() {
   );
 
   // ============================================
-  // FILTRAGE DES CONTACTS (simplifié)
+  // FILTRAGE DES CONTACTS
   // ============================================
   const filteredContacts = useMemo(() => {
     let result = contacts.filter((c) => !c.is_deleted);
@@ -1600,7 +2166,6 @@ function MessagesContent() {
   // CHARGEMENT DE LA CONVERSATION
   // ============================================
   const loadConversation = useCallback((contact: ContactConversation) => {
-    // Filtrer les messages pour cette conversation
     const conversationMessages = [
       ...messagesRecus.filter((m) => m.expediteurEmail === contact.email),
       ...messagesEnvoyes.filter((m) => m.destinataireEmail === contact.email),
@@ -1611,19 +2176,17 @@ function MessagesContent() {
       messages: conversationMessages,
     });
 
-    // Marquer les messages comme lus
     conversationMessages
       .filter((m) => !m.estEnvoye && !m.estLu)
       .forEach((m) => handleMarkAsRead(m.uuid));
 
-    // Focus sur l'input
     setTimeout(() => {
       messageInputRef.current?.focus();
     }, 100);
   }, [messagesRecus, messagesEnvoyes, handleMarkAsRead]);
 
   // ============================================
-  // ✅ ENVOI DE MESSAGE (CORRIGÉ - UTILISE LE BON ENDPOINT)
+  // ✅ ENVOI DE MESSAGE AVEC AFFICHAGE IMMÉDIAT (CORRIGÉ)
   // ============================================
   const handleSendMessage = async () => {
     if (!currentConversation) {
@@ -1632,39 +2195,141 @@ function MessagesContent() {
       return;
     }
 
-    if (!newMessage.contenu.trim()) {
-      setInfoMessage("Veuillez saisir un message");
+    if (!newMessage.contenu.trim() && selectedFiles.length === 0 && !selectedAudio) {
+      setInfoMessage("Veuillez saisir un message ou joindre un fichier");
       setTimeout(() => setInfoMessage(null), 3000);
       return;
     }
 
-    setLoading((prev) => ({ ...prev, envoi: true }));
+    setLoading((prev) => ({ ...prev, envoi: true, uploading: true }));
     setError(null);
     setApiError(null);
 
     try {
-      const messageData = {
+      let uploadedFiles: Attachment[] = [];
+      let uploadedAudio: (Attachment & { duree: number }) | null = null;
+
+      if (isDemoMode) {
+        console.log("🎮 Mode démo: envoi de message simulé");
+        
+        const sentMessage: Message = {
+          uuid: `demo-${Date.now()}`,
+          sujet: newMessage.sujet || `Message pour ${currentConversation.contact.prenoms}`,
+          contenu: newMessage.contenu.trim(),
+          expediteurNom: vendeurProfile ? `${vendeurProfile.prenoms || ""} ${vendeurProfile.nom || ""}`.trim() : "Vendeur SONEC",
+          expediteurEmail: vendeurProfile?.email || "",
+          expediteurUuid: vendeurProfile?.uuid || "",
+          expediteurAvatar: vendeurProfile?.avatar || null,
+          destinataireEmail: currentConversation.contact.email,
+          destinataireUuid: currentConversation.contact.uuid,
+          type: "NOTIFICATION",
+          estEnvoye: true,
+          envoyeLe: new Date().toISOString(),
+          estLu: false,
+          dateLecture: null,
+          piecesJointes: [],
+          noteVocale: null,
+          status: "sent",
+        };
+
+        setMessagesEnvoyes((prev) => [sentMessage, ...prev]);
+        messagesCache.current.envoyes = [sentMessage, ...messagesCache.current.envoyes];
+
+        setCurrentConversation((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            messages: [...prev.messages, sentMessage],
+          };
+        });
+
+        setContacts((prev) =>
+          prev.map((c) =>
+            c.email === currentConversation.contact.email
+              ? {
+                  ...c,
+                  lastMessageDate: sentMessage.envoyeLe,
+                  lastMessage: sentMessage.contenu,
+                  lastMessageStatus: "sent",
+                  totalMessages: (c.totalMessages || 0) + 1,
+                }
+              : c,
+          ),
+        );
+
+        showToast(
+          "success",
+          "✅ Message envoyé ! (Mode démo)",
+          `Votre message a été simulé avec succès`,
+          { duration: 3000 },
+        );
+
+        setNewMessage((prev) => ({
+          ...prev,
+          contenu: "",
+          sujet: `Message pour ${currentConversation.contact.prenoms}`,
+        }));
+        setSelectedFiles([]);
+        setSelectedAudio(null);
+        setAudioDuration(0);
+        setUploadedAttachments([]);
+
+        setTimeout(scrollToBottom, 100);
+        return;
+      }
+
+      for (const file of selectedFiles) {
+        try {
+          const attachment = await uploadFile(file);
+          uploadedFiles.push(attachment);
+        } catch (error) {
+          console.error("❌ Erreur upload fichier:", error);
+          showToast("error", "❌ Erreur upload", `Impossible d'uploader ${file.name}`, { duration: 3000 });
+        }
+      }
+
+      if (selectedAudio) {
+        try {
+          uploadedAudio = await uploadAudio(selectedAudio, audioDuration);
+        } catch (error) {
+          console.error("❌ Erreur upload note vocale:", error);
+          showToast("error", "❌ Erreur upload", "Impossible d'uploader la note vocale", { duration: 3000 });
+        }
+      }
+
+      const messageData: any = {
         destinataireEmail: currentConversation.contact.email,
-        destinataireUuid: currentConversation.contact.uuid,
         sujet: newMessage.sujet || `Message pour ${currentConversation.contact.prenoms}`,
         contenu: newMessage.contenu.trim(),
         type: "NOTIFICATION",
       };
 
-      console.log("📤 Envoi de message:", {
-        ...messageData,
-        contenu: messageData.contenu.substring(0, 50) + "...",
-      });
+      if (uploadedFiles.length > 0) {
+        const file = uploadedFiles[0];
+        messageData.pieceJointeKey = file.key;
+        messageData.pieceJointeNom = file.nom;
+        messageData.pieceJointeType = file.type;
+        messageData.pieceJointeMimeType = file.mimeType;
+        messageData.pieceJointeTaille = file.taille;
+      }
+
+      if (uploadedAudio) {
+        messageData.noteVocaleKey = uploadedAudio.key;
+        messageData.noteVocaleDuree = uploadedAudio.duree;
+      }
+
+      console.log("📤 Envoi de message avec fichiers:", messageData);
 
       const response = await api.post<any>(
         API_ENDPOINTS.MESSAGERIE.SEND,
-        messageData,
+        messageData
       );
 
       console.log("✅ Message envoyé avec succès, réponse:", response);
 
+      // ✅ CRÉER LE MESSAGE LOCALEMENT POUR AFFICHAGE IMMÉDIAT
       const sentMessage: Message = {
-        uuid: response.uuid || `temp-${Date.now()}`,
+        uuid: response.uuid || `msg-${Date.now()}`,
         sujet: messageData.sujet,
         contenu: messageData.contenu,
         expediteurNom: vendeurProfile ? `${vendeurProfile.prenoms || ""} ${vendeurProfile.nom || ""}`.trim() : "Vendeur SONEC",
@@ -1672,21 +2337,26 @@ function MessagesContent() {
         expediteurUuid: vendeurProfile?.uuid || "",
         expediteurAvatar: vendeurProfile?.avatar || null,
         destinataireEmail: messageData.destinataireEmail,
-        destinataireUuid: messageData.destinataireUuid,
+        destinataireUuid: currentConversation.contact.uuid,
         type: "NOTIFICATION",
         estEnvoye: true,
         envoyeLe: new Date().toISOString(),
         estLu: false,
         dateLecture: null,
+        piecesJointes: uploadedFiles,
+        // ✅ CORRIGÉ : Créer l'objet noteVocale complet
+        noteVocale: uploadedAudio ? {
+          key: uploadedAudio.key,
+          duree: uploadedAudio.duree,
+          url: uploadedAudio.url,
+        } : null,
+        status: "sent",
       };
 
-      // Ajouter à la liste des messages envoyés
+      // ✅ MISE À JOUR LOCALE IMMÉDIATE
       setMessagesEnvoyes((prev) => [sentMessage, ...prev]);
-      
-      // Mettre à jour le cache
       messagesCache.current.envoyes = [sentMessage, ...messagesCache.current.envoyes];
 
-      // Ajouter à la conversation courante
       setCurrentConversation((prev) => {
         if (!prev) return null;
         return {
@@ -1695,7 +2365,6 @@ function MessagesContent() {
         };
       });
 
-      // Mettre à jour le dernier message du contact
       setContacts((prev) =>
         prev.map((c) =>
           c.email === currentConversation.contact.email
@@ -1710,6 +2379,22 @@ function MessagesContent() {
         ),
       );
 
+      // ✅ RAFRAÎCHISSEMENT EN ARRIÈRE-PLAN
+      if (vendeurProfile) {
+        Promise.all([
+          fetchMessagesRecus(vendeurProfile.email, vendeurProfile.uuid, true).catch(() => {}),
+          fetchMessagesEnvoyes(
+            `${vendeurProfile.prenoms || ""} ${vendeurProfile.nom || ""}`.trim() ||
+              "Vendeur SONEC",
+            vendeurProfile.email,
+            vendeurProfile.uuid,
+            true,
+          ).catch(() => {}),
+        ]).finally(() => {
+          console.log("🔄 Rafraîchissement en arrière-plan terminé");
+        });
+      }
+
       showToast(
         "success",
         "✅ Message envoyé !",
@@ -1723,14 +2408,16 @@ function MessagesContent() {
         },
       );
 
-      // Réinitialiser le formulaire
       setNewMessage((prev) => ({
         ...prev,
         contenu: "",
         sujet: `Message pour ${currentConversation.contact.prenoms}`,
       }));
+      setSelectedFiles([]);
+      setSelectedAudio(null);
+      setAudioDuration(0);
+      setUploadedAttachments([]);
 
-      // Scroll vers le bas
       setTimeout(scrollToBottom, 100);
     } catch (err: any) {
       console.error("❌ Erreur envoi message:", err);
@@ -1751,7 +2438,7 @@ function MessagesContent() {
       setApiError(errorMessage);
       showToast("error", "❌ Erreur d'envoi", errorMessage, { duration: 5000 });
     } finally {
-      setLoading((prev) => ({ ...prev, envoi: false }));
+      setLoading((prev) => ({ ...prev, envoi: false, uploading: false }));
     }
   };
 
@@ -1874,6 +2561,22 @@ function MessagesContent() {
         ))}
       </div>
 
+      {/* Bannière mode démo */}
+      {isDemoMode && (
+        <div
+          className="position-fixed top-0 start-0 w-100 text-center py-2"
+          style={{
+            backgroundColor: "#f39c12",
+            color: "white",
+            zIndex: 10000,
+            fontSize: "0.9rem",
+          }}
+        >
+          <FontAwesomeIcon icon={faInfoCircle} className="me-2" />
+          Mode démo actif - Les messages ne sont pas persistés
+        </div>
+      )}
+
       {/* Modale de confirmation de suppression */}
       {showDeleteModal && messageToDelete && (
         <div
@@ -1929,9 +2632,7 @@ function MessagesContent() {
 
       <div className="container-fluid p-0 vh-100 bg-light">
         <div className="d-flex h-100">
-          {/* ======================================== */}
           {/* PANGAUCHE - LISTE DES CONTACTS */}
-          {/* ======================================== */}
           <div
             className="d-flex flex-column border-end bg-white"
             style={{
@@ -2096,9 +2797,7 @@ function MessagesContent() {
             </div>
           </div>
 
-          {/* ======================================== */}
           {/* PAN DROIT - CONVERSATION */}
-          {/* ======================================== */}
           <div className="flex-grow-1 d-flex flex-column" style={{ background: "#efeae2" }}>
             {currentConversation ? (
               <>
@@ -2258,22 +2957,106 @@ function MessagesContent() {
                           navigator.clipboard.writeText(message.contenu);
                           showToast("success", "📋 Message copié", "Le message a été copié dans le presse-papiers", { duration: 2000 });
                         }}
+                        onDownload={(attachment) => {
+                          window.open(attachment.url, '_blank');
+                          showToast("success", "📥 Téléchargement", `Téléchargement de ${attachment.nom}`, { duration: 2000 });
+                        }}
                       />
                     );
                   })}
                   <div ref={messagesEndRef} />
                 </div>
 
-                {/* Zone de saisie */}
+                {/* Zone de saisie avec gestion des fichiers */}
                 <div className="p-3" style={{ background: "#f0f2f5" }}>
-                  <div className="d-flex align-items-center gap-2">
+                  {/* Fichiers sélectionnés */}
+                  {selectedFiles.length > 0 && (
+                    <div className="mb-2 d-flex flex-wrap gap-2">
+                      {selectedFiles.map((file, index) => (
+                        <FileAttachment
+                          key={index}
+                          file={{ name: file.name, type: file.type, size: file.size }}
+                          onRemove={() => removeFile(index)}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Note vocale sélectionnée */}
+                  {selectedAudio && (
+                    <div className="mb-2">
+                      <FileAttachment
+                        file={{ name: selectedAudio.name, type: selectedAudio.type, size: selectedAudio.size }}
+                        onRemove={removeAudio}
+                      />
+                      {audioDuration > 0 && (
+                        <small className="text-muted ms-2">
+                          Durée: {Math.floor(audioDuration / 60)}:{(audioDuration % 60).toString().padStart(2, '0')}
+                        </small>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Inputs cachés pour les fichiers */}
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileSelect}
+                    multiple
+                    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+                    style={{ display: 'none' }}
+                  />
+                  <input
+                    type="file"
+                    ref={audioInputRef}
+                    onChange={handleAudioSelect}
+                    accept="audio/*"
+                    style={{ display: 'none' }}
+                  />
+
+                  {/* Barre d'outils */}
+                  <div className="d-flex align-items-center gap-2 mb-2">
                     <button
                       className="btn btn-light rounded-circle d-flex align-items-center justify-content-center"
-                      style={{ width: "45px", height: "45px" }}
+                      style={{ width: "40px", height: "40px" }}
+                      onClick={() => fileInputRef.current?.click()}
+                      title="Joindre un fichier"
                     >
-                      <FontAwesomeIcon icon={faPlus} style={{ fontSize: "1.1rem", color: "#54656f" }} />
+                      <FontAwesomeIcon icon={faPaperclip} style={{ fontSize: "1rem", color: "#54656f" }} />
                     </button>
+                    <button
+                      className="btn btn-light rounded-circle d-flex align-items-center justify-content-center"
+                      style={{ width: "40px", height: "40px" }}
+                      onClick={() => audioInputRef.current?.click()}
+                      title="Ajouter une note vocale"
+                    >
+                      <FontAwesomeIcon icon={faMicrophone} style={{ fontSize: "1rem", color: "#54656f" }} />
+                    </button>
+                    <button
+                      className="btn btn-light rounded-circle d-flex align-items-center justify-content-center"
+                      style={{ width: "40px", height: "40px" }}
+                      title="Ajouter une image"
+                      onClick={() => {
+                        if (fileInputRef.current) {
+                          fileInputRef.current.accept = "image/*";
+                          fileInputRef.current.multiple = true;
+                          fileInputRef.current.click();
+                        }
+                      }}
+                    >
+                      <FontAwesomeIcon icon={faImage} style={{ fontSize: "1rem", color: "#54656f" }} />
+                    </button>
+                    <button
+                      className="btn btn-light rounded-circle d-flex align-items-center justify-content-center"
+                      style={{ width: "40px", height: "40px" }}
+                      title="Ajouter un emoji"
+                    >
+                      <FontAwesomeIcon icon={faSmile} style={{ fontSize: "1rem", color: "#54656f" }} />
+                    </button>
+                  </div>
 
+                  {/* Zone de texte et bouton d'envoi */}
+                  <div className="d-flex align-items-center gap-2">
                     <div className="flex-grow-1 position-relative">
                       <textarea
                         ref={messageInputRef}
@@ -2297,13 +3080,13 @@ function MessagesContent() {
                     <button
                       className="btn btn-success rounded-circle d-flex align-items-center justify-content-center"
                       onClick={handleSendMessage}
-                      disabled={loading.envoi || !newMessage.contenu.trim()}
+                      disabled={loading.envoi || (!newMessage.contenu.trim() && selectedFiles.length === 0 && !selectedAudio)}
                       style={{
                         width: "45px",
                         height: "45px",
                         background: "#25D366",
                         border: "none",
-                        opacity: loading.envoi || !newMessage.contenu.trim() ? 0.6 : 1,
+                        opacity: loading.envoi || (!newMessage.contenu.trim() && selectedFiles.length === 0 && !selectedAudio) ? 0.6 : 1,
                       }}
                     >
                       {loading.envoi ? (
@@ -2314,21 +3097,15 @@ function MessagesContent() {
                     </button>
                   </div>
 
-                  {/* Barre d'outils */}
-                  <div className="d-flex justify-content-center gap-3 mt-2">
-                    <button className="btn btn-link text-muted p-0">
-                      <FontAwesomeIcon icon={faSmile} style={{ fontSize: "1.2rem" }} />
-                    </button>
-                    <button className="btn btn-link text-muted p-0">
-                      <FontAwesomeIcon icon={faPaperclip} style={{ fontSize: "1.2rem" }} />
-                    </button>
-                    <button className="btn btn-link text-muted p-0">
-                      <FontAwesomeIcon icon={faCamera} style={{ fontSize: "1.2rem" }} />
-                    </button>
-                    <button className="btn btn-link text-muted p-0">
-                      <FontAwesomeIcon icon={faMicrophone} style={{ fontSize: "1.2rem" }} />
-                    </button>
-                  </div>
+                  {/* Indicateur d'upload */}
+                  {loading.uploading && (
+                    <div className="mt-2 text-center">
+                      <small className="text-muted">
+                        <FontAwesomeIcon icon={faSpinner} spin className="me-2" />
+                        Upload en cours...
+                      </small>
+                    </div>
+                  )}
                 </div>
               </>
             ) : (
@@ -2405,6 +3182,11 @@ function MessagesContent() {
         }
         .badge.bg-success {
           background-color: #25D366 !important;
+        }
+
+        /* Support des émojis */
+        .message-content, textarea, input {
+          font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'Android Emoji', 'EmojiOne Color', 'Twemoji Mozilla', system-ui, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif !important;
         }
 
         /* Scrollbar personnalisée */
