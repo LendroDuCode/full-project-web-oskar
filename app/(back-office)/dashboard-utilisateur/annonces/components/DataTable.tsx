@@ -209,7 +209,7 @@ export default function DataTable({
       };
     }
 
-    // ✅ PRIORITÉ 3: Publié
+    
     if (item.estPublie === true) {
       return {
         label: "Publié",
