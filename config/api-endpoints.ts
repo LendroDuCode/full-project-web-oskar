@@ -619,7 +619,7 @@ CATEGORIES: {
     BLOQUE_DON: withBaseUrl(`/dons/depublier`),
     DETAIL_NON_PUBLIE: (uuid: string) =>
       withBaseUrl(`/dons/non-publie/${uuid}`),
-    CREATE: withBaseUrl("/dons/creer-don-agent-vendeur-utilisateur"), // CORRIGÉ
+    CREATE: withBaseUrl("/dons/creer-don-agent-vendeur-utilisateur"), 
     UPDATE: (uuid: string) => withBaseUrl(`/dons/${uuid}`),
     DELETE: (uuid: string) => withBaseUrl(`/dons/${uuid}`),
     PUBLISH: withBaseUrl("/dons/publier"),
