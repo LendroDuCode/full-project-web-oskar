@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { buildImageUrl } from "@/app/shared/utils/image-utils";
+import { useAuth } from "@/app/(front-office)/auth/AuthContext";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowLeft,
@@ -51,10 +52,64 @@ import {
   faUnlock,
   faBell,
   faFlag,
+  faEnvelope,
+  faPhone,
+  faUser,
+  faUserCircle,
 } from "@fortawesome/free-solid-svg-icons";
+import { faWhatsapp as faWhatsappBrand } from "@fortawesome/free-brands-svg-icons";
 import "bootstrap/dist/css/bootstrap.min.css";
 
-// ✅ ALERTES AMÉLIORÉES - Plus belles et plus parlantes
+// Interface TypeScript
+interface CreateurInfo {
+  uuid: string;
+  nom: string;
+  prenoms: string;
+  email: string;
+  telephone: string;
+  avatar: string | null;
+  est_verifie?: boolean;
+  est_bloque?: boolean;
+  userType?: string;
+}
+
+interface CategorieInfo {
+  uuid: string;
+  libelle: string;
+}
+
+interface Product {
+  uuid: string;
+  libelle: string;
+  slug: string;
+  image_key: string | null;
+  disponible: boolean;
+  statut: string;
+  image: string | null;
+  prix: string | number;
+  description: string;
+  utilisateurUuid: string;
+  vendeurUuid: string | null;
+  agentUuid: string | null;
+  boutique: any | null;
+  categorie: CategorieInfo;
+  estPublie: boolean;
+  estBloque: boolean;
+  adminUuid: string | null;
+  dateCreation: string;
+  updatedAt: string;
+  quantite: number;
+  note_moyenne: number;
+  nombre_avis: number;
+  estUtilisateur: boolean;
+  estVendeur: boolean;
+  createur: CreateurInfo | null;
+  createurType: string;
+  nombre_vues?: number;
+  nombre_favoris?: number;
+}
+
+// ✅ ALERTES AMÉLIORÉES
 const CustomAlert = ({
   type,
   title,
@@ -77,14 +132,14 @@ const CustomAlert = ({
     success: "#10b981",
     error: "#ef4444",
     warning: "#f59e0b",
-    info: "#3b82f6",
+    info: "#10b981", // Vert
   };
 
   const backgrounds = {
     success: "rgba(16, 185, 129, 0.1)",
     error: "rgba(239, 68, 68, 0.1)",
     warning: "rgba(245, 158, 11, 0.1)",
-    info: "rgba(59, 130, 246, 0.1)",
+    info: "rgba(16, 185, 129, 0.1)", // Vert
   };
 
   return (
@@ -137,7 +192,7 @@ const CustomAlert = ({
   );
 };
 
-// ✅ CONFIRMATION AMÉLIORÉE - Plus moderne
+// ✅ CONFIRMATION AMÉLIORÉE
 const CustomConfirm = ({
   title,
   message,
@@ -213,7 +268,10 @@ export default function ProductDetailPage() {
   const router = useRouter();
   const uuid = params.uuid as string;
 
-  const [product, setProduct] = useState<any>(null);
+  const { user } = useAuth();
+
+  const [product, setProduct] = useState<Product | null>(null);
+  const [createur, setCreateur] = useState<CreateurInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
@@ -240,17 +298,17 @@ export default function ProductDetailPage() {
   const imageContainerRef = useRef<HTMLDivElement>(null);
   const rotationIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Perspectives 3D simulées avec des angles différents
+  // Perspectives 3D
   const perspectives = [
     { name: "Vue de face", rotation: { x: -20, y: 45 }, zoom: 1 },
     { name: "Vue de côté gauche", rotation: { x: -10, y: 90 }, zoom: 1 },
     { name: "Vue de dessus", rotation: { x: -70, y: 45 }, zoom: 1.2 },
     { name: "Vue de dos", rotation: { x: -20, y: 225 }, zoom: 1 },
     { name: "Vue de côté droit", rotation: { x: -10, y: -90 }, zoom: 1 },
-    { name: "Vue de dessous", rotation: { x: 70, y: 45 }, zoom: 1.2 },
+    { name: "Détails", rotation: { x: -30, y: 180 }, zoom: 1.5 },
   ];
 
-  // ✅ Image par défaut avec arrière-plan blanc
+  // ✅ Image par défaut
   const getProductImage = () => {
     if (imageError) {
       return `https://via.placeholder.com/800x600/f8fafc/1e293b?text=${encodeURIComponent(product?.libelle?.charAt(0) || "P")}`;
@@ -280,7 +338,6 @@ export default function ProductDetailPage() {
     };
   }, [autoRotate, isRotating, activePerspective]);
 
-  // ✅ ALERTES AMÉLIORÉES - Messages plus parlants
   const showAlert = (
     type: "success" | "error" | "warning" | "info",
     title: string,
@@ -311,16 +368,12 @@ export default function ProductDetailPage() {
       setImageError(false);
       setImageKey(Date.now());
       
-      // ✅ Utilisation de l'endpoint public si disponible
-      try {
-        const response = await api.get(
-          API_ENDPOINTS.PRODUCTS.DETAIL(uuid)
-        );
-        setProduct(response);
-      } catch (err) {
-        // Fallback vers l'endpoint standard
-        const response = await api.get(API_ENDPOINTS.PRODUCTS.DETAIL(uuid));
-        setProduct(response);
+      const response = await api.get<Product>(
+        API_ENDPOINTS.PRODUCTS.DETAIL(uuid)
+      );
+      setProduct(response);
+      if (response.createur) {
+        setCreateur(response.createur);
       }
     } catch (err: any) {
       console.error("Erreur lors du chargement du produit:", err);
@@ -408,7 +461,72 @@ export default function ProductDetailPage() {
     setZoom((prev) => Math.max(prev - 0.1, 0.5));
   };
 
-  // ✅ VALIDATION - Message d'alerte amélioré
+  // ✅ FONCTION POUR CONTACTER LE VENDEUR VIA WHATSAPP
+  const handleContactWhatsApp = () => {
+    if (!createur) {
+      showAlert("error", "❌ Erreur", "Informations du vendeur non disponibles");
+      return;
+    }
+
+    let phoneNumber = createur.telephone || "";
+    
+    if (!phoneNumber) {
+      showAlert("error", "❌ Erreur", "Aucun numéro de téléphone disponible pour ce vendeur");
+      return;
+    }
+
+    phoneNumber = phoneNumber.replace(/\D/g, "");
+    if (phoneNumber && !phoneNumber.startsWith("+")) {
+      phoneNumber = `+225${phoneNumber}`;
+    }
+
+    const message = `Bonjour ${createur.prenoms || ""} ${createur.nom || ""}, je suis intéressé(e) par votre produit "${product?.libelle}" sur OSKAR. Pourrions-nous discuter ?`;
+    const whatsappUrl = `https://wa.me/${phoneNumber.replace(/\+/g, '')}?text=${encodeURIComponent(message)}`;
+
+    window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+  };
+
+  // ✅ FONCTION POUR ENVOYER UN MESSAGE VIA LA MESSAGERIE INTERNE
+  const handleSendMessage = () => {
+    if (!createur) {
+      showAlert("error", "❌ Erreur", "Informations du vendeur non disponibles");
+      return;
+    }
+
+    const userType = user?.type || "utilisateur";
+
+    let dashboardPath = "";
+    switch (userType) {
+      case "admin":
+        dashboardPath = "/dashboard-admin";
+        break;
+      case "agent":
+        dashboardPath = "/dashboard-agent";
+        break;
+      case "vendeur":
+        dashboardPath = "/dashboard-vendeur";
+        break;
+      case "utilisateur":
+        dashboardPath = "/dashboard-utilisateur";
+        break;
+      default:
+        dashboardPath = "/dashboard-utilisateur";
+    }
+
+    const params = new URLSearchParams({
+      destinataireUuid: createur.uuid,
+      destinataireEmail: createur.email || "",
+      destinataireNom: `${createur.prenoms || ""} ${createur.nom || ""}`,
+      sujet: `Question concernant votre produit: ${product?.libelle}`,
+      produitUuid: product?.uuid || "",
+      produitImage: product?.image || "",
+      produitNom: product?.libelle || "",
+    });
+
+    router.push(`${dashboardPath}/messages?${params.toString()}`);
+  };
+
+  // ✅ VALIDATION
   const handleValidate = async () => {
     try {
       setActionLoading(true);
@@ -431,7 +549,7 @@ export default function ProductDetailPage() {
     }
   };
 
-  // ✅ REJET - Message d'alerte amélioré
+  // ✅ REJET
   const handleReject = async () => {
     try {
       setActionLoading(true);
@@ -454,16 +572,16 @@ export default function ProductDetailPage() {
     }
   };
 
-  // ✅ PUBLICATION/DÉPUBLICATION - Couleur dynamique
+  // ✅ PUBLICATION/DÉPUBLICATION
   const handlePublish = async () => {
     try {
       setActionLoading(true);
       await api.post(API_ENDPOINTS.PRODUCTS.PUBLLIER, {
         productUuid: uuid,
-        est_publie: !product.estPublie,
+        est_publie: !product!.estPublie,
       });
       
-      if (product.estPublie) {
+      if (product!.estPublie) {
         showAlert(
           "info",
           "📭 Produit dépublié",
@@ -489,7 +607,7 @@ export default function ProductDetailPage() {
     }
   };
 
-  // ✅ SUPPRESSION - Confirmation améliorée
+  // ✅ SUPPRESSION
   const handleDelete = async () => {
     showConfirm(
       "Supprimer définitivement ?",
@@ -521,16 +639,16 @@ export default function ProductDetailPage() {
     );
   };
 
-  // ✅ BLOCAGE/DÉBLOCAGE - Couleur dynamique
+  // ✅ BLOCAGE/DÉBLOCAGE
   const handleBlock = async () => {
     try {
       setActionLoading(true);
       await api.post(API_ENDPOINTS.PRODUCTS.BLOQUE_PRODUITS, {
         productUuid: uuid,
-        est_bloque: !product.estBloque,
+        est_bloque: !product!.estBloque,
       });
       
-      if (product.estBloque) {
+      if (product!.estBloque) {
         showAlert(
           "success",
           "🔓 Produit débloqué",
@@ -556,11 +674,6 @@ export default function ProductDetailPage() {
     }
   };
 
-  const handlePrint = () => {
-    window.open(`/print/produit/${uuid}`, "_blank");
-    showAlert("info", "🖨️ Impression", "Lancement de l'impression...");
-  };
-
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href);
     showAlert("success", "🔗 Lien copié !", "Le lien du produit a été copié dans le presse-papier.");
@@ -575,14 +688,19 @@ export default function ProductDetailPage() {
     }).format(numPrice);
   };
 
-  const renderStars = (rating: number) => {
-    return Array.from({ length: 5 }).map((_, index) => (
-      <FontAwesomeIcon
-        key={index}
-        icon={faStar}
-        className={index < Math.floor(rating) ? "text-warning" : "text-muted"}
-      />
-    ));
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "Date inconnue";
+    try {
+      return new Date(dateString).toLocaleDateString("fr-FR", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return "Date inconnue";
+    }
   };
 
   if (loading) {
@@ -590,13 +708,13 @@ export default function ProductDetailPage() {
       <div className="d-flex justify-content-center align-items-center min-vh-100 bg-white">
         <div className="text-center">
           <div
-            className="spinner-border text-primary mb-3"
-            style={{ width: "3rem", height: "3rem" }}
+            className="spinner-border mb-3"
+            style={{ width: "3rem", height: "3rem", color: "#10b981" }}
             role="status"
           >
             <span className="visually-hidden">Chargement...</span>
           </div>
-          <h4 className="text-primary mb-2">Chargement du produit</h4>
+          <h4 className="mb-2" style={{ color: "#10b981" }}>Chargement du produit</h4>
           <p className="text-muted">Veuillez patienter...</p>
         </div>
       </div>
@@ -606,8 +724,8 @@ export default function ProductDetailPage() {
   if (error) {
     return (
       <div className="container py-5">
-        <div className="card border-danger shadow-lg" style={{ borderRadius: "24px" }}>
-          <div className="card-header bg-danger text-white" style={{ borderRadius: "24px 24px 0 0" }}>
+        <div className="card shadow-lg" style={{ borderRadius: "24px", borderColor: "#10b981" }}>
+          <div className="card-header text-white" style={{ borderRadius: "24px 24px 0 0", backgroundColor: "#10b981" }}>
             <FontAwesomeIcon icon={faExclamationTriangle} className="me-2" />
             Erreur de chargement
           </div>
@@ -615,7 +733,7 @@ export default function ProductDetailPage() {
             <h5 className="card-title">Une erreur est survenue</h5>
             <p className="card-text">{error}</p>
             <div className="d-flex gap-3">
-              <button className="btn btn-danger" onClick={fetchProduct}>
+              <button className="btn" style={{ backgroundColor: "#10b981", color: "white" }} onClick={fetchProduct}>
                 <FontAwesomeIcon icon={faRotate} className="me-2" />
                 Réessayer
               </button>
@@ -648,7 +766,7 @@ export default function ProductDetailPage() {
               className="text-warning mb-3"
             />
             <h4 className="mb-3">Ce produit n'existe pas ou a été supprimé</h4>
-            <button className="btn btn-primary" onClick={() => router.back()}>
+            <button className="btn" style={{ backgroundColor: "#10b981", color: "white" }} onClick={() => router.back()}>
               <FontAwesomeIcon icon={faArrowLeft} className="me-2" />
               Retour aux annonces
             </button>
@@ -660,7 +778,6 @@ export default function ProductDetailPage() {
 
   return (
     <div className="container-fluid px-lg-5 py-4 bg-white min-vh-100">
-      {/* ✅ ALERTES AMÉLIORÉES - Position fixe en haut à droite */}
       {alert && (
         <div
           className="position-fixed top-0 end-0 p-4"
@@ -675,7 +792,6 @@ export default function ProductDetailPage() {
         </div>
       )}
 
-      {/* Dialogue de confirmation */}
       {confirmDialog && (
         <div
           className="position-fixed top-0 start-0 w-100 h-100"
@@ -690,7 +806,7 @@ export default function ProductDetailPage() {
         </div>
       )}
 
-      {/* En-tête améliorée */}
+      {/* En-tête */}
       <div className="mb-4">
         <nav
           aria-label="breadcrumb"
@@ -703,6 +819,7 @@ export default function ProductDetailPage() {
                 href="#"
                 className="text-decoration-none"
                 onClick={() => router.back()}
+                style={{ color: "#10b981" }}
               >
                 <FontAwesomeIcon icon={faArrowLeft} className="me-2" />
                 Retour
@@ -716,9 +833,8 @@ export default function ProductDetailPage() {
 
         <div className="d-flex justify-content-between align-items-center">
           <div>
-            <h1 className="h2 mb-3 fw-bold text-primary">{product.libelle}</h1>
+            <h1 className="h2 mb-3 fw-bold" style={{ color: "#10b981" }}>{product.libelle}</h1>
             <div className="d-flex align-items-center gap-2 flex-wrap">
-              {/* ✅ Badge Publication avec couleur dynamique */}
               <span
                 className={`badge ${product.estPublie ? "bg-success" : "bg-secondary"} fs-6 px-4 py-2 rounded-pill`}
                 style={{
@@ -729,7 +845,6 @@ export default function ProductDetailPage() {
                 {product.estPublie ? "Publié" : "Non publié"}
               </span>
 
-              {/* ✅ Badge Blocage avec couleur dynamique */}
               <span
                 className={`badge ${product.estBloque ? "bg-danger" : "bg-success"} fs-6 px-4 py-2 rounded-pill`}
                 style={{
@@ -740,16 +855,14 @@ export default function ProductDetailPage() {
                 {product.estBloque ? "Bloqué" : "Actif"}
               </span>
 
-              {/* ✅ Badge Statut */}
               <span
-                className="badge bg-info fs-6 px-4 py-2 rounded-pill"
-                style={{ backgroundColor: "#3b82f6" }}
+                className="badge fs-6 px-4 py-2 rounded-pill"
+                style={{ backgroundColor: "#10b981" }}
               >
                 <FontAwesomeIcon icon={faTag} className="me-2" />
                 {product.statut || "En attente"}
               </span>
 
-              {/* ✅ Badge Disponibilité */}
               <span
                 className={`badge ${product.disponible ? "bg-success" : "bg-secondary"} fs-6 px-4 py-2 rounded-pill`}
                 style={{
@@ -763,11 +876,13 @@ export default function ProductDetailPage() {
           </div>
           <div className="d-flex gap-2">
             <button
-              className="btn btn-outline-primary btn-lg"
+              className="btn btn-outline-success btn-lg"
               style={{
                 borderRadius: "12px",
                 padding: "12px 24px",
                 borderWidth: "2px",
+                borderColor: "#10b981",
+                color: "#10b981",
               }}
               onClick={handleShare}
               disabled={actionLoading}
@@ -775,13 +890,12 @@ export default function ProductDetailPage() {
               <FontAwesomeIcon icon={faShareAlt} className="me-2" />
               Partager
             </button>
-         
           </div>
         </div>
       </div>
 
       <div className="row g-4">
-        {/* Colonne de gauche - Vue 3D agrandie */}
+        {/* Colonne de gauche - Vue 3D */}
         <div className="col-lg-8">
           <div className="card border-0 shadow-lg h-100" style={{ borderRadius: "24px" }}>
             <div className="card-header bg-white border-0 py-4 px-4">
@@ -789,7 +903,8 @@ export default function ProductDetailPage() {
                 <h3 className="h5 mb-0">
                   <FontAwesomeIcon
                     icon={faCube}
-                    className="me-2 text-primary"
+                    className="me-2"
+                    style={{ color: "#10b981" }}
                   />
                   Visualisation 3D du Produit
                 </h3>
@@ -806,9 +921,9 @@ export default function ProductDetailPage() {
                     {autoRotate ? "Auto ON" : "Auto OFF"}
                   </button>
                   <button
-                    className="btn btn-sm btn-outline-primary"
+                    className="btn btn-sm btn-outline-success"
                     onClick={toggleFullscreen}
-                    style={{ borderRadius: "20px" }}
+                    style={{ borderRadius: "20px", borderColor: "#10b981", color: "#10b981" }}
                   >
                     <FontAwesomeIcon
                       icon={isFullscreen ? faCompress : faExpand}
@@ -829,7 +944,6 @@ export default function ProductDetailPage() {
             </div>
 
             <div className="card-body p-4">
-              {/* ✅ Conteneur 3D - Arrière-plan blanc */}
               <div
                 ref={imageContainerRef}
                 className="position-relative bg-white rounded-4 overflow-hidden mb-4 border"
@@ -847,7 +961,6 @@ export default function ProductDetailPage() {
                 onMouseUp={() => setIsRotating(false)}
                 onMouseLeave={() => setIsRotating(false)}
               >
-                {/* Conteneur de l'image avec effet 3D */}
                 <div
                   className="position-absolute top-50 start-50 translate-middle"
                   style={{
@@ -858,7 +971,6 @@ export default function ProductDetailPage() {
                     height: "80%",
                   }}
                 >
-                  {/* Image principale avec effet 3D */}
                   <div className="position-relative w-100 h-100">
                     <img
                       key={imageKey}
@@ -878,10 +990,9 @@ export default function ProductDetailPage() {
                       onError={handleImageError}
                     />
 
-                    {/* Badge produit sur l'image */}
                     <div
-                      className="position-absolute top-0 start-0 m-3 bg-primary text-white rounded-pill px-4 py-2 shadow"
-                      style={{ backdropFilter: "blur(5px)" }}
+                      className="position-absolute top-0 start-0 m-3 text-white rounded-pill px-4 py-2 shadow"
+                      style={{ backgroundColor: "#10b981", backdropFilter: "blur(5px)" }}
                     >
                       <FontAwesomeIcon icon={faTag} className="me-2" />
                       PRODUIT
@@ -889,7 +1000,6 @@ export default function ProductDetailPage() {
                   </div>
                 </div>
 
-                {/* Contrôles de navigation */}
                 <button
                   className="btn btn-light position-absolute top-50 start-0 translate-middle-y ms-3 rounded-circle shadow"
                   style={{
@@ -897,6 +1007,7 @@ export default function ProductDetailPage() {
                     height: "50px",
                     backgroundColor: "white",
                     border: "1px solid #e2e8f0",
+                    color: "#10b981",
                   }}
                   onClick={prevPerspective}
                 >
@@ -909,13 +1020,13 @@ export default function ProductDetailPage() {
                     height: "50px",
                     backgroundColor: "white",
                     border: "1px solid #e2e8f0",
+                    color: "#10b981",
                   }}
                   onClick={nextPerspective}
                 >
                   <FontAwesomeIcon icon={faChevronRight} />
                 </button>
 
-                {/* Contrôles de zoom */}
                 <div className="position-absolute bottom-0 end-0 m-3">
                   <div className="btn-group-vertical">
                     <button
@@ -925,6 +1036,7 @@ export default function ProductDetailPage() {
                         height: "40px",
                         backgroundColor: "white",
                         border: "1px solid #e2e8f0",
+                        color: "#10b981",
                       }}
                       onClick={handleZoomIn}
                     >
@@ -937,6 +1049,7 @@ export default function ProductDetailPage() {
                         height: "40px",
                         backgroundColor: "white",
                         border: "1px solid #e2e8f0",
+                        color: "#10b981",
                       }}
                       onClick={handleZoomOut}
                     >
@@ -945,7 +1058,6 @@ export default function ProductDetailPage() {
                   </div>
                 </div>
 
-                {/* Indicateur de perspective active */}
                 <div className="position-absolute bottom-0 start-50 translate-middle-x mb-3">
                   <div className="bg-dark bg-opacity-75 text-white px-4 py-2 rounded-pill shadow">
                     <FontAwesomeIcon icon={faLayerGroup} className="me-2" />
@@ -953,7 +1065,6 @@ export default function ProductDetailPage() {
                   </div>
                 </div>
 
-                {/* Coordonnées de rotation */}
                 <div className="position-absolute top-0 start-0 m-3">
                   <div className="bg-white shadow-sm px-3 py-2 rounded-3 border">
                     <div className="small fw-bold">
@@ -966,14 +1077,14 @@ export default function ProductDetailPage() {
                   </div>
                 </div>
 
-                {/* Instructions */}
                 {activePerspective === 0 && (
                   <div className="position-absolute top-0 end-0 m-3">
                     <div className="bg-white shadow-sm px-3 py-2 rounded-3 border">
                       <div className="small">
                         <FontAwesomeIcon
                           icon={faArrowsRotate}
-                          className="me-2 text-primary"
+                          className="me-2"
+                          style={{ color: "#10b981" }}
                         />
                         Cliquez-maintenez pour tourner
                       </div>
@@ -982,13 +1093,13 @@ export default function ProductDetailPage() {
                 )}
               </div>
 
-              {/* Sélecteur de perspectives amélioré */}
               <div className="mb-4">
                 <div className="d-flex justify-content-between align-items-center mb-3">
                   <h6 className="mb-0">
                     <FontAwesomeIcon
                       icon={faEye}
-                      className="me-2 text-primary"
+                      className="me-2"
+                      style={{ color: "#10b981" }}
                     />
                     Sélectionnez une perspective
                   </h6>
@@ -1002,8 +1113,8 @@ export default function ProductDetailPage() {
                       <button
                         className={`btn w-100 ${
                           activePerspective === index
-                            ? "btn-primary"
-                            : "btn-outline-primary"
+                            ? "btn-success"
+                            : "btn-outline-success"
                         } p-2`}
                         onClick={() => handlePerspectiveClick(index)}
                         style={{
@@ -1014,16 +1125,14 @@ export default function ProductDetailPage() {
                           alignItems: "center",
                           justifyContent: "center",
                           borderRadius: "12px",
+                          backgroundColor: activePerspective === index ? "#10b981" : "transparent",
+                          borderColor: "#10b981",
+                          color: activePerspective === index ? "white" : "#10b981",
                         }}
                       >
                         <div className="mb-1">
                           <FontAwesomeIcon
                             icon={faCube}
-                            className={
-                              activePerspective === index
-                                ? "text-white"
-                                : "text-primary"
-                            }
                           />
                         </div>
                         <div className="small fw-bold">
@@ -1035,7 +1144,6 @@ export default function ProductDetailPage() {
                 </div>
               </div>
 
-              {/* Contrôles de rotation améliorés */}
               <div className="row g-3">
                 <div className="col-md-6">
                   <div className="p-3 bg-white border rounded-4 shadow-sm">
@@ -1044,10 +1152,11 @@ export default function ProductDetailPage() {
                         <FontAwesomeIcon
                           icon={faArrowsRotate}
                           className="me-2"
+                          style={{ color: "#10b981" }}
                         />
                         Rotation X
                       </label>
-                      <span className="badge bg-primary rounded-pill">
+                      <span className="badge rounded-pill" style={{ backgroundColor: "#10b981" }}>
                         {rotation.x.toFixed(0)}°
                       </span>
                     </div>
@@ -1063,7 +1172,7 @@ export default function ProductDetailPage() {
                           x: parseInt(e.target.value),
                         }))
                       }
-                      style={{ cursor: "pointer" }}
+                      style={{ cursor: "pointer", accentColor: "#10b981" }}
                     />
                     <div className="d-flex justify-content-between small text-muted">
                       <span>-90°</span>
@@ -1079,10 +1188,11 @@ export default function ProductDetailPage() {
                         <FontAwesomeIcon
                           icon={faArrowsRotate}
                           className="me-2"
+                          style={{ color: "#10b981" }}
                         />
                         Rotation Y
                       </label>
-                      <span className="badge bg-primary rounded-pill">
+                      <span className="badge rounded-pill" style={{ backgroundColor: "#10b981" }}>
                         {rotation.y.toFixed(0)}°
                       </span>
                     </div>
@@ -1098,7 +1208,7 @@ export default function ProductDetailPage() {
                           y: parseInt(e.target.value),
                         }))
                       }
-                      style={{ cursor: "pointer" }}
+                      style={{ cursor: "pointer", accentColor: "#10b981" }}
                     />
                     <div className="d-flex justify-content-between small text-muted">
                       <span>0°</span>
@@ -1109,16 +1219,15 @@ export default function ProductDetailPage() {
                 </div>
               </div>
 
-              {/* Contrôle de zoom */}
               <div className="row mt-3">
                 <div className="col-12">
                   <div className="p-3 bg-white border rounded-4 shadow-sm">
                     <div className="d-flex justify-content-between align-items-center mb-2">
                       <label className="form-label small text-muted mb-0">
-                        <FontAwesomeIcon icon={faSearch} className="me-2" />
+                        <FontAwesomeIcon icon={faSearch} className="me-2" style={{ color: "#10b981" }} />
                         Zoom
                       </label>
-                      <span className="badge bg-success rounded-pill">
+                      <span className="badge rounded-pill" style={{ backgroundColor: "#10b981" }}>
                         {zoom.toFixed(1)}x
                       </span>
                     </div>
@@ -1130,7 +1239,7 @@ export default function ProductDetailPage() {
                       step="0.1"
                       value={zoom}
                       onChange={(e) => setZoom(parseFloat(e.target.value))}
-                      style={{ cursor: "pointer" }}
+                      style={{ cursor: "pointer", accentColor: "#10b981" }}
                     />
                     <div className="d-flex justify-content-between small text-muted">
                       <span>0.5x</span>
@@ -1146,28 +1255,108 @@ export default function ProductDetailPage() {
 
         {/* Colonne de droite - Informations et actions */}
         <div className="col-lg-4">
+          {/* ✅ Carte du vendeur en premier */}
+          {createur && (
+            <div className="card border-0 shadow-lg mb-4" style={{ borderRadius: "24px" }}>
+              <div className="card-header bg-white border-0 py-3 px-4">
+                <h3 className="h5 mb-0">
+                  <FontAwesomeIcon icon={faUser} className="me-2" style={{ color: "#10b981" }} />
+                  À propos du vendeur
+                </h3>
+              </div>
+              <div className="card-body p-4 text-center">
+                <div className="mb-3">
+                  {createur.avatar ? (
+                    <img
+                      src={buildImageUrl(createur.avatar)}
+                      alt={`${createur.prenoms} ${createur.nom}`}
+                      className="rounded-circle border border-3"
+                      style={{
+                        width: "120px",
+                        height: "120px",
+                        objectFit: "cover",
+                        borderColor: "#10b981 !important",
+                      }}
+                      onError={(e) => {
+                        e.currentTarget.src = "https://via.placeholder.com/120x120/10b981/ffffff?text=U";
+                      }}
+                    />
+                  ) : (
+                    <div
+                      className="bg-light rounded-circle mx-auto d-flex align-items-center justify-content-center border border-3"
+                      style={{
+                        width: "120px",
+                        height: "120px",
+                        borderColor: "#10b981",
+                      }}
+                    >
+                      <FontAwesomeIcon icon={faUserCircle} className="fa-4x" style={{ color: "#10b981" }} />
+                    </div>
+                  )}
+                </div>
+
+                <h4 className="fw-bold mb-2">
+                  {createur.prenoms || ""} {createur.nom || "Vendeur"}
+                </h4>
+                <p className="text-muted mb-3">
+                  <FontAwesomeIcon icon={faEnvelope} className="me-2" style={{ color: "#10b981" }} />
+                  {createur.email || "Email non disponible"}
+                </p>
+                {createur.telephone && (
+                  <p className="text-muted mb-4">
+                    <FontAwesomeIcon icon={faPhone} className="me-2" style={{ color: "#10b981" }} />
+                    {createur.telephone}
+                  </p>
+                )}
+
+                <div className="d-grid gap-3">
+                  <button
+                    onClick={handleSendMessage}
+                    className="btn py-3 fw-bold text-white"
+                    style={{ backgroundColor: "#10b981", borderRadius: "12px" }}
+                  >
+                    <FontAwesomeIcon icon={faEnvelope} className="me-2" />
+                    Envoyer un message
+                  </button>
+                  <button
+                    onClick={handleContactWhatsApp}
+                    className="btn py-3 fw-bold text-white"
+                    style={{ backgroundColor: "#25D366", borderRadius: "12px" }}
+                    disabled={!createur.telephone}
+                  >
+                    <FontAwesomeIcon icon={faWhatsappBrand} className="me-2" />
+                    {createur.telephone ? "WhatsApp" : "Numéro non disponible"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Carte de prix et statistiques */}
           <div className="card border-0 shadow-lg mb-4" style={{ borderRadius: "24px" }}>
             <div className="card-body p-4">
               <div className="d-flex justify-content-between align-items-center mb-4">
                 <div>
                   <div className="text-muted mb-1">Prix du produit</div>
-                  <h2 className="text-success fw-bold display-6 mb-2">
+                  <h2 className="fw-bold display-6 mb-2" style={{ color: "#10b981" }}>
                     {formatPrice(product.prix)}
                   </h2>
-                  {product.ancien_prix && (
-                    <div className="text-decoration-line-through text-muted">
-                      Ancien prix: {formatPrice(product.ancien_prix)}
-                    </div>
-                  )}
+                </div>
+                <div className="text-end">
+                  <div className="rounded-4 p-3" style={{ backgroundColor: "rgba(16, 185, 129, 0.1)" }}>
+                    <FontAwesomeIcon
+                      icon={faMoneyBill}
+                      className="fs-2"
+                      style={{ color: "#10b981" }}
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Statistiques rapides */}
               <div className="row g-2 mb-3">
                 <div className="col-4">
                   <div className="text-center p-3 bg-light rounded-4">
-                    <div className="h5 fw-bold mb-1 text-primary">
+                    <div className="h5 fw-bold mb-1" style={{ color: "#10b981" }}>
                       {product.nombre_vues || 0}
                     </div>
                     <div className="text-muted extra-small">
@@ -1187,7 +1376,7 @@ export default function ProductDetailPage() {
                 </div>
                 <div className="col-4">
                   <div className="text-center p-3 bg-light rounded-4">
-                    <div className="h5 fw-bold mb-1 text-success">
+                    <div className="h5 fw-bold mb-1" style={{ color: "#10b981" }}>
                       {product.quantite || 1}
                     </div>
                     <div className="text-muted extra-small">
@@ -1206,13 +1395,15 @@ export default function ProductDetailPage() {
                 <h3 className="h5 mb-0">
                   <FontAwesomeIcon
                     icon={faInfoCircle}
-                    className="me-2 text-primary"
+                    className="me-2"
+                    style={{ color: "#10b981" }}
                   />
                   Informations détaillées
                 </h3>
                 <button
-                  className="btn btn-sm btn-outline-primary rounded-pill"
+                  className="btn btn-sm rounded-pill"
                   onClick={() => setShowDetails(!showDetails)}
+                  style={{ borderColor: "#10b981", color: "#10b981" }}
                 >
                   <FontAwesomeIcon
                     icon={showDetails ? faAngleUp : faAngleDown}
@@ -1228,10 +1419,11 @@ export default function ProductDetailPage() {
                 <div className="row g-3">
                   <div className="col-6">
                     <div className="d-flex align-items-center p-3 bg-light rounded-4 h-100">
-                      <div className="bg-primary bg-opacity-10 rounded-3 p-2 me-3">
+                      <div className="rounded-3 p-2 me-3" style={{ backgroundColor: "rgba(16, 185, 129, 0.1)" }}>
                         <FontAwesomeIcon
                           icon={faBox}
-                          className="text-primary fs-4"
+                          className="fs-4"
+                          style={{ color: "#10b981" }}
                         />
                       </div>
                       <div>
@@ -1244,16 +1436,17 @@ export default function ProductDetailPage() {
                   </div>
                   <div className="col-6">
                     <div className="d-flex align-items-center p-3 bg-light rounded-4 h-100">
-                      <div className="bg-success bg-opacity-10 rounded-3 p-2 me-3">
+                      <div className="rounded-3 p-2 me-3" style={{ backgroundColor: "rgba(16, 185, 129, 0.1)" }}>
                         <FontAwesomeIcon
-                          icon={faEye}
-                          className="text-success fs-4"
+                          icon={faTag}
+                          className="fs-4"
+                          style={{ color: "#10b981" }}
                         />
                       </div>
                       <div>
-                        <div className="text-muted small">Vues</div>
+                        <div className="text-muted small">Catégorie</div>
                         <div className="h4 fw-bold mb-0">
-                          {product.nombre_vues || 0}
+                          {product.categorie?.libelle || "Non catégorisé"}
                         </div>
                       </div>
                     </div>
@@ -1262,7 +1455,7 @@ export default function ProductDetailPage() {
 
                 <div className="mt-4">
                   <h5 className="mb-3">
-                    <FontAwesomeIcon icon={faInfoCircle} className="me-2 text-primary" />
+                    <FontAwesomeIcon icon={faInfoCircle} className="me-2" style={{ color: "#10b981" }} />
                     Description
                   </h5>
                   <div className="p-3 bg-light rounded-4">
@@ -1277,96 +1470,41 @@ export default function ProductDetailPage() {
                     <div className="col-6">
                       <div className="p-3 border rounded-4">
                         <div className="text-muted small">
-                          <FontAwesomeIcon icon={faCalendar} className="me-2" />
-                          Créé le
+                          <FontAwesomeIcon icon={faCalendar} className="me-2" style={{ color: "#10b981" }} />
+                          Date de création
                         </div>
                         <div className="fw-bold">
-                          {new Date(product.createdAt).toLocaleDateString(
-                            "fr-FR",
-                            {
-                              day: "2-digit",
-                              month: "long",
-                              year: "numeric",
-                            },
-                          )}
+                          {formatDate(product.dateCreation)}
                         </div>
                       </div>
                     </div>
                     <div className="col-6">
                       <div className="p-3 border rounded-4">
                         <div className="text-muted small">
-                          <FontAwesomeIcon icon={faCalendar} className="me-2" />
-                          Modifié le
+                          <FontAwesomeIcon icon={faCalendar} className="me-2" style={{ color: "#10b981" }} />
+                          Dernière modification
                         </div>
                         <div className="fw-bold">
-                          {new Date(product.updatedAt).toLocaleDateString(
-                            "fr-FR",
-                            {
-                              day: "2-digit",
-                              month: "long",
-                              year: "numeric",
-                            },
-                          )}
+                          {formatDate(product.updatedAt)}
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
-
-                {/* Informations boutique */}
-                {product.boutique && (
-                  <div className="mt-4">
-                    <h5 className="mb-3">
-                      <FontAwesomeIcon
-                        icon={faStore}
-                        className="me-2 text-primary"
-                      />
-                      Boutique
-                    </h5>
-                    <div className="card border rounded-4">
-                      <div className="card-body p-3">
-                        <div className="d-flex align-items-center">
-                          <div className="flex-shrink-0">
-                            <div className="bg-primary bg-opacity-10 rounded-3 p-2">
-                              <FontAwesomeIcon
-                                icon={faStore}
-                                className="text-primary fs-4"
-                              />
-                            </div>
-                          </div>
-                          <div className="flex-grow-1 ms-3">
-                            <h6 className="mb-1 fw-bold">
-                              {product.boutique.nom}
-                            </h6>
-                            <p className="text-muted small mb-2">
-                              {product.boutique.description}
-                            </p>
-                            <span
-                              className={`badge ${product.boutique.statut === "actif" ? "bg-success" : "bg-warning"} rounded-pill`}
-                            >
-                              {product.boutique.statut}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
           </div>
 
-          {/* ✅ Carte des actions d'administration avec couleurs dynamiques */}
+          {/* ✅ Carte des actions d'administration */}
           <div className="card border-0 shadow-lg" style={{ borderRadius: "24px" }}>
             <div className="card-header bg-white border-0 py-3 px-4">
               <h3 className="h5 mb-0">
-                <FontAwesomeIcon icon={faCog} className="me-2 text-primary" />
+                <FontAwesomeIcon icon={faCog} className="me-2" style={{ color: "#10b981" }} />
                 Actions d'administration
               </h3>
             </div>
             <div className="card-body p-4">
               <div className="d-grid gap-3">
-                {/* Validation/Rejet */}
                 {(product.statut === "en_attente" ||
                   product.statut === "en-attente") && (
                   <div className="row g-2">
@@ -1413,12 +1551,10 @@ export default function ProductDetailPage() {
                   </div>
                 )}
 
-                {/* ✅ Publication/Dépublication - Couleur dynamique */}
                 <button
-                  className="btn w-100 py-3"
+                  className="btn w-100 py-3 text-white"
                   style={{
                     backgroundColor: product.estPublie ? "#f59e0b" : "#10b981",
-                    color: "white",
                     borderRadius: "12px",
                     border: "none",
                     fontWeight: "600",
@@ -1440,12 +1576,10 @@ export default function ProductDetailPage() {
                   {product.estPublie ? "Dépublier le produit" : "Publier le produit"}
                 </button>
 
-                {/* ✅ Blocage/Déblocage - Couleur dynamique */}
                 <button
-                  className="btn w-100 py-3"
+                  className="btn w-100 py-3 text-white"
                   style={{
                     backgroundColor: product.estBloque ? "#10b981" : "#ef4444",
-                    color: "white",
                     borderRadius: "12px",
                     border: "none",
                     fontWeight: "600",
@@ -1467,12 +1601,10 @@ export default function ProductDetailPage() {
                   {product.estBloque ? "Débloquer le produit" : "Bloquer le produit"}
                 </button>
 
-                {/* ✅ Suppression - Rouge fixe */}
                 <button
-                  className="btn w-100 py-3"
+                  className="btn w-100 py-3 text-white"
                   style={{
                     backgroundColor: "#ef4444",
-                    color: "white",
                     borderRadius: "12px",
                     border: "none",
                     fontWeight: "600",
@@ -1492,7 +1624,6 @@ export default function ProductDetailPage() {
         </div>
       </div>
 
-      {/* Styles supplémentaires */}
       <style jsx>{`
         .bg-white {
           background-color: #ffffff !important;
@@ -1500,14 +1631,6 @@ export default function ProductDetailPage() {
 
         .shadow-lg {
           box-shadow: 0 10px 40px -5px rgba(0, 0, 0, 0.1) !important;
-        }
-
-        .transition-all {
-          transition: all 0.3s ease;
-        }
-
-        .cursor-pointer {
-          cursor: pointer;
         }
 
         .extra-small {

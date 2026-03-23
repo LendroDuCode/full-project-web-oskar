@@ -377,29 +377,34 @@ export default function DataTable({
     return configs[type as keyof typeof configs] || configs.produit;
   };
 
-  const getStatusBadge = (item: ContentItem) => {
-    if (item.estBloque) {
-      return {
-        label: "Bloqué",
-        color: "#ef4444",
-        icon: faBan,
-      };
-    }
-    
-    if (item.estPublie) {
-      return {
-        label: "Publié",
-        color: "#10b981",
-        icon: faGlobe,
-      };
-    }
-    
+// Dans DataTable.tsx, corrigez la fonction getStatusBadge
+
+const getStatusBadge = (item: ContentItem) => {
+  // ✅ CORRECTION : Vérifier d'abord le blocage
+  if (item.estBloque) {
     return {
-      label: "En attente",
-      color: "#f59e0b",
-      icon: faClock,
+      label: "Bloqué",
+      color: "#ef4444",
+      icon: faBan,
     };
+  }
+  
+  // Ensuite vérifier la publication
+  if (item.estPublie) {
+    return {
+      label: "Publié",
+      color: "#10b981",
+      icon: faGlobe,
+    };
+  }
+  
+  // Sinon, c'est en attente
+  return {
+    label: "En attente",
+    color: "#f59e0b",
+    icon: faClock,
   };
+};
 
   // ============================================
   // GESTION DES CONFIRMATIONS

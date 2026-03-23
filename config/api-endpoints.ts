@@ -637,7 +637,16 @@ CATEGORIES: {
     LIST_FAVORIS_DON_VENDEUR: withBaseUrl("/dons/favoris/vendeur"),
     LISTE_DON_PUBLIE_VENDEUR: withBaseUrl("/dons/liste-don-publies-pour-vendeur"),
     LISTE_DONS_PUBLIE_UTILISATEUR: withBaseUrl("/dons/liste-don-publies-pour-utilisateur"),
+    PUBLIER_DON_AI: withBaseUrl("/admin/ia-moderation/publier"),
   },
+
+   IA_MODERATION: {
+    PUBLIER_DON: "/admin/ia-moderation/publier",        // POST - Publier avec IA
+    CONFIGURER_AI_MODERATION: "/admin/ia-moderation/config",        // PATCH - Modération avec IA
+    VERIFIER_DON: "/admin/ia-moderation/verifier",      // POST - Vérifier seulement
+    STATUT: "/admin/ia-moderation/status",              // GET - Statut de l'IA
+  },
+  
 
   // Notes
   NOTES: {

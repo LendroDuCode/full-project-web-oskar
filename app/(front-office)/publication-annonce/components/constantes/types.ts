@@ -625,3 +625,25 @@ export type {
   ProductCreationFormProps as ProductFormProps,
   SellerConversionFormProps as ConversionFormProps,
 };
+
+
+// Ajoutez ces interfaces
+export interface Suggestion {
+  id: string;
+  type: 'orthographe' | 'clarte' | 'amelioration';
+  originalText: string;
+  suggestedText: string;
+  explication: string;
+  champ: 'titre' | 'description' | 'localisation';
+  confiance: number;
+}
+
+export interface ModerationResult {
+  estConforme: boolean;
+  estTraiteParIA: boolean;
+  categoriesViolées: string[];
+  scores: Record<string, number>;
+  messageIA?: string;
+  suggestions?: Suggestion[];
+  besoinActionUtilisateur?: boolean;
+}

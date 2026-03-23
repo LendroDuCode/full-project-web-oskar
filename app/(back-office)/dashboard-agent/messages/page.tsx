@@ -82,6 +82,7 @@ import {
   faForward,
   faCopy,
   faHome,
+  faSpinner,
 } from "@fortawesome/free-solid-svg-icons";
 
 // Import des services et hooks
@@ -123,18 +124,16 @@ const getInitials = (nom?: string, prenoms?: string, email?: string): string => 
 const buildAvatarUrl = (avatarPath: string | null | undefined): string | null => {
   if (!avatarPath) return null;
   
-  // Si c'est déjà une URL complète
   if (avatarPath.startsWith('http')) {
     return avatarPath;
   }
   
-  // Construire l'URL vers le serveur de fichiers
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3005';
   return `${API_URL}/api/files/${avatarPath}`;
 };
 
 // ============================================
-// COMPOSANT D'AVATAR AVEC FALLBACK VERS INITIALES
+// COMPOSANT D'AVATAR
 // ============================================
 const UserAvatar = ({
   avatar,
@@ -557,24 +556,6 @@ const MessageBubble = ({
     setShowOptions(false);
   };
 
-  const getTypeColor = () => {
-    const type = (message.type || "").toUpperCase();
-    switch (type) {
-      case "ALERT":
-        return "#dc3545";
-      case "WARNING":
-        return "#ffc107";
-      case "INFO":
-        return "#0dcaf0";
-      case "NOTIFICATION":
-        return "#0d6efd";
-      case "SUPER_ADMIN":
-        return "#6f42c1";
-      default:
-        return "#6c757d";
-    }
-  };
-
   return (
     <div
       className={`d-flex ${isOwn ? "justify-content-end" : "justify-content-start"} mb-3`}
@@ -764,36 +745,6 @@ const ChatHeader = ({
       }
     }
     return "Hors ligne";
-  };
-
-  const getUserTypeColor = (userType: string) => {
-    switch (userType) {
-      case "super_admin":
-        return "#6f42c1";
-      case "admin":
-        return "#0dcaf0";
-      case "agent":
-        return "#0d6efd";
-      case "vendeur":
-        return "#ffc107";
-      default:
-        return "#198754";
-    }
-  };
-
-  const getUserTypeIcon = (userType: string) => {
-    switch (userType) {
-      case "super_admin":
-        return faCrown;
-      case "admin":
-        return faShield;
-      case "agent":
-        return faUserTie;
-      case "vendeur":
-        return faStore;
-      default:
-        return faUser;
-    }
   };
 
   return (
@@ -995,36 +946,6 @@ const ConversationItem = ({
       : lastMessage.contenu;
   };
 
-  const getUserTypeColor = (userType: string) => {
-    switch (userType) {
-      case "super_admin":
-        return "#6f42c1";
-      case "admin":
-        return "#0dcaf0";
-      case "agent":
-        return "#0d6efd";
-      case "vendeur":
-        return "#ffc107";
-      default:
-        return "#198754";
-    }
-  };
-
-  const getUserTypeIcon = (userType: string) => {
-    switch (userType) {
-      case "super_admin":
-        return faCrown;
-      case "admin":
-        return faShield;
-      case "agent":
-        return faUserTie;
-      case "vendeur":
-        return faStore;
-      default:
-        return faUser;
-    }
-  };
-
   return (
     <div
       className={`d-flex align-items-center p-3 border-bottom cursor-pointer ${
@@ -1113,36 +1034,6 @@ const ContactInfo = ({
         return "Vendeur";
       default:
         return "Utilisateur";
-    }
-  };
-
-  const getUserTypeIcon = (userType: string) => {
-    switch (userType) {
-      case "super_admin":
-        return faCrown;
-      case "admin":
-        return faShield;
-      case "agent":
-        return faUserTie;
-      case "vendeur":
-        return faStore;
-      default:
-        return faUser;
-    }
-  };
-
-  const getUserTypeColor = (userType: string) => {
-    switch (userType) {
-      case "super_admin":
-        return "#6f42c1";
-      case "admin":
-        return "#0dcaf0";
-      case "agent":
-        return "#0d6efd";
-      case "vendeur":
-        return "#ffc107";
-      default:
-        return "#198754";
     }
   };
 
@@ -1243,24 +1134,6 @@ const formatDate = (dateString: string) => {
       hour: "2-digit",
       minute: "2-digit",
     });
-  } catch {
-    return "Date inconnue";
-  }
-};
-
-const formatLastMessageDate = (dateString?: string) => {
-  if (!dateString) return "Jamais";
-  try {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffDays === 0)
-      return date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-    if (diffDays === 1) return "Hier";
-    if (diffDays < 7) return `Il y a ${diffDays} jours`;
-    return date.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
   } catch {
     return "Date inconnue";
   }
@@ -1374,7 +1247,7 @@ function MessagesContent() {
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
   const isMounted = useRef(true);
 
-  // ✅ Fonction pour naviguer vers l'accueil (CORRIGÉE)
+  // ✅ Fonction pour naviguer vers l'accueil
   const navigateToHome = useCallback(() => {
     router.push('/');
   }, [router]);
@@ -1460,21 +1333,6 @@ function MessagesContent() {
           ),
         );
 
-        setConversations((prev) =>
-          prev.map((conv) => ({
-            ...conv,
-            messages: conv.messages.map((msg) =>
-              msg.uuid === messageId
-                ? { ...msg, estLu: true, dateLecture: new Date().toISOString(), status: "read" as const }
-                : msg
-            ),
-            unreadCount:
-              conv.contact.email === currentConversation?.contact.email
-                ? 0
-                : conv.unreadCount,
-          }))
-        );
-
         if (currentConversation) {
           setCurrentConversation((prev) =>
             prev
@@ -1504,68 +1362,8 @@ function MessagesContent() {
     [currentConversation, showToast],
   );
 
-  const handleMarkAsUnread = useCallback(
-    async (messageId: string) => {
-      try {
-        await api.patch(API_ENDPOINTS.MESSAGERIE.MARK_UNREAD(messageId));
-
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.uuid === messageId
-              ? { ...msg, estLu: false, dateLecture: null, status: "delivered" as const }
-              : msg,
-          ),
-        );
-
-        setMessagesEnvoyes((prev) =>
-          prev.map((msg) =>
-            msg.uuid === messageId
-              ? { ...msg, estLu: false, dateLecture: null, status: "delivered" as const }
-              : msg,
-          ),
-        );
-
-        setConversations((prev) =>
-          prev.map((conv) => ({
-            ...conv,
-            messages: conv.messages.map((msg) =>
-              msg.uuid === messageId
-                ? { ...msg, estLu: false, dateLecture: null, status: "delivered" as const }
-                : msg
-            ),
-          }))
-        );
-
-        if (currentConversation) {
-          setCurrentConversation((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  messages: prev.messages.map((msg) =>
-                    msg.uuid === messageId
-                      ? { ...msg, estLu: false, dateLecture: null, status: "delivered" as const }
-                      : msg
-                  ),
-                }
-              : null
-          );
-        }
-
-        showToast(
-          "info",
-          "📬 Message marqué comme non lu",
-          "Le message a été marqué comme non lu",
-          { duration: 3000, messageId },
-        );
-      } catch (err: any) {
-        console.error("❌ Erreur lors du marquage comme non lu:", err);
-      }
-    },
-    [currentConversation, showToast],
-  );
-
   // ============================================
-  // FONCTION DE SUPPRESSION DE MESSAGE AVEC MODALE
+  // FONCTION DE SUPPRESSION DE MESSAGE
   // ============================================
   const openDeleteModal = useCallback((message: Message) => {
     setMessageToDelete(message);
@@ -1588,13 +1386,6 @@ function MessagesContent() {
 
       setMessages((prev) => prev.filter((msg) => msg.uuid !== messageToDelete.uuid));
       setMessagesEnvoyes((prev) => prev.filter((msg) => msg.uuid !== messageToDelete.uuid));
-
-      setConversations((prev) =>
-        prev.map((conv) => ({
-          ...conv,
-          messages: conv.messages.filter((msg) => msg.uuid !== messageToDelete.uuid),
-        }))
-      );
 
       if (currentConversation) {
         setCurrentConversation((prev) =>
@@ -1625,24 +1416,7 @@ function MessagesContent() {
   }, [messageToDelete, currentConversation, showToast]);
 
   // ============================================
-  // FONCTION UTILITAIRE POUR LE CACHE API
-  // ============================================
-  const cachedApiCall = useCallback(
-    async (key: string, apiCall: () => Promise<any>) => {
-      const cached = apiCache.current.get(key);
-      if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-        return cached.data;
-      }
-
-      const data = await apiCall();
-      apiCache.current.set(key, { data, timestamp: Date.now() });
-      return data;
-    },
-    [],
-  );
-
-  // ============================================
-  // GESTION DES PARAMÈTRES D'URL
+  // GESTION DES PARAMÈTRES D'URL - CORRIGÉE
   // ============================================
   const handleUrlParams = useCallback(() => {
     const destinataireUuid = searchParams.get("destinataireUuid");
@@ -1658,21 +1432,32 @@ function MessagesContent() {
         sujet,
       });
 
-      const existingConv = conversations.find(
+      // ✅ CRÉER OU TROUVER LA CONVERSATION
+      let existingConversation = conversations.find(
         (c) => c.contact.email === destinataireEmail
       );
 
-      if (existingConv) {
-        setCurrentConversation(existingConv);
+      if (existingConversation) {
+        // Si la conversation existe déjà, la charger
+        setCurrentConversation(existingConversation);
+        setShowMobileConversations(false);
+        
+        // Mettre à jour le formulaire
+        setNewMessage((prev) => ({
+          ...prev,
+          destinataireEmail: destinataireEmail,
+          destinataireUuid: destinataireUuid || existingConversation.contact.uuid,
+          sujet: sujet || `Message pour ${destinataireNom || destinataireEmail}`,
+          contenu: "",
+          type: "notification",
+        }));
       } else {
+        // ✅ CRÉER UN NOUVEAU CONTACT TEMPORAIRE
         const contact: ContactConversation = {
           uuid: destinataireUuid || `contact-${Date.now()}`,
           email: destinataireEmail,
           nom: destinataireNom?.split(" ").pop() || "",
-          prenoms:
-            destinataireNom?.split(" ").slice(0, -1).join(" ") ||
-            destinataireNom ||
-            "Contact",
+          prenoms: destinataireNom?.split(" ").slice(0, -1).join(" ") || destinataireNom || "Contact",
           telephone: "",
           userType: detectUserTypeFromEmail(destinataireEmail),
           est_verifie: true,
@@ -1681,6 +1466,7 @@ function MessagesContent() {
           online: false,
         };
 
+        // ✅ CRÉER UNE NOUVELLE CONVERSATION
         const newConv: Conversation = {
           contact,
           messages: [],
@@ -1688,21 +1474,28 @@ function MessagesContent() {
           unreadCount: 0,
         };
 
+        // Ajouter la nouvelle conversation à la liste
         setConversations((prev) => [newConv, ...prev]);
         setCurrentConversation(newConv);
+        setShowMobileConversations(false);
+
+        // Mettre à jour le formulaire
+        setNewMessage((prev) => ({
+          ...prev,
+          destinataireEmail: destinataireEmail,
+          destinataireUuid: destinataireUuid || "",
+          sujet: sujet || `Message pour ${destinataireNom || destinataireEmail}`,
+          contenu: "",
+          type: "notification",
+        }));
       }
 
-      setNewMessage((prev) => ({
-        ...prev,
-        destinataireEmail: destinataireEmail,
-        destinataireUuid: destinataireUuid || "",
-        sujet: sujet || `Message pour ${destinataireNom || destinataireEmail}`,
-        contenu: "",
-        type: "notification",
-      }));
+      // ✅ FOCUS SUR L'INPUT
+      setTimeout(() => {
+        messageInputRef.current?.focus();
+      }, 300);
 
-      setShowMobileConversations(false);
-
+      // ✅ NETTOYER L'URL
       const url = new URL(window.location.href);
       url.search = "";
       router.replace(url.pathname, { scroll: false });
@@ -1752,61 +1545,53 @@ function MessagesContent() {
   const fetchSuperAdmins = useCallback(async () => {
     setLoading((prev) => ({ ...prev, superAdmins: true }));
     try {
-      const response = await cachedApiCall("superAdmins", () =>
-        api.get<{ data: SuperAdmin[] }>(API_ENDPOINTS.AUTH.ADMIN.LISTE_ADMIN),
-      );
+      const response = await api.get<{ data: SuperAdmin[] }>(API_ENDPOINTS.AUTH.ADMIN.LISTE_ADMIN);
       setSuperAdmins(response?.data || []);
     } catch (err: any) {
       console.error("❌ Erreur chargement super-admins:", err);
     } finally {
       setLoading((prev) => ({ ...prev, superAdmins: false }));
     }
-  }, [cachedApiCall]);
+  }, []);
 
   const fetchAgents = useCallback(async () => {
     setLoading((prev) => ({ ...prev, agents: true }));
     try {
-      const response = await cachedApiCall("agents", () =>
-        api.get<{ data: Agent[] }>(API_ENDPOINTS.ADMIN.AGENTS.LIST),
-      );
+      const response = await api.get<{ data: Agent[] }>(API_ENDPOINTS.ADMIN.AGENTS.LIST);
       setAgents(response?.data || []);
     } catch (err: any) {
       console.error("❌ Error fetching agents:", err);
     } finally {
       setLoading((prev) => ({ ...prev, agents: false }));
     }
-  }, [cachedApiCall]);
+  }, []);
 
   const fetchVendeurs = useCallback(async () => {
     setLoading((prev) => ({ ...prev, vendeurs: true }));
     try {
-      const response = await cachedApiCall("vendeurs", () =>
-        api.get<{ data: Vendeur[] }>(API_ENDPOINTS.ADMIN.VENDEURS.LIST),
-      );
+      const response = await api.get<{ data: Vendeur[] }>(API_ENDPOINTS.ADMIN.VENDEURS.LIST);
       setVendeurs(response?.data || []);
     } catch (err: any) {
       console.error("❌ Error fetching vendeurs:", err);
     } finally {
       setLoading((prev) => ({ ...prev, vendeurs: false }));
     }
-  }, [cachedApiCall]);
+  }, []);
 
   const fetchUtilisateurs = useCallback(async () => {
     setLoading((prev) => ({ ...prev, utilisateurs: true }));
     try {
-      const response = await cachedApiCall("utilisateurs", () =>
-        api.get<{ data: Utilisateur[] }>(API_ENDPOINTS.ADMIN.USERS.LIST),
-      );
+      const response = await api.get<{ data: Utilisateur[] }>(API_ENDPOINTS.ADMIN.USERS.LIST);
       setUtilisateurs(response?.data || []);
     } catch (err: any) {
       console.error("❌ Error fetching utilisateurs:", err);
     } finally {
       setLoading((prev) => ({ ...prev, utilisateurs: false }));
     }
-  }, [cachedApiCall]);
+  }, []);
 
   // ============================================
-  // ✅ CHARGEMENT DES MESSAGES REÇUS AVEC CACHE
+  // CHARGEMENT DES MESSAGES REÇUS
   // ============================================
   const fetchMessagesRecus = useCallback(
     async (profileEmail?: string, profileUuid?: string, forceRefresh = false) => {
@@ -1884,7 +1669,7 @@ function MessagesContent() {
   );
 
   // ============================================
-  // ✅ CHARGEMENT DES MESSAGES ENVOYÉS AVEC CACHE
+  // CHARGEMENT DES MESSAGES ENVOYÉS
   // ============================================
   const fetchMessagesEnvoyes = useCallback(
     async (profileNom?: string, profileEmail?: string, profileUuid?: string, forceRefresh = false) => {
@@ -2083,7 +1868,9 @@ function MessagesContent() {
     [messages, messagesEnvoyes],
   );
 
-
+  // ============================================
+  // CHARGEMENT INITIAL
+  // ============================================
   useEffect(() => {
     isMounted.current = true;
 
@@ -2149,26 +1936,14 @@ function MessagesContent() {
   // GESTION DES PARAMÈTRES URL APRÈS CHARGEMENT
   // ============================================
   useEffect(() => {
-    if (agentProfile && !loading.initial && conversations.length > 0) {
-      handleUrlParams();
+    if (agentProfile && !loading.initial) {
+      // Attendre que les conversations soient chargées
+      const timer = setTimeout(() => {
+        handleUrlParams();
+      }, 500);
+      return () => clearTimeout(timer);
     }
   }, [agentProfile, loading.initial, conversations.length, handleUrlParams]);
-
-  // ============================================
-  // STATISTIQUES
-  // ============================================
-  const stats = useMemo(
-    () => ({
-      totalUsers:
-        superAdmins.length + agents.length + vendeurs.length + utilisateurs.length,
-      totalMessages: messages.length + messagesEnvoyes.length,
-      unreadMessages: messages.filter((m) => !m.estLu).length,
-      sentMessages: messagesEnvoyes.length,
-      superAdmins: superAdmins.length,
-      totalConversations: conversations.length,
-    }),
-    [superAdmins, agents, vendeurs, utilisateurs, messages, messagesEnvoyes, conversations.length],
-  );
 
   // ============================================
   // COMBINER TOUS LES UTILISATEURS POUR LES CONTACTS
@@ -2287,13 +2062,6 @@ function MessagesContent() {
       conversation.messages
         .filter((m) => !m.estLu && m.expediteurEmail !== agentProfile?.email)
         .forEach((m) => {
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.uuid === m.uuid
-                ? { ...msg, estLu: true, dateLecture: new Date().toISOString(), status: "read" as const }
-                : msg,
-            ),
-          );
           handleMarkAsRead(m.uuid).catch(() => {});
         });
     } else {
@@ -2356,7 +2124,7 @@ function MessagesContent() {
 
         console.log("✅ Message envoyé avec succès, réponse:", response);
 
-        const newMessage: Message = {
+        const newMessageObj: Message = {
           uuid: response.uuid || `temp-${Date.now()}`,
           sujet: messageData.sujet,
           contenu: messageData.contenu,
@@ -2374,13 +2142,13 @@ function MessagesContent() {
           status: "sent",
         };
 
-        setMessagesEnvoyes((prev) => [newMessage, ...prev]);
-        messagesCache.current.envoyes = [newMessage, ...messagesCache.current.envoyes];
+        setMessagesEnvoyes((prev) => [newMessageObj, ...prev]);
+        messagesCache.current.envoyes = [newMessageObj, ...messagesCache.current.envoyes];
 
         const updatedConversation = {
           ...currentConversation,
-          messages: [...currentConversation.messages, newMessage],
-          lastMessage: newMessage,
+          messages: [...currentConversation.messages, newMessageObj],
+          lastMessage: newMessageObj,
         };
         
         setCurrentConversation(updatedConversation);
@@ -2618,10 +2386,9 @@ function MessagesContent() {
               maxWidth: "350px",
             }}
           >
-            {/* En-tête de la liste avec logo OSKAR - CORRIGÉ */}
+            {/* En-tête de la liste avec logo OSKAR */}
             <div className="p-3 border-bottom" style={{ background: "#f0f2f5" }}>
               <div className="d-flex align-items-center justify-content-between mb-3">
-                {/* 👇 LOGO OSKAR cliquable - Version corrigée */}
                 <div 
                   className="d-flex align-items-center gap-2" 
                   style={{ cursor: "pointer" }}
@@ -2685,7 +2452,7 @@ function MessagesContent() {
                 />
               </div>
 
-              {/* Filtre "Tous" uniquement - affiché de façon statique pour information */}
+              {/* Filtre "Tous" uniquement */}
               <div className="mt-3">
                 <span className="badge bg-success" style={{ borderRadius: "20px", fontSize: "0.8rem", padding: "6px 12px" }}>
                   Tous les contacts
@@ -2813,7 +2580,6 @@ function MessagesContent() {
                     <span className="badge bg-warning px-3 py-2">Vendeurs</span>
                     <span className="badge bg-success px-3 py-2">Utilisateurs</span>
                   </div>
-                  {/* 👇 LOGO OSKAR QUAND AUCUN CONTACT - CORRIGÉ */}
                   <div 
                     className="d-flex align-items-center justify-content-center gap-2 mx-auto mt-4"
                     style={{ cursor: "pointer", maxWidth: "fit-content" }}

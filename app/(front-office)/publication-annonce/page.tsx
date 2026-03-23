@@ -13,6 +13,12 @@ import {
   faInfoCircle,
   faExclamationCircle,
   faTimes,
+  faRobot,
+  faShield,
+  faGavel,
+  faBan,
+  faThumbsUp,
+  faClock,
 } from "@fortawesome/free-solid-svg-icons";
 import colors from "../../shared/constants/colors";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
@@ -27,19 +33,21 @@ import {
   Boutique,
   SaleMode,
   ConditionOption,
+  Suggestion,
 } from "./components/constantes/types";
 import DonForm from "./components/DonForm";
 import EchangeForm from "./components/ExchangeForm";
 import VenteForm from "./components/SaleForm";
 import CreateBoutiqueModal from "@/app/(back-office)/dashboard-vendeur/boutique/apercu/components/modals/CreateBoutiqueModal";
 import VendeurRegisterModal from "@/app/(front-office)/auth/register/VendeurRegisterModal";
+import AISuggestionsModal from "./components/AISuggestionsModal";
 
 const PublishAdModal: React.FC<PublishAdModalProps> = ({
   visible,
   onHide,
-  isLoggedIn,
+  isLoggedIn: isLoggedInProp,
   onLoginRequired,
-  user,
+  user: userProp,
 }) => {
   const [adType, setAdType] = useState<"don" | "exchange" | "sale" | null>(
     null,
@@ -50,6 +58,16 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+  const notificationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // États pour l'IA
+  const [showAISuggestions, setShowAISuggestions] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<Suggestion[]>([]);
+  const [pendingDonData, setPendingDonData] = useState<DonData | null>(null);
+  const [aiModerationEnabled, setAiModerationEnabled] = useState(true);
+  
+  // 🔥 État pour l'utilisateur récupéré depuis localStorage
+  const [localUser, setLocalUser] = useState<any>(null);
 
   // État pour les catégories
   const [categories, setCategories] = useState<Category[]>([]);
@@ -69,6 +87,30 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
 
   // Référence pour suivre si la boutique a été présélectionnée
   const boutiquePreselectedRef = useRef(false);
+
+  // 🔥 Récupérer l'utilisateur depuis localStorage si non passé en props
+  useEffect(() => {
+    if (userProp) {
+      console.log("📦 Utilisateur reçu via props:", userProp);
+      setLocalUser(userProp);
+    } else {
+      try {
+        const userStr = localStorage.getItem("oskar_user");
+        if (userStr) {
+          const userData = JSON.parse(userStr);
+          console.log("📦 Utilisateur récupéré depuis localStorage:", userData);
+          setLocalUser(userData);
+        } else {
+          console.log("⚠️ Aucun utilisateur trouvé dans localStorage");
+        }
+      } catch (error) {
+        console.error("❌ Erreur récupération utilisateur:", error);
+      }
+    }
+  }, [userProp]);
+
+  const user = localUser;
+  const isLoggedIn = isLoggedInProp || !!user;
 
   const [donData, setDonData] = useState<DonData>({
     description: "",
@@ -130,8 +172,8 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
   // COULEURS POUR CHAQUE TYPE D'ANNONCE
   const colorsByType = {
     don: {
-      primary: "#8b5cf6", // Violet
-      light: "#ede9fe",   // Violet très clair
+      primary: "#8b5cf6",
+      light: "#ede9fe",
       gradient: "linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)",
       iconBg: "#f5f3ff",
       border: "#8b5cf6",
@@ -139,7 +181,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       bg: "bg-violet-50",
     },
     exchange: {
-      primary: "#007aff", // Bleu
+      primary: "#007aff",
       light: "#e6f2ff",
       gradient: "linear-gradient(135deg, #007aff 0%, #5856d6 100%)",
       iconBg: "#e6f2ff",
@@ -148,7 +190,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       bg: "bg-blue-50",
     },
     sale: {
-      primary: "#34c759", // Vert
+      primary: "#34c759",
       light: "#e6f7ec",
       gradient: "linear-gradient(135deg, #34c759 0%, #30b0c7 100%)",
       iconBg: "#e6f7ec",
@@ -200,6 +242,40 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
   // Vérifier si l'utilisateur est un vendeur
   const isVendeur = user?.type?.toLowerCase() === "vendeur";
 
+  // ✅ Vérifier le statut de l'IA au chargement
+  useEffect(() => {
+    const checkAIStatus = async () => {
+      console.log("🔍 Vérification du statut IA pour l'utilisateur:", user?.type);
+      console.log("🔍 isVendeur:", isVendeur);
+      console.log("🔍 isLoggedIn:", isLoggedIn);
+      
+      if (!isLoggedIn) {
+        console.log("⚠️ Utilisateur non connecté, IA désactivée");
+        setAiModerationEnabled(false);
+        return;
+      }
+      
+      try {
+        const response = await api.get(API_ENDPOINTS.IA_MODERATION.STATUT);
+        console.log("✅ Statut IA récupéré depuis l'API:", response);
+        
+        const isEnabled = response.isModerationEnabled === true;
+        
+        setAiModerationEnabled(isEnabled);
+        console.log(`🔧 IA modération ${isEnabled ? 'ACTIVÉE' : 'DÉSACTIVÉE'} pour ${user?.type || 'utilisateur'}`);
+        
+      } catch (error) {
+        console.error("❌ Erreur vérification statut IA:", error);
+        setAiModerationEnabled(true);
+        console.log("⚠️ IA activée par défaut (après erreur API)");
+      }
+    };
+    
+    if (visible) {
+      checkAIStatus();
+    }
+  }, [visible, isLoggedIn, user]);
+
   // Charger les catégories quand le modal s'ouvre
   useEffect(() => {
     const fetchCategories = async () => {
@@ -212,28 +288,14 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         console.log("🟢 PublishAdModal - Categories API raw response:", response);
 
         if (Array.isArray(response)) {
-          // ÉTAPE 1: Filtrer uniquement les catégories actives et non supprimées
           const activeCategories = response.filter(
             (cat: Category) => !cat.is_deleted && cat.deleted_at === null
           );
 
-          console.log("🟢 PublishAdModal - Active categories:", activeCategories.length);
-
-          // ÉTAPE 2: Identifier les catégories principales (sans parent ou path vide/null)
           const mainCategories = activeCategories.filter(
             (cat: Category) => !cat.path || cat.path === null || cat.path === ""
           );
 
-          console.log(
-            "🟢 PublishAdModal - Main categories found:",
-            mainCategories.map((c: Category) => ({
-              libelle: c.libelle,
-              id: c.id,
-              hasEnfants: c.enfants?.length || 0,
-            })),
-          );
-
-          // ÉTAPE 3: Éliminer les doublons basés sur le libellé
           const uniqueCategoriesMap = new Map<string, Category>();
 
           mainCategories.forEach((category: Category) => {
@@ -244,8 +306,6 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
             } else {
               const existingId = existing.id || 0;
               const currentId = category.id || 0;
-
-              // Garder la catégorie avec l'ID le plus élevé (la plus récente)
               if (currentId > existingId) {
                 uniqueCategoriesMap.set(category.libelle, category);
               }
@@ -254,10 +314,8 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
 
           const uniqueMainCategories = Array.from(uniqueCategoriesMap.values());
 
-          // ÉTAPE 4: Pour chaque catégorie principale, traiter les enfants
           const processedCategories: Category[] = uniqueMainCategories.map((category: Category) => {
             const enfants = category.enfants || [];
-
             const activeEnfants = enfants.filter(
               (enfant: Category) => !enfant.is_deleted && enfant.deleted_at === null
             );
@@ -282,18 +340,8 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
             };
           });
 
-          // ÉTAPE 5: Trier par libellé pour une navigation cohérente
           const sortedCategories = processedCategories.sort(
             (a: Category, b: Category) => a.libelle.localeCompare(b.libelle)
-          );
-
-          console.log(
-            "🟢 PublishAdModal - Final categories to display:",
-            sortedCategories.map((c: Category) => ({
-              libelle: c.libelle,
-              slug: c.slug,
-              enfantsCount: c.enfants?.length || 0,
-            })),
           );
 
           setCategories(sortedCategories);
@@ -313,7 +361,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     }
   }, [visible]);
 
-  // ✅ CHARGER LES BOUTIQUES - VERSION QUI FONCTIONNE
+  // ✅ CHARGER LES BOUTIQUES
   useEffect(() => {
     const fetchBoutiques = async () => {
       if (!isLoggedIn || adType !== "sale" || !isVendeur) {
@@ -357,7 +405,6 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
           const premiereBoutique = boutiquesActives[0];
           console.log(`✅ Boutique présélectionnée: ${premiereBoutique.nom}`);
           
-          // Mettre à jour l'état de manière synchrone
           setVenteData(prev => ({
             ...prev,
             boutiqueUuid: premiereBoutique.uuid,
@@ -441,9 +488,21 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     }
   };
 
-  const showPendingNotification = (message: string) => {
-    setPendingMessage(message);
-    setTimeout(() => setPendingMessage(null), 5000);
+  // ✅ Fonction d'affichage des notifications améliorée avec support pour 'info'
+  const showNotification = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    const cleanMessage = message.replace(/\s*\(sans analyse d'image\)\s*/g, '');
+    
+    if (notificationTimeoutRef.current) {
+      clearTimeout(notificationTimeoutRef.current);
+    }
+    
+    setPendingMessage(cleanMessage);
+    
+    const duration = type === 'error' ? 10000 : type === 'info' ? 6000 : 7000;
+    notificationTimeoutRef.current = setTimeout(() => {
+      setPendingMessage(null);
+      notificationTimeoutRef.current = null;
+    }, duration);
   };
 
   const handleOpenCreateBoutique = () => {
@@ -618,7 +677,626 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     }
   };
 
+  // ============================================
+  // ✅ PUBLICATION AVEC IA POUR LES DONS
+  // ============================================
+  const publishDonWithAI = async (formData: FormData) => {
+    try {
+      setLoading(true);
+      setSubmitError(null);
+      
+      console.log("🚀 [IA] Début publication du don avec IA...");
+      
+      const createResponse = await api.post(API_ENDPOINTS.DONS.CREATE, formData, {
+        isFormData: true,
+      });
+      
+      const donUuid = createResponse.data?.uuid || createResponse.uuid;
+      
+      if (!donUuid) {
+        throw new Error("Impossible de récupérer l'UUID du don");
+      }
+      
+      console.log("✅ [IA] Don créé avec UUID:", donUuid);
+      
+      const moderationResponse = await api.post(
+        API_ENDPOINTS.IA_MODERATION.PUBLIER_DON,
+        {
+          uuid: donUuid,
+          forcePublish: false,
+          bypassIA: false,
+        }
+      );
+      
+      const donData = moderationResponse.data;
+      console.log("🤖 [IA] Réponse IA reçue");
+      
+      if (!donData) {
+        console.error("❌ [IA] Réponse API invalide");
+        showNotification(
+          "❌ Erreur de communication avec le serveur. Veuillez réessayer.",
+          'error'
+        );
+        setTimeout(() => {
+          onHide();
+          resetForm();
+        }, 5000);
+        setLoading(false);
+        return;
+      }
+      
+      const suggestions = donData._suggestions || [];
+      const estBloque = donData?.statut === 'bloque' || donData?.est_bloque === true;
+      const estPublie = donData?.statut === 'publie' || donData?.estPublie === true;
+      
+      console.log("🔍 [IA] Analyse:", { statut: donData?.statut, estBloque, estPublie, suggestionsCount: suggestions.length });
+      
+      if (suggestions.length > 0) {
+        console.log("💡 [IA] Suggestions reçues:", suggestions.length);
+        setAiSuggestions(suggestions);
+        setPendingDonData(donData);
+        setShowAISuggestions(true);
+        setLoading(false);
+        return;
+      }
+      
+      if (estBloque) {
+        const categories = donData.ai_moderation_categories || [];
+        let message = donData.moderation_message || `❌ Votre don a été rejeté : ${categories.join(', ')}`;
+        message = message.replace(/\s*\(sans analyse d'image\)\s*/g, '');
+        
+        if (!message.startsWith('❌') && !message.startsWith('✅')) {
+          message = `❌ ${message}`;
+        }
+        
+        console.log("🚫 [IA] Rejet:", message);
+        showNotification(message, 'error');
+        
+        setTimeout(() => {
+          onHide();
+          resetForm();
+        }, 10000);
+        
+        setLoading(false);
+        return;
+      }
+      
+      if (estPublie) {
+        let successMessage = donData.moderation_message?.includes('✅') 
+          ? donData.moderation_message
+          : "✅ Félicitations ! Votre don a été automatiquement approuvé et publié par notre IA !";
+        
+        successMessage = successMessage.replace(/\s*\(sans analyse d'image\)\s*/g, '');
+        
+        console.log("✅ [IA] Succès:", successMessage);
+        showNotification(successMessage, 'success');
+        
+        setTimeout(() => {
+          onHide();
+          resetForm();
+        }, 7000);
+        
+        setLoading(false);
+        return;
+      }
+      
+      console.error("❌ [IA] Statut inattendu:", donData?.statut);
+      showNotification("❌ Une erreur est survenue lors de la publication.", 'error');
+      
+      setTimeout(() => {
+        onHide();
+        resetForm();
+      }, 7000);
+      
+      setLoading(false);
+      
+    } catch (error: any) {
+      console.error("❌ [IA] Erreur publication don:", error);
+      
+      let errorMessage = "❌ Une erreur est survenue lors de la publication.";
+      
+      if (error.message?.includes("401")) {
+        errorMessage = "❌ Session expirée. Veuillez vous reconnecter.";
+        onLoginRequired();
+      } else if (error.message?.includes("500")) {
+        errorMessage = "❌ Erreur serveur. Veuillez réessayer plus tard.";
+      } else if (error.message) {
+        errorMessage = `❌ ${error.message}`;
+      }
+      
+      showNotification(errorMessage, 'error');
+      setSubmitError(error.message || "Erreur lors de la publication");
+      setLoading(false);
+    }
+  };
+
+  // ============================================
+  // ✅ PUBLICATION AVEC IA POUR LES ÉCHANGES
+  // ============================================
+  const publishEchangeWithAI = async (formData: FormData) => {
+    try {
+      setLoading(true);
+      setSubmitError(null);
+      
+      console.log("🔄 [IA] Début publication de l'échange avec IA...");
+      
+      const createResponse = await api.post(API_ENDPOINTS.ECHANGES.CREATE, formData, {
+        isFormData: true,
+      });
+      
+      const echangeUuid = createResponse.data?.uuid || createResponse.uuid;
+      
+      if (!echangeUuid) {
+        throw new Error("Impossible de récupérer l'UUID de l'échange");
+      }
+      
+      console.log("✅ [IA] Échange créé avec UUID:", echangeUuid);
+      
+      const moderationResponse = await api.post(
+        API_ENDPOINTS.IA_MODERATION.PUBLIER_DON,
+        {
+          uuid: echangeUuid,
+          forcePublish: false,
+          bypassIA: false,
+        }
+      );
+      
+      const echangeData = moderationResponse.data;
+      console.log("🤖 [IA] Réponse IA reçue");
+      
+      if (!echangeData) {
+        console.error("❌ [IA] Réponse API invalide");
+        showNotification(
+          "❌ Erreur de communication avec le serveur. Veuillez réessayer.",
+          'error'
+        );
+        setTimeout(() => {
+          onHide();
+          resetForm();
+        }, 5000);
+        setLoading(false);
+        return;
+      }
+      
+      const suggestions = echangeData._suggestions || [];
+      const estBloque = echangeData?.statut === 'bloque' || echangeData?.statut === 'Bloquée' || echangeData?.estBloque === true;
+      const estPublie = echangeData?.statut === 'publie' || echangeData?.statut === 'Publiée' || echangeData?.estPublie === true;
+      
+      console.log("🔍 [IA] Analyse:", { statut: echangeData?.statut, estBloque, estPublie, suggestionsCount: suggestions.length });
+      
+      if (suggestions.length > 0) {
+        console.log("💡 [IA] Suggestions reçues:", suggestions.length);
+        setAiSuggestions(suggestions);
+        setPendingDonData(echangeData);
+        setShowAISuggestions(true);
+        setLoading(false);
+        return;
+      }
+      
+      if (estBloque) {
+        const categories = echangeData.ai_moderation_categories || [];
+        let message = echangeData.moderation_message || `❌ Votre échange a été rejeté : ${categories.join(', ')}`;
+        message = message.replace(/\s*\(sans analyse d'image\)\s*/g, '');
+        
+        if (!message.startsWith('❌') && !message.startsWith('✅')) {
+          message = `❌ ${message}`;
+        }
+        
+        console.log("🚫 [IA] Rejet:", message);
+        showNotification(message, 'error');
+        
+        setTimeout(() => {
+          onHide();
+          resetForm();
+        }, 10000);
+        
+        setLoading(false);
+        return;
+      }
+      
+      if (estPublie) {
+        let successMessage = echangeData.moderation_message?.includes('✅') 
+          ? echangeData.moderation_message
+          : "✅ Félicitations ! Votre échange a été automatiquement approuvé et publié par notre IA !";
+        
+        successMessage = successMessage.replace(/\s*\(sans analyse d'image\)\s*/g, '');
+        
+        console.log("✅ [IA] Succès:", successMessage);
+        showNotification(successMessage, 'success');
+        
+        setTimeout(() => {
+          onHide();
+          resetForm();
+        }, 7000);
+        
+        setLoading(false);
+        return;
+      }
+      
+      console.error("❌ [IA] Statut inattendu:", echangeData?.statut);
+      showNotification("❌ Une erreur est survenue lors de la publication.", 'error');
+      
+      setTimeout(() => {
+        onHide();
+        resetForm();
+      }, 7000);
+      
+      setLoading(false);
+      
+    } catch (error: any) {
+      console.error("❌ [IA] Erreur publication échange:", error);
+      
+      let errorMessage = "❌ Une erreur est survenue lors de la publication.";
+      
+      if (error.message?.includes("401")) {
+        errorMessage = "❌ Session expirée. Veuillez vous reconnecter.";
+        onLoginRequired();
+      } else if (error.message?.includes("500")) {
+        errorMessage = "❌ Erreur serveur. Veuillez réessayer plus tard.";
+      } else if (error.message) {
+        errorMessage = `❌ ${error.message}`;
+      }
+      
+      showNotification(errorMessage, 'error');
+      setSubmitError(error.message || "Erreur lors de la publication");
+      setLoading(false);
+    }
+  };
+
+  // ============================================
+  // ✅ PUBLICATION AVEC IA POUR LES PRODUITS
+  // ============================================
+  const publishProduitWithAI = async (formData: FormData) => {
+    try {
+      setLoading(true);
+      setSubmitError(null);
+      
+      console.log("🛒 [IA] Début publication du produit avec IA...");
+      
+      const createResponse = await api.post(API_ENDPOINTS.PRODUCTS.CREATE, formData, {
+        isFormData: true,
+      });
+      
+      const produitUuid = createResponse.data?.uuid || createResponse.uuid;
+      
+      if (!produitUuid) {
+        throw new Error("Impossible de récupérer l'UUID du produit");
+      }
+      
+      console.log("✅ [IA] Produit créé avec UUID:", produitUuid);
+      
+      const moderationResponse = await api.post(
+        API_ENDPOINTS.IA_MODERATION.PUBLIER_DON,
+        {
+          uuid: produitUuid,
+          forcePublish: false,
+          bypassIA: false,
+        }
+      );
+      
+      const produitData = moderationResponse.data;
+      console.log("🤖 [IA] Réponse IA reçue");
+      
+      if (!produitData) {
+        console.error("❌ [IA] Réponse API invalide");
+        showNotification(
+          "❌ Erreur de communication avec le serveur. Veuillez réessayer.",
+          'error'
+        );
+        setTimeout(() => {
+          onHide();
+          resetForm();
+        }, 5000);
+        setLoading(false);
+        return;
+      }
+      
+      const suggestions = produitData._suggestions || [];
+      const estBloque = produitData?.statut === 'bloque' || produitData?.statut === 'Bloqué' || produitData?.estBloque === true;
+      const estPublie = produitData?.statut === 'publie' || produitData?.statut === 'Publié' || produitData?.estPublie === true;
+      
+      console.log("🔍 [IA] Analyse:", { statut: produitData?.statut, estBloque, estPublie, suggestionsCount: suggestions.length });
+      
+      if (suggestions.length > 0) {
+        console.log("💡 [IA] Suggestions reçues:", suggestions.length);
+        setAiSuggestions(suggestions);
+        setPendingDonData(produitData);
+        setShowAISuggestions(true);
+        setLoading(false);
+        return;
+      }
+      
+      if (estBloque) {
+        const categories = produitData.ai_moderation_categories || [];
+        let message = produitData.moderation_message || `❌ Votre produit a été rejeté : ${categories.join(', ')}`;
+        message = message.replace(/\s*\(sans analyse d'image\)\s*/g, '');
+        
+        if (!message.startsWith('❌') && !message.startsWith('✅')) {
+          message = `❌ ${message}`;
+        }
+        
+        console.log("🚫 [IA] Rejet:", message);
+        showNotification(message, 'error');
+        
+        setTimeout(() => {
+          onHide();
+          resetForm();
+        }, 10000);
+        
+        setLoading(false);
+        return;
+      }
+      
+      if (estPublie) {
+        let successMessage = produitData.moderation_message?.includes('✅') 
+          ? produitData.moderation_message
+          : "✅ Félicitations ! Votre produit a été automatiquement approuvé et publié par notre IA !";
+        
+        successMessage = successMessage.replace(/\s*\(sans analyse d'image\)\s*/g, '');
+        
+        console.log("✅ [IA] Succès:", successMessage);
+        showNotification(successMessage, 'success');
+        
+        setTimeout(() => {
+          onHide();
+          resetForm();
+        }, 7000);
+        
+        setLoading(false);
+        return;
+      }
+      
+      console.error("❌ [IA] Statut inattendu:", produitData?.statut);
+      showNotification("❌ Une erreur est survenue lors de la publication.", 'error');
+      
+      setTimeout(() => {
+        onHide();
+        resetForm();
+      }, 7000);
+      
+      setLoading(false);
+      
+    } catch (error: any) {
+      console.error("❌ [IA] Erreur publication produit:", error);
+      
+      let errorMessage = "❌ Une erreur est survenue lors de la publication.";
+      
+      if (error.message?.includes("401")) {
+        errorMessage = "❌ Session expirée. Veuillez vous reconnecter.";
+        onLoginRequired();
+      } else if (error.message?.includes("500")) {
+        errorMessage = "❌ Erreur serveur. Veuillez réessayer plus tard.";
+      } else if (error.message) {
+        errorMessage = `❌ ${error.message}`;
+      }
+      
+      showNotification(errorMessage, 'error');
+      setSubmitError(error.message || "Erreur lors de la publication");
+      setLoading(false);
+    }
+  };
+
+  // ============================================
+  // ✅ PUBLICATIONS MANUELLES (FALLBACK) - AVEC ALERTE "EN ATTENTE"
+  // ============================================
+  const submitDonManually = async (formData: FormData) => {
+    try {
+      setLoading(true);
+      
+      console.log("⚠️ [MANUEL] Publication manuelle du don (IA désactivée)");
+      
+      const result = await api.post(API_ENDPOINTS.DONS.CREATE, formData, {
+        isFormData: true,
+      });
+      
+      console.log("✅ [MANUEL] Don créé avec succès:", result.data?.uuid);
+      
+      // ✅ Message d'attente personnalisé
+      showNotification(
+        "⏳ Votre don a été soumis avec succès et est en attente de validation par nos équipes. Vous serez notifié dès qu'il sera publié.",
+        'info'
+      );
+      
+      setTimeout(() => {
+        onHide();
+        resetForm();
+      }, 6000);
+      
+    } catch (error: any) {
+      console.error("❌ [MANUEL] Erreur publication don:", error);
+      setSubmitError(error.message || "Erreur lors de la publication");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const submitEchangeManually = async (formData: FormData) => {
+    try {
+      setLoading(true);
+      
+      console.log("⚠️ [MANUEL] Publication manuelle de l'échange (IA désactivée)");
+      
+      const result = await api.post(API_ENDPOINTS.ECHANGES.CREATE, formData, {
+        isFormData: true,
+      });
+      
+      console.log("✅ [MANUEL] Échange créé avec succès:", result.data?.uuid);
+      
+      // ✅ Message d'attente personnalisé
+      showNotification(
+        "⏳ Votre échange a été soumis avec succès et est en attente de validation par nos équipes. Vous serez notifié dès qu'il sera publié.",
+        'info'
+      );
+      
+      setTimeout(() => {
+        onHide();
+        resetForm();
+      }, 6000);
+      
+    } catch (error: any) {
+      console.error("❌ [MANUEL] Erreur publication échange:", error);
+      setSubmitError(error.message || "Erreur lors de la publication");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const submitVenteManually = async (formData: FormData) => {
+    try {
+      setLoading(true);
+      
+      console.log("⚠️ [MANUEL] Publication manuelle du produit (IA désactivée)");
+      
+      const result = await api.post(API_ENDPOINTS.PRODUCTS.CREATE, formData, {
+        isFormData: true,
+      });
+      
+      console.log("✅ [MANUEL] Produit créé avec succès:", result.data?.uuid);
+      
+      // ✅ Message d'attente personnalisé
+      showNotification(
+        "⏳ Votre produit a été soumis avec succès et est en attente de validation par nos équipes. Vous serez notifié dès qu'il sera publié.",
+        'info'
+      );
+      
+      setTimeout(() => {
+        onHide();
+        resetForm();
+      }, 6000);
+      
+    } catch (error: any) {
+      console.error("❌ [MANUEL] Erreur publication produit:", error);
+      setSubmitError(error.message || "Erreur lors de la publication");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============================================
+  // ✅ GESTION DES SUGGESTIONS
+  // ============================================
+  const handleAcceptSuggestion = async (suggestion: Suggestion) => {
+    if (!pendingDonData) return;
+    
+    try {
+      setLoading(true);
+      setShowAISuggestions(false);
+      
+      const updatedData = { ...pendingDonData };
+      if (suggestion.champ === "titre") {
+        updatedData.titre = suggestion.suggestedText;
+      } else if (suggestion.champ === "description") {
+        updatedData.description = suggestion.suggestedText;
+      } else if (suggestion.champ === "localisation") {
+        updatedData.lieu_retrait = suggestion.suggestedText;
+      }
+      
+      const formData = new FormData();
+      formData.append("nom", updatedData.titre?.trim() || "");
+      formData.append("lieu_retrait", updatedData.lieu_retrait?.trim() || "");
+      formData.append("categorie_uuid", updatedData.categorie_uuid || "");
+      formData.append("description", updatedData.description?.trim() || "");
+      formData.append("quantite", updatedData.quantite || "1");
+      if (updatedData.image) {
+        formData.append("image", updatedData.image);
+      }
+      
+      if (adType === "don") {
+        await publishDonWithAI(formData);
+      } else if (adType === "exchange") {
+        await publishEchangeWithAI(formData);
+      } else {
+        await publishProduitWithAI(formData);
+      }
+      
+    } catch (error: any) {
+      setSubmitError(error.message);
+      setLoading(false);
+    }
+  };
+
+  const handleAcceptAllSuggestions = async () => {
+    if (!pendingDonData || aiSuggestions.length === 0) return;
+    
+    try {
+      setLoading(true);
+      setShowAISuggestions(false);
+      
+      const updatedData = { ...pendingDonData };
+      
+      aiSuggestions.forEach((suggestion) => {
+        if (suggestion.champ === "titre") {
+          updatedData.titre = suggestion.suggestedText;
+        } else if (suggestion.champ === "description") {
+          updatedData.description = suggestion.suggestedText;
+        } else if (suggestion.champ === "localisation") {
+          updatedData.lieu_retrait = suggestion.suggestedText;
+        }
+      });
+      
+      const formData = new FormData();
+      formData.append("nom", updatedData.titre?.trim() || "");
+      formData.append("lieu_retrait", updatedData.lieu_retrait?.trim() || "");
+      formData.append("categorie_uuid", updatedData.categorie_uuid || "");
+      formData.append("description", updatedData.description?.trim() || "");
+      formData.append("quantite", updatedData.quantite || "1");
+      if (updatedData.image) {
+        formData.append("image", updatedData.image);
+      }
+      
+      if (adType === "don") {
+        await publishDonWithAI(formData);
+      } else if (adType === "exchange") {
+        await publishEchangeWithAI(formData);
+      } else {
+        await publishProduitWithAI(formData);
+      }
+      
+    } catch (error: any) {
+      setSubmitError(error.message);
+      setLoading(false);
+    }
+  };
+
+  const handleRejectAllSuggestions = async () => {
+    if (!pendingDonData) return;
+    
+    try {
+      setLoading(true);
+      setShowAISuggestions(false);
+      
+      const formData = new FormData();
+      formData.append("nom", pendingDonData.titre?.trim() || "");
+      formData.append("lieu_retrait", pendingDonData.lieu_retrait?.trim() || "");
+      formData.append("categorie_uuid", pendingDonData.categorie_uuid || "");
+      formData.append("description", pendingDonData.description?.trim() || "");
+      formData.append("quantite", pendingDonData.quantite || "1");
+      if (pendingDonData.image) {
+        formData.append("image", pendingDonData.image);
+      }
+      
+      if (adType === "don") {
+        await publishDonWithAI(formData);
+      } else if (adType === "exchange") {
+        await publishEchangeWithAI(formData);
+      } else {
+        await publishProduitWithAI(formData);
+      }
+      
+    } catch (error: any) {
+      setSubmitError(error.message);
+      setLoading(false);
+    }
+  };
+
+  // ============================================
+  // ✅ SOUMISSION DES ANNONCES
+  // ============================================
   const submitDon = async (): Promise<void> => {
+    console.log("📝 [submitDon] Début - aiModerationEnabled:", aiModerationEnabled);
+    console.log("📝 [submitDon] user type:", user?.type);
+    console.log("📝 [submitDon] isVendeur:", isVendeur);
+    
     if (!donData.titre?.trim()) {
       setSubmitError("Le titre du don est obligatoire");
       return;
@@ -664,10 +1342,21 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       formData.append("image", donData.image);
     }
 
-    await sendFormData(formData, API_ENDPOINTS.DONS.CREATE, "don");
+    console.log("📤 [submitDon] Envoi du don");
+    console.log("🔘 [submitDon] Chemin choisi:", aiModerationEnabled ? "IA" : "Manuel");
+
+    if (aiModerationEnabled) {
+      console.log("🚀 [submitDon] Appel à publishDonWithAI");
+      await publishDonWithAI(formData);
+    } else {
+      console.log("⚠️ [submitDon] Appel à submitDonManually");
+      await submitDonManually(formData);
+    }
   };
 
   const submitEchange = async (): Promise<void> => {
+    console.log("📝 [submitEchange] Début - aiModerationEnabled:", aiModerationEnabled);
+    
     if (!echangeData.nomElementEchange?.trim()) {
       setSubmitError("Le titre de l'échange est obligatoire");
       return;
@@ -713,23 +1402,46 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       formData.append("sous_categorie_uuid", echangeData.sous_categorie_uuid);
     }
 
-    await sendFormData(formData, API_ENDPOINTS.ECHANGES.CREATE, "échange");
+    if (aiModerationEnabled) {
+      await publishEchangeWithAI(formData);
+    } else {
+      await submitEchangeManually(formData);
+    }
   };
 
-  // ✅ VERSION VENTE - INCHANGÉE (FONCTIONNE)
   const submitVente = async (): Promise<void> => {
     console.log("🚀 Début submitVente");
     console.log("📊 État venteData:", venteData);
     console.log("👤 Type utilisateur:", user?.type);
 
-    const formData = new FormData();
+    if (!venteData.libelle?.trim()) {
+      setSubmitError("Le nom du produit est obligatoire");
+      return;
+    }
+
+    if (!venteData.prix?.trim()) {
+      setSubmitError("Le prix est obligatoire");
+      return;
+    }
+
+    const categorieAEnvoyer = venteData.final_categorie_uuid || venteData.categorie_uuid;
+    if (!categorieAEnvoyer) {
+      setSubmitError("Veuillez sélectionner une catégorie");
+      return;
+    }
+
+    if (!venteData.image) {
+      setSubmitError("Veuillez ajouter une photo");
+      return;
+    }
 
     const boutiqueId = venteData.boutiqueUuid;
     console.log("📝 boutiqueUuid à envoyer:", boutiqueId);
 
+    const formData = new FormData();
+
     if (boutiqueId) {
       formData.append("boutiqueUuid", boutiqueId);
-
       if (venteData.boutiqueNom) {
         formData.append("boutiqueNom", venteData.boutiqueNom);
       }
@@ -745,10 +1457,8 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     formData.append("libelle", venteData.libelle.trim());
     formData.append("type", venteData.type.trim());
     formData.append("disponible", String(venteData.disponible));
-
-    const categorieAEnvoyer = venteData.final_categorie_uuid || venteData.categorie_uuid;
     formData.append("categorie_uuid", categorieAEnvoyer);
-
+    
     if (venteData.sous_categorie_uuid) {
       formData.append("sous_categorie_uuid", venteData.sous_categorie_uuid);
     }
@@ -766,7 +1476,11 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       formData.append("image", venteData.image);
     }
 
-    await sendFormData(formData, API_ENDPOINTS.PRODUCTS.CREATE, "vente");
+    if (aiModerationEnabled) {
+      await publishProduitWithAI(formData);
+    } else {
+      await submitVenteManually(formData);
+    }
   };
 
   const sendFormData = async (
@@ -786,16 +1500,14 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
 
       resetForm();
       
-      // Message indiquant que l'annonce est en attente de validation
       const messageType = type === "don" ? "don" : type === "échange" ? "échange" : "annonce de vente";
-      showPendingNotification(
-        `Votre ${messageType} a été soumis avec succès et est en attente de validation par nos équipes. Vous serez notifié(e) dès qu'il sera approuvé.`
+      showNotification(
+        `✅ Votre ${messageType} a été soumis avec succès !`,
+        'success'
       );
 
       setTimeout(() => {
         onHide();
-        // Optionnel: recharger la page après un délai plus long
-        // window.location.reload();
       }, 3000);
     } catch (err: any) {
       console.error(`❌ Erreur publication ${type}:`, err);
@@ -841,7 +1553,6 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       return;
     }
 
-    // Petite pause pour s'assurer que l'état est bien à jour
     await new Promise(resolve => setTimeout(resolve, 50));
 
     if (adType === "sale" && isVendeur && !venteData.boutiqueUuid) {
@@ -864,7 +1575,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
           break;
       }
     } catch (error) {
-      // Erreur déjà gérée
+      console.error("❌ Erreur dans handleSubmit:", error);
     }
   };
 
@@ -927,6 +1638,8 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     setSelectedBoutique(null);
     setShowBoutiqueModal(false);
     setPendingVenteData(null);
+    setAiSuggestions([]);
+    setPendingDonData(null);
     boutiquePreselectedRef.current = false;
   };
 
@@ -1030,6 +1743,32 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     return colorsByType[adType].light;
   };
 
+  // ✅ Fonction pour déterminer le style de notification
+  const getNotificationStyle = () => {
+    if (pendingMessage?.includes('✅')) {
+      return {
+        background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+        icon: faCheckCircle,
+        title: "✅ Publication réussie !",
+        borderColor: "#0b8b5c",
+      };
+    } else if (pendingMessage?.includes('⏳')) {
+      return {
+        background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+        icon: faClock,
+        title: "⏳ En attente de validation",
+        borderColor: "#b45309",
+      };
+    } else {
+      return {
+        background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
+        icon: faBan,
+        title: "❌ Publication rejetée",
+        borderColor: "#b91c1c",
+      };
+    }
+  };
+
   return (
     <>
       {pendingMessage && (
@@ -1038,33 +1777,70 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
           style={{ zIndex: 9999, maxWidth: "600px", width: "90%" }}
         >
           <div
-            className="alert alert-warning border-0 shadow-lg d-flex align-items-center justify-content-between"
+            className="alert border-0 shadow-lg d-flex align-items-center"
             role="alert"
             style={{
-              borderRadius: "12px",
-              background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+              borderRadius: "16px",
+              background: getNotificationStyle().background,
               color: "white",
-              padding: "1rem 1.5rem",
+              padding: "1.5rem 2rem",
+              boxShadow: pendingMessage.includes('✅') 
+                ? "0 10px 25px -5px rgba(16, 185, 129, 0.5)"
+                : pendingMessage.includes('⏳')
+                ? "0 10px 25px -5px rgba(245, 158, 11, 0.5)"
+                : "0 10px 25px -5px rgba(239, 68, 68, 0.5)",
+              borderLeft: `5px solid ${getNotificationStyle().borderColor}`,
             }}
           >
-            <div className="d-flex align-items-center">
-              <div className="rounded-circle bg-white bg-opacity-25 p-2 me-3">
-                <FontAwesomeIcon icon={faInfoCircle} className="fs-4" />
+            <div className="d-flex align-items-center w-100">
+              <div className="flex-shrink-0 me-4">
+                <div className="rounded-circle bg-white bg-opacity-25 p-3 d-flex align-items-center justify-content-center"
+                  style={{ width: "60px", height: "60px" }}
+                >
+                  <FontAwesomeIcon 
+                    icon={getNotificationStyle().icon}
+                    className="fs-2" 
+                  />
+                </div>
               </div>
-              <div>
-                <h5 className="fw-bold mb-1">En attente de validation</h5>
-                <p className="mb-0 opacity-90">{pendingMessage}</p>
+              <div className="flex-grow-1">
+                <h5 className="fw-bold mb-2 fs-5">
+                  {getNotificationStyle().title}
+                </h5>
+                <p className="mb-0 opacity-90" style={{ 
+                  whiteSpace: 'pre-wrap',
+                  fontSize: '1rem',
+                  lineHeight: '1.5'
+                }}>
+                  {pendingMessage}
+                </p>
+                {pendingMessage.includes('❌') && (
+                  <div className="mt-3 d-flex align-items-center">
+                    <FontAwesomeIcon icon={faGavel} className="me-2 opacity-75" />
+                    <small className="opacity-75">Conformément aux règles de la plateforme</small>
+                  </div>
+                )}
+                {pendingMessage.includes('⏳') && (
+                  <div className="mt-3 d-flex align-items-center">
+                    <FontAwesomeIcon icon={faShield} className="me-2 opacity-75" />
+                    <small className="opacity-75">Un modérateur examinera votre annonce sous 24h</small>
+                  </div>
+                )}
               </div>
+              <button
+                type="button"
+                className="btn-close btn-close-white opacity-75 ms-3"
+                onClick={() => setPendingMessage(null)}
+                aria-label="Close"
+                style={{ 
+                  background: "transparent", 
+                  border: "none",
+                  fontSize: "1.2rem"
+                }}
+              >
+                <FontAwesomeIcon icon={faTimes} />
+              </button>
             </div>
-            <button
-              type="button"
-              className="btn-close btn-close-white opacity-75"
-              onClick={() => setPendingMessage(null)}
-              aria-label="Close"
-              style={{ background: "transparent", border: "none" }}
-            >
-              <FontAwesomeIcon icon={faTimes} />
-            </button>
           </div>
         </div>
       )}
@@ -1088,6 +1864,21 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         }}
         onVendeurRegistered={handleVendeurRegistered}
         onSwitchToUser={() => {}}
+      />
+
+      <AISuggestionsModal
+        visible={showAISuggestions}
+        suggestions={aiSuggestions}
+        onAcceptSuggestion={handleAcceptSuggestion}
+        onAcceptAll={handleAcceptAllSuggestions}
+        onRejectAll={handleRejectAllSuggestions}
+        onClose={() => {
+          setShowAISuggestions(false);
+          setAiSuggestions([]);
+          setPendingDonData(null);
+          setLoading(false);
+        }}
+        type={adType || "don"}
       />
 
       {boutiqueCreationSuccess && (
@@ -1137,15 +1928,30 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
               <div className="w-100">
                 <div className="d-flex justify-content-between align-items-center mb-4">
                   <div>
-                    <h2 className="modal-title fw-bold text-dark mb-1">
-                      {step === 1
-                        ? "Publier une annonce"
-                        : adType === "don"
-                          ? "Faire un Don"
-                          : adType === "exchange"
-                            ? "Proposer un Échange"
-                            : "Vendre un Produit"}
-                    </h2>
+                    <div className="d-flex align-items-center">
+                      <h2 className="modal-title fw-bold text-dark mb-1">
+                        {step === 1
+                          ? "Publier une annonce"
+                          : adType === "don"
+                            ? "Faire un Don"
+                            : adType === "exchange"
+                              ? "Proposer un Échange"
+                              : "Vendre un Produit"}
+                      </h2>
+                      {aiModerationEnabled && (
+                        <span
+                          className="badge rounded-pill ms-3 px-3 py-2"
+                          style={{
+                            background: "linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)",
+                            color: "white",
+                            fontSize: "0.8rem",
+                          }}
+                        >
+                          <FontAwesomeIcon icon={faRobot} className="me-1" />
+                          Modération IA active
+                        </span>
+                      )}
+                    </div>
                     <p className="text-muted mb-0">
                       {step === 1
                         ? "Étape 1/3 : Sélection"
@@ -1456,7 +2262,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
           box-shadow: 0 0 0 0.25rem rgba(25, 135, 84, 0.15) !important;
         }
         .card {
-          border-radius: 16px !important;
+          borderRadius: "16px !important";
         }
         .border-dashed {
           border-style: dashed !important;

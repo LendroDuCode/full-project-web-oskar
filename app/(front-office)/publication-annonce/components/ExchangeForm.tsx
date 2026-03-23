@@ -12,6 +12,7 @@ import {
   faCheckCircle,
   faChevronDown,
   faTimes,
+  faMoneyBill,
 } from "@fortawesome/free-solid-svg-icons";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { api } from "@/lib/api-client";
@@ -27,7 +28,7 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
   onRemoveImage,
   step,
 }) => {
-  const [categories, setCategories] = useState<Category[]>(initialCategories);
+  const [categories, setCategories] = useState<Category[]>(initialCategories || []);
   const [sousCategories, setSousCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,17 +47,14 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
 
   // ✅ Fonction pour formater le prix avec séparateur de milliers
   const formatPrix = (value: string): string => {
-    // Supprimer tous les caractères non numériques
     const numbers = value.replace(/\D/g, '');
-    
-    // Formater avec des espaces tous les 3 chiffres
     if (numbers) {
       return numbers.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
     }
     return '';
   };
 
-  // ✅ Fonction pour extraire la valeur numérique (sans espaces)
+  // ✅ Fonction pour extraire la valeur numérique
   const extractNumericValue = (formattedValue: string): string => {
     return formattedValue.replace(/\s/g, '');
   };
@@ -64,16 +62,12 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
   // ✅ Gestionnaire de changement pour le prix
   const handlePrixChange = (e: ChangeEvent<HTMLInputElement>) => {
     const formatted = formatPrix(e.target.value);
-    
-    // Mettre à jour l'affichage avec le format
     e.target.value = formatted;
-    
-    // Stocker la valeur sans espaces dans les données
     const numericValue = extractNumericValue(formatted);
     setEchangeData({
       ...echangeData,
       prix: numericValue,
-      quantite: "1", // S'assurer que la quantité reste à 1
+      quantite: "1",
     });
   };
 
@@ -87,17 +81,14 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
         console.log("📦 Réponse catégories brute:", response);
 
         if (Array.isArray(response)) {
-          // Filtrer les catégories actives
           const activeCategories = response.filter(
             (cat: Category) => !cat.is_deleted && cat.deleted_at === null
           );
 
-          // Identifier les catégories principales
           const mainCategories = activeCategories.filter(
             (cat: Category) => !cat.path || cat.path === null || cat.path === ""
           );
 
-          // Éliminer les doublons
           const uniqueCategoriesMap = new Map<string, Category>();
           mainCategories.forEach((category: Category) => {
             const existing = uniqueCategoriesMap.get(category.libelle);
@@ -114,41 +105,24 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
 
           const uniqueMainCategories = Array.from(uniqueCategoriesMap.values());
 
-          // Traiter les enfants
           const processedCategories: Category[] = uniqueMainCategories.map((category: Category) => {
             const enfants = category.enfants || [];
             const activeEnfants = enfants.filter(
               (enfant: Category) => !enfant.is_deleted && enfant.deleted_at === null
             );
 
-            const uniqueChildrenMap = new Map<string, Category>();
-            activeEnfants.forEach((enfant: Category) => {
-              if (!uniqueChildrenMap.has(enfant.libelle)) {
-                uniqueChildrenMap.set(enfant.libelle, enfant);
-              } else {
-                const existing = uniqueChildrenMap.get(enfant.libelle)!;
-                if ((enfant.id || 0) > (existing.id || 0)) {
-                  uniqueChildrenMap.set(enfant.libelle, enfant);
-                }
-              }
-            });
-
-            const uniqueChildren = Array.from(uniqueChildrenMap.values());
-
             return {
               ...category,
-              enfants: uniqueChildren
+              enfants: activeEnfants
             };
           });
 
-          // Trier par libellé
           const sortedCategories = processedCategories.sort(
             (a: Category, b: Category) => a.libelle.localeCompare(b.libelle)
           );
 
           setCategories(sortedCategories);
 
-          // Si une catégorie est déjà sélectionnée, charger ses sous-catégories
           if (echangeData.categorie_uuid) {
             const selectedCat = sortedCategories.find(c => c.uuid === echangeData.categorie_uuid);
             if (selectedCat?.enfants && selectedCat.enfants.length > 0) {
@@ -164,10 +138,11 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
       }
     };
 
-    fetchCategories();
+    if (categories.length === 0) {
+      fetchCategories();
+    }
   }, [echangeData.categorie_uuid]);
 
-  // Gérer le changement de catégorie principale
   const handleCategorieChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const categorieUuid = e.target.value;
     const selectedCategory = categories.find(c => c.uuid === categorieUuid);
@@ -177,10 +152,9 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
       categorie_uuid: categorieUuid,
       sous_categorie_uuid: "",
       final_categorie_uuid: categorieUuid,
-      quantite: "1", // S'assurer que la quantité reste à 1
+      quantite: "1",
     });
 
-    // Charger les sous-catégories
     if (selectedCategory?.enfants && selectedCategory.enfants.length > 0) {
       setSousCategories(selectedCategory.enfants);
     } else {
@@ -188,7 +162,6 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
     }
   };
 
-  // Gérer le changement de sous-catégorie
   const handleSousCategorieChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const sousCategorieUuid = e.target.value;
 
@@ -196,14 +169,13 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
       ...echangeData,
       sous_categorie_uuid: sousCategorieUuid,
       final_categorie_uuid: sousCategorieUuid || echangeData.categorie_uuid,
-      quantite: "1", // S'assurer que la quantité reste à 1
+      quantite: "1",
     });
   };
 
   if (step === 2) {
     return (
       <div className="container-fluid p-4">
-        {/* En-tête */}
         <div className="row mb-5">
           <div className="col-12">
             <div className="d-flex align-items-center bg-primary bg-opacity-10 p-4 rounded-4 border border-primary border-opacity-25">
@@ -235,7 +207,6 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
         )}
 
         <div className="row g-4">
-          {/* Colonne principale - Formulaire */}
           <div className="col-lg-8">
             <div className="card border shadow-lg rounded-4 mb-4 hover-shadow transition-all">
               <div className="card-header bg-white border-bottom py-4 px-4 rounded-top-4">
@@ -246,34 +217,30 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
               </div>
 
               <div className="card-body p-4">
-                {/* Titre de l'échange - Obligatoire */}
-                <div className="mb-4" style={{ minHeight: "110px" }}>
+                <div className="mb-4">
                   <label className="form-label fw-bold fs-5 mb-3 d-flex align-items-center">
                     <FontAwesomeIcon icon={faTag} className="me-2 text-primary" />
                     Titre de l'échange <span className="text-danger ms-1">*</span>
                   </label>
-                  <div className="position-relative">
-                    <input
-                      type="text"
-                      className="form-control form-control-lg border border-secondary rounded-4 py-3 px-4"
-                      style={{ fontSize: "1.1rem" }}
-                      placeholder="Ex: iPhone 12 contre Samsung S21"
-                      value={echangeData.nomElementEchange || ""}
-                      onChange={(e) =>
-                        setEchangeData({
-                          ...echangeData,
-                          nomElementEchange: e.target.value,
-                          quantite: "1",
-                        })
-                      }
-                      required
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    className="form-control form-control-lg border border-secondary rounded-4 py-3 px-4"
+                    style={{ fontSize: "1.1rem" }}
+                    placeholder="Ex: iPhone 12 contre Samsung S21"
+                    value={echangeData.nomElementEchange || ""}
+                    onChange={(e) =>
+                      setEchangeData({
+                        ...echangeData,
+                        nomElementEchange: e.target.value,
+                        quantite: "1",
+                      })
+                    }
+                    required
+                  />
                 </div>
 
-                {/* Objet recherché - Obligatoire */}
                 <div className="row g-4 mb-4">
-                  <div className="col-md-12" style={{ minHeight: "100px" }}>
+                  <div className="col-md-12">
                     <label className="form-label fw-bold fs-5 mb-3">
                       Objet recherché <span className="text-danger">*</span>
                     </label>
@@ -295,32 +262,33 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                   </div>
                 </div>
 
-                {/* Prix estimé - Obligatoire avec formatage */}
                 <div className="row g-4 mb-4">
-                  <div className="col-md-12" style={{ minHeight: "100px" }}>
+                  <div className="col-md-12">
                     <label className="form-label fw-bold fs-5 mb-3">
                       Prix estimé (FCFA) <span className="text-danger">*</span>
                     </label>
-                    <input
-                      type="text"
-                      className="form-control form-control-lg border border-secondary rounded-4 py-3 px-4"
-                      style={{ fontSize: "1.1rem" }}
-                      placeholder="Ex: 100 000"
-                      value={echangeData.prix ? formatPrix(echangeData.prix) : ""}
-                      onChange={handlePrixChange}
-                      inputMode="numeric"
-                      required
-                    />
+                    <div className="input-group">
+                      <span className="input-group-text bg-light border rounded-start-4 px-4">
+                        <FontAwesomeIcon icon={faMoneyBill} className="text-primary fs-4" />
+                      </span>
+                      <input
+                        type="text"
+                        className="form-control form-control-lg border border-secondary rounded-end-4 py-3 px-4"
+                        style={{ fontSize: "1.1rem" }}
+                        placeholder="100 000"
+                        value={echangeData.prix ? formatPrix(echangeData.prix) : ""}
+                        onChange={handlePrixChange}
+                        inputMode="numeric"
+                        required
+                      />
+                    </div>
                     <small className="text-muted mt-1 d-block">
                       Les espaces sont ajoutés automatiquement pour les milliers
                     </small>
                   </div>
                 </div>
 
-                {/* Champ Quantité - SUPPRIMÉ (valeur par défaut à 1) */}
-
-                {/* Message - Optionnel */}
-                <div className="mb-4" style={{ minHeight: "120px" }}>
+                <div className="mb-4">
                   <label className="form-label fw-bold fs-5 mb-3">
                     Message <span className="text-muted">(optionnel)</span>
                   </label>
@@ -343,10 +311,8 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
             </div>
           </div>
 
-          {/* Colonne latérale - Photo et Catégorie */}
           <div className="col-lg-4">
             <div className="sticky-top" style={{ top: "20px" }}>
-              {/* Photo - Obligatoire */}
               <div className="card border shadow-lg rounded-4 mb-4 hover-shadow transition-all">
                 <div className="card-header bg-white border-bottom py-4 px-4 rounded-top-4">
                   <h4 className="fw-bold mb-0 text-dark d-flex align-items-center">
@@ -355,7 +321,7 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                   </h4>
                 </div>
 
-                <div className="card-body p-4" style={{ minHeight: "350px" }}>
+                <div className="card-body p-4">
                   {imagePreview ? (
                     <div className="position-relative mb-4">
                       <img
@@ -417,7 +383,6 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                 </div>
               </div>
 
-              {/* Catégorie principale - Obligatoire */}
               <div className="card border shadow-lg rounded-4 mb-4 hover-shadow transition-all">
                 <div className="card-header bg-white border-bottom py-4 px-4 rounded-top-4">
                   <h4 className="fw-bold mb-0 text-dark d-flex align-items-center">
@@ -426,7 +391,7 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                   </h4>
                 </div>
 
-                <div className="card-body p-4" style={{ minHeight: "200px" }}>
+                <div className="card-body p-4">
                   {loading ? (
                     <div className="text-center py-4">
                       <div className="spinner-border text-primary mb-3" role="status">
@@ -441,7 +406,7 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                     </div>
                   ) : (
                     <>
-                      <div className="mb-4" style={{ minHeight: "100px" }}>
+                      <div className="mb-4">
                         <label className="form-label fw-bold fs-6 mb-3">
                           Catégorie principale <span className="text-danger">*</span>
                         </label>
@@ -460,9 +425,9 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                             onChange={handleCategorieChange}
                             required
                           >
-                            <option value="" className="py-2">📦 Choisir une catégorie</option>
+                            <option value="">📦 Choisir une catégorie</option>
                             {categories.map((cat) => (
-                              <option key={cat.uuid} value={cat.uuid} className="py-2">
+                              <option key={cat.uuid} value={cat.uuid}>
                                 {cat.libelle}
                               </option>
                             ))}
@@ -474,7 +439,7 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                       </div>
 
                       {sousCategories.length > 0 && (
-                        <div className="mb-3" style={{ minHeight: "100px" }}>
+                        <div className="mb-3">
                           <label className="form-label fw-bold fs-6 mb-3">
                             Sous-catégorie <span className="text-info">(Recommandé)</span>
                           </label>
@@ -492,9 +457,9 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                               value={echangeData.sous_categorie_uuid || ""}
                               onChange={handleSousCategorieChange}
                             >
-                              <option value="" className="py-2">🔽 Sous-catégorie</option>
+                              <option value="">🔽 Sous-catégorie</option>
                               {sousCategories.map((sousCat) => (
-                                <option key={sousCat.uuid} value={sousCat.uuid} className="py-2">
+                                <option key={sousCat.uuid} value={sousCat.uuid}>
                                   {sousCat.libelle}
                                 </option>
                               ))}
@@ -502,16 +467,6 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                             <div className="position-absolute end-0 top-0 h-100 d-flex align-items-center pe-4" style={{ pointerEvents: "none", zIndex: 2 }}>
                               <FontAwesomeIcon icon={faChevronDown} className="text-secondary" style={{ fontSize: "1rem" }} />
                             </div>
-                          </div>
-                          <div className="mt-2 p-2 bg-info bg-opacity-10 rounded-3">
-                            <small className="text-info">
-                              <i className="fa-regular fa-circle-info me-1"></i>
-                              {echangeData.sous_categorie_uuid ? (
-                                <>✅ La sous-catégorie sélectionnée sera enregistrée</>
-                              ) : (
-                                <>👉 Sélectionnez une sous-catégorie pour un ciblage plus précis</>
-                              )}
-                            </small>
                           </div>
                         </div>
                       )}
@@ -532,7 +487,6 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
       sc => sc.uuid === echangeData.sous_categorie_uuid
     );
 
-    // ✅ Fonction pour formater l'affichage du prix dans le récapitulatif
     const formatPrixDisplay = (prix: string): string => {
       if (!prix) return "Non renseigné";
       const numbers = prix.replace(/\D/g, '');
@@ -614,16 +568,6 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                       </p>
                     </div>
                   </div>
-                  {echangeData.quantite && parseInt(echangeData.quantite) > 1 && (
-                    <div className="col-md-6">
-                      <div className="p-4 bg-light rounded-4 border">
-                        <p className="text-secondary mb-2 small">Quantité</p>
-                        <p className="fw-bold text-dark mb-0 fs-5">
-                          {echangeData.quantite}
-                        </p>
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {echangeData.message && (

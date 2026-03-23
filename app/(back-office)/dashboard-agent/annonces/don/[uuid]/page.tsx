@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { buildImageUrl } from "@/app/shared/utils/image-utils";
+import { useAuth } from "@/app/(front-office)/auth/AuthContext";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowLeft,
@@ -52,7 +53,11 @@ import {
   faUnlock,
   faBell,
   faFlag,
+  faCommentDots,
+  faUserCircle,
 } from "@fortawesome/free-solid-svg-icons";
+// ✅ WhatsApp et autres icônes de marques doivent être importées depuis brands
+import { faWhatsapp } from "@fortawesome/free-brands-svg-icons";
 import "bootstrap/dist/css/bootstrap.min.css";
 
 // ✅ ALERTES AMÉLIORÉES - Plus belles et plus parlantes
@@ -78,14 +83,14 @@ const CustomAlert = ({
     success: "#10b981",
     error: "#ef4444",
     warning: "#f59e0b",
-    info: "#3b82f6",
+    info: "#8b5cf6", // Violet
   };
 
   const backgrounds = {
     success: "rgba(16, 185, 129, 0.1)",
     error: "rgba(239, 68, 68, 0.1)",
     warning: "rgba(245, 158, 11, 0.1)",
-    info: "rgba(59, 130, 246, 0.1)",
+    info: "rgba(139, 92, 246, 0.1)", // Violet
   };
 
   return (
@@ -214,6 +219,8 @@ export default function DonDetailPage() {
   const router = useRouter();
   const uuid = params.uuid as string;
 
+  const { user } = useAuth(); // Récupérer l'utilisateur connecté
+
   const [don, setDon] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -250,6 +257,14 @@ export default function DonDetailPage() {
     { name: "Vue de côté droit", rotation: { x: -10, y: -90 }, zoom: 1 },
     { name: "Détails", rotation: { x: -30, y: 180 }, zoom: 1.5 },
   ];
+
+  // ✅ Fonction pour obtenir le libellé de la catégorie
+  const getCategoryName = () => {
+    if (!don?.categorie) return "Général";
+    if (typeof don.categorie === 'string') return don.categorie;
+    if (don.categorie?.libelle) return don.categorie.libelle;
+    return "Général";
+  };
 
   // ✅ Image par défaut avec arrière-plan blanc
   const getDonImage = () => {
@@ -400,52 +415,6 @@ export default function DonDetailPage() {
     setImageError(true);
   };
 
-  // ✅ VALIDATION - Message d'alerte amélioré
-  const handleValidate = async () => {
-    try {
-      setActionLoading(true);
-      await api.post(`/dons/${uuid}/validate`, {});
-      showAlert(
-        "success",
-        "🎉 Don validé avec succès !",
-        "Le don a été approuvé et est maintenant visible par tous les utilisateurs.",
-      );
-      await fetchDon();
-    } catch (err: any) {
-      console.error("Erreur lors de la validation:", err);
-      showAlert(
-        "error",
-        "❌ Erreur de validation",
-        `Impossible de valider le don : ${err.message || "Erreur serveur"}`,
-      );
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  // ✅ REJET - Message d'alerte amélioré
-  const handleReject = async () => {
-    try {
-      setActionLoading(true);
-      await api.post(`/dons/${uuid}/reject`, {});
-      showAlert(
-        "warning",
-        "⚠️ Don rejeté",
-        "Le don a été rejeté. L'utilisateur sera notifié de cette décision.",
-      );
-      await fetchDon();
-    } catch (err: any) {
-      console.error("Erreur lors du rejet:", err);
-      showAlert(
-        "error",
-        "❌ Erreur",
-        `Erreur lors du rejet: ${err.message}`,
-      );
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
   // ✅ PUBLICATION/DÉPUBLICATION - Couleur dynamique
   const handlePublish = async () => {
     try {
@@ -558,14 +527,79 @@ export default function DonDetailPage() {
     showAlert("success", "🔗 Lien copié !", "Le lien du don a été copié dans le presse-papier.");
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("fr-FR", {
-      day: "2-digit",
-      month: "long",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
+  // ✅ Redirection vers la messagerie interne (identique à la page front-office)
+  const handleSendMessage = () => {
+    if (!don?.createur) {
+      showAlert("error", "Erreur", "Informations du donateur non disponibles");
+      return;
+    }
+
+    // Récupérer le type d'utilisateur
+    const userType = user?.type || "utilisateur";
+
+    let dashboardPath = "";
+    switch (userType) {
+      case "admin":
+        dashboardPath = "/dashboard-admin";
+        break;
+      case "agent":
+        dashboardPath = "/dashboard-agent";
+        break;
+      case "vendeur":
+        dashboardPath = "/dashboard-vendeur";
+        break;
+      case "utilisateur":
+        dashboardPath = "/dashboard-utilisateur";
+        break;
+      default:
+        dashboardPath = "/dashboard-utilisateur";
+    }
+
+    // Construction des paramètres avec l'image du don
+    const params = new URLSearchParams({
+      destinataireUuid: don.createur.uuid,
+      destinataireEmail: don.createur.email || "",
+      destinataireNom: `${don.createur.prenoms || ""} ${don.createur.nom || ""}`.trim(),
+      sujet: `Question concernant votre don: ${don.nom}`,
+      donUuid: don.uuid,
+      donImage: don.image || "",
+      donNom: don.nom || "",
     });
+
+    // Redirection vers la messagerie
+    router.push(`${dashboardPath}/messages?${params.toString()}`);
+  };
+
+  // ✅ Redirection vers WhatsApp
+  const handleWhatsApp = () => {
+    if (!don?.createur?.telephone) {
+      showAlert("error", "Erreur", "Numéro de téléphone non disponible");
+      return;
+    }
+
+    let phoneNumber = don.createur.telephone.replace(/\D/g, "");
+    if (phoneNumber && !phoneNumber.startsWith("+")) {
+      phoneNumber = `+225${phoneNumber}`;
+    }
+    
+    const message = `Bonjour ${don.createur.prenoms || ""} ${don.createur.nom || ""}, je suis intéressé(e) par votre don "${don.nom}" sur OSKAR. Pourrions-nous discuter ?`;
+    const whatsappUrl = `https://wa.me/${phoneNumber.replace(/\+/g, '')}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return "Date inconnue";
+    try {
+      return new Date(dateString).toLocaleDateString("fr-FR", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return "Date inconnue";
+    }
   };
 
   if (loading) {
@@ -573,13 +607,13 @@ export default function DonDetailPage() {
       <div className="d-flex justify-content-center align-items-center min-vh-100 bg-white">
         <div className="text-center">
           <div
-            className="spinner-border text-primary mb-3"
-            style={{ width: "3rem", height: "3rem" }}
+            className="spinner-border mb-3"
+            style={{ width: "3rem", height: "3rem", color: "#8b5cf6" }}
             role="status"
           >
             <span className="visually-hidden">Chargement...</span>
           </div>
-          <h4 className="text-primary mb-2">Chargement du don</h4>
+          <h4 className="mb-2" style={{ color: "#8b5cf6" }}>Chargement du don</h4>
           <p className="text-muted">Veuillez patienter...</p>
         </div>
       </div>
@@ -589,8 +623,8 @@ export default function DonDetailPage() {
   if (error) {
     return (
       <div className="container py-5">
-        <div className="card border-danger shadow-lg" style={{ borderRadius: "24px" }}>
-          <div className="card-header bg-danger text-white" style={{ borderRadius: "24px 24px 0 0" }}>
+        <div className="card shadow-lg" style={{ borderRadius: "24px", borderColor: "#8b5cf6" }}>
+          <div className="card-header text-white" style={{ borderRadius: "24px 24px 0 0", backgroundColor: "#8b5cf6" }}>
             <FontAwesomeIcon icon={faExclamationTriangle} className="me-2" />
             Erreur de chargement
           </div>
@@ -598,7 +632,7 @@ export default function DonDetailPage() {
             <h5 className="card-title">Une erreur est survenue</h5>
             <p className="card-text">{error}</p>
             <div className="d-flex gap-3">
-              <button className="btn btn-danger" onClick={fetchDon}>
+              <button className="btn" style={{ backgroundColor: "#8b5cf6", color: "white" }} onClick={fetchDon}>
                 <FontAwesomeIcon icon={faSpinner} className="me-2" />
                 Réessayer
               </button>
@@ -631,7 +665,7 @@ export default function DonDetailPage() {
               className="text-warning mb-3"
             />
             <h4 className="mb-3">Ce don n'existe pas ou a été supprimé</h4>
-            <button className="btn btn-primary" onClick={() => router.back()}>
+            <button className="btn" style={{ backgroundColor: "#8b5cf6", color: "white" }} onClick={() => router.back()}>
               <FontAwesomeIcon icon={faArrowLeft} className="me-2" />
               Retour aux annonces
             </button>
@@ -685,6 +719,7 @@ export default function DonDetailPage() {
                 href="#"
                 className="text-decoration-none"
                 onClick={() => router.back()}
+                style={{ color: "#8b5cf6" }}
               >
                 <FontAwesomeIcon icon={faArrowLeft} className="me-2" />
                 Retour
@@ -698,7 +733,7 @@ export default function DonDetailPage() {
 
         <div className="d-flex justify-content-between align-items-center">
           <div>
-            <h1 className="h2 mb-3 fw-bold text-primary">
+            <h1 className="h2 mb-3 fw-bold" style={{ color: "#8b5cf6" }}>
               <FontAwesomeIcon icon={faGift} className="me-3" />
               {don.nom || "Don sans nom"}
             </h1>
@@ -727,8 +762,8 @@ export default function DonDetailPage() {
 
               {/* ✅ Badge Statut */}
               <span
-                className="badge bg-info fs-6 px-4 py-2 rounded-pill"
-                style={{ backgroundColor: "#3b82f6" }}
+                className="badge fs-6 px-4 py-2 rounded-pill"
+                style={{ backgroundColor: "#8b5cf6" }}
               >
                 <FontAwesomeIcon icon={faTag} className="me-2" />
                 {don.statut || "En attente"}
@@ -748,11 +783,13 @@ export default function DonDetailPage() {
           </div>
           <div className="d-flex gap-2">
             <button
-              className="btn btn-outline-primary btn-lg"
+              className="btn btn-outline-violet btn-lg"
               style={{
                 borderRadius: "12px",
                 padding: "12px 24px",
                 borderWidth: "2px",
+                borderColor: "#8b5cf6",
+                color: "#8b5cf6",
               }}
               onClick={handleShare}
               disabled={actionLoading}
@@ -773,7 +810,8 @@ export default function DonDetailPage() {
                 <h3 className="h5 mb-0">
                   <FontAwesomeIcon
                     icon={faCube}
-                    className="me-2 text-primary"
+                    className="me-2"
+                    style={{ color: "#8b5cf6" }}
                   />
                   Visualisation 3D du Don
                 </h3>
@@ -789,7 +827,7 @@ export default function DonDetailPage() {
                   <button
                     className="btn btn-sm btn-outline-primary"
                     onClick={toggleFullscreen}
-                    style={{ borderRadius: "20px" }}
+                    style={{ borderRadius: "20px", borderColor: "#8b5cf6", color: "#8b5cf6" }}
                   >
                     <FontAwesomeIcon
                       icon={isFullscreen ? faCompress : faExpand}
@@ -861,8 +899,8 @@ export default function DonDetailPage() {
 
                     {/* Badge don sur l'image */}
                     <div
-                      className="position-absolute top-0 start-0 m-3 bg-success text-white rounded-pill px-4 py-2 shadow"
-                      style={{ backdropFilter: "blur(5px)" }}
+                      className="position-absolute top-0 start-0 m-3 text-white rounded-pill px-4 py-2 shadow"
+                      style={{ backgroundColor: "#8b5cf6", backdropFilter: "blur(5px)" }}
                     >
                       <FontAwesomeIcon icon={faGift} className="me-2" />
                       DON
@@ -878,6 +916,7 @@ export default function DonDetailPage() {
                     height: "50px",
                     backgroundColor: "white",
                     border: "1px solid #e2e8f0",
+                    color: "#8b5cf6",
                   }}
                   onClick={prevPerspective}
                 >
@@ -890,6 +929,7 @@ export default function DonDetailPage() {
                     height: "50px",
                     backgroundColor: "white",
                     border: "1px solid #e2e8f0",
+                    color: "#8b5cf6",
                   }}
                   onClick={nextPerspective}
                 >
@@ -906,6 +946,7 @@ export default function DonDetailPage() {
                         height: "40px",
                         backgroundColor: "white",
                         border: "1px solid #e2e8f0",
+                        color: "#8b5cf6",
                       }}
                       onClick={handleZoomIn}
                     >
@@ -918,6 +959,7 @@ export default function DonDetailPage() {
                         height: "40px",
                         backgroundColor: "white",
                         border: "1px solid #e2e8f0",
+                        color: "#8b5cf6",
                       }}
                       onClick={handleZoomOut}
                     >
@@ -954,7 +996,8 @@ export default function DonDetailPage() {
                       <div className="small">
                         <FontAwesomeIcon
                           icon={faArrowsRotate}
-                          className="me-2 text-primary"
+                          className="me-2"
+                          style={{ color: "#8b5cf6" }}
                         />
                         Cliquez-maintenez pour tourner
                       </div>
@@ -969,7 +1012,8 @@ export default function DonDetailPage() {
                   <h6 className="mb-0">
                     <FontAwesomeIcon
                       icon={faEye}
-                      className="me-2 text-primary"
+                      className="me-2"
+                      style={{ color: "#8b5cf6" }}
                     />
                     Sélectionnez une perspective
                   </h6>
@@ -983,8 +1027,8 @@ export default function DonDetailPage() {
                       <button
                         className={`btn w-100 ${
                           activePerspective === index
-                            ? "btn-primary"
-                            : "btn-outline-primary"
+                            ? "btn-violet"
+                            : "btn-outline-violet"
                         } p-2`}
                         onClick={() => handlePerspectiveClick(index)}
                         style={{
@@ -995,16 +1039,14 @@ export default function DonDetailPage() {
                           alignItems: "center",
                           justifyContent: "center",
                           borderRadius: "12px",
+                          backgroundColor: activePerspective === index ? "#8b5cf6" : "transparent",
+                          borderColor: "#8b5cf6",
+                          color: activePerspective === index ? "white" : "#8b5cf6",
                         }}
                       >
                         <div className="mb-1">
                           <FontAwesomeIcon
                             icon={faCube}
-                            className={
-                              activePerspective === index
-                                ? "text-white"
-                                : "text-primary"
-                            }
                           />
                         </div>
                         <div className="small fw-bold">
@@ -1025,10 +1067,11 @@ export default function DonDetailPage() {
                         <FontAwesomeIcon
                           icon={faArrowsRotate}
                           className="me-2"
+                          style={{ color: "#8b5cf6" }}
                         />
                         Rotation X
                       </label>
-                      <span className="badge bg-primary rounded-pill">
+                      <span className="badge rounded-pill" style={{ backgroundColor: "#8b5cf6" }}>
                         {rotation.x.toFixed(0)}°
                       </span>
                     </div>
@@ -1044,7 +1087,7 @@ export default function DonDetailPage() {
                           x: parseInt(e.target.value),
                         }))
                       }
-                      style={{ cursor: "pointer" }}
+                      style={{ cursor: "pointer", accentColor: "#8b5cf6" }}
                     />
                     <div className="d-flex justify-content-between small text-muted">
                       <span>-90°</span>
@@ -1060,10 +1103,11 @@ export default function DonDetailPage() {
                         <FontAwesomeIcon
                           icon={faArrowsRotate}
                           className="me-2"
+                          style={{ color: "#8b5cf6" }}
                         />
                         Rotation Y
                       </label>
-                      <span className="badge bg-primary rounded-pill">
+                      <span className="badge rounded-pill" style={{ backgroundColor: "#8b5cf6" }}>
                         {rotation.y.toFixed(0)}°
                       </span>
                     </div>
@@ -1079,7 +1123,7 @@ export default function DonDetailPage() {
                           y: parseInt(e.target.value),
                         }))
                       }
-                      style={{ cursor: "pointer" }}
+                      style={{ cursor: "pointer", accentColor: "#8b5cf6" }}
                     />
                     <div className="d-flex justify-content-between small text-muted">
                       <span>0°</span>
@@ -1096,10 +1140,10 @@ export default function DonDetailPage() {
                   <div className="p-3 bg-white border rounded-4 shadow-sm">
                     <div className="d-flex justify-content-between align-items-center mb-2">
                       <label className="form-label small text-muted mb-0">
-                        <FontAwesomeIcon icon={faSearch} className="me-2" />
+                        <FontAwesomeIcon icon={faSearch} className="me-2" style={{ color: "#8b5cf6" }} />
                         Zoom
                       </label>
-                      <span className="badge bg-success rounded-pill">
+                      <span className="badge rounded-pill" style={{ backgroundColor: "#10b981" }}>
                         {zoom.toFixed(1)}x
                       </span>
                     </div>
@@ -1111,7 +1155,7 @@ export default function DonDetailPage() {
                       step="0.1"
                       value={zoom}
                       onChange={(e) => setZoom(parseFloat(e.target.value))}
-                      style={{ cursor: "pointer" }}
+                      style={{ cursor: "pointer", accentColor: "#8b5cf6" }}
                     />
                     <div className="d-flex justify-content-between small text-muted">
                       <span>0.5x</span>
@@ -1127,25 +1171,106 @@ export default function DonDetailPage() {
 
         {/* Colonne de droite - Informations et actions */}
         <div className="col-lg-4">
+          {/* ✅ Carte du donateur avec photo et boutons */}
+          <div className="card border-0 shadow-lg mb-4" style={{ borderRadius: "24px" }}>
+            <div className="card-header bg-white border-0 py-3 px-4">
+              <h3 className="h5 mb-0">
+                <FontAwesomeIcon icon={faUser} className="me-2" style={{ color: "#8b5cf6" }} />
+                À propos du donateur
+              </h3>
+            </div>
+            <div className="card-body p-4 text-center">
+              {/* Photo du donateur */}
+              <div className="mb-3">
+                {don.createur?.avatar ? (
+                  <img
+                    src={buildImageUrl(don.createur.avatar)}
+                    alt={`${don.createur.prenoms || ""} ${don.createur.nom || ""}`}
+                    className="rounded-circle border border-3"
+                    style={{
+                      width: "120px",
+                      height: "120px",
+                      objectFit: "cover",
+                      borderColor: "#8b5cf6 !important",
+                    }}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = "https://via.placeholder.com/120x120/8b5cf6/ffffff?text=User";
+                    }}
+                  />
+                ) : (
+                  <div
+                    className="bg-light rounded-circle mx-auto d-flex align-items-center justify-content-center border border-3"
+                    style={{
+                      width: "120px",
+                      height: "120px",
+                      borderColor: "#8b5cf6",
+                    }}
+                  >
+                    <FontAwesomeIcon icon={faUserCircle} className="fa-4x" style={{ color: "#8b5cf6" }} />
+                  </div>
+                )}
+              </div>
+
+              {/* Informations du donateur */}
+              <h4 className="fw-bold mb-2">
+                {don.createur?.prenoms || ""} {don.createur?.nom || "Donateur"}
+              </h4>
+              {don.createur?.est_verifie && (
+                <span className="badge mb-3 px-3 py-2" style={{ backgroundColor: "#8b5cf6" }}>
+                  <FontAwesomeIcon icon={faCheckCircle} className="me-1" />
+                  Vérifié
+                </span>
+              )}
+              <p className="text-muted mb-3">
+                <FontAwesomeIcon icon={faEnvelope} className="me-2" style={{ color: "#8b5cf6" }} />
+                {don.createur?.email || "Email non disponible"}
+              </p>
+              {don.createur?.telephone && (
+                <p className="text-muted mb-4">
+                  <FontAwesomeIcon icon={faPhone} className="me-2" style={{ color: "#8b5cf6" }} />
+                  {don.createur.telephone}
+                </p>
+              )}
+
+              {/* Boutons d'action */}
+              <div className="d-grid gap-3">
+                <button
+                  onClick={handleSendMessage}
+                  className="btn py-3 fw-bold text-white"
+                  style={{ backgroundColor: "#8b5cf6", borderRadius: "12px" }}
+                >
+                  <FontAwesomeIcon icon={faCommentDots} className="me-2" />
+                  Envoyer un message
+                </button>
+                <button
+                  onClick={handleWhatsApp}
+                  className="btn py-3 fw-bold text-white"
+                  style={{ backgroundColor: "#25D366", borderRadius: "12px" }}
+                  disabled={!don.createur?.telephone}
+                >
+                  <FontAwesomeIcon icon={faWhatsapp} className="me-2" />
+                  WhatsApp
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Carte d'informations principales */}
           <div className="card border-0 shadow-lg mb-4" style={{ borderRadius: "24px" }}>
             <div className="card-body p-4">
               <div className="d-flex justify-content-between align-items-center mb-4">
                 <div>
                   <div className="text-muted mb-1">Type de don</div>
-                  <h2 className="text-primary fw-bold display-6 mb-2">
+                  <h2 className="fw-bold display-6 mb-2" style={{ color: "#8b5cf6" }}>
                     {don.type_don || "Non spécifié"}
                   </h2>
-                  <div className="text-muted">
-                    <FontAwesomeIcon icon={faUser} className="me-2" />
-                    Donateur: {don.nom_donataire || "Anonyme"}
-                  </div>
                 </div>
                 <div className="text-end">
-                  <div className="bg-primary bg-opacity-10 rounded-4 p-3">
+                  <div className="rounded-4 p-3" style={{ backgroundColor: "rgba(139, 92, 246, 0.1)" }}>
                     <FontAwesomeIcon
                       icon={faGift}
-                      className="text-primary fs-2"
+                      className="fs-2"
+                      style={{ color: "#8b5cf6" }}
                     />
                   </div>
                 </div>
@@ -1155,7 +1280,7 @@ export default function DonDetailPage() {
               <div className="row g-2 mb-3">
                 <div className="col-4">
                   <div className="text-center p-3 bg-light rounded-4">
-                    <div className="h5 fw-bold mb-1 text-primary">
+                    <div className="h5 fw-bold mb-1" style={{ color: "#8b5cf6" }}>
                       {don.nombre_vues || 0}
                     </div>
                     <div className="text-muted extra-small">
@@ -1166,7 +1291,7 @@ export default function DonDetailPage() {
                 <div className="col-4">
                   <div className="text-center p-3 bg-light rounded-4">
                     <div className="h5 fw-bold mb-1 text-danger">
-                      {don.nombre_favoris || 0}
+                      {don.nombreFavoris || don.nombre_favoris || 0}
                     </div>
                     <div className="text-muted extra-small">
                       <FontAwesomeIcon icon={faHeart} /> Favoris
@@ -1194,13 +1319,15 @@ export default function DonDetailPage() {
                 <h3 className="h5 mb-0">
                   <FontAwesomeIcon
                     icon={faInfoCircle}
-                    className="me-2 text-primary"
+                    className="me-2"
+                    style={{ color: "#8b5cf6" }}
                   />
                   Informations détaillées
                 </h3>
                 <button
-                  className="btn btn-sm btn-outline-primary rounded-pill"
+                  className="btn btn-sm rounded-pill"
                   onClick={() => setShowDetails(!showDetails)}
+                  style={{ borderColor: "#8b5cf6", color: "#8b5cf6" }}
                 >
                   <FontAwesomeIcon
                     icon={showDetails ? faAngleUp : faAngleDown}
@@ -1216,10 +1343,11 @@ export default function DonDetailPage() {
                 <div className="row g-3">
                   <div className="col-6">
                     <div className="d-flex align-items-center p-3 bg-light rounded-4 h-100">
-                      <div className="bg-primary bg-opacity-10 rounded-3 p-2 me-3">
+                      <div className="rounded-3 p-2 me-3" style={{ backgroundColor: "rgba(139, 92, 246, 0.1)" }}>
                         <FontAwesomeIcon
                           icon={faBox}
-                          className="text-primary fs-4"
+                          className="fs-4"
+                          style={{ color: "#8b5cf6" }}
                         />
                       </div>
                       <div>
@@ -1232,16 +1360,17 @@ export default function DonDetailPage() {
                   </div>
                   <div className="col-6">
                     <div className="d-flex align-items-center p-3 bg-light rounded-4 h-100">
-                      <div className="bg-warning bg-opacity-10 rounded-3 p-2 me-3">
+                      <div className="rounded-3 p-2 me-3" style={{ backgroundColor: "rgba(139, 92, 246, 0.1)" }}>
                         <FontAwesomeIcon
                           icon={faTag}
-                          className="text-warning fs-4"
+                          className="fs-4"
+                          style={{ color: "#8b5cf6" }}
                         />
                       </div>
                       <div>
                         <div className="text-muted small">Catégorie</div>
                         <div className="h4 fw-bold mb-0">
-                          {don.categorie || "Général"}
+                          {getCategoryName()}
                         </div>
                       </div>
                     </div>
@@ -1250,7 +1379,7 @@ export default function DonDetailPage() {
 
                 <div className="mt-4">
                   <h5 className="mb-3">
-                    <FontAwesomeIcon icon={faInfoCircle} className="me-2 text-primary" />
+                    <FontAwesomeIcon icon={faInfoCircle} className="me-2" style={{ color: "#8b5cf6" }} />
                     Description
                   </h5>
                   <div className="p-3 bg-light rounded-4">
@@ -1263,28 +1392,18 @@ export default function DonDetailPage() {
                 {/* Localisation et contact */}
                 <div className="mt-4">
                   <div className="row g-3">
-                    <div className="col-6">
+                    <div className="col-12">
                       <div className="p-3 border rounded-4">
                         <div className="text-muted small mb-2">
                           <FontAwesomeIcon
                             icon={faMapMarkerAlt}
                             className="me-2"
+                            style={{ color: "#8b5cf6" }}
                           />
                           Lieu de retrait
                         </div>
                         <div className="fw-bold">
-                          {don.lieu_retrait || "Non spécifié"}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-6">
-                      <div className="p-3 border rounded-4">
-                        <div className="text-muted small mb-2">
-                          <FontAwesomeIcon icon={faPhone} className="me-2" />
-                          Contact
-                        </div>
-                        <div className="fw-bold">
-                          {don.numero || "Non disponible"}
+                          {don.lieu_retrait || don.localisation || "Non spécifié"}
                         </div>
                       </div>
                     </div>
@@ -1296,19 +1415,19 @@ export default function DonDetailPage() {
                     <div className="col-6">
                       <div className="p-3 border rounded-4">
                         <div className="text-muted small">
-                          <FontAwesomeIcon icon={faCalendar} className="me-2" />
-                          Date de début
+                          <FontAwesomeIcon icon={faCalendar} className="me-2" style={{ color: "#8b5cf6" }} />
+                          Date de création
                         </div>
                         <div className="fw-bold">
-                          {formatDate(don.date_debut || don.createdAt)}
+                          {formatDate(don.date_debut || don.createdAt || don.dateCreation)}
                         </div>
                       </div>
                     </div>
                     <div className="col-6">
                       <div className="p-3 border rounded-4">
                         <div className="text-muted small">
-                          <FontAwesomeIcon icon={faClock} className="me-2" />
-                          Date de fin
+                          <FontAwesomeIcon icon={faClock} className="me-2" style={{ color: "#8b5cf6" }} />
+                          Date d'expiration
                         </div>
                         <div className="fw-bold">
                           {don.date_fin
@@ -1326,7 +1445,8 @@ export default function DonDetailPage() {
                     <h5 className="mb-3">
                       <FontAwesomeIcon
                         icon={faInfoCircle}
-                        className="me-2 text-primary"
+                        className="me-2"
+                        style={{ color: "#8b5cf6" }}
                       />
                       Conditions de retrait
                     </h5>
@@ -1335,114 +1455,35 @@ export default function DonDetailPage() {
                     </div>
                   </div>
                 )}
-
-                {/* Informations supplémentaires */}
-                <div className="mt-4">
-                  <div className="p-3 border rounded-4">
-                    <h6 className="mb-3">Informations complémentaires</h6>
-                    <div className="row g-2">
-                      <div className="col-6">
-                        <small className="text-muted">État</small>
-                        <div className="fw-bold">{don.etat || "Bon état"}</div>
-                      </div>
-                      <div className="col-6">
-                        <small className="text-muted">Dimensions</small>
-                        <div className="fw-bold">
-                          {don.dimensions || "Non spécifié"}
-                        </div>
-                      </div>
-                      <div className="col-6">
-                        <small className="text-muted">Poids</small>
-                        <div className="fw-bold">
-                          {don.poids || "Non spécifié"}
-                        </div>
-                      </div>
-                      <div className="col-6">
-                        <small className="text-muted">Marque</small>
-                        <div className="fw-bold">
-                          {don.marque || "Non spécifié"}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
               </div>
             )}
           </div>
 
-          {/* ✅ Carte des actions d'administration avec couleurs dynamiques */}
+          {/* ✅ Carte des actions d'administration (sans validation/rejet) */}
           <div className="card border-0 shadow-lg" style={{ borderRadius: "24px" }}>
             <div className="card-header bg-white border-0 py-3 px-4">
               <h3 className="h5 mb-0">
-                <FontAwesomeIcon icon={faCog} className="me-2 text-primary" />
+                <FontAwesomeIcon icon={faCog} className="me-2" style={{ color: "#8b5cf6" }} />
                 Actions d'administration
               </h3>
             </div>
             <div className="card-body p-4">
               <div className="d-grid gap-3">
-                {/* Validation/Rejet */}
-                {(don.statut === "en_attente" ||
-                  don.statut === "en-attente") && (
-                  <div className="row g-2">
-                    <div className="col">
-                      <button
-                        className="btn w-100 py-3"
-                        style={{
-                          backgroundColor: "#10b981",
-                          color: "white",
-                          borderRadius: "12px",
-                          border: "none",
-                          fontWeight: "600",
-                          transition: "all 0.2s",
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#0f9d6e")}
-                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#10b981")}
-                        onClick={handleValidate}
-                        disabled={actionLoading}
-                      >
-                        <FontAwesomeIcon icon={faCheck} className="me-2" />
-                        Valider le don
-                      </button>
-                    </div>
-                    <div className="col">
-                      <button
-                        className="btn w-100 py-3"
-                        style={{
-                          backgroundColor: "#ef4444",
-                          color: "white",
-                          borderRadius: "12px",
-                          border: "none",
-                          fontWeight: "600",
-                          transition: "all 0.2s",
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#dc2626")}
-                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ef4444")}
-                        onClick={handleReject}
-                        disabled={actionLoading}
-                      >
-                        <FontAwesomeIcon icon={faXmark} className="me-2" />
-                        Rejeter
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* ✅ Publication/Dépublication - Couleur dynamique */}
+                {/* ✅ Publication/Dépublication - Couleur violet */}
                 <button
-                  className="btn w-100 py-3"
+                  className="btn w-100 py-3 text-white"
                   style={{
-                    backgroundColor: don.estPublie ? "#f59e0b" : "#10b981",
-                    color: "white",
+                    backgroundColor: don.estPublie ? "#f59e0b" : "#8b5cf6",
                     borderRadius: "12px",
                     border: "none",
                     fontWeight: "600",
                     transition: "all 0.2s",
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = don.estPublie ? "#d97706" : "#0f9d6e";
+                    e.currentTarget.style.backgroundColor = don.estPublie ? "#d97706" : "#7c3aed";
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = don.estPublie ? "#f59e0b" : "#10b981";
+                    e.currentTarget.style.backgroundColor = don.estPublie ? "#f59e0b" : "#8b5cf6";
                   }}
                   onClick={handlePublish}
                   disabled={actionLoading}
@@ -1456,10 +1497,9 @@ export default function DonDetailPage() {
 
                 {/* ✅ Blocage/Déblocage - Couleur dynamique */}
                 <button
-                  className="btn w-100 py-3"
+                  className="btn w-100 py-3 text-white"
                   style={{
                     backgroundColor: don.est_bloque ? "#10b981" : "#ef4444",
-                    color: "white",
                     borderRadius: "12px",
                     border: "none",
                     fontWeight: "600",
@@ -1483,10 +1523,9 @@ export default function DonDetailPage() {
 
                 {/* ✅ Suppression - Rouge fixe */}
                 <button
-                  className="btn w-100 py-3"
+                  className="btn w-100 py-3 text-white"
                   style={{
                     backgroundColor: "#ef4444",
-                    color: "white",
                     borderRadius: "12px",
                     border: "none",
                     fontWeight: "600",
@@ -1530,6 +1569,26 @@ export default function DonDetailPage() {
 
         .cursor-pointer {
           cursor: pointer;
+        }
+
+        .btn-outline-violet {
+          border-color: #8b5cf6;
+          color: #8b5cf6;
+        }
+
+        .btn-outline-violet:hover {
+          background-color: #8b5cf6;
+          color: white;
+        }
+
+        .btn-violet {
+          background-color: #8b5cf6;
+          color: white;
+        }
+
+        .btn-violet:hover {
+          background-color: #7c3aed;
+          color: white;
         }
 
         @keyframes slideInRight {

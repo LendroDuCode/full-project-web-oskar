@@ -1,3 +1,5 @@
+// app/(back-office)/dashboard-agent/annonces/echange/[uuid]/page.tsx
+
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -5,6 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { buildImageUrl } from "@/app/shared/utils/image-utils";
+import { useAuth } from "@/app/(front-office)/auth/AuthContext";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowLeft,
@@ -53,44 +56,81 @@ import {
   faBell,
   faEnvelope,
   faFlag,
+  faUserCircle,
 } from "@fortawesome/free-solid-svg-icons";
+import { faWhatsapp as faWhatsappBrand } from "@fortawesome/free-brands-svg-icons";
 import "bootstrap/dist/css/bootstrap.min.css";
 
 // Interface TypeScript
-interface Echange {
+interface CreateurInfo {
   uuid: string;
-  nomElementEchange?: string;
-  typeEchange?: string;
-  description?: string;
+  nom: string;
+  prenoms: string;
+  email: string;
+  telephone: string;
+  avatar: string | null;
+  est_verifie?: boolean;
+  est_bloque?: boolean;
+  userType?: string;
+}
+
+interface CategorieInfo {
+  libelle: string;
+  uuid?: string;
+}
+
+interface UtilisateurInfo {
+  uuid: string;
+  nom: string;
+  prenoms: string;
+  email: string;
+  telephone: string;
+  avatar: string | null;
+}
+
+interface Echange {
+  is_deleted: boolean;
+  deleted_at: string | null;
+  id: string;
+  uuid: string;
+  nomElementEchange: string;
+  nom_initiateur: string;
+  prix: string | number;
+  image: string | null;
+  image_key: string | null;
+  typeDestinataire: string;
+  typeEchange: string;
+  adminUuid: string | null;
+  agentUuid: string | null;
+  vendeur_uuid: string | null;
+  utilisateur_uuid: string;
+  utilisateur: UtilisateurInfo | null;
+  objetPropose: string;
+  objetDemande: string;
+  publieLe: string | null;
   estPublie: boolean;
   estBloque: boolean;
   statut: string;
+  message: string;
+  dateProposition: string;
+  dateAcceptation: string | null;
+  numero: string;
+  dateRefus: string | null;
+  dateCreation: string;
+  updatedAt: string | null;
+  image_url: string | null;
+  categorieUuid: string;
+  categorie: CategorieInfo;
   disponible: boolean;
   quantite: number;
-  categorie?: string;
-  image?: string;
-  objetPropose?: string;
-  objetDemande?: string;
-  valeurPropose?: number | string;
-  valeurDemande?: number | string;
-  descriptionPropose?: string;
-  descriptionDemande?: string;
-  prix?: number | string;
-  nom_initiateur?: string;
-  numero?: string;
-  localisation?: string;
-  dateProposition?: string;
-  dureeValidite?: string;
-  message?: string;
-  typeDestinataire?: string;
-  modeRemise?: string;
-  etat?: string;
-  conditions?: string;
-  nombre_vues?: number;
-  nombre_favoris?: number;
-  nombre_propositions?: number;
-  createdAt: string;
-  updatedAt: string;
+  note_moyenne: number;
+  nombre_avis: number;
+  is_favoris: boolean;
+  nombreFavoris: number | null;
+  createur: CreateurInfo | null;
+  createurType: string;
+  destinataire: any;
+  destinataireType: string;
 }
 
 interface Perspective {
@@ -99,7 +139,7 @@ interface Perspective {
   zoom: number;
 }
 
-// ✅ ALERTES AMÉLIORÉES - Plus belles et plus parlantes
+// ✅ ALERTES AMÉLIORÉES
 const CustomAlert = ({
   type,
   title,
@@ -182,7 +222,7 @@ const CustomAlert = ({
   );
 };
 
-// ✅ CONFIRMATION AMÉLIORÉE - Plus moderne
+// ✅ CONFIRMATION AMÉLIORÉE
 const CustomConfirm = ({
   title,
   message,
@@ -258,7 +298,10 @@ export default function EchangeDetailPage() {
   const router = useRouter();
   const uuid = params.uuid as string;
 
+  const { isLoggedIn, user, openLoginModal } = useAuth();
+
   const [echange, setEchange] = useState<Echange | null>(null);
+  const [createur, setCreateur] = useState<CreateurInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
@@ -297,7 +340,6 @@ export default function EchangeDetailPage() {
     { name: "Vue d'ensemble", rotation: { x: -30, y: 135 }, zoom: 0.9 },
   ];
 
-  // ✅ Image par défaut avec arrière-plan blanc
   const getEchangeImage = useCallback(() => {
     if (imageError) {
       return `https://via.placeholder.com/800x600/f8fafc/1e293b?text=${encodeURIComponent(echange?.nomElementEchange?.charAt(0) || "E")}`;
@@ -327,7 +369,6 @@ export default function EchangeDetailPage() {
     };
   }, [autoRotate, isRotating, activePerspective]);
 
-  // ✅ ALERTES AMÉLIORÉES - Messages plus parlants
   const showAlert = (
     type: "success" | "error" | "warning" | "info",
     title: string,
@@ -347,6 +388,14 @@ export default function EchangeDetailPage() {
     setConfirmDialog({ title, message, onConfirm });
   };
 
+  const requireAuth = (action: () => void) => {
+    if (!isLoggedIn) {
+      openLoginModal();
+      return;
+    }
+    action();
+  };
+
   const fetchEchange = async () => {
     try {
       setLoading(true);
@@ -357,6 +406,22 @@ export default function EchangeDetailPage() {
         API_ENDPOINTS.ECHANGES.DETAIL_NON_PUBLIE(uuid),
       );
       setEchange(response);
+      // ✅ Utiliser createur s'il existe, sinon utiliser utilisateur
+      if (response.createur) {
+        setCreateur(response.createur);
+      } else if (response.utilisateur) {
+        setCreateur({
+          uuid: response.utilisateur.uuid,
+          nom: response.utilisateur.nom,
+          prenoms: response.utilisateur.prenoms,
+          email: response.utilisateur.email,
+          telephone: response.utilisateur.telephone,
+          avatar: response.utilisateur.avatar,
+          est_verifie: false,
+          est_bloque: false,
+          userType: "utilisateur",
+        });
+      }
     } catch (err: any) {
       console.error("Erreur lors du chargement de l'échange:", err);
       setError(err.message || "Erreur lors du chargement de l'échange");
@@ -450,53 +515,76 @@ export default function EchangeDetailPage() {
     setZoom((prev) => Math.max(prev - 0.1, 0.5));
   };
 
-  // ✅ VALIDATION - Message d'alerte amélioré
-  const handleValidate = async () => {
-    try {
-      setActionLoading(true);
-      await api.post(`/echanges/${uuid}/validate`, {});
-      showAlert(
-        "success",
-        "🎉 Échange validé avec succès !",
-        "L'échange a été approuvé et est maintenant visible par tous les utilisateurs.",
-      );
-      await fetchEchange();
-    } catch (err: any) {
-      console.error("Erreur lors de la validation:", err);
-      showAlert(
-        "error",
-        "❌ Erreur de validation",
-        `Impossible de valider l'échange : ${err.message || "Erreur serveur"}`,
-      );
-    } finally {
-      setActionLoading(false);
-    }
+  // ✅ FONCTION POUR CONTACTER L'INITIATEUR VIA WHATSAPP
+  const handleContactWhatsApp = () => {
+    requireAuth(() => {
+      if (!createur) {
+        showAlert("error", "❌ Erreur", "Informations de l'initiateur non disponibles");
+        return;
+      }
+
+      let phoneNumber = createur.telephone || "";
+      
+      if (!phoneNumber) {
+        showAlert("error", "❌ Erreur", "Aucun numéro de téléphone disponible pour cet utilisateur");
+        return;
+      }
+
+      phoneNumber = phoneNumber.replace(/\D/g, "");
+      if (phoneNumber && !phoneNumber.startsWith("+")) {
+        phoneNumber = `+225${phoneNumber}`;
+      }
+
+      const message = `Bonjour ${createur.prenoms || ""} ${createur.nom || ""}, je suis intéressé(e) par votre échange "${echange?.nomElementEchange}" sur OSKAR. Pourrions-nous discuter ?`;
+      const whatsappUrl = `https://wa.me/${phoneNumber.replace(/\+/g, '')}?text=${encodeURIComponent(message)}`;
+
+      window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+    });
   };
 
-  // ✅ REJET - Message d'alerte amélioré
-  const handleReject = async () => {
-    try {
-      setActionLoading(true);
-      await api.post(`/echanges/${uuid}/reject`, {});
-      showAlert(
-        "warning",
-        "⚠️ Échange rejeté",
-        "L'échange a été rejeté. L'utilisateur sera notifié de cette décision.",
-      );
-      await fetchEchange();
-    } catch (err: any) {
-      console.error("Erreur lors du rejet:", err);
-      showAlert(
-        "error",
-        "❌ Erreur",
-        `Erreur lors du rejet: ${err.message}`,
-      );
-    } finally {
-      setActionLoading(false);
-    }
+  // ✅ FONCTION POUR ENVOYER UN MESSAGE VIA LA MESSAGERIE INTERNE
+  const handleSendMessage = () => {
+    requireAuth(() => {
+      if (!createur) {
+        showAlert("error", "❌ Erreur", "Informations de l'initiateur non disponibles");
+        return;
+      }
+
+      const userType = user?.type || "utilisateur";
+
+      let dashboardPath = "";
+      switch (userType) {
+        case "admin":
+          dashboardPath = "/dashboard-admin";
+          break;
+        case "agent":
+          dashboardPath = "/dashboard-agent";
+          break;
+        case "vendeur":
+          dashboardPath = "/dashboard-vendeur";
+          break;
+        case "utilisateur":
+          dashboardPath = "/dashboard-utilisateur";
+          break;
+        default:
+          dashboardPath = "/dashboard-utilisateur";
+      }
+
+      const params = new URLSearchParams({
+        destinataireUuid: createur.uuid,
+        destinataireEmail: createur.email || "",
+        destinataireNom: `${createur.prenoms || ""} ${createur.nom || ""}`,
+        sujet: `Question concernant votre échange: ${echange?.nomElementEchange}`,
+        echangeUuid: echange?.uuid || "",
+        echangeImage: echange?.image || "",
+        echangeNom: echange?.nomElementEchange || "",
+      });
+
+      router.push(`${dashboardPath}/messages?${params.toString()}`);
+    });
   };
 
-  // ✅ PUBLICATION/DÉPUBLICATION - Couleur dynamique
+  // ✅ FONCTIONS ADMINISTRATION (sans validation/rejet)
   const handlePublish = async () => {
     try {
       setActionLoading(true);
@@ -531,7 +619,6 @@ export default function EchangeDetailPage() {
     }
   };
 
-  // ✅ SUPPRESSION - Confirmation améliorée
   const handleDelete = async () => {
     showConfirm(
       "Supprimer définitivement ?",
@@ -563,7 +650,6 @@ export default function EchangeDetailPage() {
     );
   };
 
-  // ✅ BLOCAGE/DÉBLOCAGE - Couleur dynamique
   const handleBlock = async () => {
     try {
       setActionLoading(true);
@@ -598,11 +684,6 @@ export default function EchangeDetailPage() {
     }
   };
 
-  const handlePrint = () => {
-    window.open(`/print/echange/${uuid}`, "_blank");
-    showAlert("info", "🖨️ Impression", "Lancement de l'impression...");
-  };
-
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href);
     showAlert("success", "🔗 Lien copié !", "Le lien de l'échange a été copié dans le presse-papier.");
@@ -627,6 +708,28 @@ export default function EchangeDetailPage() {
       hour: "2-digit",
       minute: "2-digit",
     });
+  };
+
+  // ✅ Fonction utilitaire pour obtenir le libellé de la catégorie
+  const getCategorieLibelle = (categorie: CategorieInfo | string | undefined): string => {
+    if (!categorie) return "Général";
+    if (typeof categorie === 'string') return categorie;
+    if (categorie.libelle) return categorie.libelle;
+    return "Général";
+  };
+
+  // ✅ Fonction pour obtenir le nom complet de l'initiateur
+  const getInitiateurNom = (): string => {
+    if (echange?.nom_initiateur && echange.nom_initiateur.trim() !== "") {
+      return echange.nom_initiateur;
+    }
+    if (createur) {
+      return `${createur.prenoms || ""} ${createur.nom || ""}`.trim() || "Initiateur";
+    }
+    if (echange?.utilisateur) {
+      return `${echange.utilisateur.prenoms || ""} ${echange.utilisateur.nom || ""}`.trim() || "Initiateur";
+    }
+    return "Initiateur";
   };
 
   if (loading) {
@@ -704,7 +807,6 @@ export default function EchangeDetailPage() {
 
   return (
     <div className="container-fluid px-lg-5 py-4 bg-white min-vh-100">
-      {/* ✅ ALERTES AMÉLIORÉES - Position fixe en haut à droite */}
       {alert && (
         <div
           className="position-fixed top-0 end-0 p-4"
@@ -719,7 +821,6 @@ export default function EchangeDetailPage() {
         </div>
       )}
 
-      {/* Dialogue de confirmation */}
       {confirmDialog && (
         <div
           className="position-fixed top-0 start-0 w-100 h-100"
@@ -765,7 +866,6 @@ export default function EchangeDetailPage() {
               {echange.nomElementEchange || "Échange sans nom"}
             </h1>
             <div className="d-flex align-items-center gap-2 flex-wrap">
-              {/* ✅ Badge Publication avec couleur dynamique */}
               <span
                 className={`badge ${echange.estPublie ? "bg-success" : "bg-secondary"} fs-6 px-4 py-2 rounded-pill`}
                 style={{
@@ -775,8 +875,6 @@ export default function EchangeDetailPage() {
                 <FontAwesomeIcon icon={echange.estPublie ? faCheckCircle : faTimesCircle} className="me-2" />
                 {echange.estPublie ? "Publié" : "Non publié"}
               </span>
-
-              {/* ✅ Badge Blocage avec couleur dynamique */}
               <span
                 className={`badge ${echange.estBloque ? "bg-danger" : "bg-success"} fs-6 px-4 py-2 rounded-pill`}
                 style={{
@@ -786,8 +884,6 @@ export default function EchangeDetailPage() {
                 <FontAwesomeIcon icon={echange.estBloque ? faLock : faUnlock} className="me-2" />
                 {echange.estBloque ? "Bloqué" : "Actif"}
               </span>
-
-              {/* ✅ Badge Statut */}
               <span
                 className="badge bg-info fs-6 px-4 py-2 rounded-pill"
                 style={{ backgroundColor: "#3b82f6" }}
@@ -795,8 +891,6 @@ export default function EchangeDetailPage() {
                 <FontAwesomeIcon icon={faTag} className="me-2" />
                 {echange.statut || "En attente"}
               </span>
-
-              {/* ✅ Badge Disponibilité */}
               <span
                 className={`badge ${echange.disponible ? "bg-success" : "bg-secondary"} fs-6 px-4 py-2 rounded-pill`}
                 style={{
@@ -822,12 +916,10 @@ export default function EchangeDetailPage() {
               <FontAwesomeIcon icon={faShareAlt} className="me-2" />
               Partager
             </button>
-           
           </div>
         </div>
       </div>
 
-      {/* Contenu principal */}
       <div className="row g-4">
         {/* Colonne de gauche - Visualisation 3D */}
         <div className="col-lg-8">
@@ -845,11 +937,6 @@ export default function EchangeDetailPage() {
                   <button
                     className={`btn btn-sm ${autoRotate ? "btn-success" : "btn-outline-success"}`}
                     onClick={toggleAutoRotate}
-                    aria-label={
-                      autoRotate
-                        ? "Désactiver rotation auto"
-                        : "Activer rotation auto"
-                    }
                     style={{ borderRadius: "20px" }}
                   >
                     <FontAwesomeIcon icon={faSync} className="me-2" />
@@ -858,9 +945,6 @@ export default function EchangeDetailPage() {
                   <button
                     className="btn btn-sm btn-outline-primary"
                     onClick={toggleFullscreen}
-                    aria-label={
-                      isFullscreen ? "Quitter plein écran" : "Plein écran"
-                    }
                     style={{ borderRadius: "20px" }}
                   >
                     <FontAwesomeIcon
@@ -872,7 +956,6 @@ export default function EchangeDetailPage() {
                   <button
                     className="btn btn-sm btn-outline-secondary"
                     onClick={resetRotation}
-                    aria-label="Réinitialiser la rotation"
                     style={{ borderRadius: "20px" }}
                   >
                     <FontAwesomeIcon icon={faSync} className="me-2" />
@@ -883,7 +966,6 @@ export default function EchangeDetailPage() {
             </div>
 
             <div className="card-body p-4">
-              {/* ✅ Conteneur 3D - Arrière-plan blanc */}
               <div
                 ref={imageContainerRef}
                 className="position-relative bg-white rounded-4 overflow-hidden mb-4 border"
@@ -901,7 +983,6 @@ export default function EchangeDetailPage() {
                 onMouseUp={() => setIsRotating(false)}
                 onMouseLeave={() => setIsRotating(false)}
               >
-                {/* Conteneur de l'image avec effet 3D */}
                 <div
                   className="position-absolute top-50 start-50 translate-middle"
                   style={{
@@ -912,7 +993,6 @@ export default function EchangeDetailPage() {
                     height: "80%",
                   }}
                 >
-                  {/* Image principale avec effet 3D */}
                   <div className="position-relative w-100 h-100">
                     <img
                       key={imageKey}
@@ -932,7 +1012,6 @@ export default function EchangeDetailPage() {
                       onError={handleImageError}
                     />
 
-                    {/* Badge échange sur l'image */}
                     <div
                       className="position-absolute top-0 start-0 m-3 bg-primary text-white rounded-pill px-4 py-2 shadow"
                       style={{ backdropFilter: "blur(5px)" }}
@@ -943,7 +1022,6 @@ export default function EchangeDetailPage() {
                   </div>
                 </div>
 
-                {/* Contrôles de navigation */}
                 <button
                   className="btn btn-light position-absolute top-50 start-0 translate-middle-y ms-3 rounded-circle shadow"
                   style={{
@@ -953,7 +1031,6 @@ export default function EchangeDetailPage() {
                     border: "1px solid #e2e8f0",
                   }}
                   onClick={prevPerspective}
-                  aria-label="Perspective précédente"
                 >
                   <FontAwesomeIcon icon={faChevronLeft} />
                 </button>
@@ -966,12 +1043,10 @@ export default function EchangeDetailPage() {
                     border: "1px solid #e2e8f0",
                   }}
                   onClick={nextPerspective}
-                  aria-label="Perspective suivante"
                 >
                   <FontAwesomeIcon icon={faChevronRight} />
                 </button>
 
-                {/* Contrôles de zoom */}
                 <div className="position-absolute bottom-0 end-0 m-3">
                   <div className="btn-group-vertical">
                     <button
@@ -983,7 +1058,6 @@ export default function EchangeDetailPage() {
                         border: "1px solid #e2e8f0",
                       }}
                       onClick={handleZoomIn}
-                      aria-label="Zoom avant"
                     >
                       <FontAwesomeIcon icon={faPlus} />
                     </button>
@@ -996,14 +1070,12 @@ export default function EchangeDetailPage() {
                         border: "1px solid #e2e8f0",
                       }}
                       onClick={handleZoomOut}
-                      aria-label="Zoom arrière"
                     >
                       <FontAwesomeIcon icon={faMinus} />
                     </button>
                   </div>
                 </div>
 
-                {/* Indicateur de perspective active */}
                 <div className="position-absolute bottom-0 start-50 translate-middle-x mb-3">
                   <div className="bg-dark bg-opacity-75 text-white px-4 py-2 rounded-pill shadow">
                     <FontAwesomeIcon icon={faLayerGroup} className="me-2" />
@@ -1011,7 +1083,6 @@ export default function EchangeDetailPage() {
                   </div>
                 </div>
 
-                {/* Coordonnées de rotation */}
                 <div className="position-absolute top-0 start-0 m-3">
                   <div className="bg-white shadow-sm px-3 py-2 rounded-3 border">
                     <div className="small fw-bold">
@@ -1024,7 +1095,6 @@ export default function EchangeDetailPage() {
                   </div>
                 </div>
 
-                {/* Instructions */}
                 {activePerspective === 0 && (
                   <div className="position-absolute top-0 end-0 m-3">
                     <div className="bg-white shadow-sm px-3 py-2 rounded-3 border">
@@ -1040,7 +1110,6 @@ export default function EchangeDetailPage() {
                 )}
               </div>
 
-              {/* Sélecteur de perspectives */}
               <div className="mb-4">
                 <div className="d-flex justify-content-between align-items-center mb-3">
                   <h6 className="mb-0">
@@ -1073,7 +1142,6 @@ export default function EchangeDetailPage() {
                           justifyContent: "center",
                           borderRadius: "12px",
                         }}
-                        aria-label={`Sélectionner ${perspective.name}`}
                       >
                         <div className="mb-1">
                           <FontAwesomeIcon
@@ -1094,7 +1162,6 @@ export default function EchangeDetailPage() {
                 </div>
               </div>
 
-              {/* Contrôles de rotation */}
               <div className="row g-3">
                 <div className="col-md-6">
                   <div className="p-3 bg-white border rounded-4 shadow-sm">
@@ -1123,7 +1190,6 @@ export default function EchangeDetailPage() {
                         }))
                       }
                       style={{ cursor: "pointer" }}
-                      aria-label="Rotation horizontale"
                     />
                     <div className="d-flex justify-content-between small text-muted">
                       <span>-90°</span>
@@ -1159,7 +1225,6 @@ export default function EchangeDetailPage() {
                         }))
                       }
                       style={{ cursor: "pointer" }}
-                      aria-label="Rotation verticale"
                     />
                     <div className="d-flex justify-content-between small text-muted">
                       <span>0°</span>
@@ -1170,7 +1235,6 @@ export default function EchangeDetailPage() {
                 </div>
               </div>
 
-              {/* Contrôle de zoom */}
               <div className="row mt-3">
                 <div className="col-12">
                   <div className="p-3 bg-white border rounded-4 shadow-sm">
@@ -1192,7 +1256,6 @@ export default function EchangeDetailPage() {
                       value={zoom}
                       onChange={(e) => setZoom(parseFloat(e.target.value))}
                       style={{ cursor: "pointer" }}
-                      aria-label="Niveau de zoom"
                     />
                     <div className="d-flex justify-content-between small text-muted">
                       <span>0.5x</span>
@@ -1208,6 +1271,92 @@ export default function EchangeDetailPage() {
 
         {/* Colonne de droite - Informations et actions */}
         <div className="col-lg-4">
+          {/* ✅ Carte de l'initiateur en premier (comme pour don) */}
+          {createur && (
+            <div className="card border-0 shadow-lg mb-4" style={{ borderRadius: "24px" }}>
+              <div className="card-header bg-white border-0 py-3 px-4">
+                <h3 className="h5 mb-0">
+                  <FontAwesomeIcon icon={faUser} className="me-2 text-primary" />
+                  À propos de l'initiateur
+                </h3>
+              </div>
+              <div className="card-body p-4 text-center">
+                {/* Photo de l'initiateur */}
+                <div className="mb-3">
+                  {createur.avatar ? (
+                    <img
+                      src={buildImageUrl(createur.avatar)}
+                      alt={`${createur.prenoms} ${createur.nom}`}
+                      className="rounded-circle border border-3"
+                      style={{
+                        width: "120px",
+                        height: "120px",
+                        objectFit: "cover",
+                        borderColor: "#10b981 !important",
+                      }}
+                      onError={(e) => {
+                        e.currentTarget.src = "https://via.placeholder.com/120x120/10b981/ffffff?text=U";
+                      }}
+                    />
+                  ) : (
+                    <div
+                      className="bg-light rounded-circle mx-auto d-flex align-items-center justify-content-center border border-3"
+                      style={{
+                        width: "120px",
+                        height: "120px",
+                        borderColor: "#10b981",
+                      }}
+                    >
+                      <FontAwesomeIcon icon={faUserCircle} className="fa-4x" style={{ color: "#10b981" }} />
+                    </div>
+                  )}
+                </div>
+
+                {/* Informations de l'initiateur */}
+                <h4 className="fw-bold mb-2">
+                  {createur.prenoms || ""} {createur.nom || "Initiateur"}
+                </h4>
+                {createur.est_verifie && (
+                  <span className="badge mb-3 px-3 py-2" style={{ backgroundColor: "#10b981" }}>
+                    <FontAwesomeIcon icon={faCheckCircle} className="me-1" />
+                    Vérifié
+                  </span>
+                )}
+                <p className="text-muted mb-3">
+                  <FontAwesomeIcon icon={faEnvelope} className="me-2" style={{ color: "#10b981" }} />
+                  {createur.email || "Email non disponible"}
+                </p>
+                {createur.telephone && (
+                  <p className="text-muted mb-4">
+                    <FontAwesomeIcon icon={faPhone} className="me-2" style={{ color: "#10b981" }} />
+                    {createur.telephone}
+                  </p>
+                )}
+
+                {/* Boutons d'action */}
+                <div className="d-grid gap-3">
+                  <button
+                    onClick={handleSendMessage}
+                    className="btn py-3 fw-bold text-white"
+                    style={{ backgroundColor: "#10b981", borderRadius: "12px" }}
+                  >
+                    <FontAwesomeIcon icon={faEnvelope} className="me-2" />
+                    Envoyer un message
+                  </button>
+                  <button
+                    onClick={handleContactWhatsApp}
+                    className="btn py-3 fw-bold text-white"
+                    style={{ backgroundColor: "#25D366", borderRadius: "12px" }}
+                    disabled={!createur.telephone}
+                  >
+                    <FontAwesomeIcon icon={faWhatsappBrand} className="me-2" />
+                    {createur.telephone ? "WhatsApp" : "Numéro non disponible"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Carte d'informations principales */}
           <div className="card border-0 shadow-lg mb-4" style={{ borderRadius: "24px" }}>
             <div className="card-body p-4">
@@ -1222,7 +1371,7 @@ export default function EchangeDetailPage() {
                   </div>
                   <div className="text-muted">
                     <FontAwesomeIcon icon={faUser} className="me-2" />
-                    Initiateur: {echange.nom_initiateur || "Anonyme"}
+                    Initiateur: {getInitiateurNom()}
                   </div>
                 </div>
                 <div className="text-end">
@@ -1235,7 +1384,6 @@ export default function EchangeDetailPage() {
                 </div>
               </div>
 
-              {/* Comparaison objet proposé/demandé */}
               <div className="mb-3">
                 <div className="row g-2 mb-2">
                   <div className="col-6">
@@ -1266,6 +1414,40 @@ export default function EchangeDetailPage() {
                   />
                 </div>
               </div>
+
+              {/* Statistiques rapides */}
+              {/* <div className="row g-2 mb-3">
+                <div className="col-4">
+                  <div className="text-center p-3 bg-light rounded-4">
+                    <div className="h5 fw-bold mb-1 text-primary">
+                      {echange.nombre_vues || 0}
+                    </div>
+                    <div className="text-muted extra-small">
+                      <FontAwesomeIcon icon={faEye} /> Vues
+                    </div>
+                  </div>
+                </div>
+                <div className="col-4">
+                  <div className="text-center p-3 bg-light rounded-4">
+                    <div className="h5 fw-bold mb-1 text-danger">
+                      {echange.nombreFavoris || 0}
+                    </div>
+                    <div className="text-muted extra-small">
+                      <FontAwesomeIcon icon={faHeart} /> Favoris
+                    </div>
+                  </div>
+                </div>
+                <div className="col-4">
+                  <div className="text-center p-3 bg-light rounded-4">
+                    <div className="h5 fw-bold mb-1 text-warning">
+                      0
+                    </div>
+                    <div className="text-muted extra-small">
+                      <FontAwesomeIcon icon={faUser} /> Demandes
+                    </div>
+                  </div>
+                </div>
+              </div> */}
             </div>
           </div>
 
@@ -1283,9 +1465,6 @@ export default function EchangeDetailPage() {
                 <button
                   className="btn btn-sm btn-outline-primary rounded-pill"
                   onClick={() => setShowDetails(!showDetails)}
-                  aria-label={
-                    showDetails ? "Masquer les détails" : "Afficher les détails"
-                  }
                 >
                   <FontAwesomeIcon
                     icon={showDetails ? faAngleUp : faAngleDown}
@@ -1326,109 +1505,55 @@ export default function EchangeDetailPage() {
                       <div>
                         <div className="text-muted small">Catégorie</div>
                         <div className="h4 fw-bold mb-0">
-                          {echange.categorie || "Général"}
+                          {getCategorieLibelle(echange.categorie)}
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Informations sur l'initiateur */}
                 <div className="mt-4">
                   <h5 className="mb-3">
                     <FontAwesomeIcon
-                      icon={faUser}
+                      icon={faInfoCircle}
                       className="me-2 text-primary"
                     />
-                    Informations initiateur
+                    Description
                   </h5>
-                  <div className="row g-3">
-                    <div className="col-12">
-                      <div className="p-3 border rounded-4">
-                        <div className="text-muted small">
-                          <FontAwesomeIcon icon={faUser} className="me-2" />
-                          Nom de l'initiateur
-                        </div>
-                        <div className="fw-bold">
-                          {echange.nom_initiateur || "Non spécifié"}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-6">
-                      <div className="p-3 border rounded-4">
-                        <div className="text-muted small">
-                          <FontAwesomeIcon icon={faPhone} className="me-2" />
-                          Contact
-                        </div>
-                        <div className="fw-bold">
-                          {echange.numero || "Non spécifié"}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-6">
-                      <div className="p-3 border rounded-4">
-                        <div className="text-muted small">
-                          <FontAwesomeIcon
-                            icon={faMapMarkerAlt}
-                            className="me-2"
-                          />
-                          Localisation
-                        </div>
-                        <div className="fw-bold">
-                          {echange.localisation || "Non spécifié"}
-                        </div>
-                      </div>
-                    </div>
+                  <div className="p-3 bg-light rounded-4">
+                    <p className="mb-0">
+                      {echange.message || echange.nomElementEchange || "Aucune description disponible"}
+                    </p>
                   </div>
                 </div>
 
-                {/* Informations temporelles */}
                 <div className="mt-4">
                   <div className="row g-3">
                     <div className="col-6">
                       <div className="p-3 border rounded-4">
                         <div className="text-muted small">
-                          <FontAwesomeIcon icon={faCalendar} className="me-2" />
-                          Date de proposition
+                          <FontAwesomeIcon icon={faCalendar} className="me-2" style={{ color: "#10b981" }} />
+                          Date de création
                         </div>
                         <div className="fw-bold">
-                          {formatDate(
-                            echange.dateProposition || echange.createdAt,
-                          )}
+                          {formatDate(echange.dateProposition || echange.dateCreation)}
                         </div>
                       </div>
                     </div>
                     <div className="col-6">
                       <div className="p-3 border rounded-4">
                         <div className="text-muted small">
-                          <FontAwesomeIcon icon={faClock} className="me-2" />
-                          Durée de validité
+                          <FontAwesomeIcon icon={faClock} className="me-2" style={{ color: "#10b981" }} />
+                          Date d'expiration
                         </div>
                         <div className="fw-bold">
-                          {echange.dureeValidite || "Illimitée"}
+                          Illimitée
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Message de l'initiateur */}
-                {echange.message && (
-                  <div className="mt-4">
-                    <h5 className="mb-3">
-                      <FontAwesomeIcon
-                        icon={faMessage}
-                        className="me-2 text-primary"
-                      />
-                      Message de l'initiateur
-                    </h5>
-                    <div className="p-3 bg-light rounded-4">
-                      <p className="mb-0">{echange.message}</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Conditions de l'échange */}
                 <div className="mt-4">
                   <div className="p-3 border rounded-4">
                     <h6 className="mb-3">Conditions de l'échange</h6>
@@ -1444,19 +1569,19 @@ export default function EchangeDetailPage() {
                       <div className="col-6">
                         <small className="text-muted">Mode de remise</small>
                         <div className="fw-bold">
-                          {echange.modeRemise || "À convenir"}
+                          À convenir
                         </div>
                       </div>
                       <div className="col-6">
                         <small className="text-muted">État de l'objet</small>
                         <div className="fw-bold">
-                          {echange.etat || "Bon état"}
+                          Bon état
                         </div>
                       </div>
                       <div className="col-6">
                         <small className="text-muted">Conditions</small>
                         <div className="fw-bold">
-                          {echange.conditions || "À discuter"}
+                          À discuter
                         </div>
                       </div>
                     </div>
@@ -1466,7 +1591,7 @@ export default function EchangeDetailPage() {
             )}
           </div>
 
-          {/* ✅ Carte des actions d'administration avec couleurs dynamiques */}
+          {/* ✅ Carte des actions d'administration (sans validation/rejet) */}
           <div className="card border-0 shadow-lg" style={{ borderRadius: "24px" }}>
             <div className="card-header bg-white border-0 py-3 px-4">
               <h3 className="h5 mb-0">
@@ -1476,54 +1601,7 @@ export default function EchangeDetailPage() {
             </div>
             <div className="card-body p-4">
               <div className="d-grid gap-3">
-                {/* Validation/Rejet */}
-                {(echange.statut === "en_attente" ||
-                  echange.statut === "en-attente") && (
-                  <div className="row g-2">
-                    <div className="col">
-                      <button
-                        className="btn w-100 py-3"
-                        style={{
-                          backgroundColor: "#10b981",
-                          color: "white",
-                          borderRadius: "12px",
-                          border: "none",
-                          fontWeight: "600",
-                          transition: "all 0.2s",
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#0f9d6e")}
-                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#10b981")}
-                        onClick={handleValidate}
-                        disabled={actionLoading}
-                      >
-                        <FontAwesomeIcon icon={faCheck} className="me-2" />
-                        Valider l'échange
-                      </button>
-                    </div>
-                    <div className="col">
-                      <button
-                        className="btn w-100 py-3"
-                        style={{
-                          backgroundColor: "#ef4444",
-                          color: "white",
-                          borderRadius: "12px",
-                          border: "none",
-                          fontWeight: "600",
-                          transition: "all 0.2s",
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#dc2626")}
-                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ef4444")}
-                        onClick={handleReject}
-                        disabled={actionLoading}
-                      >
-                        <FontAwesomeIcon icon={faXmark} className="me-2" />
-                        Rejeter
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* ✅ Publication/Dépublication - Couleur dynamique */}
+                {/* ✅ Publication/Dépublication */}
                 <button
                   className="btn w-100 py-3"
                   style={{
@@ -1532,13 +1610,6 @@ export default function EchangeDetailPage() {
                     borderRadius: "12px",
                     border: "none",
                     fontWeight: "600",
-                    transition: "all 0.2s",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = echange.estPublie ? "#d97706" : "#0f9d6e";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = echange.estPublie ? "#f59e0b" : "#10b981";
                   }}
                   onClick={handlePublish}
                   disabled={actionLoading}
@@ -1550,7 +1621,7 @@ export default function EchangeDetailPage() {
                   {echange.estPublie ? "Dépublier l'échange" : "Publier l'échange"}
                 </button>
 
-                {/* ✅ Blocage/Déblocage - Couleur dynamique */}
+                {/* ✅ Blocage/Déblocage */}
                 <button
                   className="btn w-100 py-3"
                   style={{
@@ -1559,13 +1630,6 @@ export default function EchangeDetailPage() {
                     borderRadius: "12px",
                     border: "none",
                     fontWeight: "600",
-                    transition: "all 0.2s",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = echange.estBloque ? "#0f9d6e" : "#dc2626";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = echange.estBloque ? "#10b981" : "#ef4444";
                   }}
                   onClick={handleBlock}
                   disabled={actionLoading}
@@ -1577,7 +1641,7 @@ export default function EchangeDetailPage() {
                   {echange.estBloque ? "Débloquer l'échange" : "Bloquer l'échange"}
                 </button>
 
-                {/* ✅ Suppression - Rouge fixe */}
+                {/* ✅ Suppression */}
                 <button
                   className="btn w-100 py-3"
                   style={{
@@ -1586,10 +1650,7 @@ export default function EchangeDetailPage() {
                     borderRadius: "12px",
                     border: "none",
                     fontWeight: "600",
-                    transition: "all 0.2s",
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#dc2626")}
-                  onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#ef4444")}
                   onClick={handleDelete}
                   disabled={actionLoading}
                 >
@@ -1602,7 +1663,6 @@ export default function EchangeDetailPage() {
         </div>
       </div>
 
-      {/* Styles supplémentaires */}
       <style jsx>{`
         .bg-white {
           background-color: #ffffff !important;

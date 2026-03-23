@@ -12,9 +12,8 @@ import {
   faShieldHalved,
   faUsers,
   faBolt,
-  faSignInAlt,
-  faUserShield,
   faArrowRightToBracket,
+  faUserShield,
   faCheckCircle,
 } from "@fortawesome/free-solid-svg-icons";
 import { faGoogle, faFacebook } from "@fortawesome/free-brands-svg-icons";
@@ -269,6 +268,7 @@ const LoginModal: React.FC<LoginModalProps> = ({
           type: "admin",
           endpoint: API_ENDPOINTS.AUTH.ADMIN.LOGIN,
           requestBody: { email: loginData.email, password: loginData.password },
+          role: "Administrateur"
         },
         {
           type: "agent",
@@ -277,6 +277,7 @@ const LoginModal: React.FC<LoginModalProps> = ({
             email: loginData.email,
             mot_de_passe: loginData.password,
           },
+          role: "Agent"
         },
         {
           type: "vendeur",
@@ -285,15 +286,18 @@ const LoginModal: React.FC<LoginModalProps> = ({
             email: loginData.email,
             mot_de_passe: loginData.password,
           },
+          role: "Vendeur"
         },
         {
           type: "utilisateur",
           endpoint: API_ENDPOINTS.AUTH.UTILISATEUR.LOGIN,
           requestBody: { email: loginData.email, password: loginData.password },
+          role: "Utilisateur"
         },
       ];
 
       let lastError = null;
+      let errorDetails: any = null;
 
       for (const userType of userTypes) {
         try {
@@ -316,27 +320,26 @@ const LoginModal: React.FC<LoginModalProps> = ({
             const normalizedData = normalizeUserData(data);
             normalizedData.user.type = userType.type;
 
-            // 1. Sauvegarder les données
+            // Sauvegarder les données
             saveUserData(
               userType.type,
               normalizedData.user,
               normalizedData.temp_token || normalizedData.tempToken || "",
             );
 
-            // 2. Appeler le callback de succès
+            // Appeler le callback de succès
             onLoginSuccess({
               uuid: normalizedData.user.uuid,
               email: normalizedData.user.email,
               type: normalizedData.user.type,
               role: normalizedData.user.role,
               nom_complet: normalizedData.user.nom_complet,
-              firstName:
-                normalizedData.user.firstName || normalizedData.user.nom,
+              firstName: normalizedData.user.firstName || normalizedData.user.nom,
               lastName: normalizedData.user.lastName,
               temp_token: normalizedData.temp_token || normalizedData.tempToken,
             });
 
-            // 3. Dispatcher les événements pour mettre à jour l'UI
+            // Dispatcher les événements
             const events = [
               new CustomEvent("auth-state-changed", {
                 detail: { isLoggedIn: true, user: normalizedData.user },
@@ -349,43 +352,69 @@ const LoginModal: React.FC<LoginModalProps> = ({
 
             events.forEach((event) => window.dispatchEvent(event));
 
-            // 4. Afficher le message de succès
-            setSuccess(`Connexion réussie en tant que ${userType.type} !`);
+            // Afficher le message de succès
+            setSuccess(`Bienvenue ${normalizedData.user.nom_complet || normalizedData.user.email} !`);
             setLoginSuccess(true);
 
-            // 5. Réinitialiser le formulaire
+            // Réinitialiser le formulaire
             resetForm();
 
-            // 6. ✅ FERMER LE MODAL SANS REDIRECTION
+            // Fermer le modal après succès
             setTimeout(() => {
-              onHide(); // Fermer le modal
+              onHide();
             }, 1500);
 
             return;
           } else {
-            lastError = data.message || `Erreur ${response.status}`;
+            // Stocker l'erreur avec plus de détails
+            lastError = data.message || data.error || `Erreur ${response.status}`;
+            errorDetails = {
+              status: response.status,
+              message: lastError,
+              type: userType.type,
+              role: userType.role
+            };
             console.log(`Échec ${userType.type}: ${lastError}`);
           }
         } catch (err) {
           console.error(`Erreur connexion ${userType.type}:`, err);
-          lastError = err instanceof Error ? err.message : "Erreur inconnue";
+          lastError = err instanceof Error ? err.message : "Erreur de connexion réseau";
+          errorDetails = {
+            status: "network",
+            message: lastError,
+            type: userType.type,
+            role: userType.role
+          };
         }
       }
 
-      if (
-        lastError &&
-        (lastError.includes("converti") || lastError.includes("vendeur"))
-      ) {
-        throw new Error(
-          "Votre compte a été converti en compte vendeur. Veuillez utiliser vos identifiants vendeur.",
-        );
+      // ✅ Aucune connexion réussie - Générer un message d'erreur personnalisé
+      let errorMessage = "";
+      
+      if (lastError && (lastError.includes("converti") || lastError.includes("vendeur"))) {
+        errorMessage = "Votre compte a été converti en compte vendeur. Veuillez utiliser vos identifiants vendeur.";
+      } else if (errorDetails?.status === 401) {
+        errorMessage = "Email ou mot de passe incorrect. Veuillez vérifier vos identifiants.";
+      } else if (errorDetails?.status === 404) {
+        errorMessage = "Ce compte n'existe pas. Veuillez vérifier votre email ou créer un compte.";
+      } else if (errorDetails?.status === 403) {
+        errorMessage = "Votre compte est désactivé. Veuillez contacter l'administrateur.";
+      } else if (errorDetails?.status === "network") {
+        errorMessage = "Impossible de se connecter au serveur. Vérifiez votre connexion internet.";
+      } else if (errorDetails?.message?.includes("email") || errorDetails?.message?.includes("email")) {
+        errorMessage = "Format d'email invalide. Exemple: nom@domaine.com";
+      } else if (errorDetails?.message?.includes("mot de passe") || errorDetails?.message?.includes("password")) {
+        errorMessage = "Le mot de passe doit contenir au moins 8 caractères.";
       } else {
-        throw new Error(lastError || "Identifiants invalides");
+        errorMessage = "Identifiants incorrects. Veuillez vérifier votre email et mot de passe.";
       }
+      
+      throw new Error(errorMessage);
+      
     } catch (error) {
       console.error("Erreur connexion:", error);
       setError(
-        error instanceof Error ? error.message : "Une erreur est survenue",
+        error instanceof Error ? error.message : "Une erreur est survenue lors de la connexion"
       );
     } finally {
       setLoading(false);
@@ -653,16 +682,92 @@ const LoginModal: React.FC<LoginModalProps> = ({
                     <div
                       className="alert alert-danger alert-dismissible fade show mb-4"
                       role="alert"
-                      style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}
+                      style={{ 
+                        fontSize: isMobile ? "0.9rem" : "1rem",
+                        borderRadius: "12px",
+                        borderLeft: `4px solid ${colors.oskar.green}`,
+                        backgroundColor: "#fff5f5",
+                        borderColor: "#fecaca",
+                        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.05)"
+                      }}
                     >
-                      <i className="fa-solid fa-exclamation-triangle me-2"></i>
-                      {error}
-                      <button
-                        type="button"
-                        className="btn-close"
-                        onClick={() => setError(null)}
-                        aria-label="Fermer"
-                      ></button>
+                      <div className="d-flex align-items-start">
+                        <div className="flex-shrink-0 me-3">
+                          <svg 
+                            xmlns="http://www.w3.org/2000/svg" 
+                            width={isMobile ? "20" : "24"} 
+                            height={isMobile ? "20" : "24"} 
+                            viewBox="0 0 24 24" 
+                            fill="none" 
+                            stroke="#dc2626" 
+                            strokeWidth="2" 
+                            strokeLinecap="round" 
+                            strokeLinejoin="round"
+                          >
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                          </svg>
+                        </div>
+                        <div className="flex-grow-1">
+                          <h6 className="alert-heading mb-1" style={{ fontWeight: "bold", color: "#991b1b" }}>
+                            Échec de connexion
+                          </h6>
+                          <p className="mb-0" style={{ color: "#991b1b" }}>
+                            {error}
+                          </p>
+                          {/* {(error.includes("incorrect") || error.includes("invalide")) && (
+                            <div className="mt-2">
+                              <small className="d-block text-muted">
+                                <i className="bi bi-question-circle me-1"></i>
+                                Besoin d'aide ? 
+                                <button 
+                                  type="button" 
+                                  className="btn btn-link btn-sm p-0 ms-1 text-decoration-none"
+                                  onClick={handleForgotPassword}
+                                  style={{ fontSize: "0.875rem", color: colors.oskar.green }}
+                                >
+                                  Mot de passe oublié ?
+                                </button>
+                              </small>
+                            </div>
+                          )} */}
+                          {(error.includes("n'existe pas") || error.includes("créer")) && (
+                            <div className="mt-2">
+                              <small className="d-block">
+                                <i className="bi bi-person-plus me-1"></i>
+                                Pas encore de compte ? 
+                                <button 
+                                  type="button" 
+                                  className="btn btn-link btn-sm p-0 ms-1 text-decoration-none"
+                                  onClick={onSwitchToRegister}
+                                  style={{ fontSize: "0.875rem", color: colors.oskar.green }}
+                                >
+                                  Créer un compte
+                                </button>
+                              </small>
+                            </div>
+                          )}
+                          {(error.includes("réseau") || error.includes("serveur")) && (
+                            <div className="mt-2">
+                              <small className="d-block text-muted">
+                                <i className="bi bi-wifi-off me-1"></i>
+                                Vérifiez votre connexion internet et réessayez.
+                              </small>
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          className="btn-close"
+                          onClick={() => setError(null)}
+                          aria-label="Fermer"
+                          style={{ 
+                            fontSize: "0.75rem",
+                            padding: "0.5rem"
+                          }}
+                        ></button>
+                      </div>
                     </div>
                   )}
 
@@ -675,6 +780,9 @@ const LoginModal: React.FC<LoginModalProps> = ({
                         borderColor: "#10b981",
                         color: "#065f46",
                         fontSize: isMobile ? "0.9rem" : "1rem",
+                        borderRadius: "12px",
+                        borderLeft: `4px solid ${colors.oskar.green}`,
+                        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.05)"
                       }}
                     >
                       <div className="d-flex align-items-center">

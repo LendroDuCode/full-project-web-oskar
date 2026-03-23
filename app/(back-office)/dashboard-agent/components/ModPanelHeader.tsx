@@ -15,17 +15,15 @@ import HelpModal from "./HelpModal";
 const buildImageUrl = (imagePath: string | null): string | null => {
   if (!imagePath) return null;
 
-  // Nettoyer le chemin des espaces indésirables
   let cleanPath = imagePath
-    .replace(/\s+/g, "") // Supprimer tous les espaces
-    .replace(/-/g, "-") // Normaliser les tirets
+    .replace(/\s+/g, "")
+    .replace(/-/g, "-")
     .trim();
 
   const apiUrl =
     process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
   const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
 
-  // ✅ CAS 1: Déjà une URL complète
   if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
     if (cleanPath.includes("localhost")) {
       const productionUrl = apiUrl.replace(/\/api$/, "");
@@ -34,14 +32,11 @@ const buildImageUrl = (imagePath: string | null): string | null => {
     return cleanPath;
   }
 
-  // ✅ CAS 2: Chemin avec %2F (déjà encodé)
   if (cleanPath.includes("%2F")) {
-    // Nettoyer les espaces autour de %2F
     const finalPath = cleanPath.replace(/%2F\s+/, "%2F");
     return `${apiUrl}${filesUrl}/${finalPath}`;
   }
 
-  // ✅ CAS 3: Chemin simple
   return `${apiUrl}${filesUrl}/${cleanPath}`;
 };
 
@@ -72,6 +67,13 @@ interface AgentProfile {
   updated_at: string;
 }
 
+// Interface pour la réponse de l'API IA
+interface IAConfigResponse {
+  isModerationEnabled: boolean;
+  lastModifiedByAgentUuid?: string;
+  lastModifiedAt?: string;
+}
+
 export default function DashboardHeader({
   subtitle = "",
   showPeriodSelector = true,
@@ -92,6 +94,17 @@ export default function DashboardHeader({
   const [avatarError, setAvatarError] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
 
+  // ============================================
+  // 🔥 ÉTATS POUR LA CONFIGURATION IA
+  // ============================================
+  const [aiModerationEnabled, setAiModerationEnabled] = useState<boolean>(false);
+  const [aiConfigLoading, setAiConfigLoading] = useState<boolean>(false);
+  const [showAiConfigMenu, setShowAiConfigMenu] = useState<boolean>(false);
+  const [aiConfigMessage, setAiConfigMessage] = useState<string | null>(null);
+  const [aiLastModified, setAiLastModified] = useState<string | null>(null);
+  const [aiInitialized, setAiInitialized] = useState<boolean>(false);
+  const aiConfigMenuRef = useRef<HTMLDivElement>(null);
+
   const userMenuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const mountedRef = useRef(true);
@@ -106,7 +119,6 @@ export default function DashboardHeader({
       const token = localStorage.getItem("oskar_token");
       if (!token) return false;
 
-      // Vérifier si le token est expiré en décodant le payload
       const base64Url = token.split('.')[1];
       if (!base64Url) return false;
 
@@ -118,7 +130,7 @@ export default function DashboardHeader({
       const payload = JSON.parse(jsonPayload);
       const expiry = payload.exp;
 
-      if (!expiry) return true; // Pas de date d'expiration
+      if (!expiry) return true;
 
       const now = Math.floor(Date.now() / 1000);
       return now < expiry;
@@ -134,7 +146,6 @@ export default function DashboardHeader({
     
     setIsRedirecting(true);
     
-    // Nettoyer tout timeout existant
     if (redirectTimeoutRef.current) {
       clearTimeout(redirectTimeoutRef.current);
     }
@@ -150,7 +161,6 @@ export default function DashboardHeader({
   const handleTokenExpired = useCallback(() => {
     console.log("🚨 Token expiré - Déconnexion");
 
-    // 1. Nettoyer tous les stockages
     localStorage.removeItem("oskar_user");
     localStorage.removeItem("oskar_token");
     localStorage.removeItem("temp_token");
@@ -159,20 +169,17 @@ export default function DashboardHeader({
     localStorage.removeItem("oskar_role");
     localStorage.removeItem("oskar_user_type");
 
-    // 2. Nettoyer les cookies
     document.cookie.split(";").forEach((c) => {
       document.cookie = c
         .replace(/^ +/, "")
         .replace(/=.*/, "=; expires=" + new Date().toUTCString() + "; path=/");
     });
 
-    // 3. Déclencher l'événement de déconnexion
     const logoutEvent = new CustomEvent("oskar-logout", {
       detail: { timestamp: Date.now(), reason: "token_expired", userType: "agent" },
     });
     window.dispatchEvent(logoutEvent);
 
-    // 4. Redirection sécurisée
     safeRedirect("/");
   }, [safeRedirect]);
 
@@ -201,20 +208,133 @@ export default function DashboardHeader({
     };
   }, [checkTokenValidity, handleTokenExpired, safeRedirect]);
 
-  // Fermer le menu utilisateur en cliquant à l'extérieur
+  // ============================================
+  // 🔥 ACTIVER/DÉSACTIVER LA MODÉRATION IA
+  // ============================================
+  const toggleAiModeration = async () => {
+    if (aiConfigLoading) return;
+
+    const previousState = aiModerationEnabled;
+    const newState = !previousState;
+
+    try {
+      setAiConfigLoading(true);
+      setAiConfigMessage(null);
+
+      // Mise à jour optimiste de l'UI
+      setAiModerationEnabled(newState);
+
+      console.log("🔄 Mise à jour config IA:", { isModerationEnabled: newState });
+
+      // Appel PATCH pour mettre à jour la configuration
+      const response = await api.patch<IAConfigResponse>(
+        API_ENDPOINTS.IA_MODERATION.CONFIGURER_AI_MODERATION,
+        { isModerationEnabled: newState }
+      );
+
+      console.log("📥 Réponse API PATCH:", response);
+
+      // Mettre à jour avec la réponse du serveur
+      if (response && typeof response === 'object') {
+        setAiModerationEnabled(response.isModerationEnabled);
+        
+        if (response.lastModifiedAt) {
+          setAiLastModified(new Date(response.lastModifiedAt).toLocaleString('fr-FR'));
+        }
+      }
+
+      setAiConfigMessage(
+        `✅ Modération IA ${newState ? 'activée' : 'désactivée'} avec succès`
+      );
+
+      setTimeout(() => {
+        setAiConfigMessage(null);
+      }, 3000);
+
+    } catch (error: any) {
+      console.error("❌ Erreur toggle IA:", error);
+      
+      // Restaurer l'état précédent en cas d'erreur
+      setAiModerationEnabled(previousState);
+      
+      let userMessage = "❌ Erreur lors de la modification";
+      
+      if (error?.status === 401) {
+        userMessage = "❌ Session expirée. Veuillez vous reconnecter.";
+      } else if (error?.status === 403) {
+        userMessage = "❌ Vous n'êtes pas autorisé à modifier cette configuration.";
+      } else if (error?.status === 404) {
+        userMessage = "❌ Endpoint de configuration non trouvé";
+      } else if (error?.status === 500) {
+        userMessage = "❌ Erreur serveur. Veuillez réessayer plus tard.";
+      } else if (error?.message) {
+        userMessage = `❌ ${error.message}`;
+      }
+      
+      setAiConfigMessage(userMessage);
+    } finally {
+      setAiConfigLoading(false);
+    }
+  };
+
+  // ============================================
+  // 🔥 CHARGER LA CONFIGURATION IA AU MONTAGE
+  // ============================================
+  useEffect(() => {
+    const fetchAiConfig = async () => {
+      if (aiInitialized) return;
+      
+      try {
+        setAiConfigLoading(true);
+        
+        const response = await api.get<IAConfigResponse>(
+          API_ENDPOINTS.IA_MODERATION.STATUT
+        );
+        
+        console.log("📥 Configuration IA chargée:", response);
+        
+        if (response && typeof response === 'object') {
+          setAiModerationEnabled(response.isModerationEnabled);
+          
+          if (response.lastModifiedAt) {
+            setAiLastModified(new Date(response.lastModifiedAt).toLocaleString('fr-FR'));
+          }
+        }
+        
+        setAiInitialized(true);
+        
+      } catch (error: any) {
+        console.error("❌ Erreur chargement config IA:", error);
+        
+        const savedState = localStorage.getItem('ai_moderation_enabled');
+        if (savedState !== null) {
+          setAiModerationEnabled(savedState === 'true');
+        }
+      } finally {
+        setAiConfigLoading(false);
+      }
+    };
+    
+    const token = localStorage.getItem("oskar_token");
+    if (token && !aiInitialized) {
+      fetchAiConfig();
+    }
+  }, [aiInitialized]);
+
+  // ✅ Fermer les menus quand on clique en dehors
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        userMenuRef.current &&
-        !userMenuRef.current.contains(event.target as Node)
-      ) {
+      if (aiConfigMenuRef.current && !aiConfigMenuRef.current.contains(event.target as Node)) {
+        setShowAiConfigMenu(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
         setShowUserMenu(false);
       }
     };
 
-    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener('mousedown', handleClickOutside);
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
 
@@ -225,12 +345,10 @@ export default function DashboardHeader({
       
       if (!mountedRef.current) return;
 
-      // Nettoyer l'état
       setProfile(null);
       setShowUserMenu(false);
       setError(null);
 
-      // Rediriger vers la page d'accueil si ce n'est pas déjà fait
       if (event.detail?.reason !== "token_expired" && !isRedirecting) {
         safeRedirect("/");
       }
@@ -275,7 +393,6 @@ export default function DashboardHeader({
 
         console.error("Erreur lors de la récupération du profil agent:", err);
 
-        // Vérifier si c'est une erreur 401 (token expiré)
         if (err?.status === 401 || err?.response?.status === 401 || err?.message?.includes("401")) {
           console.log("🚨 Erreur 401 détectée dans fetchProfile");
           handleTokenExpired();
@@ -340,14 +457,6 @@ export default function DashboardHeader({
     try {
       setIsLoggingOut(true);
 
-      // Appeler l'API de déconnexion si elle existe
-      try {
-     //   await api.post(API_ENDPOINTS.AUTH.LOGOUT);
-      } catch (error) {
-        console.log("API de déconnexion non disponible");
-      }
-
-      // Nettoyer le localStorage
       localStorage.removeItem("oskar_user");
       localStorage.removeItem("oskar_token");
       localStorage.removeItem("temp_token");
@@ -356,18 +465,15 @@ export default function DashboardHeader({
       localStorage.removeItem("oskar_role");
       localStorage.removeItem("oskar_user_type");
 
-      // Déclencher l'événement de déconnexion
       const logoutEvent = new CustomEvent("oskar-logout", {
         detail: { timestamp: Date.now(), reason: "manual_logout", userType: "agent" },
       });
       window.dispatchEvent(logoutEvent);
 
-      // Redirection sécurisée
       safeRedirect("/");
     } catch (error) {
       console.error("Erreur lors de la déconnexion:", error);
       
-      // Nettoyer quand même
       localStorage.removeItem("oskar_user");
       localStorage.removeItem("oskar_token");
       localStorage.removeItem("temp_token");
@@ -619,6 +725,145 @@ export default function DashboardHeader({
 
           {/* Actions à droite - Groupe compact */}
           <div className="d-flex align-items-center gap-2 gap-md-3 ms-auto flex-shrink-0">
+            {/* ============================================ */}
+            {/* 🔥 BOUTON DE CONTRÔLE IA (pour les agents) */}
+            {/* ============================================ */}
+            <div className="position-relative" ref={aiConfigMenuRef}>
+              <button
+                onClick={() => setShowAiConfigMenu(!showAiConfigMenu)}
+                className="btn d-flex align-items-center gap-2 px-3 py-2"
+                style={{
+                  backgroundColor: aiModerationEnabled ? "#10b981" : "#ef4444",
+                  borderColor: aiModerationEnabled ? "#10b981" : "#ef4444",
+                  color: "white",
+                  fontSize: "0.875rem",
+                  fontWeight: "500",
+                  whiteSpace: "nowrap",
+                  minWidth: "fit-content",
+                  transition: "all 0.3s ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.opacity = "0.9";
+                  e.currentTarget.style.transform = "translateY(-1px)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.opacity = "1";
+                  e.currentTarget.style.transform = "translateY(0)";
+                }}
+                aria-label="Contrôle de la modération IA"
+                title={aiModerationEnabled ? "IA activée" : "IA désactivée"}
+                disabled={aiConfigLoading}
+              >
+                <i className={`fa-solid ${aiModerationEnabled ? 'fa-robot' : 'fa-robot text-opacity-50'}`}></i>
+                <span>
+                  IA {aiModerationEnabled ? 'Activée' : 'Désactivée'}
+                </span>
+                <i className={`fa-solid fa-chevron-down ms-1 ${showAiConfigMenu ? 'rotate-180' : ''}`} style={{ fontSize: "0.75rem" }}></i>
+              </button>
+
+              {/* Menu déroulant de configuration IA */}
+              {showAiConfigMenu && (
+                <div
+                  className="position-absolute end-0 mt-2 bg-white border rounded-3 shadow-lg z-3"
+                  style={{ minWidth: "320px", animation: "fadeIn 0.2s ease" }}
+                >
+                  <div className="p-3 border-bottom bg-light rounded-top-3">
+                    <h6 className="fw-bold mb-1 d-flex align-items-center">
+                      <i className="fa-solid fa-robot text-success me-2"></i>
+                      Configuration IA
+                    </h6>
+                    <p className="text-muted small mb-0">
+                      Activer ou désactiver la modération automatique des annonces
+                    </p>
+                  </div>
+
+                  <div className="p-3">
+                    <div className="d-flex align-items-center justify-content-between mb-3">
+                      <div>
+                        <div className="fw-medium">État actuel</div>
+                        <div className="text-muted small mt-1">
+                          {aiModerationEnabled ? (
+                            <span className="badge bg-success px-3 py-2 rounded-pill">
+                              <i className="fa-solid fa-check-circle me-1"></i> Activée
+                            </span>
+                          ) : (
+                            <span className="badge bg-danger px-3 py-2 rounded-pill">
+                              <i className="fa-solid fa-ban me-1"></i> Désactivée
+                            </span>
+                          )}
+                        </div>
+                        {aiLastModified && (
+                          <div className="text-muted small mt-2">
+                            <i className="fa-regular fa-clock me-1"></i>
+                            Dernière modification: {aiLastModified}
+                          </div>
+                        )}
+                      </div>
+                      <div className="form-check form-switch">
+                        <input
+                          className="form-check-input"
+                          type="checkbox"
+                          role="switch"
+                          id="aiModerationSwitch"
+                          checked={aiModerationEnabled}
+                          onChange={toggleAiModeration}
+                          disabled={aiConfigLoading}
+                          style={{
+                            cursor: aiConfigLoading ? "wait" : "pointer",
+                            width: "3rem",
+                            height: "1.5rem",
+                            backgroundColor: aiModerationEnabled ? "#10b981" : "#e9ecef",
+                            borderColor: aiModerationEnabled ? "#10b981" : "#dee2e6",
+                          }}
+                        />
+                        <label
+                          className="form-check-label visually-hidden"
+                          htmlFor="aiModerationSwitch"
+                        >
+                          Activer/Désactiver IA
+                        </label>
+                      </div>
+                    </div>
+
+                    {aiConfigLoading && (
+                      <div className="text-center py-3">
+                        <div className="spinner-border spinner-border-sm text-success" role="status">
+                          <span className="visually-hidden">Chargement...</span>
+                        </div>
+                        <span className="ms-2 small text-muted">Modification en cours...</span>
+                      </div>
+                    )}
+
+                    {aiConfigMessage && (
+                      <div className={`alert ${aiConfigMessage.includes('✅') ? 'alert-success' : 'alert-danger'} py-2 px-3 small mb-0 rounded-3`}>
+                        <i className={`fa-solid ${aiConfigMessage.includes('✅') ? 'fa-check-circle' : 'fa-exclamation-circle'} me-2`}></i>
+                        {aiConfigMessage}
+                      </div>
+                    )}
+
+                    <div className="mt-3 pt-2 border-top small text-muted">
+                      <i className="fa-solid fa-info-circle me-1 text-success"></i>
+                      {aiModerationEnabled 
+                        ? "Les nouvelles annonces seront automatiquement modérées par l'IA avant publication"
+                        : "Les nouvelles annonces seront en attente de validation manuelle par un agent"}
+                    </div>
+                    
+                    {aiConfigMessage && !aiConfigLoading && (
+                      <div className="mt-2 text-end">
+                        <button
+                          className="btn btn-sm btn-outline-secondary rounded-pill px-3"
+                          onClick={() => setAiConfigMessage(null)}
+                        >
+                          <i className="fa-solid fa-times me-1"></i>
+                          Fermer
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Bouton Aide */}
             {showHelpButton && (
               <button
@@ -793,7 +1038,6 @@ export default function DashboardHeader({
                         style={{ objectFit: "cover" }}
                         onError={handleImageError}
                       />
-                      {/* Indicateur de statut */}
                       <span
                         className={`position-absolute bottom-0 end-0 translate-middle p-1 rounded-circle border border-2 border-white ${
                           profile?.est_bloque ? "bg-danger" : "bg-success"
@@ -893,7 +1137,6 @@ export default function DashboardHeader({
                   )}
 
                   <div className="py-2">
-                    {/* Accueil */}
                     <button
                       onClick={handleHomeClick}
                       onKeyDown={(e) => handleKeyDown(e, handleHomeClick)}
@@ -909,7 +1152,6 @@ export default function DashboardHeader({
                       <span className="fw-medium">Accueil</span>
                     </button>
 
-                    {/* Mon profil */}
                     <button
                       onClick={handleProfileClick}
                       onKeyDown={(e) => handleKeyDown(e, handleProfileClick)}
@@ -924,7 +1166,6 @@ export default function DashboardHeader({
                       <span>Mon profil</span>
                     </button>
 
-                    {/* Mes annonces */}
                     <button
                       onClick={handleAnnoncesClick}
                       onKeyDown={(e) => handleKeyDown(e, handleAnnoncesClick)}
@@ -939,7 +1180,6 @@ export default function DashboardHeader({
                       <span>Mes annonces</span>
                     </button>
 
-                    {/* Messages */}
                     <button
                       onClick={handleMessagesClick}
                       onKeyDown={(e) => handleKeyDown(e, handleMessagesClick)}
@@ -956,7 +1196,6 @@ export default function DashboardHeader({
 
                     <div className="border-top my-2" role="separator"></div>
 
-                    {/* Déconnexion */}
                     <button
                       onClick={handleLogout}
                       onKeyDown={(e) => handleKeyDown(e, handleLogout)}
@@ -1019,16 +1258,39 @@ export default function DashboardHeader({
 
       {/* Styles */}
       <style jsx>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
         .rotate-180 {
           transform: rotate(180deg);
           transition: transform 0.3s ease;
         }
+        
         .z-3 {
           z-index: 1030;
         }
+        
+        .rounded-3 {
+          border-radius: 0.75rem !important;
+        }
+        
+        .rounded-top-3 {
+          border-top-left-radius: 0.75rem !important;
+          border-top-right-radius: 0.75rem !important;
+        }
+        
         .hover-bg-light:hover {
           background-color: #f8f9fa;
         }
+        
         .hover-text-dark:hover {
           color: #1f2937 !important;
         }

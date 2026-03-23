@@ -154,28 +154,27 @@ class AnnonceService {
   /**
    * Récupère les dons en attente
    */
-  async getDonsEnAttente(): Promise<Annonce[]> {
-    if (!this.isProduction) {
-      console.log("📦 [Dons] Chargement des dons en attente...");
-      console.log("📦 Endpoint:", API_ENDPOINTS.DONS.LISTE_TOUS_DON_EN_ATTENTE);
-    }
-    
-    const response = await api.get<any>(API_ENDPOINTS.DONS.LISTE_TOUS_DON_EN_ATTENTE);
-    return this.extractData(response);
+async getDonsEnAttente(): Promise<Annonce[]> {
+  if (!this.isProduction) {
+    console.log("📦 [Dons] Chargement des dons en attente...");
+    console.log("📦 Endpoint:", API_ENDPOINTS.DONS.LISTE_TOUS_DON_EN_ATTENTE);
   }
-
+  
+  const response = await api.get<any>(API_ENDPOINTS.DONS.LISTE_TOUS_DON_EN_ATTENTE);
+  return this.extractData(response);
+}
   /**
    * Récupère les dons bloqués
    */
   async getDonsBloques(): Promise<Annonce[]> {
-    if (!this.isProduction) {
-      console.log("📦 [Dons] Chargement des dons bloqués...");
-      console.log("📦 Endpoint:", API_ENDPOINTS.DONS.LISTE_TOUS_DON_BLOQUES);
-    }
-    
-    const response = await api.get<any>(API_ENDPOINTS.DONS.LISTE_TOUS_DON_BLOQUES);
-    return this.extractData(response);
+  if (!this.isProduction) {
+    console.log("📦 [Dons] Chargement des dons bloqués...");
+    console.log("📦 Endpoint:", API_ENDPOINTS.DONS.LISTE_TOUS_DON_BLOQUES);
   }
+  
+  const response = await api.get<any>(API_ENDPOINTS.DONS.LISTE_TOUS_DON_BLOQUES);
+  return this.extractData(response);
+}
 
   // ============================================
   // ÉCHANGES
