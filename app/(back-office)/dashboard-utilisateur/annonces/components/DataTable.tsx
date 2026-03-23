@@ -218,7 +218,6 @@ export default function DataTable({
       };
     }
 
-    // ✅ PRIORITÉ 4: Si le statut contient "publié" (mais pas "en attente")
     if (statusLower.includes("publie") || statusLower.includes("publié")) {
       if (!statusLower.includes("attente")) {
         return {
