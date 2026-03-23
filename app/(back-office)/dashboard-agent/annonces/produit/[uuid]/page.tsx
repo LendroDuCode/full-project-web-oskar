@@ -1253,7 +1253,6 @@ export default function ProductDetailPage() {
           </div>
         </div>
 
-        {/* Colonne de droite - Informations et actions */}
         <div className="col-lg-4">
           {/* ✅ Carte du vendeur en premier */}
           {createur && (

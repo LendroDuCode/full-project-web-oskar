@@ -1591,7 +1591,6 @@ export default function EchangeDetailPage() {
             )}
           </div>
 
-          {/* ✅ Carte des actions d'administration (sans validation/rejet) */}
           <div className="card border-0 shadow-lg" style={{ borderRadius: "24px" }}>
             <div className="card-header bg-white border-0 py-3 px-4">
               <h3 className="h5 mb-0">

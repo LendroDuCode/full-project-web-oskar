@@ -1439,7 +1439,6 @@ export default function DonDetailPage() {
                   </div>
                 </div>
 
-                {/* Conditions de retrait */}
                 {don.conditions_retrait && (
                   <div className="mt-4">
                     <h5 className="mb-3">
