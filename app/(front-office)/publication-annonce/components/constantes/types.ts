@@ -234,7 +234,8 @@ export interface VenteFormProps {
   onBoutiqueChange?: (uuid: string) => void;
   saleMode?: SaleMode; // ✅ AJOUT DE LA PROPRIÉTÉ MANQUANTE
   onOpenCreateBoutique?: () => void;
-  onOpenVendeurRegister?: () => void; // ✅ AJOUT POUR COHÉRENCE
+  onOpenVendeurRegister?: () => void; 
+  loadingBoutiques?: boolean; 
 }
 
 export interface BoutiqueFormProps {

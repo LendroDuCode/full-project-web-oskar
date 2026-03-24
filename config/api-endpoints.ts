@@ -428,6 +428,7 @@ export const API_ENDPOINTS = {
     WITH_PUBLISHED_PRODUITS: withBaseUrl(
       "/boutiques/liste-boutique-produits-publies",
     ),
+        VERIFIER: '/boutiques/verifier', // ✅ Nouvel endpoint
     DETAIL: (uuid: string) => withBaseUrl(`/boutiques/${uuid}`),
     PUBLIC_DETAIL: (uuid: string) => withBaseUrl(`/boutiques/publie/${uuid}`),
     BY_SLUG: (slug: string) => withBaseUrl(`/boutiques/slug/${slug}`),
