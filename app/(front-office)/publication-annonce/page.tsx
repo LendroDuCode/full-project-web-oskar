@@ -64,7 +64,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
   // États pour l'IA
   const [showAISuggestions, setShowAISuggestions] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<Suggestion[]>([]);
-  const [pendingDonData, setPendingDonData] = useState<DonData | null>(null);
+  const [pendingDonData, setPendingDonData] = useState<any>(null);
   const [aiModerationEnabled, setAiModerationEnabled] = useState(true);
   const [currentDonUuid, setCurrentDonUuid] = useState<string | null>(null);
   
@@ -279,7 +279,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         const isEnabled = response.isModerationEnabled === true;
         
         setAiModerationEnabled(isEnabled);
-        console.log(`🔧 IA modération ${isEnabled ? 'ACTIVÉE' : 'DÉSACTIVÉE'} pour ${user?.type || 'utilisateur'}`);
+        console.log(`🔧 IA modération ${isEnabled ? 'ACTIVÉE' : 'DÉSACTIVÉE (modération manuelle active)'} pour ${user?.type || 'utilisateur'}`);
         
       } catch (error) {
         console.error("❌ Erreur vérification statut IA:", error);
@@ -404,7 +404,6 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
             nom: result.boutiqueNom,
           });
           
-          // ✅ Correction: Créer un objet Boutique valide sans type_boutique
           setBoutiques([{
             uuid: result.boutiqueUuid!,
             nom: result.boutiqueNom!,
@@ -680,7 +679,6 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       setVerificationBoutiqueDone(true);
       setBoutiqueInfo({ uuid: newBoutiqueUuid, nom: newBoutiqueNom });
       
-      // ✅ Correction: Créer un objet Boutique valide sans type_boutique
       setBoutiques([{
         uuid: newBoutiqueUuid,
         nom: newBoutiqueNom,
@@ -747,26 +745,46 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
   // ============================================
   // 8. LES FONCTIONS DE PUBLICATION AVEC IA
   // ============================================
-  const publishDonWithAI = async (formData: FormData, suggestionAcceptee?: { suggestionId: string; champ: string; texteModifie?: string }) => {
+  const publishDonWithAI = async (formData: FormData, suggestionsAcceptees?: { suggestionId: string; champ: string; texteModifie?: string } | { suggestionId: string; champ: string; texteModifie?: string }[]) => {
     try {
       setLoading(true);
       setSubmitError(null);
       
       console.log("🚀 [IA] Début publication du don avec IA...");
-      console.log("📝 [IA] suggestionAcceptee:", suggestionAcceptee);
+      console.log("📝 [IA] suggestionsAcceptees:", suggestionsAcceptees);
       
-      const createResponse = await api.post(API_ENDPOINTS.DONS.CREATE, formData, {
-        isFormData: true,
-      });
-      
-      const donUuid = createResponse.data?.uuid || createResponse.uuid;
+      // ✅ ÉTAPE 1: Créer le don UNIQUEMENT s'il n'existe pas encore
+      let donUuid = currentDonUuid;
       
       if (!donUuid) {
-        throw new Error("Impossible de récupérer l'UUID du don");
+        const createResponse = await api.post(API_ENDPOINTS.DONS.CREATE, formData, {
+          isFormData: true,
+        });
+        
+        donUuid = createResponse.data?.uuid || createResponse.uuid;
+        
+        if (!donUuid) {
+          throw new Error("Impossible de récupérer l'UUID du don");
+        }
+        
+        console.log("✅ [IA] Don créé avec UUID:", donUuid);
+        setCurrentDonUuid(donUuid);
+      } else {
+        // ✅ Si on a déjà un UUID, on met à jour le don existant
+        console.log("🔄 [IA] Mise à jour du don existant avec UUID:", donUuid);
+        
+        // Récupérer les données du formulaire sous forme d'objet
+        const formDataObj: any = {};
+        for (const [key, value] of formData.entries()) {
+          if (key !== 'image') {
+            formDataObj[key] = value;
+          }
+        }
+        
+        // Appeler l'API de mise à jour
+        await api.patch(API_ENDPOINTS.DONS.UPDATE(donUuid), formDataObj);
+        console.log("✅ [IA] Don mis à jour avec succès");
       }
-      
-      console.log("✅ [IA] Don créé avec UUID:", donUuid);
-      setCurrentDonUuid(donUuid);
       
       const imageFile = formData.get("image") as File;
       if (imageFile) {
@@ -774,18 +792,23 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         console.log("✅ Image sauvegardée pour les suggestions");
       }
       
+      // ✅ Si des suggestions ont été acceptées, on force la publication directement
+      const hasAcceptedSuggestions = suggestionsAcceptees && 
+        (Array.isArray(suggestionsAcceptees) ? suggestionsAcceptees.length > 0 : true);
+      
+      // ✅ ÉTAPE 2: Envoyer à l'IA pour modération avec forcePublish si suggestions acceptées
       const moderationResponse = await api.post(
         API_ENDPOINTS.IA_MODERATION.PUBLIER_DON,
         {
           uuid: donUuid,
-          forcePublish: false,
-          bypassIA: false,
-          suggestionAcceptee: suggestionAcceptee,
+          forcePublish: hasAcceptedSuggestions, // ✅ FORCER la publication si suggestions acceptées
+          bypassIA: hasAcceptedSuggestions,      // ✅ Bypasser l'IA si suggestions acceptées
+          suggestionsAcceptees: suggestionsAcceptees,
         }
       );
       
       const donData = moderationResponse.data;
-      console.log("🤖 [IA] Réponse IA reçue");
+      console.log("🤖 [IA] Réponse IA reçue:", donData);
       
       if (!donData) {
         console.error("❌ [IA] Réponse API invalide");
@@ -806,13 +829,21 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       const estBloque = donData?.statut === 'bloque' || donData?.est_bloque === true;
       const estPublie = donData?.statut === 'publie' || donData?.estPublie === true;
       
-      console.log("🔍 [IA] Analyse:", { statut: donData?.statut, estBloque, estPublie, suggestionsCount: suggestions.length });
+      console.log("🔍 [IA] Analyse:", { 
+        statut: donData?.statut, 
+        estBloque, 
+        estPublie, 
+        suggestionsCount: suggestions.length,
+        hasAcceptedSuggestions
+      });
       
-      if (suggestions.length > 0 && !suggestionAcceptee) {
+      // ✅ Si des suggestions sont reçues et qu'on n'en a pas encore envoyé
+      if (suggestions.length > 0 && !hasAcceptedSuggestions) {
         console.log("💡 [IA] Suggestions reçues:", suggestions.length);
         setAiSuggestions(suggestions);
         setPendingDonData({
           ...donData,
+          uuid: donUuid,
           image: imageFile || savedImageFile,
         });
         setShowAISuggestions(true);
@@ -820,7 +851,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         return;
       }
       
-      if (estBloque) {
+      if (estBloque && !hasAcceptedSuggestions) {
         const categories = donData.ai_moderation_categories || [];
         let message = donData.moderation_message || `❌ Votre don a été rejeté : ${categories.join(', ')}`;
         message = message.replace(/\s*\(sans analyse d'image\)\s*/g, '');
@@ -841,10 +872,12 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         return;
       }
       
-      if (estPublie) {
+      if (estPublie || hasAcceptedSuggestions) {
         let successMessage = donData.moderation_message?.includes('✅') 
           ? donData.moderation_message
-          : "✅ Félicitations ! Votre don a été automatiquement approuvé et publié par notre IA !";
+          : hasAcceptedSuggestions
+            ? "✅ Félicitations ! Vos modifications ont été acceptées et votre annonce a été publiée avec succès !"
+            : "✅ Félicitations ! Votre don a été automatiquement approuvé et publié par notre IA !";
         
         successMessage = successMessage.replace(/\s*\(sans analyse d'image\)\s*/g, '');
         
@@ -893,26 +926,44 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     }
   };
 
-  const publishEchangeWithAI = async (formData: FormData, suggestionAcceptee?: { suggestionId: string; champ: string; texteModifie?: string }) => {
+  const publishEchangeWithAI = async (formData: FormData, suggestionsAcceptees?: { suggestionId: string; champ: string; texteModifie?: string } | { suggestionId: string; champ: string; texteModifie?: string }[]) => {
     try {
       setLoading(true);
       setSubmitError(null);
       
       console.log("🔄 [IA] Début publication de l'échange avec IA...");
-      console.log("📝 [IA] suggestionAcceptee:", suggestionAcceptee);
+      console.log("📝 [IA] suggestionsAcceptees:", suggestionsAcceptees);
       
-      const createResponse = await api.post(API_ENDPOINTS.ECHANGES.CREATE, formData, {
-        isFormData: true,
-      });
-      
-      const echangeUuid = createResponse.data?.uuid || createResponse.uuid;
+      // ✅ ÉTAPE 1: Créer l'échange UNIQUEMENT s'il n'existe pas encore
+      let echangeUuid = currentDonUuid;
       
       if (!echangeUuid) {
-        throw new Error("Impossible de récupérer l'UUID de l'échange");
+        const createResponse = await api.post(API_ENDPOINTS.ECHANGES.CREATE, formData, {
+          isFormData: true,
+        });
+        
+        echangeUuid = createResponse.data?.uuid || createResponse.uuid;
+        
+        if (!echangeUuid) {
+          throw new Error("Impossible de récupérer l'UUID de l'échange");
+        }
+        
+        console.log("✅ [IA] Échange créé avec UUID:", echangeUuid);
+        setCurrentDonUuid(echangeUuid);
+      } else {
+        // ✅ Si on a déjà un UUID, on met à jour l'échange existant
+        console.log("🔄 [IA] Mise à jour de l'échange existant avec UUID:", echangeUuid);
+        
+        const formDataObj: any = {};
+        for (const [key, value] of formData.entries()) {
+          if (key !== 'image') {
+            formDataObj[key] = value;
+          }
+        }
+        
+        await api.put(API_ENDPOINTS.ECHANGES.UPDATE(echangeUuid), formDataObj);
+        console.log("✅ [IA] Échange mis à jour avec succès");
       }
-      
-      console.log("✅ [IA] Échange créé avec UUID:", echangeUuid);
-      setCurrentDonUuid(echangeUuid);
       
       const imageFile = formData.get("image") as File;
       if (imageFile) {
@@ -920,13 +971,18 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         console.log("✅ Image sauvegardée pour les suggestions");
       }
       
+      // ✅ Si des suggestions ont été acceptées, on force la publication directement
+      const hasAcceptedSuggestions = suggestionsAcceptees && 
+        (Array.isArray(suggestionsAcceptees) ? suggestionsAcceptees.length > 0 : true);
+      
+      // ✅ ÉTAPE 2: Envoyer à l'IA pour modération avec forcePublish si suggestions acceptées
       const moderationResponse = await api.post(
         API_ENDPOINTS.IA_MODERATION.PUBLIER_DON,
         {
           uuid: echangeUuid,
-          forcePublish: false,
-          bypassIA: false,
-          suggestionAcceptee: suggestionAcceptee,
+          forcePublish: hasAcceptedSuggestions,
+          bypassIA: hasAcceptedSuggestions,
+          suggestionsAcceptees: suggestionsAcceptees,
         }
       );
       
@@ -954,11 +1010,12 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       
       console.log("🔍 [IA] Analyse:", { statut: echangeData?.statut, estBloque, estPublie, suggestionsCount: suggestions.length });
       
-      if (suggestions.length > 0 && !suggestionAcceptee) {
+      if (suggestions.length > 0 && !hasAcceptedSuggestions) {
         console.log("💡 [IA] Suggestions reçues:", suggestions.length);
         setAiSuggestions(suggestions);
         setPendingDonData({
           ...echangeData,
+          uuid: echangeUuid,
           image: imageFile || savedImageFile,
         });
         setShowAISuggestions(true);
@@ -966,7 +1023,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         return;
       }
       
-      if (estBloque) {
+      if (estBloque && !hasAcceptedSuggestions) {
         const categories = echangeData.ai_moderation_categories || [];
         let message = echangeData.moderation_message || `❌ Votre échange a été rejeté : ${categories.join(', ')}`;
         message = message.replace(/\s*\(sans analyse d'image\)\s*/g, '');
@@ -987,10 +1044,12 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         return;
       }
       
-      if (estPublie) {
+      if (estPublie || hasAcceptedSuggestions) {
         let successMessage = echangeData.moderation_message?.includes('✅') 
           ? echangeData.moderation_message
-          : "✅ Félicitations ! Votre échange a été automatiquement approuvé et publié par notre IA !";
+          : hasAcceptedSuggestions
+            ? "✅ Félicitations ! Vos modifications ont été acceptées et votre annonce a été publiée avec succès !"
+            : "✅ Félicitations ! Votre échange a été automatiquement approuvé et publié par notre IA !";
         
         successMessage = successMessage.replace(/\s*\(sans analyse d'image\)\s*/g, '');
         
@@ -1039,7 +1098,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     }
   };
 
-  const publishProduitWithAI = async (formData: FormData, suggestionAcceptee?: { suggestionId: string; champ: string; texteModifie?: string }) => {
+  const publishProduitWithAI = async (formData: FormData, suggestionsAcceptees?: { suggestionId: string; champ: string; texteModifie?: string } | { suggestionId: string; champ: string; texteModifie?: string }[]) => {
     try {
       if (isVendeur && adType === "sale") {
         if (!verificationBoutiqueDone) {
@@ -1078,21 +1137,39 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       setSubmitError(null);
       
       console.log("🛒 [IA] Début publication du produit avec IA...");
-      console.log("📝 [IA] suggestionAcceptee:", suggestionAcceptee);
+      console.log("📝 [IA] suggestionsAcceptees:", suggestionsAcceptees);
       console.log("📝 [IA] boutiqueUuid:", venteData.boutiqueUuid);
       
-      const createResponse = await api.post(API_ENDPOINTS.PRODUCTS.CREATE, formData, {
-        isFormData: true,
-      });
-      
-      const produitUuid = createResponse.data?.uuid || createResponse.uuid;
+      // ✅ ÉTAPE 1: Créer le produit UNIQUEMENT s'il n'existe pas encore
+      let produitUuid = currentDonUuid;
       
       if (!produitUuid) {
-        throw new Error("Impossible de récupérer l'UUID du produit");
+        const createResponse = await api.post(API_ENDPOINTS.PRODUCTS.CREATE, formData, {
+          isFormData: true,
+        });
+        
+        produitUuid = createResponse.data?.uuid || createResponse.uuid;
+        
+        if (!produitUuid) {
+          throw new Error("Impossible de récupérer l'UUID du produit");
+        }
+        
+        console.log("✅ [IA] Produit créé avec UUID:", produitUuid);
+        setCurrentDonUuid(produitUuid);
+      } else {
+        // ✅ Si on a déjà un UUID, on met à jour le produit existant
+        console.log("🔄 [IA] Mise à jour du produit existant avec UUID:", produitUuid);
+        
+        const formDataObj: any = {};
+        for (const [key, value] of formData.entries()) {
+          if (key !== 'image') {
+            formDataObj[key] = value;
+          }
+        }
+        
+        await api.put(API_ENDPOINTS.PRODUCTS.UPDATE(produitUuid), formDataObj);
+        console.log("✅ [IA] Produit mis à jour avec succès");
       }
-      
-      console.log("✅ [IA] Produit créé avec UUID:", produitUuid);
-      setCurrentDonUuid(produitUuid);
       
       const imageFile = formData.get("image") as File;
       if (imageFile) {
@@ -1100,13 +1177,18 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         console.log("✅ Image sauvegardée pour les suggestions");
       }
       
+      // ✅ Si des suggestions ont été acceptées, on force la publication directement
+      const hasAcceptedSuggestions = suggestionsAcceptees && 
+        (Array.isArray(suggestionsAcceptees) ? suggestionsAcceptees.length > 0 : true);
+      
+      // ✅ ÉTAPE 2: Envoyer à l'IA pour modération avec forcePublish si suggestions acceptées
       const moderationResponse = await api.post(
         API_ENDPOINTS.IA_MODERATION.PUBLIER_DON,
         {
           uuid: produitUuid,
-          forcePublish: false,
-          bypassIA: false,
-          suggestionAcceptee: suggestionAcceptee,
+          forcePublish: hasAcceptedSuggestions,
+          bypassIA: hasAcceptedSuggestions,
+          suggestionsAcceptees: suggestionsAcceptees,
         }
       );
       
@@ -1134,11 +1216,12 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       
       console.log("🔍 [IA] Analyse:", { statut: produitData?.statut, estBloque, estPublie, suggestionsCount: suggestions.length });
       
-      if (suggestions.length > 0 && !suggestionAcceptee) {
+      if (suggestions.length > 0 && !hasAcceptedSuggestions) {
         console.log("💡 [IA] Suggestions reçues:", suggestions.length);
         setAiSuggestions(suggestions);
         setPendingDonData({
           ...produitData,
+          uuid: produitUuid,
           image: imageFile || savedImageFile,
         });
         setShowAISuggestions(true);
@@ -1146,7 +1229,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         return;
       }
       
-      if (estBloque) {
+      if (estBloque && !hasAcceptedSuggestions) {
         const categories = produitData.ai_moderation_categories || [];
         let message = produitData.moderation_message || `❌ Votre produit a été rejeté : ${categories.join(', ')}`;
         message = message.replace(/\s*\(sans analyse d'image\)\s*/g, '');
@@ -1167,10 +1250,12 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         return;
       }
       
-      if (estPublie) {
+      if (estPublie || hasAcceptedSuggestions) {
         let successMessage = produitData.moderation_message?.includes('✅') 
           ? produitData.moderation_message
-          : "✅ Félicitations ! Votre produit a été automatiquement approuvé et publié par notre IA !";
+          : hasAcceptedSuggestions
+            ? "✅ Félicitations ! Vos modifications ont été acceptées et votre annonce a été publiée avec succès !"
+            : "✅ Félicitations ! Votre produit a été automatiquement approuvé et publié par notre IA !";
         
         successMessage = successMessage.replace(/\s*\(sans analyse d'image\)\s*/g, '');
         
@@ -1220,13 +1305,14 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
   };
 
   // ============================================
-  // 9. LES FONCTIONS DE PUBLICATION MANUELLE
+  // 9. LES FONCTIONS DE PUBLICATION MANUELLE (MODÉRATION MANUELLE)
   // ============================================
   const submitDonManually = async (formData: FormData) => {
     try {
       setLoading(true);
       
       console.log("⚠️ [MANUEL] Publication manuelle du don (IA désactivée)");
+      console.log("⏳ [MANUEL] Annonce en attente de validation par un modérateur");
       
       const result = await api.post(API_ENDPOINTS.DONS.CREATE, formData, {
         isFormData: true,
@@ -1235,15 +1321,15 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       console.log("✅ [MANUEL] Don créé avec succès:", result.data?.uuid);
       
       showNotification(
-        "✅ Votre don a été soumis avec succès !",
-        'success',
+        "⏳ Votre don a été soumis avec succès et est en attente de validation par un modérateur. Vous serez notifié dès sa publication.",
+        'info',
         true
       );
       
       setTimeout(() => {
         onHide();
         resetForm();
-      }, 3000);
+      }, 4000);
       
     } catch (error: any) {
       console.error("❌ [MANUEL] Erreur publication don:", error);
@@ -1263,6 +1349,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       setLoading(true);
       
       console.log("⚠️ [MANUEL] Publication manuelle de l'échange (IA désactivée)");
+      console.log("⏳ [MANUEL] Annonce en attente de validation par un modérateur");
       
       const result = await api.post(API_ENDPOINTS.ECHANGES.CREATE, formData, {
         isFormData: true,
@@ -1271,15 +1358,15 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       console.log("✅ [MANUEL] Échange créé avec succès:", result.data?.uuid);
       
       showNotification(
-        "✅ Votre échange a été soumis avec succès !",
-        'success',
+        "⏳ Votre échange a été soumis avec succès et est en attente de validation par un modérateur. Vous serez notifié dès sa publication.",
+        'info',
         true
       );
       
       setTimeout(() => {
         onHide();
         resetForm();
-      }, 3000);
+      }, 4000);
       
     } catch (error: any) {
       console.error("❌ [MANUEL] Erreur publication échange:", error);
@@ -1299,6 +1386,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       setLoading(true);
       
       console.log("⚠️ [MANUEL] Publication manuelle du produit (IA désactivée)");
+      console.log("⏳ [MANUEL] Annonce en attente de validation par un modérateur");
       
       const result = await api.post(API_ENDPOINTS.PRODUCTS.CREATE, formData, {
         isFormData: true,
@@ -1307,15 +1395,15 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       console.log("✅ [MANUEL] Produit créé avec succès:", result.data?.uuid);
       
       showNotification(
-        "✅ Votre produit a été soumis avec succès !",
-        'success',
+        "⏳ Votre produit a été soumis avec succès et est en attente de validation par un modérateur. Vous serez notifié dès sa publication.",
+        'info',
         true
       );
       
       setTimeout(() => {
         onHide();
         resetForm();
-      }, 3000);
+      }, 4000);
       
     } catch (error: any) {
       console.error("❌ [MANUEL] Erreur publication produit:", error);
@@ -1341,6 +1429,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       setShowAISuggestions(false);
       
       console.log("🔍 pendingDonData avant acceptation:", {
+        uuid: pendingDonData.uuid,
         titre: pendingDonData.titre,
         description: pendingDonData.description,
         lieu_retrait: pendingDonData.lieu_retrait,
@@ -1378,7 +1467,6 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
           if (venteData.boutiqueNom) {
             formData.append("boutiqueNom", venteData.boutiqueNom);
           }
-          console.log("📝 [IA] Ajout boutiqueUuid au formData:", venteData.boutiqueUuid);
         }
         
         formData.append("prix", venteData.prix || "0");
@@ -1393,10 +1481,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       
       const imageToSend = updatedData.image || savedImageFile;
       if (imageToSend) {
-        console.log("✅ Image trouvée, ajout au FormData");
         formData.append("image", imageToSend);
-      } else {
-        console.warn("⚠️ Aucune image trouvée dans les données!");
       }
       
       const suggestionAcceptee = {
@@ -1428,6 +1513,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       setShowAISuggestions(false);
       
       console.log("🔍 pendingDonData avant acceptation de toutes les suggestions:", {
+        uuid: pendingDonData.uuid,
         titre: pendingDonData.titre,
         description: pendingDonData.description,
         lieu_retrait: pendingDonData.lieu_retrait,
@@ -1435,8 +1521,11 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         savedImage: !!savedImageFile
       });
       
+      // ✅ Appliquer TOUTES les suggestions à updatedData
       const updatedData = { ...pendingDonData };
-      let premiereSuggestion: { suggestionId: string; champ: string; texteModifie: string } | null = null;
+      
+      // ✅ Stocker TOUTES les suggestions acceptées
+      const suggestionsAcceptees: { suggestionId: string; champ: string; texteModifie: string }[] = [];
       
       aiSuggestions.forEach((suggestion) => {
         let texteModifie = "";
@@ -1451,14 +1540,14 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
           texteModifie = suggestion.suggestedText;
         }
         
-        if (!premiereSuggestion) {
-          premiereSuggestion = {
-            suggestionId: suggestion.id,
-            champ: suggestion.champ,
-            texteModifie: texteModifie,
-          };
-        }
+        suggestionsAcceptees.push({
+          suggestionId: suggestion.id,
+          champ: suggestion.champ,
+          texteModifie: texteModifie,
+        });
       });
+      
+      console.log(`✅ ${suggestionsAcceptees.length} suggestions acceptées:`, suggestionsAcceptees);
       
       const formData = new FormData();
       
@@ -1476,7 +1565,6 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
           if (venteData.boutiqueNom) {
             formData.append("boutiqueNom", venteData.boutiqueNom);
           }
-          console.log("📝 [IA] Ajout boutiqueUuid au formData:", venteData.boutiqueUuid);
         }
         
         formData.append("prix", venteData.prix || "0");
@@ -1491,18 +1579,16 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       
       const imageToSend = updatedData.image || savedImageFile;
       if (imageToSend) {
-        console.log("✅ Image trouvée, ajout au FormData");
         formData.append("image", imageToSend);
-      } else {
-        console.warn("⚠️ Aucune image trouvée dans les données!");
       }
       
+      // ✅ Envoyer TOUTES les suggestions acceptées avec forcePublish = true
       if (adType === "don") {
-        await publishDonWithAI(formData, premiereSuggestion || undefined);
+        await publishDonWithAI(formData, suggestionsAcceptees);
       } else if (adType === "exchange") {
-        await publishEchangeWithAI(formData, premiereSuggestion || undefined);
+        await publishEchangeWithAI(formData, suggestionsAcceptees);
       } else {
-        await publishProduitWithAI(formData, premiereSuggestion || undefined);
+        await publishProduitWithAI(formData, suggestionsAcceptees);
       }
       
     } catch (error: any) {
@@ -1570,8 +1656,6 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
   // ============================================
   const submitDon = async (): Promise<void> => {
     console.log("📝 [submitDon] Début - aiModerationEnabled:", aiModerationEnabled);
-    console.log("📝 [submitDon] user type:", user?.type);
-    console.log("📝 [submitDon] isVendeur:", isVendeur);
     
     if (!donData.titre?.trim()) {
       setSubmitError("Le titre du don est obligatoire");
@@ -1623,13 +1707,11 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     }
 
     console.log("📤 [submitDon] Envoi du don");
-    console.log("🔘 [submitDon] Chemin choisi:", aiModerationEnabled ? "IA" : "Manuel");
+    console.log("🔘 [submitDon] Chemin choisi:", aiModerationEnabled ? "IA" : "Manuel (modération manuelle)");
 
     if (aiModerationEnabled) {
-      console.log("🚀 [submitDon] Appel à publishDonWithAI");
       await publishDonWithAI(formData);
     } else {
-      console.log("⚠️ [submitDon] Appel à submitDonManually");
       await submitDonManually(formData);
     }
   };
@@ -1695,8 +1777,6 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
 
   const submitVente = async (): Promise<void> => {
     console.log("🚀 Début submitVente");
-    console.log("📊 État venteData:", venteData);
-    console.log("👤 Type utilisateur:", user?.type);
 
     if (!venteData.libelle?.trim()) {
       setSubmitError("Le nom du produit est obligatoire");
@@ -2197,7 +2277,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
                               ? "Proposer un Échange"
                               : "Vendre un Produit"}
                       </h2>
-                      {aiModerationEnabled && (
+                      {aiModerationEnabled ? (
                         <span
                           className="badge rounded-pill ms-3 px-3 py-2"
                           style={{
@@ -2208,6 +2288,18 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
                         >
                           <FontAwesomeIcon icon={faRobot} className="me-1" />
                           Modération IA active
+                        </span>
+                      ) : (
+                        <span
+                          className="badge rounded-pill ms-3 px-3 py-2"
+                          style={{
+                            background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+                            color: "white",
+                            fontSize: "0.8rem",
+                          }}
+                        >
+                          <FontAwesomeIcon icon={faShield} className="me-1" />
+                          Modération manuelle
                         </span>
                       )}
                     </div>
