@@ -1,19 +1,9 @@
-// app/(back-office)/dashboard-utilisateur/annonces/components/DataTable.tsx
 "use client";
 
 import { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faEye,
-  faCheck,
-  faXmark,
-  faGlobe,
-  faLock,
-  faBoxOpen,
-  faUnlock,
-  faCalendarCheck,
-  faCalendarXmark,
   faTrash,
   faEdit,
   faTag,
@@ -23,17 +13,16 @@ import {
   faExclamationTriangle,
   faChevronDown,
   faChevronUp,
-  faListCheck,
+  faBoxOpen,
   faClock,
   faBan,
+  faGlobe,
 } from "@fortawesome/free-solid-svg-icons";
 import colors from "@/app/shared/constants/colors";
 import {
   formatPrice,
   formatRelativeTime,
   truncateText,
-  getStatusLabel,
-  getTypeLabel,
 } from "@/app/shared/utils/formatters";
 
 // ============================================
@@ -42,17 +31,15 @@ import {
 const buildImageUrl = (imagePath: string | null): string | null => {
   if (!imagePath) return null;
 
-  // Nettoyer le chemin des espaces indésirables
   let cleanPath = imagePath
-    .replace(/\s+/g, "") // Supprimer tous les espaces
-    .replace(/-/g, "-") // Normaliser les tirets
+    .replace(/\s+/g, "")
+    .replace(/-/g, "-")
     .trim();
 
   const apiUrl =
     process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
   const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
 
-  // ✅ CAS 1: Déjà une URL complète
   if (cleanPath.startsWith("http://") || cleanPath.startsWith("https://")) {
     if (cleanPath.includes("localhost")) {
       const productionUrl = apiUrl.replace(/\/api$/, "");
@@ -61,14 +48,11 @@ const buildImageUrl = (imagePath: string | null): string | null => {
     return cleanPath;
   }
 
-  // ✅ CAS 2: Chemin avec %2F (déjà encodé)
   if (cleanPath.includes("%2F")) {
-    // Nettoyer les espaces autour de %2F
     const finalPath = cleanPath.replace(/%2F\s+/, "%2F");
     return `${apiUrl}${filesUrl}/${finalPath}`;
   }
 
-  // ✅ CAS 3: Chemin simple
   return `${apiUrl}${filesUrl}/${cleanPath}`;
 };
 
@@ -87,30 +71,18 @@ interface AnnonceItem {
   estBloque?: boolean;
   category?: string;
   originalData?: any;
-  seller?: {
-    name: string;
-    avatar?: string;
-    avatar_key?: string;
-    isPro?: boolean;
-    type?: string;
-  };
 }
 
 interface DataTableProps {
   data: AnnonceItem[];
   loading?: boolean;
   error?: string | null;
-  onValidate?: (uuid: string, type: string) => void;
-  onReject?: (uuid: string, type: string) => void;
-  onPublish?: (uuid: string, type: string, publish: boolean) => void;
-  onBlock?: (uuid: string, type: string, block: boolean) => void;
-  onDelete?: (uuid: string, type: string) => void;
   onView?: (uuid: string, type: string) => void;
-  onEdit?: (uuid: string, type: string) => void;
+  onEdit?: (uuid: string, type: string, item?: any) => void;
+  onDelete?: (uuid: string, type: string) => void;
   onRefresh?: () => void;
   selectedItems?: Set<string>;
   onSelectionChange?: (selected: Set<string>) => void;
-  onBulkAction?: (action: string, items: AnnonceItem[]) => void;
   className?: string;
 }
 
@@ -118,41 +90,33 @@ export default function DataTable({
   data,
   loading = false,
   error = null,
-  onValidate,
-  onReject,
-  onPublish,
-  onBlock,
-  onDelete,
   onView,
   onEdit,
+  onDelete,
   onRefresh,
   selectedItems = new Set(),
   onSelectionChange,
-  onBulkAction,
   className = "",
 }: DataTableProps) {
-  const router = useRouter();
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [processingItems, setProcessingItems] = useState<Set<string>>(
-    new Set(),
-  );
+  const [processingItems, setProcessingItems] = useState<Set<string>>(new Set());
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
 
   const totalPages = useMemo(
     () => Math.ceil(data.length / itemsPerPage),
-    [data.length, itemsPerPage],
+    [data.length, itemsPerPage]
   );
 
   const startIndex = useMemo(
     () => (currentPage - 1) * itemsPerPage,
-    [currentPage, itemsPerPage],
+    [currentPage, itemsPerPage]
   );
 
   const currentItems = useMemo(
     () => data.slice(startIndex, startIndex + itemsPerPage),
-    [data, startIndex, itemsPerPage],
+    [data, startIndex, itemsPerPage]
   );
 
   const getTypeConfig = (type: string) => {
@@ -179,19 +143,10 @@ export default function DataTable({
     return configs[type as keyof typeof configs] || configs.produit;
   };
 
-  // ✅ FONCTION CORRIGÉE POUR LES STATUTS
+  // ✅ FONCTION POUR LES STATUTS
   const getStatusConfig = (item: AnnonceItem) => {
     const statusLower = item.status?.toLowerCase() || "";
 
-    // Log pour déboguer
-    console.log(`🎯 Statut pour ${item.title}:`, {
-      status: item.status,
-      estPublie: item.estPublie,
-      estBloque: item.estBloque,
-      statusLower
-    });
-
-    // ✅ PRIORITÉ 1: Bloqué (priorité absolue)
     if (item.estBloque === true) {
       return {
         label: "Bloqué",
@@ -200,7 +155,6 @@ export default function DataTable({
       };
     }
 
-    // ✅ PRIORITÉ 2: Si le statut contient "bloqué"
     if (statusLower.includes("bloque") || statusLower.includes("bloqué")) {
       return {
         label: "Bloqué",
@@ -209,7 +163,6 @@ export default function DataTable({
       };
     }
 
-    
     if (item.estPublie === true) {
       return {
         label: "Publié",
@@ -228,7 +181,6 @@ export default function DataTable({
       }
     }
 
-    // ✅ PRIORITÉ 5: En attente
     if (statusLower.includes("en-attente") || 
         statusLower.includes("en_attente") || 
         statusLower.includes("en attente") ||
@@ -240,7 +192,6 @@ export default function DataTable({
       };
     }
 
-    // ✅ PRIORITÉ 6: Non publié (cas par défaut)
     return {
       label: "Non publié",
       color: colors.oskar.warning,
@@ -248,26 +199,20 @@ export default function DataTable({
     };
   };
 
-  // ✅ Gestion des erreurs d'image
   const handleImageError = (
     uuid: string,
-    e: React.SyntheticEvent<HTMLImageElement, Event>,
+    e: React.SyntheticEvent<HTMLImageElement, Event>
   ) => {
     const target = e.currentTarget;
 
-    // Si l'URL contient localhost, essayer de la corriger
     if (target.src.includes("localhost")) {
       const productionUrl =
         process.env.NEXT_PUBLIC_API_URL?.replace(/\/api$/, "") ||
         "https://oskar-api.mysonec.pro";
-      target.src = target.src.replace(
-        /http:\/\/localhost(:\d+)?/g,
-        productionUrl,
-      );
+      target.src = target.src.replace(/http:\/\/localhost(:\d+)?/g, productionUrl);
       return;
     }
 
-    // Si l'URL contient des espaces, essayer de les nettoyer
     if (target.src.includes("%20")) {
       target.src = target.src.replace(/%20/g, "");
       return;
@@ -277,19 +222,16 @@ export default function DataTable({
     target.onerror = null;
   };
 
-  // ✅ Obtenir l'URL de l'image
   const getImageUrl = (item: AnnonceItem): string => {
     if (imageErrors.has(item.uuid)) {
       return `https://via.placeholder.com/48?text=${item.title?.charAt(0) || "?"}`;
     }
 
-    // Essayer d'abord avec image_key
     if (item.image_key) {
       const url = buildImageUrl(item.image_key);
       if (url) return url;
     }
 
-    // Sinon avec image
     if (item.image) {
       const url = buildImageUrl(item.image);
       if (url) return url;
@@ -327,12 +269,7 @@ export default function DataTable({
     setExpandedItems(newExpanded);
   };
 
-  const handleAction = async (
-    action: string,
-    uuid: string,
-    type: string,
-    extra?: any,
-  ) => {
+  const handleAction = async (action: string, uuid: string, type: string, item?: any) => {
     setProcessingItems((prev) => new Set(prev).add(uuid));
 
     try {
@@ -341,25 +278,7 @@ export default function DataTable({
           onView?.(uuid, type);
           break;
         case "edit":
-          onEdit?.(uuid, type);
-          break;
-        case "validate":
-          onValidate?.(uuid, type);
-          break;
-        case "reject":
-          onReject?.(uuid, type);
-          break;
-        case "publish":
-          onPublish?.(uuid, type, true);
-          break;
-        case "unpublish":
-          onPublish?.(uuid, type, false);
-          break;
-        case "block":
-          onBlock?.(uuid, type, true);
-          break;
-        case "unblock":
-          onBlock?.(uuid, type, false);
+          onEdit?.(uuid, type, item);
           break;
         case "delete":
           if (confirm("Êtes-vous sûr de vouloir supprimer cette annonce ?")) {
@@ -376,18 +295,6 @@ export default function DataTable({
         return newSet;
       });
     }
-  };
-
-  const handleBulkAction = (action: string) => {
-    if (selectedItems.size === 0) {
-      alert("Veuillez sélectionner au moins une annonce");
-      return;
-    }
-
-    const selectedAnnonces = data.filter((item) =>
-      selectedItems.has(item.uuid),
-    );
-    onBulkAction?.(action, selectedAnnonces);
   };
 
   if (loading) {
@@ -447,123 +354,13 @@ export default function DataTable({
         <h5 className="fw-semibold mb-2" style={{ color: colors.oskar.black }}>
           Aucune annonce
         </h5>
-        <p className="text-muted mb-0">
-          Aucune annonce à afficher pour le moment
-        </p>
+        <p className="text-muted mb-0">Aucune annonce à afficher pour le moment</p>
       </div>
     );
   }
 
   return (
-    <div
-      className={`bg-white border border-light rounded-3 shadow-sm ${className}`}
-    >
-      {/* Barre d'actions en masse */}
-      {selectedItems.size > 0 && (
-        <div
-          className="px-4 py-3 border-bottom border-light"
-          style={{ backgroundColor: colors.oskar.lightGrey }}
-        >
-          <div className="d-flex justify-content-between align-items-center">
-            <div className="d-flex align-items-center gap-3">
-              <FontAwesomeIcon
-                icon={faListCheck}
-                style={{ color: colors.oskar.blueHover }}
-              />
-              <span className="fw-medium" style={{ color: colors.oskar.black }}>
-                {selectedItems.size} annonce(s) sélectionnée(s)
-              </span>
-            </div>
-
-            <div className="d-flex gap-2">
-              <button
-                type="button"
-                className="btn btn-sm d-flex align-items-center gap-2"
-                onClick={() => handleBulkAction("publish")}
-                style={{
-                  backgroundColor: colors.status.published,
-                  color: "white",
-                  border: "none",
-                  padding: "0.25rem 0.5rem",
-                  borderRadius: "4px",
-                  fontSize: "0.75rem",
-                }}
-              >
-                <FontAwesomeIcon icon={faGlobe} size="xs" />
-                Publier
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-sm d-flex align-items-center gap-2"
-                onClick={() => handleBulkAction("unpublish")}
-                style={{
-                  backgroundColor: colors.oskar.warning,
-                  color: "white",
-                  border: "none",
-                  padding: "0.25rem 0.5rem",
-                  borderRadius: "4px",
-                  fontSize: "0.75rem",
-                }}
-              >
-                <FontAwesomeIcon icon={faCalendarXmark} size="xs" />
-                Dépublier
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-sm d-flex align-items-center gap-2"
-                onClick={() => handleBulkAction("block")}
-                style={{
-                  backgroundColor: colors.status.blocked,
-                  color: "white",
-                  border: "none",
-                  padding: "0.25rem 0.5rem",
-                  borderRadius: "4px",
-                  fontSize: "0.75rem",
-                }}
-              >
-                <FontAwesomeIcon icon={faLock} size="xs" />
-                Bloquer
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-sm d-flex align-items-center gap-2"
-                onClick={() => handleBulkAction("delete")}
-                style={{
-                  backgroundColor: colors.oskar.red,
-                  color: "white",
-                  border: "none",
-                  padding: "0.25rem 0.5rem",
-                  borderRadius: "4px",
-                  fontSize: "0.75rem",
-                }}
-              >
-                <FontAwesomeIcon icon={faTrash} size="xs" />
-                Supprimer
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-sm d-flex align-items-center gap-2"
-                onClick={() => onSelectionChange?.(new Set())}
-                style={{
-                  backgroundColor: colors.oskar.lightGrey,
-                  color: colors.oskar.grey,
-                  border: "none",
-                  padding: "0.25rem 0.5rem",
-                  borderRadius: "4px",
-                  fontSize: "0.75rem",
-                }}
-              >
-                Annuler
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
+    <div className={`bg-white border border-light rounded-3 shadow-sm ${className}`}>
       {/* Tableau */}
       <div className="table-responsive">
         <table className="table table-hover mb-0">
@@ -575,8 +372,7 @@ export default function DataTable({
                     className="form-check-input"
                     type="checkbox"
                     checked={
-                      selectedItems.size === currentItems.length &&
-                      currentItems.length > 0
+                      selectedItems.size === currentItems.length && currentItems.length > 0
                     }
                     onChange={toggleSelectAll}
                     style={{ cursor: "pointer" }}
@@ -601,21 +397,13 @@ export default function DataTable({
               const isSelected = selectedItems.has(item.uuid);
               const isProcessing = processingItems.has(item.uuid);
               const isExpanded = expandedItems.has(item.uuid);
-              const isPublished = item.estPublie === true;
-              const isBlocked = item.estBloque === true;
-              const isEnAttente = 
-                !isPublished && 
-                !isBlocked && 
-                (item.status?.toLowerCase().includes("attente") || !isPublished);
               const imageUrl = getImageUrl(item);
 
               return (
                 <tr
                   key={item.uuid}
                   style={{
-                    backgroundColor: isSelected
-                      ? `${colors.oskar.blue}05`
-                      : "transparent",
+                    backgroundColor: isSelected ? `${colors.oskar.blue}05` : "transparent",
                   }}
                 >
                   <td className="ps-4">
@@ -634,11 +422,7 @@ export default function DataTable({
                     <div className="d-flex align-items-center gap-3">
                       <div
                         className="rounded-3 overflow-hidden"
-                        style={{
-                          width: "48px",
-                          height: "48px",
-                          flexShrink: 0,
-                        }}
+                        style={{ width: "48px", height: "48px", flexShrink: 0 }}
                       >
                         <img
                           src={imageUrl}
@@ -677,10 +461,7 @@ export default function DataTable({
                         )}
 
                         {isExpanded && item.originalData && (
-                          <div
-                            className="mt-2 p-2 border rounded"
-                            style={{ fontSize: "0.75rem" }}
-                          >
+                          <div className="mt-2 p-2 border rounded" style={{ fontSize: "0.75rem" }}>
                             <div className="row">
                               <div className="col-6">
                                 <span className="text-muted">UUID:</span>{" "}
@@ -688,16 +469,12 @@ export default function DataTable({
                               </div>
                               <div className="col-6">
                                 <span className="text-muted">Catégorie:</span>{" "}
-                                <span className="fw-medium">
-                                  {item.category || "Non définie"}
-                                </span>
+                                <span className="fw-medium">{item.category || "Non définie"}</span>
                               </div>
                               {item.quantity && (
                                 <div className="col-6 mt-1">
                                   <span className="text-muted">Quantité:</span>{" "}
-                                  <span className="fw-medium">
-                                    {item.quantity}
-                                  </span>
+                                  <span className="fw-medium">{item.quantity}</span>
                                 </div>
                               )}
                             </div>
@@ -732,36 +509,25 @@ export default function DataTable({
                         padding: "0.25rem 0.5rem",
                       }}
                     >
-                      {statusConfig.icon && (
-                        <FontAwesomeIcon icon={statusConfig.icon} size="xs" />
-                      )}
+                      {statusConfig.icon && <FontAwesomeIcon icon={statusConfig.icon} size="xs" />}
                       {statusConfig.label}
                     </div>
                   </td>
 
                   <td>
-                    <span
-                      className="fw-medium small"
-                      style={{ color: colors.oskar.black }}
-                    >
+                    <span className="fw-medium small" style={{ color: colors.oskar.black }}>
                       {formatPrice(item.price)}
                     </span>
                   </td>
 
                   <td>
-                    <span
-                      className="fw-medium small"
-                      style={{ color: colors.oskar.black }}
-                    >
+                    <span className="fw-medium small" style={{ color: colors.oskar.black }}>
                       {item.quantity || 1}
                     </span>
                   </td>
 
                   <td>
-                    <div
-                      className="small"
-                      style={{ color: colors.oskar.black }}
-                    >
+                    <div className="small" style={{ color: colors.oskar.black }}>
                       {formatRelativeTime(item.date)}
                     </div>
                   </td>
@@ -781,9 +547,7 @@ export default function DataTable({
                           <button
                             type="button"
                             className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
-                            onClick={() =>
-                              handleAction("view", item.uuid, item.type)
-                            }
+                            onClick={() => handleAction("view", item.uuid, item.type)}
                             title="Voir détails"
                             style={{
                               width: "28px",
@@ -797,117 +561,23 @@ export default function DataTable({
                             <FontAwesomeIcon icon={faEye} size="xs" />
                           </button>
 
-                          {/* Valider (seulement en attente) */}
-                          {isEnAttente && onValidate && (
+                          {/* Modifier */}
+                          {onEdit && (
                             <button
                               type="button"
                               className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
-                              onClick={() =>
-                                handleAction("validate", item.uuid, item.type)
-                              }
-                              title="Valider"
+                              onClick={() => handleAction("edit", item.uuid, item.type, item)}
+                              title="Modifier l'annonce"
                               style={{
                                 width: "28px",
                                 height: "28px",
-                                backgroundColor: `${colors.status.validated}15`,
-                                color: colors.status.validated,
+                                backgroundColor: `${colors.oskar.yellow}20`,
+                                color: colors.oskar.yellow,
                                 border: "none",
                                 borderRadius: "4px",
                               }}
                             >
-                              <FontAwesomeIcon icon={faCheck} size="xs" />
-                            </button>
-                          )}
-
-                          {/* Refuser (seulement en attente) */}
-                          {isEnAttente && onReject && (
-                            <button
-                              type="button"
-                              className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
-                              onClick={() =>
-                                handleAction("reject", item.uuid, item.type)
-                              }
-                              title="Refuser"
-                              style={{
-                                width: "28px",
-                                height: "28px",
-                                backgroundColor: `${colors.oskar.red}15`,
-                                color: colors.oskar.red,
-                                border: "none",
-                                borderRadius: "4px",
-                              }}
-                            >
-                              <FontAwesomeIcon icon={faXmark} size="xs" />
-                            </button>
-                          )}
-
-                          {/* Publier/Dépublier */}
-                          {onPublish && (
-                            <button
-                              type="button"
-                              className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
-                              onClick={() =>
-                                handleAction(
-                                  isPublished ? "unpublish" : "publish",
-                                  item.uuid,
-                                  item.type,
-                                )
-                              }
-                              title={isPublished ? "Dépublier" : "Publier"}
-                              style={{
-                                width: "28px",
-                                height: "28px",
-                                backgroundColor: isPublished
-                                  ? `${colors.oskar.warning}15`
-                                  : `${colors.status.published}15`,
-                                color: isPublished
-                                  ? colors.oskar.warning
-                                  : colors.status.published,
-                                border: "none",
-                                borderRadius: "4px",
-                              }}
-                            >
-                              <FontAwesomeIcon
-                                icon={
-                                  isPublished
-                                    ? faCalendarXmark
-                                    : faCalendarCheck
-                                }
-                                size="xs"
-                              />
-                            </button>
-                          )}
-
-                          {/* Bloquer/Débloquer */}
-                          {onBlock && (
-                            <button
-                              type="button"
-                              className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
-                              onClick={() =>
-                                handleAction(
-                                  isBlocked ? "unblock" : "block",
-                                  item.uuid,
-                                  item.type,
-                                )
-                              }
-                              title={isBlocked ? "Débloquer" : "Bloquer"}
-                              style={{
-                                width: "28px",
-                                height: "28px",
-                                backgroundColor: isBlocked
-                                  ? `${colors.oskar.green}15`
-                                  : `${colors.status.blocked}15`,
-                                color: isBlocked
-                                  ? colors.oskar.green
-                                  : colors.status.blocked,
-                                border: "none",
-                                borderRadius: "4px",
-                              }}
-                            >
-                              <FontAwesomeIcon
-                                icon={isBlocked ? faUnlock : faLock}
-                                size="xs"
-                              />
+                              <FontAwesomeIcon icon={faEdit} size="xs" />
                             </button>
                           )}
 
@@ -916,10 +586,8 @@ export default function DataTable({
                             <button
                               type="button"
                               className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
-                              onClick={() =>
-                                handleAction("delete", item.uuid, item.type)
-                              }
-                              title="Supprimer"
+                              onClick={() => handleAction("delete", item.uuid, item.type)}
+                              title="Supprimer l'annonce"
                               style={{
                                 width: "28px",
                                 height: "28px",
@@ -930,28 +598,6 @@ export default function DataTable({
                               }}
                             >
                               <FontAwesomeIcon icon={faTrash} size="xs" />
-                            </button>
-                          )}
-
-                          {/* Éditer */}
-                          {onEdit && (
-                            <button
-                              type="button"
-                              className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
-                              onClick={() =>
-                                handleAction("edit", item.uuid, item.type)
-                              }
-                              title="Éditer"
-                              style={{
-                                width: "28px",
-                                height: "28px",
-                                backgroundColor: `${colors.oskar.secondary}15`,
-                                color: colors.oskar.secondary,
-                                border: "none",
-                                borderRadius: "4px",
-                              }}
-                            >
-                              <FontAwesomeIcon icon={faEdit} size="xs" />
                             </button>
                           )}
                         </>
@@ -971,10 +617,8 @@ export default function DataTable({
           <div className="d-flex justify-content-between align-items-center">
             <div className="text-muted small">
               Affichage de {startIndex + 1} à{" "}
-              {Math.min(startIndex + itemsPerPage, data.length)} sur{" "}
-              {data.length} annonces
-              {selectedItems.size > 0 &&
-                ` • ${selectedItems.size} sélectionnée(s)`}
+              {Math.min(startIndex + itemsPerPage, data.length)} sur {data.length} annonces
+              {selectedItems.size > 0 && ` • ${selectedItems.size} sélectionnée(s)`}
             </div>
 
             <div className="d-flex align-items-center gap-3">
@@ -995,56 +639,28 @@ export default function DataTable({
 
               <nav>
                 <ul className="pagination pagination-sm mb-0">
-                  <li
-                    className={`page-item ${currentPage === 1 ? "disabled" : ""}`}
-                  >
-                    <button
-                      className="page-link"
-                      onClick={() => setCurrentPage(1)}
-                      disabled={currentPage === 1}
-                    >
+                  <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
+                    <button className="page-link" onClick={() => setCurrentPage(1)} disabled={currentPage === 1}>
                       «
                     </button>
                   </li>
-
-                  <li
-                    className={`page-item ${currentPage === 1 ? "disabled" : ""}`}
-                  >
-                    <button
-                      className="page-link"
-                      onClick={() => setCurrentPage(currentPage - 1)}
-                      disabled={currentPage === 1}
-                    >
+                  <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
+                    <button className="page-link" onClick={() => setCurrentPage(currentPage - 1)} disabled={currentPage === 1}>
                       ‹
                     </button>
                   </li>
-
                   <li className="page-item">
                     <span className="page-link">
                       Page {currentPage} sur {totalPages}
                     </span>
                   </li>
-
-                  <li
-                    className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}
-                  >
-                    <button
-                      className="page-link"
-                      onClick={() => setCurrentPage(currentPage + 1)}
-                      disabled={currentPage === totalPages}
-                    >
+                  <li className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}>
+                    <button className="page-link" onClick={() => setCurrentPage(currentPage + 1)} disabled={currentPage === totalPages}>
                       ›
                     </button>
                   </li>
-
-                  <li
-                    className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}
-                  >
-                    <button
-                      className="page-link"
-                      onClick={() => setCurrentPage(totalPages)}
-                      disabled={currentPage === totalPages}
-                    >
+                  <li className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}>
+                    <button className="page-link" onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}>
                       »
                     </button>
                   </li>

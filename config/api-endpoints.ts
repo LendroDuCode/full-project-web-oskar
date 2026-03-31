@@ -536,6 +536,8 @@ export const API_ENDPOINTS = {
     DELETE: (uuid: string) => withBaseUrl(`/produits/${uuid}`),
     UPDATE_STOCK_PRODUIT: (uuid: string) =>
       withBaseUrl(`/produits/stock-produit-vendeur/${uuid}`),
+    UPDATE_PRODUIT_PERSO: (uuid: string) =>
+      withBaseUrl(`/produits/modifier-produit-perso/${uuid}`),
     RANDOM_DETAIL: (uuid: string) =>
       withBaseUrl(`/produits/details/aletoire/${uuid}`),
     BLOCK: (uuid: string) => withBaseUrl(`/produits/${uuid}/bloquer`),
@@ -619,6 +621,8 @@ CATEGORIES: {
     DONS_FAVORIS: withBaseUrl("/dons/liste-dons-favoris"),
     DETAIL: (uuid: string) => withBaseUrl(`/dons/${uuid}`),
     BLOQUE_DON: withBaseUrl(`/dons/depublier`),
+    //
+    LISTE_BLOQUE_DON: withBaseUrl(`/dons/liste-dons-bloques`),
     DETAIL_NON_PUBLIE: (uuid: string) =>
       withBaseUrl(`/dons/non-publie/${uuid}`),
     CREATE: withBaseUrl("/dons/creer-don-agent-vendeur-utilisateur"), 
@@ -629,6 +633,8 @@ CATEGORIES: {
       withBaseUrl(`/dons/stock-don-utilisateur/${uuid}`),
     UPDATE_STOCK_DON: (uuid: string) =>
       withBaseUrl(`/dons/stock-don-vendeur/${uuid}`),
+    UPDATE_DON_PERSO: (uuid: string) =>
+      withBaseUrl(`/dons/modifier-don-perso/${uuid}`),
     UPDATE_STOCK_CLIENT: (uuid: string) =>
       withBaseUrl(`/dons/stock-don-client/${uuid}`),
     VALIDATE: (uuid: string) => withBaseUrl(`/dons/${uuid}/validate`),
@@ -698,6 +704,7 @@ CATEGORIES: {
     BY_STATUS: (statut: string) => withBaseUrl(`/echanges/statut/${statut}`),
     CREATE: withBaseUrl("/echanges/creer-vendeur-agent-utilisateur"),
     UPDATE: (uuid: string) => withBaseUrl(`/echanges/modifier/${uuid}`),
+    UPDATE_ECHANGE_PERSO: (uuid: string) => withBaseUrl(`/echanges/modifier-echange-perso/${uuid}`),
     DELETE: (uuid: string) => withBaseUrl(`/echanges/${uuid}`),
     ACCEPT: (uuid: string) => withBaseUrl(`/echanges/${uuid}/accept`),
     REFUSE: (uuid: string) => withBaseUrl(`/echanges/${uuid}/refuse`),

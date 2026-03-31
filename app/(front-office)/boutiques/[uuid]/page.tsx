@@ -1,5 +1,3 @@
-// app/(front-office)/boutiques/[uuid]/page.tsx
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -114,6 +112,14 @@ export default function BoutiquePremium() {
   // 🔴 Récupérer l'UUID depuis les paramètres d'URL
   const boutiqueUuid = params?.uuid as string;
 
+  // ✅ Filtrer les produits pour n'afficher que ceux qui sont publiés et non bloqués
+  const getProduitsPublies = () => {
+    if (!boutique) return [];
+    return boutique.produits.filter(produit => 
+      produit.estPublie === true && produit.estBloque !== true
+    );
+  };
+
   const fetchBoutique = async () => {
     if (!boutiqueUuid) {
       setError("UUID de boutique non fourni");
@@ -133,6 +139,9 @@ export default function BoutiquePremium() {
       );
 
       console.log("✅ Boutique chargée:", response);
+      console.log("📦 Produits reçus:", response.produits?.length || 0);
+      console.log("✅ Produits publiés:", response.produits?.filter(p => p.estPublie === true && p.estBloque !== true).length || 0);
+      
       setBoutique(response);
     } catch (err: any) {
       console.error("❌ Erreur lors du chargement de la boutique:", err);
@@ -256,25 +265,29 @@ export default function BoutiquePremium() {
     return "Non catégorisé";
   };
 
-  // Calcul des statistiques
+  // ✅ Obtenir les produits publiés
+  const produitsPublies = getProduitsPublies();
+
+  // Calcul des statistiques basé sur les produits publiés uniquement
   const stats = boutique
     ? {
-        totalProduits: boutique.produits.length,
-        produitsPublies: boutique.produits.filter((p) => p.estPublie).length,
+        totalProduits: produitsPublies.length,
+        produitsPubliesCount: produitsPublies.length,
         produitsBloques: boutique.produits.filter((p) => p.estBloque).length,
-        produitsDisponibles: boutique.produits.filter((p) => p.disponible)
+        produitsEnAttente: boutique.produits.filter((p) => !p.estPublie && !p.estBloque).length,
+        produitsDisponibles: produitsPublies.filter((p) => p.disponible)
           .length,
-        valeurStock: boutique.produits.reduce((sum, p) => {
+        valeurStock: produitsPublies.reduce((sum, p) => {
           const prix = parseFloat(p.prix || "0") || 0;
           return sum + prix * p.quantite;
         }, 0),
         noteMoyenne:
-          boutique.produits.length > 0
-            ? boutique.produits.reduce((sum, p) => sum + p.note_moyenne, 0) /
-              boutique.produits.length
+          produitsPublies.length > 0
+            ? produitsPublies.reduce((sum, p) => sum + p.note_moyenne, 0) /
+              produitsPublies.length
             : 0,
-        totalAvis: boutique.produits.reduce((sum, p) => sum + p.nombre_avis, 0),
-        totalFavoris: boutique.produits.reduce(
+        totalAvis: produitsPublies.reduce((sum, p) => sum + p.nombre_avis, 0),
+        totalFavoris: produitsPublies.reduce(
           (sum, p) => sum + (favorites.has(p.uuid) ? 1 : 0),
           0,
         ),
@@ -479,7 +492,7 @@ export default function BoutiquePremium() {
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards - basées sur les produits publiés */}
       <div
         id="stats-cards"
         className={`container mt-n5 ${isVisible ? "animate-fade-in-up" : "opacity-0"}`}
@@ -489,8 +502,8 @@ export default function BoutiquePremium() {
             {
               icon: faBox,
               value: stats?.totalProduits || 0,
-              label: "Produits",
-              badge: `${stats?.produitsPublies || 0} publiés`,
+              label: "Produits en ligne",
+              badge: `${stats?.produitsEnAttente || 0} en attente`,
               color: "success",
               delay: "0s",
             },
@@ -585,7 +598,11 @@ export default function BoutiquePremium() {
                   Informations
                 </h5>
               </div>
-            
+              <div className="card-body">
+                <p className="mb-0">
+                  {boutique.description || "Aucune description disponible."}
+                </p>
+              </div>
             </div>
 
             {/* Features */}
@@ -657,13 +674,13 @@ export default function BoutiquePremium() {
                     {
                       id: "produits",
                       icon: faBox,
-                      label: `Produits (${boutique.produits.length})`,
+                      label: `Produits (${produitsPublies.length})`,
                     },
                     { id: "about", icon: faInfoCircle, label: "À propos" },
                     {
                       id: "reviews",
                       icon: faStar,
-                      label: `Avis (${stats?.totalAvis})`,
+                      label: `Avis (${stats?.totalAvis || 0})`,
                     },
                   ].map((tab) => (
                     <li key={tab.id} className="nav-item" role="presentation">
@@ -684,7 +701,7 @@ export default function BoutiquePremium() {
                 <div
                   className={`tab-content ${activeTab === "produits" ? "animate-fade-in" : "d-none"}`}
                 >
-                  {/* Produits Tab - AVEC REDIRECTION */}
+                  {/* Produits Tab - UNIQUEMENT LES PRODUITS PUBLIÉS */}
                   {activeTab === "produits" && (
                     <div>
                       <div className="d-flex justify-content-between align-items-center mb-4">
@@ -699,7 +716,7 @@ export default function BoutiquePremium() {
                         </div>
                       </div>
 
-                      {boutique.produits.length === 0 ? (
+                      {produitsPublies.length === 0 ? (
                         <div className="text-center py-5">
                           <div className="bg-light rounded-circle d-inline-flex p-4 mb-3 animate-spin-slow">
                             <FontAwesomeIcon
@@ -711,12 +728,12 @@ export default function BoutiquePremium() {
                             Aucun produit disponible
                           </h4>
                           <p className="text-muted mb-4">
-                            Cette boutique n'a pas encore ajouté de produits.
+                            Cette boutique n'a pas encore de produits publiés.
                           </p>
                         </div>
                       ) : (
                         <div className="row g-4">
-                          {boutique.produits.map((produit, index) => (
+                          {produitsPublies.map((produit, index) => (
                             <div
                               key={produit.uuid}
                               className="col-md-6 col-lg-6 animate-slide-up"
@@ -758,19 +775,9 @@ export default function BoutiquePremium() {
                                     </button>
                                   </div>
                                   <div className="position-absolute top-0 start-0 m-3">
-                                    {produit.estBloque ? (
-                                      <span className="badge bg-danger animate-pulse">
-                                        Bloqué
-                                      </span>
-                                    ) : produit.estPublie ? (
-                                      <span className="badge bg-success">
-                                        En stock
-                                      </span>
-                                    ) : (
-                                      <span className="badge bg-secondary">
-                                        Non publié
-                                      </span>
-                                    )}
+                                    <span className="badge bg-success animate-pulse">
+                                      En stock
+                                    </span>
                                   </div>
                                 </div>
 

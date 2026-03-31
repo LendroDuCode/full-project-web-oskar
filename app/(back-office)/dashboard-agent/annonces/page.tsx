@@ -305,49 +305,101 @@ export default function Annonces() {
   }, []);
 
   // Préparer les données pour le DataTable
-  const preparedData = useMemo(() => {
-    return filteredAndSortedData.map((item) => {
-      let title = "";
-      let description = "";
-      let date = new Date().toISOString();
+ const preparedData = useMemo(() => {
+  return filteredAndSortedData.map((item) => {
+    let title = "";
+    let description = "";
+    let date = new Date().toISOString();
+    let prix = "";
+    let quantite = 0;
+    let categorie_uuid = "";
 
+    // ✅ Normaliser les propriétés de statut
+    const estBloque =  item.estBloque === true;
+    const estPublie =  item.estPublie === true;
+    
+    // ✅ Déterminer le statut textuel
+    let statusText = "";
+    if (estBloque) {
+      statusText = "bloque";
+    } else if (estPublie) {
+      statusText = "publie";
+    } else {
+      statusText = "en-attente";
+    }
+
+    // ✅ Extraire les données selon le type
+    if (item.type === "produit") {
+      title = item.libelle || "Produit sans nom";
+      description = item.description || "";
+      date = item.dateCreation || new Date().toISOString();
+      prix = item.prix?.toString() || "";
+      quantite = item.quantite || 0;
+      categorie_uuid = item.categorie_uuid || item.categorie?.uuid || "";
+    } 
+    else if (item.type === "don") {
+      title = item.nom || "Don sans nom";
+      description = item.description || "";
+      date = item.dateCreation  || new Date().toISOString();
+      prix = item.prix?.toString() || "";
+      quantite = item.quantite || 1;
+      categorie_uuid = item.categorie_uuid || item.categorie?.uuid || "";
+    } 
+    else if (item.type === "echange") {
+      title = (item as any).nomElementEchange || 
+              `${(item as any).objetPropose || ""} vs ${(item as any).objetDemande || ""}`.trim() || 
+              "Échange sans nom";
+      description = item.description || (item as any).message || "";
+      date = item.dateCreation || new Date().toISOString();
+      prix = item.prix?.toString() || "";
+      quantite = item.quantite || 1;
+      categorie_uuid = item.categorie_uuid || item.categorie?.uuid || "";
+    }
+
+    // ✅ Obtenir l'URL de l'image
+    let imageUrl = "";
+    if (item.image) {
+      imageUrl = buildImageUrl(item.image);
+    } else if (item.image_key) {
+      imageUrl = buildImageUrl(item.image_key);
+    }
+    
+    if (!imageUrl) {
+      // Fallback par type
       if (item.type === "produit") {
-        title = item.libelle || "Produit sans nom";
-        description = item.description || "";
-        date = item.dateCreation || new Date().toISOString();
+        imageUrl = `https://via.placeholder.com/64/10b981/ffffff?text=P`;
       } else if (item.type === "don") {
-        title = item.nom || "Don sans nom";
-        description = item.description || "";
-        date = item.dateCreation || new Date().toISOString();
+        imageUrl = `https://via.placeholder.com/64/8b5cf6/ffffff?text=D`;
       } else if (item.type === "echange") {
-        title =
-          (item as any).nomElementEchange ||
-          `${(item as any).objetPropose || ""} vs ${(item as any).objetDemande || ""}`.trim() ||
-          "Échange sans nom";
-        description = item.description || "";
-        date = item.dateCreation || new Date().toISOString();
+        imageUrl = `https://via.placeholder.com/64/f59e0b/ffffff?text=E`;
+      } else {
+        imageUrl = `https://via.placeholder.com/64/6c757d/ffffff?text=?`;
       }
+    }
 
-      const image = getItemImageUrl(item);
+    // ✅ Log pour déboguer (optionnel, à commenter en production)
+    if (process.env.NODE_ENV !== 'production' && estBloque) {
+      console.log(`🔒 Item bloqué: ${title} (${item.type})`, { estBloque, estPublie, original: item });
+    }
 
-      return {
-        id: item.id?.toString() || item.uuid,
-        uuid: item.uuid,
-        title,
-        description,
-        image,
-        status: item.statut?.toLowerCase() || (item.estPublie ? "publie" : "en-attente"),
-        type: item.type,
-        date,
-        category: item.categorie_uuid,
-        quantite: item.quantite,
-        prix: item.prix?.toString(),
-        estPublie: item.estPublie || false,
-        estBloque: item.estBloque || false,
-        originalData: item,
-      };
-    });
-  }, [filteredAndSortedData, getItemImageUrl]);
+    return {
+      id: item.id?.toString() || item.uuid,
+      uuid: item.uuid,
+      title: title || "Sans titre",
+      description: description || "",
+      image: imageUrl,
+      status: statusText,
+      type: item.type,
+      date: date,
+      category: categorie_uuid,
+      quantite: quantite,
+      prix: prix,
+      estPublie: estPublie,
+      estBloque: estBloque,
+      originalData: item,
+    };
+  });
+}, [filteredAndSortedData, getItemImageUrl]);
 
   const handleValidate = useCallback(
     async (id: string, type: string) => {

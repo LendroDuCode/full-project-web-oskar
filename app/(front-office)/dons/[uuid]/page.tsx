@@ -217,6 +217,7 @@ interface Don {
   localisation: string;
   statut: string;
   date_debut: string;
+  publieLe: string | null;
   date_fin: string;
   lieu_retrait: string;
   disponible: boolean;
@@ -786,6 +787,8 @@ const transformDonData = (apiDon: DonAPI): Don => {
     nombre_avis: apiDon.nombre_avis || 0,
     is_favoris: apiDon.is_favoris || false,
     favorite_id: apiDon.favorite_id,
+    // ✅ AJOUTER publieLe dans l'objet transformé
+    publieLe: apiDon.publieLe || null,
     ...(apiDon.createur && { createur: transformCreateurInfo(apiDon.createur) }),
     createurType: apiDon.createurType,
     categorie: apiDon.categorie,
@@ -1845,7 +1848,7 @@ export default function DonDetailPage() {
                 </div>
                 <div className="d-flex align-items-center gap-2">
                   <span className="badge bg-success bg-opacity-10 text-success px-3 py-2 rounded-pill">Don {don.type_don}</span>
-                  <span className="small text-muted"><FontAwesomeIcon icon={faClock} className="me-1" />Publié {formatDate(don.createdAt)}</span>
+                  <span className="small text-muted"><FontAwesomeIcon icon={faClock} className="me-1" />Publié {formatDate(don.publieLe)}</span>
                 </div>
               </div>
 

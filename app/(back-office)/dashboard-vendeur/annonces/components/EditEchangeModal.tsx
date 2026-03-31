@@ -1,45 +1,37 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faTimes,
-  faExchangeAlt,
-  faInfoCircle,
-  faCheckCircle,
-  faCamera,
+  faSave,
+  faSpinner,
   faImage,
   faTag,
+  faFileAlt,
+  faUpload,
+  faCheckCircle,
+  faExclamationTriangle,
+  faTrash,
+  faEdit,
   faBox,
   faHandHoldingHeart,
   faPhone,
   faMoneyBillWave,
-  faFileAlt,
-  faTrash,
-  faUpload,
+  faList,
+  faInfoCircle,
+  faSearch,
+  faChevronDown,
 } from "@fortawesome/free-solid-svg-icons";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
+import colors from "@/app/shared/constants/colors";
 
 interface EditEchangeModalProps {
   isOpen: boolean;
   echange: any;
   onClose: () => void;
   onSuccess: () => void;
-}
-
-interface EchangeFormData {
-  titre: string;
-  description: string;
-  objet_propose: string;
-  objet_demande: string;
-  type_echange: "produit" | "service";
-  categorie_uuid: string;
-  prix: string;
-  numero: string;
-  quantite: string;
-  message: string;
-  statut: string;
 }
 
 interface Category {
@@ -53,36 +45,33 @@ export default function EditEchangeModal({
   onClose,
   onSuccess,
 }: EditEchangeModalProps) {
-  const [loading, setLoading] = useState(false);
-  const [uploadingImage, setUploadingImage] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-
-  const [formData, setFormData] = useState<EchangeFormData>({
-    titre: "",
-    description: "",
-    objet_propose: "",
-    objet_demande: "",
-    type_echange: "produit",
-    categorie_uuid: "",
-    prix: "",
-    numero: "",
-    quantite: "1",
+  const [formData, setFormData] = useState({
+    nomElementEchange: "",
+    objetPropose: "",
+    objetDemande: "",
     message: "",
-    statut: "en_attente",
+    prix: "",
+    categorie_uuid: "",
+    image: null as File | null,
   });
 
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [searchCategory, setSearchCategory] = useState("");
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const categoryDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Charger les catégories et initialiser le formulaire
+  // Charger les catégories
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await api.get<Category[]>(
-          API_ENDPOINTS.CATEGORIES.LIST,
-        );
+        const response = await api.get(API_ENDPOINTS.CATEGORIES.LIST);
         if (Array.isArray(response)) {
           setCategories(response);
         }
@@ -91,68 +80,141 @@ export default function EditEchangeModal({
       }
     };
 
-    const initializeForm = () => {
-      if (echange) {
-        setFormData({
-          titre: echange.titre || "",
-          description: echange.description || "",
-          objet_propose: echange.objet_propose || echange.titre || "",
-          objet_demande: echange.objet_demande || "",
-          type_echange: echange.type_echange || "produit",
-          categorie_uuid:
-            echange.categorie?.uuid || echange.categorie_uuid || "",
-          prix: echange.prix || "",
-          numero: echange.numero || "",
-          quantite: echange.quantite?.toString() || "1",
-          message: echange.message || "",
-          statut: echange.statut || "en_attente",
-        });
+    if (isOpen) {
+      fetchCategories();
+    }
+  }, [isOpen]);
 
-        if (echange.image) {
-          setImagePreview(echange.image);
-        }
+  // Filtrer les catégories
+  const filteredCategories = categories.filter((cat) =>
+    cat.libelle.toLowerCase().includes(searchCategory.toLowerCase())
+  );
+
+  // Fermer le dropdown en cliquant en dehors
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(event.target as Node)) {
+        setIsCategoryDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  // Initialiser le formulaire
+  useEffect(() => {
+    if (isOpen && echange) {
+      setFormData({
+        nomElementEchange: echange.nomElementEchange || echange.titre || "",
+        objetPropose: echange.objetPropose || "",
+        objetDemande: echange.objetDemande || "",
+        message: echange.message || "",
+        prix: echange.prix?.toString().replace(".00", "") || "",
+        categorie_uuid: echange.categorie?.uuid || echange.categorie_uuid || "",
+        image: null,
+      });
+
+      // Construire l'URL de l'image existante
+      if (echange.image) {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+        const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+        setImagePreview(`${apiUrl}${filesUrl}/${echange.image}`);
+      } else if (echange.image_key) {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+        const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+        setImagePreview(`${apiUrl}${filesUrl}/${echange.image_key}`);
+      }
+
+      setError(null);
+      setSuccess(null);
+      setValidationErrors({});
+      setSearchCategory("");
+      setIsCategoryDropdownOpen(false);
+    }
+  }, [isOpen, echange]);
+
+  // Fermer en cliquant en dehors de la modal
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        modalRef.current &&
+        !modalRef.current.contains(event.target as Node)
+      ) {
+        handleClose();
       }
     };
 
     if (isOpen) {
-      fetchCategories();
-      initializeForm();
-      setError(null);
-      setSuccess(null);
-      setImageFile(null);
+      document.addEventListener("mousedown", handleClickOutside);
     }
-  }, [isOpen, echange]);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isOpen]);
+
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    if (!formData.nomElementEchange.trim()) errors.nomElementEchange = "Le titre est obligatoire";
+    if (!formData.objetPropose.trim()) errors.objetPropose = "L'objet proposé est obligatoire";
+    if (!formData.objetDemande.trim()) errors.objetDemande = "L'objet demandé est obligatoire";
+    if (!formData.categorie_uuid) errors.categorie_uuid = "La catégorie est obligatoire";
+
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   const handleInputChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >,
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
+
+    if (validationErrors[name]) {
+      setValidationErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
+  };
+
+  const selectCategory = (uuid: string) => {
+    setFormData((prev) => ({ ...prev, categorie_uuid: uuid }));
+    setSearchCategory("");
+    setIsCategoryDropdownOpen(false);
+    if (validationErrors.categorie_uuid) {
+      setValidationErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors.categorie_uuid;
+        return newErrors;
+      });
+    }
+  };
+
+  const getSelectedCategoryLabel = (): string => {
+    if (!formData.categorie_uuid) return "Sélectionnez une catégorie...";
+    const selected = categories.find(c => c.uuid === formData.categorie_uuid);
+    return selected?.libelle || "Sélectionnez une catégorie...";
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Vérifier la taille du fichier (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
         setError("L'image ne doit pas dépasser 5MB");
         return;
       }
-
-      // Vérifier le type de fichier
       if (!file.type.startsWith("image/")) {
         setError("Veuillez sélectionner une image valide");
         return;
       }
 
-      setImageFile(file);
-
-      // Créer une preview
+      setFormData((prev) => ({ ...prev, image: file }));
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result as string);
@@ -162,96 +224,81 @@ export default function EditEchangeModal({
   };
 
   const removeImage = () => {
-    setImageFile(null);
-    setImagePreview(null);
+    setFormData((prev) => ({ ...prev, image: null }));
+    if (echange?.image) {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
+      const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
+      setImagePreview(`${apiUrl}${filesUrl}/${echange.image}`);
+    } else {
+      setImagePreview(null);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
+  // SOUMISSION AVEC FORMDATA
   const handleSubmit = async () => {
+    if (!validateForm()) {
+      setError("Veuillez remplir tous les champs obligatoires");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
     try {
-      setLoading(true);
-      setError(null);
-      setSuccess(null);
-
-      // Validation
-      if (
-        !formData.titre.trim() ||
-        !formData.objet_propose.trim() ||
-        !formData.objet_demande.trim()
-      ) {
-        throw new Error("Veuillez remplir tous les champs obligatoires");
+      const formDataToSend = new FormData();
+      
+      formDataToSend.append("nomElementEchange", formData.nomElementEchange);
+      formDataToSend.append("objetPropose", formData.objetPropose);
+      formDataToSend.append("objetDemande", formData.objetDemande);
+      formDataToSend.append("categorie_uuid", formData.categorie_uuid);
+      formDataToSend.append("prix", formData.prix || "0");
+      
+      if (formData.message) {
+        formDataToSend.append("message", formData.message);
       }
 
-      let imageUrl = imagePreview || "";
-
-      // Upload de la nouvelle image si présente
-      if (imageFile) {
-        setUploadingImage(true);
-        try {
-          const formDataImage = new FormData();
-          formDataImage.append("image", imageFile);
-
-          const uploadResponse = await api.post(
-            API_ENDPOINTS.ECHANGES.UPLOAD,
-            formDataImage,
-            {
-              headers: {
-                "Content-Type": "multipart/form-data",
-              },
-            },
-          );
-
-          if (uploadResponse.url) {
-            imageUrl = uploadResponse.url;
-          }
-        } catch (uploadError) {
-          console.error("Erreur upload image:", uploadError);
-          // Continuer avec l'ancienne image si l'upload échoue
-        } finally {
-          setUploadingImage(false);
-        }
+      if (formData.image) {
+        formDataToSend.append("image", formData.image);
       }
 
-      // Préparer les données pour l'API
-      const echangeData = {
-        titre: formData.titre,
-        description: formData.description,
-        objet_propose: formData.objet_propose,
-        objet_demande: formData.objet_demande,
-        type_echange: formData.type_echange,
-        categorie_uuid: formData.categorie_uuid,
-        prix: formData.prix || "0",
-        numero: formData.numero,
-        quantite: parseInt(formData.quantite) || 1,
-        message: formData.message,
-        image: imageUrl,
-        statut: formData.statut,
-      };
-
-      // Envoyer la requête de mise à jour
-      const response = await api.put(
-        API_ENDPOINTS.ECHANGES.UPDATE(echange.uuid),
-        echangeData,
+      const response = await api.putFormData(
+        API_ENDPOINTS.ECHANGES.UPDATE_ECHANGE_PERSO(echange.uuid),
+        formDataToSend
       );
 
-      if (response.uuid) {
-        setSuccess("Échange modifié avec succès !");
+      if (response && response.success !== false) {
+        setSuccess(response.message || "Échange modifié avec succès !");
         setTimeout(() => {
           onSuccess();
           onClose();
         }, 1500);
       } else {
-        throw new Error("Erreur lors de la modification de l'échange");
+        throw new Error(response?.message || "Erreur lors de la modification");
       }
     } catch (err: any) {
-      console.error("❌ Erreur modification échange:", err);
-      setError(
-        err.response?.data?.message ||
-          err.message ||
-          "Erreur lors de la modification",
-      );
+      console.error("Erreur modification échange:", err);
+      setError(err.response?.data?.message || err.message || "Erreur lors de la modification");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleClose = () => {
+    if (loading) return;
+
+    const hasChanges = 
+      formData.nomElementEchange !== (echange?.nomElementEchange || "") ||
+      formData.image !== null;
+
+    if (hasChanges && !confirm("Vous avez des modifications non sauvegardées. Voulez-vous vraiment annuler ?")) {
+      return;
+    }
+
+    onClose();
   };
 
   if (!isOpen || !echange) return null;
@@ -259,438 +306,315 @@ export default function EditEchangeModal({
   return (
     <div
       className="modal fade show d-block"
-      style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1050 }}
+      style={{
+        backgroundColor: "rgba(0,0,0,0.6)",
+        backdropFilter: "blur(4px)",
+        zIndex: 1050,
+      }}
       tabIndex={-1}
     >
-      <div className="modal-dialog modal-dialog-centered modal-lg">
-        <div className="modal-content border-0 shadow-lg">
+      <div className="modal-dialog modal-dialog-centered modal-md" ref={modalRef}>
+        <div className="modal-content border-0 shadow-lg" style={{ borderRadius: "20px" }}>
           {/* En-tête */}
-          <div className="modal-header border-0 bg-warning text-white rounded-top-3">
-            <h5 className="modal-title fw-bold">
-              <FontAwesomeIcon icon={faExchangeAlt} className="me-2" />
-              Modifier l'échange
-            </h5>
+          <div
+            className="modal-header text-white border-0"
+            style={{
+              background: `linear-gradient(135deg, ${colors.oskar.yellow} 0%, ${colors.oskar.yellowHover} 100%)`,
+              padding: "1.5rem 2rem",
+            }}
+          >
+            <div className="d-flex align-items-center">
+              <div className="bg-white bg-opacity-25 rounded-circle p-2 me-3">
+                <FontAwesomeIcon icon={faEdit} className="fs-5" />
+              </div>
+              <div>
+                <h5 className="modal-title mb-0 fw-bold">Modifier l'échange</h5>
+                <p className="mb-0 opacity-75" style={{ fontSize: "0.85rem" }}>
+                  Modifiez les informations de votre échange
+                </p>
+              </div>
+            </div>
             <button
               type="button"
               className="btn-close btn-close-white"
-              onClick={onClose}
+              onClick={handleClose}
               disabled={loading}
-            ></button>
+              aria-label="Fermer"
+            />
           </div>
 
-          {/* Messages d'alerte */}
-          {(error || success) && (
-            <div className="px-4 pt-3">
-              {error && (
-                <div
-                  className="alert alert-danger alert-dismissible fade show"
-                  role="alert"
-                >
-                  <FontAwesomeIcon icon={faInfoCircle} className="me-2" />
-                  {error}
+          {/* Corps */}
+          <div className="modal-body p-4">
+            {error && (
+              <div className="alert alert-danger border-0 shadow-sm mb-4" role="alert" style={{ borderRadius: "12px" }}>
+                <div className="d-flex align-items-center">
+                  <FontAwesomeIcon icon={faExclamationTriangle} className="text-danger fs-5 me-3" />
+                  <div>
+                    <h6 className="alert-heading mb-1 fw-bold">Erreur</h6>
+                    <p className="mb-0">{error}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {success && (
+              <div className="alert alert-success border-0 shadow-sm mb-4" role="alert" style={{ borderRadius: "12px" }}>
+                <div className="d-flex align-items-center">
+                  <FontAwesomeIcon icon={faCheckCircle} className="text-success fs-5 me-3" />
+                  <div>
+                    <h6 className="alert-heading mb-1 fw-bold">Succès !</h6>
+                    <p className="mb-0">{success}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <form encType="multipart/form-data">
+              {/* Image */}
+              <div className="mb-4">
+                <label className="form-label fw-semibold">
+                  <FontAwesomeIcon icon={faImage} className="me-2 text-primary" />
+                  Photo de l'échange
+                </label>
+
+                {imagePreview ? (
+                  <div className="position-relative d-inline-block">
+                    <img
+                      src={imagePreview}
+                      alt="Aperçu"
+                      className="img-fluid rounded-3 shadow"
+                      style={{ maxHeight: "150px", objectFit: "cover" }}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-danger position-absolute top-0 end-0 m-1"
+                      onClick={removeImage}
+                      disabled={loading}
+                      style={{ width: "28px", height: "28px", borderRadius: "50%", padding: 0 }}
+                    >
+                      <FontAwesomeIcon icon={faTrash} />
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    className="border rounded-3 p-4 text-center"
+                    style={{
+                      borderStyle: "dashed",
+                      borderColor: colors.oskar.grey,
+                      background: colors.oskar.lightGrey + "20",
+                      cursor: "pointer",
+                    }}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <FontAwesomeIcon icon={faImage} className="fs-2 text-muted mb-2" />
+                    <p className="mb-0 small">Cliquez pour ajouter une photo</p>
+                    <p className="text-muted mb-0" style={{ fontSize: "0.7rem" }}>
+                      JPG, PNG, WEBP, GIF (max 5MB)
+                    </p>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="d-none"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Titre */}
+              <div className="mb-3">
+                <label className="form-label fw-semibold">
+                  <FontAwesomeIcon icon={faTag} className="me-2 text-primary" />
+                  Titre de l'échange *
+                </label>
+                <input
+                  type="text"
+                  name="nomElementEchange"
+                  className={`form-control ${validationErrors.nomElementEchange ? "is-invalid" : ""}`}
+                  value={formData.nomElementEchange}
+                  onChange={handleInputChange}
+                  disabled={loading}
+                  placeholder="Ex: RRRRRRRRRRRRRRRRRRRRRRRRTTTT"
+                  style={{ borderRadius: "10px", padding: "0.75rem 1rem" }}
+                />
+                {validationErrors.nomElementEchange && <div className="invalid-feedback">{validationErrors.nomElementEchange}</div>}
+              </div>
+
+              {/* Objet proposé */}
+              <div className="mb-3">
+                <label className="form-label fw-semibold">
+                  <FontAwesomeIcon icon={faBox} className="me-2 text-primary" />
+                  Objet que vous proposez *
+                </label>
+                <input
+                  type="text"
+                  name="objetPropose"
+                  className={`form-control ${validationErrors.objetPropose ? "is-invalid" : ""}`}
+                  value={formData.objetPropose}
+                  onChange={handleInputChange}
+                  disabled={loading}
+                  placeholder="Ex: RRRRRRRRRRRRRRRRRRRRRRRRTTTT"
+                  style={{ borderRadius: "10px", padding: "0.75rem 1rem" }}
+                />
+                {validationErrors.objetPropose && <div className="invalid-feedback">{validationErrors.objetPropose}</div>}
+              </div>
+
+              {/* Objet demandé */}
+              <div className="mb-3">
+                <label className="form-label fw-semibold">
+                  <FontAwesomeIcon icon={faHandHoldingHeart} className="me-2 text-primary" />
+                  Objet que vous recherchez *
+                </label>
+                <input
+                  type="text"
+                  name="objetDemande"
+                  className={`form-control ${validationErrors.objetDemande ? "is-invalid" : ""}`}
+                  value={formData.objetDemande}
+                  onChange={handleInputChange}
+                  disabled={loading}
+                  placeholder="Ex: RRRRRRRRRRRRRRRRRRRRRRRRTTTT"
+                  style={{ borderRadius: "10px", padding: "0.75rem 1rem" }}
+                />
+                {validationErrors.objetDemande && <div className="invalid-feedback">{validationErrors.objetDemande}</div>}
+              </div>
+
+              {/* Catégorie - avec dropdown fonctionnel */}
+              <div className="mb-3">
+                <label className="form-label fw-semibold">
+                  <FontAwesomeIcon icon={faList} className="me-2 text-primary" />
+                  Catégorie *
+                </label>
+                <div className="dropdown" ref={categoryDropdownRef}>
                   <button
                     type="button"
-                    className="btn-close"
-                    onClick={() => setError(null)}
-                  ></button>
-                </div>
-              )}
-              {success && (
-                <div
-                  className="alert alert-success alert-dismissible fade show"
-                  role="alert"
-                >
-                  <FontAwesomeIcon icon={faCheckCircle} className="me-2" />
-                  {success}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Contenu du modal */}
-          <div className="modal-body p-4">
-            <div className="row g-3">
-              <div className="col-md-8">
-                <div className="row g-3">
-                  <div className="col-md-12">
-                    <div className="mb-3">
-                      <label className="form-label fw-semibold">
-                        <FontAwesomeIcon
-                          icon={faTag}
-                          className="me-2 text-primary"
-                        />
-                        Titre de l'échange *
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        name="titre"
-                        value={formData.titre}
-                        onChange={handleInputChange}
-                        placeholder="Ex: Cahier vs Galaxy S21"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="col-md-12">
-                    <div className="mb-3">
-                      <label className="form-label fw-semibold">
-                        Description
-                      </label>
-                      <textarea
-                        className="form-control"
-                        name="description"
-                        value={formData.description}
-                        onChange={handleInputChange}
-                        rows={3}
-                        placeholder="Décrivez votre échange en détails..."
-                      />
-                    </div>
-                  </div>
-
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label fw-semibold">
-                        <FontAwesomeIcon
-                          icon={faBox}
-                          className="me-2 text-primary"
-                        />
-                        Objet que vous proposez *
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        name="objet_propose"
-                        value={formData.objet_propose}
-                        onChange={handleInputChange}
-                        placeholder="Ex: iPhone 12 Pro"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label fw-semibold">
-                        <FontAwesomeIcon
-                          icon={faHandHoldingHeart}
-                          className="me-2 text-primary"
-                        />
-                        Objet que vous recherchez *
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        name="objet_demande"
-                        value={formData.objet_demande}
-                        onChange={handleInputChange}
-                        placeholder="Ex: Samsung Galaxy S21"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label fw-semibold">
-                        Type d'échange
-                      </label>
-                      <div className="d-flex gap-2">
-                        <button
-                          type="button"
-                          className={`btn ${formData.type_echange === "produit" ? "btn-primary" : "btn-outline-primary"} flex-fill`}
-                          onClick={() =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              type_echange: "produit",
-                            }))
-                          }
-                        >
-                          <FontAwesomeIcon icon={faBox} className="me-2" />
-                          Produit
-                        </button>
-                        <button
-                          type="button"
-                          className={`btn ${formData.type_echange === "service" ? "btn-primary" : "btn-outline-primary"} flex-fill`}
-                          onClick={() =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              type_echange: "service",
-                            }))
-                          }
-                        >
-                          <FontAwesomeIcon
-                            icon={faHandHoldingHeart}
-                            className="me-2"
-                          />
-                          Service
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label fw-semibold">
-                        Quantité *
-                      </label>
-                      <input
-                        type="number"
-                        className="form-control"
-                        name="quantite"
-                        value={formData.quantite}
-                        onChange={handleInputChange}
-                        min="1"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label fw-semibold">
-                        Catégorie *
-                      </label>
-                      <select
-                        className="form-select"
-                        name="categorie_uuid"
-                        value={formData.categorie_uuid}
-                        onChange={handleInputChange}
-                        required
-                      >
-                        <option value="">Sélectionnez une catégorie</option>
-                        {categories.map((category) => (
-                          <option key={category.uuid} value={category.uuid}>
-                            {category.libelle}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label fw-semibold">Statut</label>
-                      <select
-                        className="form-select"
-                        name="statut"
-                        value={formData.statut}
-                        onChange={handleInputChange}
-                      >
-                        <option value="en_attente">En attente</option>
-                        <option value="disponible">Disponible</option>
-                        <option value="accepte">Accepté</option>
-                        <option value="refuse">Refusé</option>
-                        <option value="indisponible">Indisponible</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label fw-semibold">
-                        <FontAwesomeIcon
-                          icon={faMoneyBillWave}
-                          className="me-2 text-primary"
-                        />
-                        Prix estimé (FCFA)
-                      </label>
-                      <input
-                        type="number"
-                        className="form-control"
-                        name="prix"
-                        value={formData.prix}
-                        onChange={handleInputChange}
-                        placeholder="Ex: 100000"
-                        min="0"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="col-md-6">
-                    <div className="mb-3">
-                      <label className="form-label fw-semibold">
-                        <FontAwesomeIcon
-                          icon={faPhone}
-                          className="me-2 text-primary"
-                        />
-                        Numéro de contact *
-                      </label>
-                      <input
-                        type="tel"
-                        className="form-control"
-                        name="numero"
-                        value={formData.numero}
-                        onChange={handleInputChange}
-                        placeholder="Ex: 00225 0546895765"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="col-md-12">
-                    <div className="mb-3">
-                      <label className="form-label fw-semibold">
-                        Message supplémentaire
-                      </label>
-                      <textarea
-                        className="form-control"
-                        name="message"
-                        value={formData.message}
-                        onChange={handleInputChange}
-                        rows={2}
-                        placeholder="Souhaitez-vous procéder à un échange ?"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="col-md-4">
-                <div className="sticky-top" style={{ top: "20px" }}>
-                  <div className="card border">
-                    <div className="card-body">
-                      <h6 className="fw-bold text-dark mb-3">
-                        <FontAwesomeIcon
-                          icon={faCamera}
-                          className="me-2 text-primary"
-                        />
-                        Photo
-                      </h6>
-
-                      {imagePreview ? (
-                        <div className="position-relative mb-3">
-                          <img
-                            src={imagePreview}
-                            alt="Preview"
-                            className="img-fluid rounded mb-2"
-                            style={{
-                              maxHeight: "200px",
-                              width: "100%",
-                              objectFit: "cover",
-                            }}
-                          />
-                          <button
-                            type="button"
-                            className="btn btn-danger btn-sm position-absolute top-0 end-0 m-2"
-                            onClick={removeImage}
-                            disabled={loading}
-                          >
-                            <FontAwesomeIcon icon={faTrash} />
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="text-center py-4 border rounded mb-3 bg-light">
-                          <FontAwesomeIcon
-                            icon={faImage}
-                            className="text-muted fs-1 mb-2"
-                          />
-                          <p className="text-muted mb-0">Aucune photo</p>
-                        </div>
-                      )}
-
-                      <div className="d-grid">
-                        <label className="btn btn-outline-primary">
-                          <FontAwesomeIcon icon={faUpload} className="me-2" />
-                          {imagePreview
-                            ? "Changer la photo"
-                            : "Ajouter une photo"}
+                    className={`form-select text-start d-flex align-items-center justify-content-between ${validationErrors.categorie_uuid ? "is-invalid" : ""}`}
+                    onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+                    style={{ borderRadius: "10px", padding: "0.75rem 1rem" }}
+                  >
+                    <span className={!formData.categorie_uuid ? "text-muted" : ""}>
+                      {getSelectedCategoryLabel()}
+                    </span>
+                    <FontAwesomeIcon icon={faChevronDown} className="text-muted" />
+                  </button>
+                  
+                  {isCategoryDropdownOpen && (
+                    <div className="dropdown-menu show w-100 p-3" style={{ maxHeight: "250px", overflowY: "auto", position: "absolute", top: "100%", left: 0, zIndex: 1000 }}>
+                      <div className="mb-2">
+                        <div className="input-group">
+                          <span className="input-group-text bg-light border-end-0">
+                            <FontAwesomeIcon icon={faSearch} className="text-muted" />
+                          </span>
                           <input
-                            type="file"
-                            className="d-none"
-                            accept="image/*"
-                            onChange={handleImageUpload}
+                            type="text"
+                            className="form-control"
+                            placeholder="Rechercher une catégorie..."
+                            value={searchCategory}
+                            onChange={(e) => setSearchCategory(e.target.value)}
+                            style={{ borderLeft: 0 }}
+                            autoFocus
                           />
-                        </label>
-                      </div>
-                      <small className="text-muted mt-2 d-block">
-                        Formats acceptés: JPG, PNG, GIF (max 5MB)
-                      </small>
-                    </div>
-                  </div>
-
-                  <div className="card border mt-3">
-                    <div className="card-body">
-                      <h6 className="fw-bold text-dark mb-3">
-                        <FontAwesomeIcon
-                          icon={faInfoCircle}
-                          className="me-2 text-primary"
-                        />
-                        Informations
-                      </h6>
-                      <div className="mb-2">
-                        <small className="text-muted">ID</small>
-                        <div className="fw-semibold text-truncate">
-                          {echange.uuid}
                         </div>
                       </div>
-                      <div className="mb-2">
-                        <small className="text-muted">Date création</small>
-                        <div className="fw-semibold">
-                          {new Date(
-                            echange.createdAt || Date.now(),
-                          ).toLocaleDateString("fr-FR")}
-                        </div>
-                      </div>
-                      <div className="mb-2">
-                        <small className="text-muted">Statut actuel</small>
-                        <div className="fw-semibold">
-                          {echange.statut === "en_attente" && (
-                            <span className="badge bg-warning">En attente</span>
-                          )}
-                          {echange.statut === "disponible" && (
-                            <span className="badge bg-success">Disponible</span>
-                          )}
-                          {echange.statut === "accepte" && (
-                            <span className="badge bg-primary">Accepté</span>
-                          )}
-                          {echange.statut === "refuse" && (
-                            <span className="badge bg-danger">Refusé</span>
-                          )}
-                          {echange.statut === "indisponible" && (
-                            <span className="badge bg-secondary">
-                              Indisponible
-                            </span>
-                          )}
-                        </div>
+                      <div className="category-list">
+                        {filteredCategories.length > 0 ? (
+                          filteredCategories.map((category) => (
+                            <button
+                              key={category.uuid}
+                              type="button"
+                              className={`dropdown-item ${formData.categorie_uuid === category.uuid ? "active" : ""}`}
+                              onClick={() => selectCategory(category.uuid)}
+                            >
+                              {category.libelle}
+                            </button>
+                          ))
+                        ) : (
+                          <div className="text-center text-muted py-3">
+                            Aucune catégorie trouvée
+                          </div>
+                        )}
                       </div>
                     </div>
-                  </div>
+                  )}
                 </div>
+                {validationErrors.categorie_uuid && <div className="invalid-feedback d-block">{validationErrors.categorie_uuid}</div>}
               </div>
-            </div>
-          </div>
 
-          {/* Pied de modal */}
-          <div className="modal-footer border-0">
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={onClose}
-              disabled={loading}
-            >
-              Annuler
-            </button>
+              {/* Prix */}
+              <div className="mb-3">
+                <label className="form-label fw-semibold">
+                  <FontAwesomeIcon icon={faMoneyBillWave} className="me-2 text-primary" />
+                  Prix estimé (FCFA)
+                </label>
+                <input
+                  type="number"
+                  name="prix"
+                  className="form-control"
+                  value={formData.prix}
+                  onChange={handleInputChange}
+                  disabled={loading}
+                  placeholder="Ex: 100000"
+                  min="0"
+                  step="1"
+                  style={{ borderRadius: "10px", padding: "0.75rem 1rem" }}
+                />
+              </div>
 
-            <button
-              type="button"
-              className="btn btn-warning"
-              onClick={handleSubmit}
-              disabled={loading || uploadingImage}
-            >
-              {loading || uploadingImage ? (
-                <>
-                  <span className="spinner-border spinner-border-sm me-2"></span>
-                  {uploadingImage ? "Upload..." : "Modification..."}
-                </>
-              ) : (
-                <>
-                  <FontAwesomeIcon icon={faCheckCircle} className="me-2" />
-                  Modifier l'échange
-                </>
-              )}
-            </button>
+              {/* Message */}
+              <div className="mb-4">
+                <label className="form-label fw-semibold">
+                  <FontAwesomeIcon icon={faFileAlt} className="me-2 text-primary" />
+                  Message
+                </label>
+                <textarea
+                  name="message"
+                  className="form-control"
+                  rows={3}
+                  value={formData.message}
+                  onChange={handleInputChange}
+                  disabled={loading}
+                  placeholder="Les livres sont en excellent état, jamais lus. Je préfère un échange en ..."
+                  style={{ borderRadius: "10px", padding: "0.75rem 1rem" }}
+                />
+              </div>
+
+              {/* Footer */}
+              <div className="d-flex justify-content-end gap-3 mt-4 pt-2 border-top">
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary px-4"
+                  onClick={handleClose}
+                  disabled={loading}
+                  style={{ borderRadius: "10px" }}
+                >
+                  <FontAwesomeIcon icon={faTimes} className="me-2" />
+                  Annuler
+                </button>
+
+                <button
+                  type="button"
+                  className="btn text-white px-4"
+                  onClick={handleSubmit}
+                  disabled={loading}
+                  style={{
+                    background: colors.oskar.green,
+                    borderRadius: "10px",
+                  }}
+                >
+                  {loading ? (
+                    <>
+                      <FontAwesomeIcon icon={faSpinner} spin className="me-2" />
+                      Enregistrement...
+                    </>
+                  ) : (
+                    <>
+                      <FontAwesomeIcon icon={faSave} className="me-2" />
+                      Enregistrer
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       </div>

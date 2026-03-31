@@ -623,7 +623,7 @@ export default function DashboardHeaderVendeur({
               </Link>
 
               {/* Notification */}
-              {showNotification && (
+              {/* {showNotification && (
                 <button
                   onClick={handleNotificationClick}
                   onKeyDown={(e) => handleKeyDown(e, handleNotificationClick)}
@@ -653,7 +653,7 @@ export default function DashboardHeaderVendeur({
                     </span>
                   )}
                 </button>
-              )}
+              )} */}
 
               {/* Export */}
               {showExportButton && (

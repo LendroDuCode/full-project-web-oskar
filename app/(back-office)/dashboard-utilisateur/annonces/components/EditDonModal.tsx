@@ -16,28 +16,29 @@ import {
   faList,
   faSearch,
   faChevronDown,
+  faMapMarkerAlt,
 } from "@fortawesome/free-solid-svg-icons";
 import { api } from "@/lib/api-client";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import colors from "@/app/shared/constants/colors";
 
-interface EditProduitModalProps {
+interface EditDonModalProps {
   isOpen: boolean;
-  produit: any;
+  don: any;
   onClose: () => void;
-  onSuccess: (message: string) => void;
+  onSuccess: () => void;
 }
 
-export default function EditProduitModal({
+export default function EditDonModal({
   isOpen,
-  produit,
+  don,
   onClose,
   onSuccess,
-}: EditProduitModalProps) {
+}: EditDonModalProps) {
   const [formData, setFormData] = useState({
-    libelle: "",
+    nom: "",
+    lieu_retrait: "",
     categorie_uuid: "",
-    prix: "",
     description: "",
     image: null as File | null,
   });
@@ -87,22 +88,22 @@ export default function EditProduitModal({
   }, []);
 
   useEffect(() => {
-    if (isOpen && produit) {
+    if (isOpen && don) {
       setFormData({
-        libelle: produit.libelle || "",
-        categorie_uuid: produit.categorie_uuid || "",
-        prix: produit.prix?.toString().replace(".00", "") || "",
-        description: produit.description || "",
+        nom: don.nom || "",
+        lieu_retrait: don.lieu_retrait || "",
+        categorie_uuid: don.categorie_uuid || "",
+        description: don.description || "",
         image: null,
       });
-      if (produit.image) {
+      if (don.image) {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
         const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
-        setImagePreview(`${apiUrl}${filesUrl}/${produit.image}`);
-      } else if (produit.image_key) {
+        setImagePreview(`${apiUrl}${filesUrl}/${don.image}`);
+      } else if (don.image_key) {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
         const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
-        setImagePreview(`${apiUrl}${filesUrl}/${produit.image_key}`);
+        setImagePreview(`${apiUrl}${filesUrl}/${don.image_key}`);
       }
       setError(null);
       setSuccessMessage(null);
@@ -110,7 +111,7 @@ export default function EditProduitModal({
       setSearchCategory("");
       setIsCategoryDropdownOpen(false);
     }
-  }, [isOpen, produit]);
+  }, [isOpen, don]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -122,9 +123,9 @@ export default function EditProduitModal({
 
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
-    if (!formData.libelle.trim()) errors.libelle = "Le libellé est obligatoire";
+    if (!formData.nom.trim()) errors.nom = "Le titre est obligatoire";
+    if (!formData.lieu_retrait.trim()) errors.lieu_retrait = "Le lieu de retrait est obligatoire";
     if (!formData.categorie_uuid) errors.categorie_uuid = "La catégorie est obligatoire";
-    if (!formData.prix || parseFloat(formData.prix) <= 0) errors.prix = "Le prix doit être supérieur à 0";
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -182,16 +183,17 @@ export default function EditProduitModal({
 
   const handleRemoveImage = () => {
     setFormData((prev) => ({ ...prev, image: null }));
-    if (produit?.image) {
+    if (don?.image) {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://oskar-api.mysonec.pro";
       const filesUrl = process.env.NEXT_PUBLIC_FILES_URL || "/api/files";
-      setImagePreview(`${apiUrl}${filesUrl}/${produit.image}`);
+      setImagePreview(`${apiUrl}${filesUrl}/${don.image}`);
     } else {
       setImagePreview(null);
     }
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  // ✅ CORRECTION: Utiliser putFormData au lieu de patch avec headers
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) {
@@ -204,28 +206,31 @@ export default function EditProduitModal({
 
     try {
       const formDataToSend = new FormData();
-      formDataToSend.append("libelle", formData.libelle);
+      formDataToSend.append("nom", formData.nom);
+      formDataToSend.append("lieu_retrait", formData.lieu_retrait);
       formDataToSend.append("categorie_uuid", formData.categorie_uuid);
-      formDataToSend.append("prix", formData.prix);
       if (formData.description) formDataToSend.append("description", formData.description);
       if (formData.image) formDataToSend.append("image", formData.image);
 
+      // ✅ Utiliser putFormData au lieu de patch
       const response = await api.putFormData(
-        API_ENDPOINTS.PRODUCTS.UPDATE_PRODUIT_PERSO(produit.uuid),
+        API_ENDPOINTS.DONS.UPDATE_DON_PERSO(don.uuid),
         formDataToSend
       );
 
       if (response && response.success !== false) {
-        setSuccessMessage(response.message || "Produit modifié avec succès !");
+        setSuccessMessage(response.message || "Don modifié avec succès !");
         setTimeout(() => {
-          onSuccess("Produit modifié avec succès !");
+          if (onSuccess) onSuccess();
           onClose();
         }, 1500);
       } else {
         throw new Error(response?.message || "Erreur lors de la modification");
       }
     } catch (err: any) {
-      console.error("Erreur modification produit:", err);
+      console.error("Erreur modification don:", err);
+      
+      // Message d'erreur plus explicite
       if (err.message?.includes("Authentification") || err.message?.includes("token")) {
         setError("Session expirée. Veuillez vous reconnecter.");
       } else {
@@ -238,12 +243,12 @@ export default function EditProduitModal({
 
   const handleClose = () => {
     if (loading) return;
-    const hasChanges = formData.libelle !== (produit?.libelle || "") || formData.image !== null;
+    const hasChanges = formData.nom !== (don?.nom || "") || formData.image !== null;
     if (hasChanges && !confirm("Vous avez des modifications non sauvegardées. Voulez-vous vraiment annuler ?")) return;
     onClose();
   };
 
-  if (!isOpen || !produit) return null;
+  if (!isOpen || !don) return null;
 
   return (
     <div className="modal fade show d-block" tabIndex={-1} style={{ backgroundColor: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)", zIndex: 1050 }}>
@@ -252,7 +257,7 @@ export default function EditProduitModal({
           <div className="modal-header text-white border-0" style={{ background: `linear-gradient(135deg, ${colors.oskar.yellow} 0%, ${colors.oskar.yellowHover} 100%)`, padding: "1.5rem 2rem" }}>
             <div className="d-flex align-items-center">
               <div className="bg-white bg-opacity-25 rounded-circle p-2 me-3"><FontAwesomeIcon icon={faEdit} className="fs-5" /></div>
-              <div><h5 className="modal-title mb-0 fw-bold">Modifier le produit</h5><p className="mb-0 opacity-75" style={{ fontSize: "0.85rem" }}>Modifiez les informations de votre produit</p></div>
+              <div><h5 className="modal-title mb-0 fw-bold">Modifier le don</h5><p className="mb-0 opacity-75" style={{ fontSize: "0.85rem" }}>Modifiez les informations de votre don</p></div>
             </div>
             <button type="button" className="btn-close btn-close-white" onClick={handleClose} disabled={loading} />
           </div>
@@ -271,7 +276,7 @@ export default function EditProduitModal({
 
             <form onSubmit={handleSubmit}>
               <div className="mb-4">
-                <label className="form-label fw-semibold"><FontAwesomeIcon icon={faImage} className="me-2 text-primary" />Photo du produit</label>
+                <label className="form-label fw-semibold"><FontAwesomeIcon icon={faImage} className="me-2 text-primary" />Photo du don</label>
                 {imagePreview ? (
                   <div className="position-relative d-inline-block">
                     <img src={imagePreview} alt="Aperçu" className="img-fluid rounded-3 shadow" style={{ maxHeight: "150px", objectFit: "cover" }} />
@@ -288,9 +293,15 @@ export default function EditProduitModal({
               </div>
 
               <div className="mb-3">
-                <label className="form-label fw-semibold"><FontAwesomeIcon icon={faTag} className="me-2 text-primary" />Libellé du produit *</label>
-                <input type="text" name="libelle" className={`form-control ${validationErrors.libelle ? "is-invalid" : ""}`} value={formData.libelle} onChange={handleChange} disabled={loading} style={{ borderRadius: "10px", padding: "0.75rem 1rem" }} />
-                {validationErrors.libelle && <div className="invalid-feedback">{validationErrors.libelle}</div>}
+                <label className="form-label fw-semibold"><FontAwesomeIcon icon={faTag} className="me-2 text-primary" />Titre du don *</label>
+                <input type="text" name="nom" className={`form-control ${validationErrors.nom ? "is-invalid" : ""}`} value={formData.nom} onChange={handleChange} disabled={loading} style={{ borderRadius: "10px", padding: "0.75rem 1rem" }} />
+                {validationErrors.nom && <div className="invalid-feedback">{validationErrors.nom}</div>}
+              </div>
+
+              <div className="mb-3">
+                <label className="form-label fw-semibold"><FontAwesomeIcon icon={faMapMarkerAlt} className="me-2 text-primary" />Lieu de retrait *</label>
+                <input type="text" name="lieu_retrait" className={`form-control ${validationErrors.lieu_retrait ? "is-invalid" : ""}`} value={formData.lieu_retrait} onChange={handleChange} disabled={loading} style={{ borderRadius: "10px", padding: "0.75rem 1rem" }} />
+                {validationErrors.lieu_retrait && <div className="invalid-feedback">{validationErrors.lieu_retrait}</div>}
               </div>
 
               <div className="mb-3">
@@ -321,15 +332,9 @@ export default function EditProduitModal({
                 {validationErrors.categorie_uuid && <div className="invalid-feedback d-block">{validationErrors.categorie_uuid}</div>}
               </div>
 
-              <div className="mb-3">
-                <label className="form-label fw-semibold"><FontAwesomeIcon icon={faTag} className="me-2 text-primary" />Prix (FCFA) *</label>
-                <input type="number" name="prix" className={`form-control ${validationErrors.prix ? "is-invalid" : ""}`} value={formData.prix} onChange={handleChange} disabled={loading} min="0" step="1" style={{ borderRadius: "10px", padding: "0.75rem 1rem" }} />
-                {validationErrors.prix && <div className="invalid-feedback">{validationErrors.prix}</div>}
-              </div>
-
               <div className="mb-4">
                 <label className="form-label fw-semibold">Description</label>
-                <textarea name="description" className="form-control" rows={3} value={formData.description} onChange={handleChange} disabled={loading} placeholder="Ex: Mercedez GLC dernier modèle" style={{ borderRadius: "10px", padding: "0.75rem 1rem" }} />
+                <textarea name="description" className="form-control" rows={3} value={formData.description} onChange={handleChange} disabled={loading} placeholder="Ex: Chaussure Air force, 45 pointure." style={{ borderRadius: "10px", padding: "0.75rem 1rem" }} />
               </div>
 
               <div className="d-flex justify-content-end gap-3 mt-4 pt-2 border-top">

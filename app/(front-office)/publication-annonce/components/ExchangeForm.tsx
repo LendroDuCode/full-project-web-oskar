@@ -290,7 +290,7 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
 
                 <div className="mb-4">
                   <label className="form-label fw-bold fs-5 mb-3">
-                    Message <span className="text-muted">(optionnel)</span>
+                    Description <span className="text-muted">(optionnel)</span>
                   </label>
                   <textarea
                     className="form-control form-control-lg border border-secondary rounded-4 py-3 px-4"

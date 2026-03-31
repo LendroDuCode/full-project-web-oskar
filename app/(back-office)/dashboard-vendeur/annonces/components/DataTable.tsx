@@ -99,7 +99,7 @@ interface DataTableProps {
   onBlock?: (uuid: string, type: string, block: boolean) => void;
   onDelete?: (uuid: string, type: string) => void;
   onView?: (uuid: string, type: string) => void;
-  onEdit?: (uuid: string, type: string) => void;
+  onEdit?: (uuid: string, type: string, item?: any) => void;
   onRefresh?: () => void;
   selectedItems?: Set<string>;
   onSelectionChange?: (selected: Set<string>) => void;
@@ -114,7 +114,7 @@ export default function DataTable({
   onValidate,
   onReject,
   onPublish,
-  onBlock, // Gardé pour compatibilité mais plus utilisé
+  onBlock,
   onDelete,
   onView,
   onEdit,
@@ -324,7 +324,7 @@ export default function DataTable({
     action: string,
     uuid: string,
     type: string,
-    extra?: any,
+    item?: any,
   ) => {
     setProcessingItems((prev) => new Set(prev).add(uuid));
 
@@ -334,7 +334,7 @@ export default function DataTable({
           onView?.(uuid, type);
           break;
         case "edit":
-          onEdit?.(uuid, type);
+          onEdit?.(uuid, type, item);
           break;
         case "validate":
           onValidate?.(uuid, type);
@@ -350,7 +350,6 @@ export default function DataTable({
           break;
         case "block":
         case "unblock":
-          // Ne rien faire pour les actions de blocage
           console.log("Action de blocage ignorée");
           break;
         case "delete":
@@ -378,7 +377,6 @@ export default function DataTable({
       selectedItems.has(item.uuid),
     );
     
-    // Filtrer les actions de blocage
     if (action === "block" || action === "unblock") {
       alert("L'action de blocage n'est pas disponible pour les vendeurs");
       return;
@@ -745,7 +743,29 @@ export default function DataTable({
                             <FontAwesomeIcon icon={faEye} size="xs" />
                           </button>
 
-                          {/* Supprimer - UNIQUEMENT CE BOUTON */}
+                          {/* ✅ MODIFIER - Ajout du bouton d'édition */}
+                          {onEdit && (
+                            <button
+                              type="button"
+                              className="btn btn-sm p-1 d-flex align-items-center justify-content-center"
+                              onClick={() =>
+                                handleAction("edit", item.uuid, item.type, item)
+                              }
+                              title="Modifier l'annonce"
+                              style={{
+                                width: "28px",
+                                height: "28px",
+                                backgroundColor: `${colors.oskar.yellow}20`,
+                                color: colors.oskar.yellow,
+                                border: "none",
+                                borderRadius: "4px",
+                              }}
+                            >
+                              <FontAwesomeIcon icon={faEdit} size="xs" />
+                            </button>
+                          )}
+
+                          {/* Supprimer */}
                           {onDelete && (
                             <button
                               type="button"
@@ -753,7 +773,7 @@ export default function DataTable({
                               onClick={() =>
                                 handleAction("delete", item.uuid, item.type)
                               }
-                              title="Supprimer"
+                              title="Supprimer l'annonce"
                               style={{
                                 width: "28px",
                                 height: "28px",

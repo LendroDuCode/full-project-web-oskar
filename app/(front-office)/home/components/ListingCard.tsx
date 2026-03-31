@@ -19,7 +19,7 @@ export interface ListingItem {
   prix?: number | string | null;
   prixFormate?: string;
   image: string;
-  date?: string | null | undefined;
+  publicationDate?: string | null | undefined; // Date de publication unique
   disponible?: boolean;
   statut?: string;
   numero?: string;
@@ -47,7 +47,6 @@ const ListingCard: React.FC<ListingCardProps> = ({
   viewMode = "grid",
   onFavoriteToggle,
 }) => {
-  // ✅ VÉRIFICATION DE SÉCURITÉ - Si listing est undefined, ne pas rendre le composant
   if (!listing) {
     console.error("❌ ListingCard: listing est undefined");
     return null;
@@ -60,7 +59,6 @@ const ListingCard: React.FC<ListingCardProps> = ({
   const [loading, setLoading] = useState(false);
   const { isLoggedIn, openLoginModal } = useAuth();
 
-  // Détection de l'écran mobile
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
@@ -72,25 +70,21 @@ const ListingCard: React.FC<ListingCardProps> = ({
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Vérifier au chargement si l'annonce est dans les favoris
   useEffect(() => {
     setIsFavorite(listing.is_favoris || false);
   }, [listing.is_favoris]);
 
-  // ✅ FONCTION POUR OBTENIR LES INITIALES DU VENDEUR
   const getSellerInitials = (): string => {
-    if (!listing.seller) return "AN"; // AN pour "Annonceur"
+    if (!listing.seller) return "AN";
     
     const name = listing.seller.name || "";
     const prenoms = listing.seller.prenoms || "";
     const nom = listing.seller.nom || "";
     
-    // Essayer de récupérer depuis prenoms et nom
     if (prenoms && nom) {
       return `${prenoms.charAt(0)}${nom.charAt(0)}`.toUpperCase();
     }
     
-    // Sinon, utiliser le nom complet
     const nameParts = name.split(' ');
     if (nameParts.length >= 2) {
       return `${nameParts[0].charAt(0)}${nameParts[nameParts.length - 1].charAt(0)}`.toUpperCase();
@@ -101,16 +95,14 @@ const ListingCard: React.FC<ListingCardProps> = ({
     return "AN";
   };
 
-  // ✅ FONCTION POUR OBTENIR LA COULEUR DE FOND DE L'AVATAR
   const getAvatarColor = (): string => {
-    // Couleurs par type d'annonce
     switch (listing.type) {
       case "don":
-        return "#9333ea"; // Violet pour les dons
+        return "#9333ea";
       case "echange":
-        return "#2563eb"; // Bleu pour les échanges
+        return "#2563eb";
       case "produit":
-        return "#16a34a"; // Vert pour les produits
+        return "#16a34a";
       default:
         return colors.oskar.green;
     }
@@ -122,24 +114,24 @@ const ListingCard: React.FC<ListingCardProps> = ({
         return {
           label: "vente",
           color: colors.oskar.green,
-          bgColor: "#16a34a", // Vert
-          btnColor: "#f97316", // Orange pour le bouton
+          bgColor: "#16a34a",
+          btnColor: "#f97316",
           icon: "fa-tag",
         };
       case "don":
         return {
           label: "don",
           color: "#9333ea",
-          bgColor: "#9333ea", // Violet
-          btnColor: "#9333ea", // Violet
+          bgColor: "#9333ea",
+          btnColor: "#9333ea",
           icon: "fa-gift",
         };
       case "echange":
         return {
           label: "échange",
           color: "#2563eb",
-          bgColor: "#2563eb", // Bleu
-          btnColor: "#2563eb", // Bleu
+          bgColor: "#2563eb",
+          btnColor: "#2563eb",
           icon: "fa-exchange-alt",
         };
       default:
@@ -181,7 +173,6 @@ const ListingCard: React.FC<ListingCardProps> = ({
     }
   };
 
-  // ✅ FONCTION DE FORMATAGE DE PRIX
   const formatPrice = (price: number | string | null | undefined, type: string): string => {
     if (listing.prixFormate) return listing.prixFormate;
     
@@ -208,26 +199,76 @@ const ListingCard: React.FC<ListingCardProps> = ({
     return "Prix non défini";
   };
 
+  // ✅ FORMATAGE DE DATE CORRIGÉ - Utilise la date UTC pour éviter les décalages
   const formatDate = (dateString?: string | null) => {
-    if (!dateString) return "";
+    if (!dateString) return null;
+    
+    try {
+      // Créer la date en considérant qu'elle est en UTC
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return null;
+      
+      // Date actuelle en UTC
+      const now = new Date();
+      
+      // Calculer la différence en millisecondes
+      const diffTime = now.getTime() - date.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      const diffMonths = Math.floor(diffDays / 30);
+      const diffYears = Math.floor(diffDays / 365);
+
+      // Même jour (diffDays === 0)
+      if (diffDays === 0) return "Aujourd'hui";
+      
+      // Hier (diffDays === 1)
+      if (diffDays === 1) return "Hier";
+      
+      // Moins de 7 jours
+      if (diffDays < 7) return `Il y a ${diffDays} jour${diffDays > 1 ? 's' : ''}`;
+      
+      // Moins de 30 jours
+      if (diffDays < 30) return `Il y a ${diffDays} jours`;
+      
+      // Moins d'un an
+      if (diffMonths < 12) {
+        return `Il y a ${diffMonths} mois`;
+      }
+      
+      // Plus d'un an
+      if (diffYears === 1) return "Il y a 1 an";
+      return `Il y a ${diffYears} ans`;
+    } catch {
+      return null;
+    }
+  };
+
+  // ✅ FORMATAGE COMPACT POUR MOBILE CORRIGÉ
+  const formatDateCompact = (dateString?: string | null) => {
+    if (!dateString) return null;
+    
     try {
       const date = new Date(dateString);
-      if (isNaN(date.getTime())) return "";
+      if (isNaN(date.getTime())) return null;
+      
       const now = new Date();
-      const diffTime = Math.abs(now.getTime() - date.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      const diffTime = now.getTime() - date.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
-      if (diffDays === 0) return "Aujourd'hui";
+      if (diffDays === 0) return "Auj";
       if (diffDays === 1) return "Hier";
-      if (diffDays < 7) return `Il y a ${diffDays}j`;
-      if (diffDays < 30) return `Il y a ${diffDays}j`;
-      return date.toLocaleDateString("fr-FR", {
-        day: "2-digit",
-        month: "short",
-      });
+      if (diffDays < 7) return `${diffDays}j`;
+      if (diffDays < 30) return `${diffDays}j`;
+      if (diffDays < 365) return `${Math.floor(diffDays / 30)}m`;
+      return `${Math.floor(diffDays / 365)}a`;
     } catch {
-      return "";
+      return null;
     }
+  };
+
+  // ✅ OBTENIR LA DATE FORMATÉE
+  const getFormattedDate = (): string | null => {
+    if (!listing.publicationDate) return null;
+    return isMobile ? formatDateCompact(listing.publicationDate) : formatDate(listing.publicationDate);
   };
 
   const getCardClasses = () => {
@@ -240,11 +281,11 @@ const ListingCard: React.FC<ListingCardProps> = ({
   const getPriceStyle = () => {
     switch (listing.type) {
       case "don":
-        return { color: "#9333ea" }; // Violet
+        return { color: "#9333ea" };
       case "echange":
-        return { color: "#2563eb" }; // Bleu
+        return { color: "#2563eb" };
       default:
-        return { color: colors.oskar.green }; // Vert
+        return { color: colors.oskar.green };
     }
   };
 
@@ -255,15 +296,14 @@ const ListingCard: React.FC<ListingCardProps> = ({
   const getButtonStyle = () => {
     switch (listing.type) {
       case "don":
-        return { backgroundColor: "#9333ea" }; // Violet
+        return { backgroundColor: "#9333ea" };
       case "echange":
-        return { backgroundColor: "#2563eb" }; // Bleu
+        return { backgroundColor: "#2563eb" };
       default:
-        return { backgroundColor: colors.oskar.orange }; // Orange pour les produits
+        return { backgroundColor: colors.oskar.orange };
     }
   };
 
-  // ✅ FONCTION POUR AFFICHER L'AVATAR (IMAGE OU INITIALES)
   const renderAvatar = () => {
     const avatarColor = getAvatarColor();
     const initials = getSellerInitials();
@@ -282,7 +322,6 @@ const ListingCard: React.FC<ListingCardProps> = ({
       );
     }
 
-    // Afficher les initiales dans un cercle coloré selon le type
     return (
       <div
         className="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
@@ -299,7 +338,6 @@ const ListingCard: React.FC<ListingCardProps> = ({
     );
   };
 
-  // ✅ FONCTION POUR GÉRER L'AJOUT/SUPPRESSION AUX FAVORIS
   const handleFavoriteClick = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -315,7 +353,6 @@ const ListingCard: React.FC<ListingCardProps> = ({
 
     try {
       if (isFavorite) {
-        // Supprimer des favoris
         let endpoint = "";
         switch (listing.type) {
           case "don":
@@ -332,7 +369,6 @@ const ListingCard: React.FC<ListingCardProps> = ({
         }
         await api.delete(endpoint);
       } else {
-        // Ajouter aux favoris
         const payload = {
           itemUuid: listing.uuid,
           type: listing.type,
@@ -340,10 +376,8 @@ const ListingCard: React.FC<ListingCardProps> = ({
         await api.post(API_ENDPOINTS.FAVORIS.ADD, payload);
       }
 
-      // Mettre à jour l'état local
       setIsFavorite(!isFavorite);
       
-      // Notifier le parent si nécessaire
       if (onFavoriteToggle) {
         onFavoriteToggle(listing.uuid, !isFavorite);
       }
@@ -361,21 +395,20 @@ const ListingCard: React.FC<ListingCardProps> = ({
     }
   };
 
-  // ✅ FONCTION POUR GÉRER LE CLIC SUR L'IMAGE
   const handleImageClick = (e: React.MouseEvent) => {
     e.preventDefault();
     window.location.href = getDetailLink();
   };
 
+  const formattedDate = getFormattedDate();
+
   if (viewMode === "list") {
-    // Version liste - adaptée mobile
     return (
       <div
         className={`card border-0 rounded-4 overflow-hidden shadow mb-2 ${featured ? "border-2 border-warning" : ""}`}
         style={{ height: isMobile ? "150px" : "200px" }}
       >
         <div className="row g-0 h-100">
-          {/* Image cliquable */}
           <div 
             className="col-4 position-relative h-100"
             onClick={handleImageClick}
@@ -454,10 +487,10 @@ const ListingCard: React.FC<ListingCardProps> = ({
                     </span>
                   </span>
                 )}
-                {(listing.date || listing.createdAt) && (
+                {formattedDate && (
                   <span className="d-flex align-items-center text-muted">
-                    <i className="fa-regular fa-clock me-1" style={{ fontSize: isMobile ? "8px" : "10px" }}></i>
-                    {formatDate(listing.date || listing.createdAt)}
+                    <i className="fa-regular fa-calendar me-1" style={{ fontSize: isMobile ? "8px" : "10px" }}></i>
+                    <span style={{ whiteSpace: "nowrap" }}>{formattedDate}</span>
                   </span>
                 )}
               </div>
@@ -514,14 +547,13 @@ const ListingCard: React.FC<ListingCardProps> = ({
     );
   }
 
-  // MODE GRID - Version mobile optimisée
-  const cardHeight = isMobile ? "320px" : "420px";
+  // MODE GRID
+  const cardHeight = isMobile ? "340px" : "440px";
   const imageHeight = isMobile ? "140px" : "180px";
-  const contentHeight = isMobile ? "180px" : "240px";
+  const contentHeight = isMobile ? "200px" : "260px";
 
   return (
     <div className={getCardClasses()} style={{ height: cardHeight }}>
-      {/* Image cliquable */}
       <div
         className="position-relative overflow-hidden"
         style={{ height: imageHeight, flexShrink: 0, cursor: "pointer" }}
@@ -535,7 +567,6 @@ const ListingCard: React.FC<ListingCardProps> = ({
           onError={() => setImageError(true)}
         />
 
-        {/* Badge type */}
         <div
           className="position-absolute top-0 start-0 px-1 py-0.5 text-white small fw-bold rounded-2 d-flex align-items-center gap-1 m-1"
           style={{ backgroundColor: typeConfig.bgColor, fontSize: isMobile ? "9px" : "11px" }}
@@ -544,7 +575,6 @@ const ListingCard: React.FC<ListingCardProps> = ({
           <span>{typeConfig.label}</span>
         </div>
 
-        {/* Bouton favori */}
         <button
           className="position-absolute top-0 end-0 bg-white rounded-circle d-flex align-items-center justify-content-center shadow border-0 m-1 transition-colors"
           style={{ 
@@ -574,9 +604,7 @@ const ListingCard: React.FC<ListingCardProps> = ({
         </button>
       </div>
 
-      {/* Contenu */}
       <div className="card-body p-2 d-flex flex-column" style={{ height: contentHeight }}>
-        {/* Titre */}
         <div style={{ height: isMobile ? "32px" : "42px", overflow: "hidden" }} className="mb-0">
           <Link href={getDetailLink()} className="text-decoration-none">
             <h6 className="card-title fw-bold text-dark mb-0" style={{ fontSize: isMobile ? "13px" : "14px", lineHeight: "1.2" }}>
@@ -585,14 +613,12 @@ const ListingCard: React.FC<ListingCardProps> = ({
           </Link>
         </div>
 
-        {/* Prix */}
         <div style={{ height: isMobile ? "22px" : "28px" }} className="mb-0">
           <div className="fw-bold" style={{ fontSize: isMobile ? "13px" : "14px", ...getPriceStyle() }}>
             {formatPrice(listing.prix, listing.type)}
           </div>
         </div>
 
-        {/* Description */}
         <div style={{ height: isMobile ? "30px" : "40px", overflow: "hidden" }} className="mb-1">
           {listing.description ? (
             <p className="card-text text-muted" style={{ fontSize: isMobile ? "10px" : "11px", lineHeight: "1.2" }}>
@@ -605,7 +631,6 @@ const ListingCard: React.FC<ListingCardProps> = ({
           )}
         </div>
 
-        {/* Localisation et date */}
         <div className="d-flex justify-content-between align-items-center text-muted" style={{ height: isMobile ? "18px" : "20px" }}>
           {listing.localisation ? (
             <span className="d-flex align-items-center">
@@ -617,15 +642,14 @@ const ListingCard: React.FC<ListingCardProps> = ({
           ) : (
             <span></span>
           )}
-          {(listing.date || listing.createdAt) && (
+          {formattedDate && (
             <span className="d-flex align-items-center">
-              <i className="fa-regular fa-clock me-1" style={{ fontSize: isMobile ? "8px" : "10px" }}></i>
-              <span style={{ fontSize: isMobile ? "9px" : "11px" }}>{formatDate(listing.date || listing.createdAt)}</span>
+              <i className="fa-regular fa-calendar me-1" style={{ fontSize: isMobile ? "8px" : "10px" }}></i>
+              <span style={{ fontSize: isMobile ? "9px" : "11px" }}>{formattedDate}</span>
             </span>
           )}
         </div>
 
-        {/* Footer avec avatar et bouton */}
         <div className="d-flex justify-content-between align-items-center pt-1 border-top mt-1" style={{ height: isMobile ? "38px" : "50px" }}>
           <div className="d-flex align-items-center" style={{ maxWidth: isMobile ? "90px" : "110px" }}>
             {listing.seller ? (

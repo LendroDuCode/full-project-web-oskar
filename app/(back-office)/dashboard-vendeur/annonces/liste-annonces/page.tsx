@@ -9,6 +9,9 @@ import DataTable from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
 import ViewModal from "../components/ViewModal";
 import DeleteConfirmModal from "../components/DeleteConfirmModal";
+import EditDonModal from "../components/EditDonModal";
+import EditProduitModal from "../components/EditProduitModal";
+import EditEchangeModal from "../components/EditEchangeModal";
 
 interface AnnonceData {
   uuid: string;
@@ -18,6 +21,7 @@ interface AnnonceData {
   type: "produit" | "don" | "echange";
   status: string;
   date: string;
+  publicationDate?: string | null;
   price?: number | string | null;
   quantity?: number;
   estPublie?: boolean;
@@ -32,6 +36,26 @@ interface AnnonceData {
   category?: string;
   originalData?: any;
 }
+
+// Fonction pour extraire la date de publication correcte
+const getPublicationDate = (item: any, type: string): string | null => {
+  if (type === "produit" && item.publierLe) {
+    return item.publierLe;
+  }
+  if (type === "don" && item.publierLe) {
+    return item.publierLe;
+  }
+  if (type === "echange" && item.publieLe) {
+    return item.publieLe;
+  }
+  if (item.dateCreation) {
+    return item.dateCreation;
+  }
+  if (item.createdAt) {
+    return item.createdAt;
+  }
+  return null;
+};
 
 export default function AnnoncesPage() {
   const [annonces, setAnnonces] = useState<AnnonceData[]>([]);
@@ -49,6 +73,14 @@ export default function AnnoncesPage() {
     data: any;
     type: string;
   } | null>(null);
+
+  // États pour les modals d'édition
+  const [editProduitModalOpen, setEditProduitModalOpen] = useState(false);
+  const [editDonModalOpen, setEditDonModalOpen] = useState(false);
+  const [editEchangeModalOpen, setEditEchangeModalOpen] = useState(false);
+  const [selectedProduit, setSelectedProduit] = useState<any>(null);
+  const [selectedDon, setSelectedDon] = useState<any>(null);
+  const [selectedEchange, setSelectedEchange] = useState<any>(null);
 
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{
@@ -81,6 +113,8 @@ export default function AnnoncesPage() {
         }
       }
 
+      const publicationDate = getPublicationDate(item, type);
+
       const baseData = {
         uuid: item.uuid,
         title:
@@ -97,13 +131,8 @@ export default function AnnoncesPage() {
           `https://via.placeholder.com/64?text=${type.charAt(0).toUpperCase()}`,
         type: type as "produit" | "don" | "echange",
         status: (item.statut || "").toLowerCase(),
-        date:
-          item.date_debut ||
-          item.dateProposition ||
-          item.dateCreation ||
-          item.createdAt ||
-          item.updatedAt ||
-          new Date().toISOString(),
+        date: publicationDate || item.dateCreation || item.createdAt || new Date().toISOString(),
+        publicationDate: publicationDate,
         price: item.prix || null,
         quantity: item.quantite,
         estPublie: estPublie,
@@ -122,10 +151,10 @@ export default function AnnoncesPage() {
           return {
             ...baseData,
             seller: {
-              name: item.vendeur || "Vendeur",
+              name: item.vendeur?.nom || item.createur?.nom || "Vendeur",
               isPro: !!item.boutique || false,
               type: "vendeur",
-              avatar: item.boutique?.logo,
+              avatar: item.boutique?.logo || item.vendeur?.avatar,
               boutique: item.boutique?.nom,
             },
           };
@@ -133,7 +162,7 @@ export default function AnnoncesPage() {
           return {
             ...baseData,
             seller: {
-              name: item.vendeur || "Donateur",
+              name: item.vendeur?.nom || item.createur?.nom || "Donateur",
               type: "vendeur",
             },
           };
@@ -141,7 +170,7 @@ export default function AnnoncesPage() {
           return {
             ...baseData,
             seller: {
-              name: item.vendeur || "Initiateur",
+              name: item.vendeur?.nom || item.createur?.nom || "Initiateur",
               type: "vendeur",
             },
           };
@@ -442,13 +471,12 @@ export default function AnnoncesPage() {
     }
   }, [annonces, searchQuery]);
 
-  // ✅ FONCTION DE BLOCAGE CORRIGÉE
+  // ✅ FONCTION DE BLOCAGE CORRIGÉE avec les bons endpoints
   const handleBlock = useCallback(
     async (uuid: string, type: string, block: boolean) => {
       try {
         setError(null);
         
-        // Déterminer le bon endpoint et le payload selon le type
         let endpoint = "";
         let payload: any = {};
         
@@ -456,8 +484,8 @@ export default function AnnoncesPage() {
           // Bloquer
           switch (type) {
             case "produit":
-              endpoint = API_ENDPOINTS.PRODUCTS.BLOQUE_PRODUITS;
-              payload = { productUuid: uuid, est_bloque: true };
+              endpoint = API_ENDPOINTS.PRODUCTS.BLOCK(uuid);
+              payload = {};
               break;
             case "don":
               endpoint = API_ENDPOINTS.DONS.BLOQUE_DON;
@@ -474,8 +502,8 @@ export default function AnnoncesPage() {
           // Débloquer
           switch (type) {
             case "produit":
-              endpoint = API_ENDPOINTS.PRODUCTS.BLOQUE_PRODUITS;
-              payload = { productUuid: uuid, est_bloque: false };
+              endpoint = API_ENDPOINTS.PRODUCTS.UNBLOCK(uuid);
+              payload = {};
               break;
             case "don":
               endpoint = API_ENDPOINTS.DONS.BLOQUE_DON;
@@ -491,8 +519,6 @@ export default function AnnoncesPage() {
         }
 
         console.log(`📡 ${block ? 'Blocage' : 'Déblocage'} - Type: ${type}, UUID: ${uuid}`);
-        console.log('📡 Endpoint:', endpoint);
-        console.log('📡 Payload:', payload);
         
         await api.post(endpoint, payload);
 
@@ -514,6 +540,32 @@ export default function AnnoncesPage() {
     },
     [fetchData, selectedType, selectedStatus],
   );
+
+  // ✅ FONCTION D'ÉDITION
+  const handleEdit = useCallback((uuid: string, type: string, item: any) => {
+    console.log(`✏️ Édition - Type: ${type}, UUID: ${uuid}`);
+    
+    switch (type) {
+      case "produit":
+        setSelectedProduit(item.originalData);
+        setEditProduitModalOpen(true);
+        break;
+      case "don":
+        setSelectedDon(item.originalData);
+        setEditDonModalOpen(true);
+        break;
+      case "echange":
+        setSelectedEchange(item.originalData);
+        setEditEchangeModalOpen(true);
+        break;
+    }
+  }, []);
+
+  // ✅ Callback après modification réussie
+  const handleEditSuccess = useCallback((message: string) => {
+    console.log("✅ Modification réussie:", message);
+    fetchData(selectedType, selectedStatus);
+  }, [fetchData, selectedType, selectedStatus]);
 
   const openDeleteModal = useCallback(
     (uuid: string, type: string, title: string) => {
@@ -719,6 +771,7 @@ export default function AnnoncesPage() {
               onReject={handleReject}
               onBlock={handleBlock}
               onDelete={handleDelete}
+              onEdit={handleEdit}
               onView={handleView}
               onRefresh={handleRefresh}
               selectedItems={selectedItems}
@@ -751,6 +804,52 @@ export default function AnnoncesPage() {
               itemType={itemToDelete?.type || ""}
               isDeleting={isDeleting}
             />
+
+            {/* Modals d'édition */}
+            {editProduitModalOpen && selectedProduit && (
+              <EditProduitModal
+                isOpen={editProduitModalOpen}
+                produit={selectedProduit}
+                createdAt={selectedProduit.dateCreation}
+                onClose={() => {
+                  setEditProduitModalOpen(false);
+                  setSelectedProduit(null);
+                }}
+                onSuccess={handleEditSuccess}
+              />
+            )}
+
+            {editDonModalOpen && selectedDon && (
+              <EditDonModal
+                isOpen={editDonModalOpen}
+                don={selectedDon}
+                onClose={() => {
+                  setEditDonModalOpen(false);
+                  setSelectedDon(null);
+                }}
+                onSuccess={() => {
+                  handleEditSuccess("Don modifié avec succès");
+                  setEditDonModalOpen(false);
+                  setSelectedDon(null);
+                }}
+              />
+            )}
+
+            {editEchangeModalOpen && selectedEchange && (
+              <EditEchangeModal
+                isOpen={editEchangeModalOpen}
+                echange={selectedEchange}
+                onClose={() => {
+                  setEditEchangeModalOpen(false);
+                  setSelectedEchange(null);
+                }}
+                onSuccess={() => {
+                  handleEditSuccess("Échange modifié avec succès");
+                  setEditEchangeModalOpen(false);
+                  setSelectedEchange(null);
+                }}
+              />
+            )}
           </>
         ) : (
           <EmptyState

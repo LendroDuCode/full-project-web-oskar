@@ -143,7 +143,6 @@ class AnnonceService {
    */
   async getDonsPublies(): Promise<Annonce[]> {
     if (!this.isProduction) {
-      console.log("📦 [Dons] Chargement des dons publiés...");
       console.log("📦 Endpoint:", API_ENDPOINTS.DONS.LISTE_TOUS_DON_PUBLIE);
     }
     

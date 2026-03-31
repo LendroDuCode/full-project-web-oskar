@@ -8,6 +8,9 @@ import FilterBar from "../components/FilterBar";
 import DataTable from "../components/DataTable";
 import EmptyState from "../components/EmptyState";
 import ViewModal from "../components/ViewModal";
+import EditProduitModal from "../components/EditProduitModal";
+import EditDonModal from "../components/EditDonModal";
+import EditEchangeModal from "../components/EditEchangeModal";
 
 interface AnnonceData {
   uuid: string;
@@ -40,12 +43,18 @@ export default function AnnoncesPage() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
   // États pour la modal de détails
-  const [selectedAnnonce, setSelectedAnnonce] = useState<AnnonceData | null>(
-    null,
-  );
+  const [selectedAnnonce, setSelectedAnnonce] = useState<AnnonceData | null>(null);
   const [showViewModal, setShowViewModal] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [fullDetails, setFullDetails] = useState<any>(null);
+
+  // États pour les modals d'édition
+  const [editProduitModalOpen, setEditProduitModalOpen] = useState(false);
+  const [editDonModalOpen, setEditDonModalOpen] = useState(false);
+  const [editEchangeModalOpen, setEditEchangeModalOpen] = useState(false);
+  const [selectedProduit, setSelectedProduit] = useState<any>(null);
+  const [selectedDon, setSelectedDon] = useState<any>(null);
+  const [selectedEchange, setSelectedEchange] = useState<any>(null);
 
   // ✅ Récupérer l'UUID de l'utilisateur connecté
   useEffect(() => {
@@ -65,7 +74,7 @@ export default function AnnoncesPage() {
     getUserInfo();
   }, []);
 
-  // ✅ Fonction pour extraire les items (gère tous les formats)
+  // ✅ Fonction pour extraire les items
   const extractItems = (response: any): any[] => {
     if (!response) return [];
     if (Array.isArray(response)) return response;
@@ -118,11 +127,10 @@ export default function AnnoncesPage() {
     return false;
   };
 
-  // ✅ Fonction de transformation adaptée à toutes les structures
+  // ✅ Fonction de transformation
   const transformAnnonceData = (item: any, type: string): AnnonceData | null => {
-    // Filtrer les annonces qui n'appartiennent pas à l'utilisateur
     if (!isOwnAnnonce(item, type)) {
-      console.log(`🚫 Annonce ignorée (pas pour l'utilisateur): ${item.uuid} (${type})`);
+      console.log(`🚫 Annonce ignorée: ${item.uuid} (${type})`);
       return null;
     }
 
@@ -154,7 +162,6 @@ export default function AnnoncesPage() {
     if (item.quantite) quantity = Number(item.quantite);
     else if (item.quantity) quantity = Number(item.quantity);
 
-    // ✅ Détection robuste du statut bloqué
     let estBloque = false;
     if (item.est_bloque === true || item.estBloque === true) {
       estBloque = true;
@@ -165,7 +172,6 @@ export default function AnnoncesPage() {
       }
     }
 
-    // ✅ Détection robuste du statut publié
     let estPublie = false;
     if (item.estPublie === true || item.est_public === 1) {
       estPublie = true;
@@ -176,9 +182,7 @@ export default function AnnoncesPage() {
       }
     }
 
-    // ✅ Déterminer le statut général (TRÈS IMPORTANT)
-    let status = "en-attente"; // Par défaut
-    
+    let status = "en-attente";
     if (estBloque) {
       status = "bloque";
     } else if (estPublie) {
@@ -194,14 +198,7 @@ export default function AnnoncesPage() {
       }
     }
 
-    const date = 
-      item.dateProposition || 
-      item.date_debut || 
-      item.createdAt || 
-      item.created_at || 
-      item.updatedAt || 
-      item.updated_at || 
-      new Date().toISOString();
+    const date = item.dateProposition || item.date_debut || item.createdAt || item.created_at || item.updatedAt || item.updated_at || new Date().toISOString();
 
     let category = "Non catégorisé";
     if (item.categorie) {
@@ -228,7 +225,7 @@ export default function AnnoncesPage() {
     };
   };
 
-  // ✅ Charger les détails complets d'une annonce
+  // ✅ Charger les détails complets
   const fetchFullDetails = useCallback(async (annonce: AnnonceData) => {
     setDetailLoading(true);
     try {
@@ -254,17 +251,74 @@ export default function AnnoncesPage() {
     }
   }, []);
 
-  const handleView = useCallback(
-    async (uuid: string, type: string) => {
-      const annonce = annonces.find((a) => a.uuid === uuid && a.type === type);
-      if (annonce) {
-        setSelectedAnnonce(annonce);
-        setShowViewModal(true);
-        await fetchFullDetails(annonce);
+  const handleView = useCallback(async (uuid: string, type: string) => {
+    const annonce = annonces.find((a) => a.uuid === uuid && a.type === type);
+    if (annonce) {
+      setSelectedAnnonce(annonce);
+      setShowViewModal(true);
+      await fetchFullDetails(annonce);
+    }
+  }, [annonces, fetchFullDetails]);
+
+  // ✅ Fonction d'édition
+  const handleEdit = useCallback((uuid: string, type: string, item: any) => {
+    console.log(`✏️ Édition - Type: ${type}, UUID: ${uuid}`);
+    
+    switch (type) {
+      case "produit":
+        setSelectedProduit(item.originalData);
+        setEditProduitModalOpen(true);
+        break;
+      case "don":
+        setSelectedDon(item.originalData);
+        setEditDonModalOpen(true);
+        break;
+      case "echange":
+        setSelectedEchange(item.originalData);
+        setEditEchangeModalOpen(true);
+        break;
+    }
+  }, []);
+
+  // ✅ FONCTION DE SUPPRESSION
+  const handleDelete = useCallback(async (uuid: string, type: string) => {
+    if (!confirm("Êtes-vous sûr de vouloir supprimer cette annonce ?")) return;
+    
+    try {
+      console.log("🗑️ Suppression:", uuid, type);
+      let endpoint = "";
+      
+      switch (type) {
+        case "produit":
+          endpoint = API_ENDPOINTS.PRODUCTS.DELETE(uuid);
+          break;
+        case "don":
+          endpoint = API_ENDPOINTS.DONS.DELETE(uuid);
+          break;
+        case "echange":
+          endpoint = API_ENDPOINTS.ECHANGES.DELETE(uuid);
+          break;
+        default:
+          throw new Error(`Type non supporté: ${type}`);
       }
-    },
-    [annonces, fetchFullDetails],
-  );
+      
+      if (endpoint) {
+        await api.delete(endpoint);
+        alert("✅ Annonce supprimée avec succès");
+        // Recharger les données après suppression
+        fetchData(selectedType, selectedStatus);
+      }
+    } catch (err: any) {
+      console.error("❌ Erreur lors de la suppression:", err);
+      alert(err.response?.data?.message || "Erreur lors de la suppression");
+    }
+  }, [selectedType, selectedStatus]);
+
+  // ✅ Callback après modification réussie
+  const handleEditSuccess = useCallback((message: string) => {
+    console.log("✅ Modification réussie:", message);
+    fetchData(selectedType, selectedStatus);
+  }, [selectedType, selectedStatus]);
 
   const handleCloseModal = useCallback(() => {
     setShowViewModal(false);
@@ -272,7 +326,7 @@ export default function AnnoncesPage() {
     setFullDetails(null);
   }, []);
 
-  // ✅ CHARGER LES DONNÉES - VERSION CORRIGÉE
+  // ✅ CHARGER LES DONNÉES
   const fetchData = useCallback(async (type: string, status: string) => {
     try {
       setLoading(true);
@@ -295,7 +349,6 @@ export default function AnnoncesPage() {
           donsEndpoint = API_ENDPOINTS.DONS.USER_BLOCKED;
           echangesEndpoint = API_ENDPOINTS.ECHANGES.USER_BLOCKED;
         } else {
-          // Pour "en-attente" et "tous", on utilise les endpoints génériques
           produitsEndpoint = API_ENDPOINTS.PRODUCTS.LISTE_PRODUITS_UTILISATEUR;
           donsEndpoint = API_ENDPOINTS.DONS.USER_DONS;
           echangesEndpoint = API_ENDPOINTS.ECHANGES.USER_ECHANGES;
@@ -335,9 +388,8 @@ export default function AnnoncesPage() {
           allItems.push(...echangesTransformes);
         }
 
-        console.log(`📊 Total après filtrage utilisateur: ${allItems.length}`);
+        console.log(`📊 Total après filtrage: ${allItems.length}`);
 
-        // ✅ SI STATUT "EN-ATTENTE", FILTRER PAR RAPPORT AU STATUT CALCULÉ
         if (status === "en-attente") {
           allItems = allItems.filter(item => 
             item.status === "en-attente" || 
@@ -346,7 +398,6 @@ export default function AnnoncesPage() {
           console.log(`📊 Après filtrage en-attente: ${allItems.length}`);
         }
       } else {
-        // Type spécifique
         let endpoint;
         
         if (status === "publie") {
@@ -380,7 +431,6 @@ export default function AnnoncesPage() {
             .filter((item): item is AnnonceData => item !== null);
           allItems = itemsTransformes;
 
-          // ✅ SI STATUT "EN-ATTENTE", FILTRER PAR RAPPORT AU STATUT CALCULÉ
           if (status === "en-attente") {
             allItems = allItems.filter(item => 
               item.status === "en-attente" || 
@@ -394,7 +444,7 @@ export default function AnnoncesPage() {
       console.log("📊 Total final:", allItems.length);
       setAnnonces(allItems);
     } catch (err: any) {
-      console.error("❌ Erreur lors du chargement des données:", err);
+      console.error("❌ Erreur lors du chargement:", err);
       setError(err.message || "Une erreur est survenue");
       setAnnonces([]);
     } finally {
@@ -403,7 +453,7 @@ export default function AnnoncesPage() {
     }
   }, []);
 
-  // ✅ Effet pour charger les données quand les filtres changent
+  // ✅ Effet pour charger les données
   useEffect(() => {
     fetchData(selectedType, selectedStatus);
   }, [selectedType, selectedStatus, fetchData]);
@@ -416,146 +466,13 @@ export default function AnnoncesPage() {
         const title = item.title.toLowerCase();
         const description = item.description?.toLowerCase() || "";
         const category = item.category?.toLowerCase() || "";
-        return (
-          title.includes(query) ||
-          description.includes(query) ||
-          category.includes(query)
-        );
+        return title.includes(query) || description.includes(query) || category.includes(query);
       });
       setFilteredAnnonces(filtered);
     } else {
       setFilteredAnnonces(annonces);
     }
   }, [annonces, searchQuery]);
-
-  // ✅ Actions
-  const handleValidate = useCallback(
-    async (uuid: string, type: string) => {
-      try {
-        console.log("Validation:", uuid, type);
-        await fetchData(selectedType, selectedStatus);
-      } catch (err) {
-        console.error("Erreur lors de la validation:", err);
-        alert("Erreur lors de la validation");
-      }
-    },
-    [selectedType, selectedStatus, fetchData],
-  );
-
-  const handleReject = useCallback(
-    async (uuid: string, type: string) => {
-      try {
-        console.log("Rejet:", uuid, type);
-        await fetchData(selectedType, selectedStatus);
-      } catch (err) {
-        console.error("Erreur lors du rejet:", err);
-        alert("Erreur lors du rejet");
-      }
-    },
-    [selectedType, selectedStatus, fetchData],
-  );
-
-  const handlePublish = useCallback(
-    async (uuid: string, type: string, publish: boolean) => {
-      try {
-        console.log(`${publish ? "Publication" : "Dépublication"}:`, uuid, type);
-        const endpoint = publish 
-          ? API_ENDPOINTS.PRODUCTS.PUBLISH(uuid) 
-          : API_ENDPOINTS.PRODUCTS.UNPUBLISH(uuid);
-        if (endpoint) {
-          await api.post(endpoint);
-          alert(`Annonce ${publish ? "publiée" : "dépubliée"} avec succès`);
-          await fetchData(selectedType, selectedStatus);
-        }
-      } catch (err: any) {
-        console.error("Erreur lors de l'opération:", err);
-        alert(err.response?.data?.message || "Erreur lors de l'opération");
-      }
-    },
-    [selectedType, selectedStatus, fetchData],
-  );
-
-  const handleBlock = useCallback(
-    async (uuid: string, type: string, block: boolean) => {
-      try {
-        console.log(`${block ? "Blocage" : "Déblocage"}:`, uuid, type);
-        const endpoint = block 
-          ? API_ENDPOINTS.PRODUCTS.BLOCK(uuid) 
-          : API_ENDPOINTS.PRODUCTS.UNBLOCK(uuid);
-        if (endpoint) {
-          await api.post(endpoint);
-          alert(`Annonce ${block ? "bloquée" : "débloquée"} avec succès`);
-          await fetchData(selectedType, selectedStatus);
-        }
-      } catch (err: any) {
-        console.error("Erreur lors de l'opération:", err);
-        alert(err.response?.data?.message || "Erreur lors de l'opération");
-      }
-    },
-    [selectedType, selectedStatus, fetchData],
-  );
-
-  const handleDelete = useCallback(
-    async (uuid: string, type: string) => {
-      if (!confirm("Êtes-vous sûr de vouloir supprimer cette annonce ?")) return;
-      try {
-        console.log("Suppression:", uuid, type);
-        let endpoint = "";
-        switch (type) {
-          case "produit":
-            endpoint = API_ENDPOINTS.PRODUCTS.DELETE(uuid);
-            break;
-          case "don":
-            endpoint = API_ENDPOINTS.DONS.DELETE(uuid);
-            break;
-          case "echange":
-            endpoint = API_ENDPOINTS.ECHANGES.DELETE(uuid);
-            break;
-        }
-        if (endpoint) {
-          await api.delete(endpoint);
-          alert("Annonce supprimée avec succès");
-          await fetchData(selectedType, selectedStatus);
-        }
-      } catch (err: any) {
-        console.error("Erreur lors de la suppression:", err);
-        alert(err.response?.data?.message || "Erreur lors de la suppression");
-      }
-    },
-    [selectedType, selectedStatus, fetchData],
-  );
-
-  const handleBulkAction = useCallback(
-    async (action: string, items: AnnonceData[]) => {
-      try {
-        console.log(`Action en masse "${action}" sur ${items.length} items`);
-        for (const item of items) {
-          switch (action) {
-            case "publish":
-              await handlePublish(item.uuid, item.type, true);
-              break;
-            case "unpublish":
-              await handlePublish(item.uuid, item.type, false);
-              break;
-            case "block":
-              await handleBlock(item.uuid, item.type, true);
-              break;
-            case "unblock":
-              await handleBlock(item.uuid, item.type, false);
-              break;
-            case "delete":
-              await handleDelete(item.uuid, item.type);
-              break;
-          }
-        }
-        setSelectedItems(new Set());
-      } catch (err) {
-        console.error("Erreur lors de l'action en masse:", err);
-        alert("Erreur lors de l'opération en masse");
-      }
-    },
-    [handlePublish, handleBlock, handleDelete],
-  );
 
   const handleClearFilters = useCallback(() => {
     setSelectedType("tous");
@@ -571,10 +488,7 @@ export default function AnnoncesPage() {
   const isLoading = loading || isFetchingBlocked;
 
   return (
-    <div
-      className="container-fluid px-0"
-      style={{ minHeight: "100vh", backgroundColor: colors.oskar.lightGrey }}
-    >
+    <div className="container-fluid px-0" style={{ minHeight: "100vh", backgroundColor: colors.oskar.lightGrey }}>
       <FilterBar
         selectedType={selectedType}
         selectedStatus={selectedStatus}
@@ -591,9 +505,7 @@ export default function AnnoncesPage() {
       <div className="container-fluid px-4 py-4">
         <div className="d-flex justify-content-between align-items-center mb-4">
           <div>
-            <h1 className="h4 fw-bold mb-2" style={{ color: colors.oskar.black }}>
-              Mes annonces
-            </h1>
+            <h1 className="h4 fw-bold mb-2" style={{ color: colors.oskar.black }}>Mes annonces</h1>
             <p className="text-muted small mb-0">
               {filteredAnnonces.length} annonce(s) trouvée(s)
               {selectedType !== "tous" && ` • Type: ${selectedType}`}
@@ -604,9 +516,7 @@ export default function AnnoncesPage() {
           </div>
 
           <div className="d-flex gap-2">
-            {(selectedType !== "tous" ||
-              selectedStatus !== "tous" ||
-              searchQuery) && (
+            {(selectedType !== "tous" || selectedStatus !== "tous" || searchQuery) && (
               <button
                 type="button"
                 className="btn btn-sm"
@@ -626,38 +536,76 @@ export default function AnnoncesPage() {
         </div>
 
         {filteredAnnonces.length > 0 ? (
-          <DataTable
-            data={filteredAnnonces}
-            loading={isLoading}
-            error={error}
-            onValidate={handleValidate}
-            onReject={handleReject}
-            onPublish={handlePublish}
-            onBlock={handleBlock}
-            onDelete={handleDelete}
-            onView={handleView}
-            onRefresh={handleRefresh}
-            selectedItems={selectedItems}
-            onSelectionChange={setSelectedItems}
-            onBulkAction={handleBulkAction}
-            className="mb-4"
-          />
+          <>
+            <DataTable
+              data={filteredAnnonces}
+              loading={isLoading}
+              error={error}
+              onView={handleView}
+              onEdit={handleEdit}
+              onDelete={handleDelete}
+              onRefresh={handleRefresh}
+              selectedItems={selectedItems}
+              onSelectionChange={setSelectedItems}
+              className="mb-4"
+            />
+
+            {/* Modals d'édition */}
+          {editProduitModalOpen && selectedProduit && (
+  <EditProduitModal
+    isOpen={editProduitModalOpen}
+    produit={selectedProduit}
+    // createdAt={selectedProduit.dateCreation}  // ❌ SUPPRIMEZ CETTE LIGNE
+    onClose={() => {
+      setEditProduitModalOpen(false);
+      setSelectedProduit(null);
+    }}
+    onSuccess={handleEditSuccess}
+  />
+)}
+
+            {editDonModalOpen && selectedDon && (
+              <EditDonModal
+                isOpen={editDonModalOpen}
+                don={selectedDon}
+                onClose={() => {
+                  setEditDonModalOpen(false);
+                  setSelectedDon(null);
+                }}
+                onSuccess={() => {
+                  handleEditSuccess("Don modifié avec succès");
+                  setEditDonModalOpen(false);
+                  setSelectedDon(null);
+                }}
+              />
+            )}
+
+            {editEchangeModalOpen && selectedEchange && (
+              <EditEchangeModal
+                isOpen={editEchangeModalOpen}
+                echange={selectedEchange}
+                onClose={() => {
+                  setEditEchangeModalOpen(false);
+                  setSelectedEchange(null);
+                }}
+                onSuccess={() => {
+                  handleEditSuccess("Échange modifié avec succès");
+                  setEditEchangeModalOpen(false);
+                  setSelectedEchange(null);
+                }}
+              />
+            )}
+          </>
         ) : (
           <EmptyState
             title={isLoading ? "Chargement..." : "Aucune annonce trouvée"}
             description={
-              searchQuery ||
-              selectedStatus !== "tous" ||
-              selectedType !== "tous"
+              searchQuery || selectedStatus !== "tous" || selectedType !== "tous"
                 ? "Aucune annonce ne correspond à vos critères de recherche."
                 : "Vous n'avez pas encore créé d'annonce."
             }
             searchQuery={searchQuery}
-            showResetButton={
-              selectedStatus !== "tous" ||
-              selectedType !== "tous" ||
-              searchQuery !== ""
-            }
+            showResetButton={selectedStatus !== "tous" || selectedType !== "tous" || searchQuery !== ""}
             onReset={handleClearFilters}
           />
         )}

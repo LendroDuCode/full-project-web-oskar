@@ -1422,89 +1422,84 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
   // 10. LES FONCTIONS DE GESTION DES SUGGESTIONS
   // ============================================
   const handleAcceptSuggestion = async (suggestion: Suggestion) => {
-    if (!pendingDonData) return;
+  if (!pendingDonData) return;
+  
+  try {
+    setLoading(true);
     
-    try {
-      setLoading(true);
-      setShowAISuggestions(false);
-      
-      console.log("🔍 pendingDonData avant acceptation:", {
-        uuid: pendingDonData.uuid,
-        titre: pendingDonData.titre,
-        description: pendingDonData.description,
-        lieu_retrait: pendingDonData.lieu_retrait,
-        hasImage: !!pendingDonData.image,
-        savedImage: !!savedImageFile
-      });
-      
-      const updatedData = { ...pendingDonData };
-      let texteModifie = "";
-      
-      if (suggestion.champ === "titre") {
-        updatedData.titre = suggestion.suggestedText;
-        texteModifie = suggestion.suggestedText;
-      } else if (suggestion.champ === "description") {
-        updatedData.description = suggestion.suggestedText;
-        texteModifie = suggestion.suggestedText;
-      } else if (suggestion.champ === "localisation") {
-        updatedData.lieu_retrait = suggestion.suggestedText;
-        texteModifie = suggestion.suggestedText;
-      }
-      
-      const formData = new FormData();
-      
-      formData.append("nom", updatedData.titre?.trim() || "");
-      formData.append("lieu_retrait", updatedData.lieu_retrait?.trim() || "");
-      formData.append("categorie_uuid", updatedData.categorie_uuid || "");
-      formData.append("description", updatedData.description?.trim() || "");
-      formData.append("quantite", updatedData.quantite || "1");
-      
-      if (adType === "sale") {
-        formData.append("libelle", updatedData.titre?.trim() || "");
-        
-        if (isVendeur && venteData.boutiqueUuid) {
-          formData.append("boutiqueUuid", venteData.boutiqueUuid);
-          if (venteData.boutiqueNom) {
-            formData.append("boutiqueNom", venteData.boutiqueNom);
-          }
-        }
-        
-        formData.append("prix", venteData.prix || "0");
-        formData.append("lieu", venteData.lieu || updatedData.lieu_retrait || "");
-        formData.append("condition", venteData.condition || "neuf");
-        formData.append("type", venteData.type || "");
-        formData.append("disponible", String(venteData.disponible ?? true));
-        formData.append("statut", venteData.statut || "publie");
-        formData.append("etoile", venteData.etoile || "5");
-        formData.append("garantie", venteData.garantie || "non");
-      }
-      
-      const imageToSend = updatedData.image || savedImageFile;
-      if (imageToSend) {
-        formData.append("image", imageToSend);
-      }
-      
-      const suggestionAcceptee = {
-        suggestionId: suggestion.id,
-        champ: suggestion.champ,
-        texteModifie: texteModifie,
-      };
-      
-      if (adType === "don") {
-        await publishDonWithAI(formData, suggestionAcceptee);
-      } else if (adType === "exchange") {
-        await publishEchangeWithAI(formData, suggestionAcceptee);
-      } else {
-        await publishProduitWithAI(formData, suggestionAcceptee);
-      }
-      
-    } catch (error: any) {
-      console.error("❌ Erreur acceptation suggestion:", error);
-      setSubmitError(error.message);
-      setLoading(false);
+    console.log("🔍 Acceptation suggestion:", suggestion);
+    console.log("🔍 pendingDonData avant:", pendingDonData);
+    
+    const updatedData = { ...pendingDonData };
+    let texteModifie = "";
+    
+    if (suggestion.champ === "titre") {
+      updatedData.titre = suggestion.suggestedText;
+      texteModifie = suggestion.suggestedText;
+    } else if (suggestion.champ === "description") {
+      updatedData.description = suggestion.suggestedText;
+      texteModifie = suggestion.suggestedText;
     }
-  };
-
+    
+    const formData = new FormData();
+    
+    formData.append("nom", updatedData.titre?.trim() || "");
+    formData.append("lieu_retrait", updatedData.lieu_retrait?.trim() || "");
+    formData.append("categorie_uuid", updatedData.categorie_uuid || "");
+    formData.append("description", updatedData.description?.trim() || "");
+    formData.append("quantite", updatedData.quantite || "1");
+    
+    if (adType === "sale") {
+      formData.append("libelle", updatedData.titre?.trim() || "");
+      
+      if (isVendeur && venteData.boutiqueUuid) {
+        formData.append("boutiqueUuid", venteData.boutiqueUuid);
+        if (venteData.boutiqueNom) {
+          formData.append("boutiqueNom", venteData.boutiqueNom);
+        }
+      }
+      
+      formData.append("prix", venteData.prix || "0");
+      formData.append("lieu", venteData.lieu || updatedData.lieu_retrait || "");
+      formData.append("condition", venteData.condition || "neuf");
+      formData.append("type", venteData.type || "");
+      formData.append("disponible", String(venteData.disponible ?? true));
+      formData.append("statut", venteData.statut || "publie");
+      formData.append("etoile", venteData.etoile || "5");
+      formData.append("garantie", venteData.garantie || "non");
+    }
+    
+    const imageToSend = updatedData.image || savedImageFile;
+    if (imageToSend) {
+      formData.append("image", imageToSend);
+    }
+    
+    const suggestionAcceptee = {
+      suggestionId: suggestion.id,
+      champ: suggestion.champ,
+      texteModifie: texteModifie,
+    };
+    
+    console.log("📝 Suggestion acceptée à envoyer:", suggestionAcceptee);
+    
+    if (adType === "don") {
+      await publishDonWithAI(formData, suggestionAcceptee);
+    } else if (adType === "exchange") {
+      await publishEchangeWithAI(formData, suggestionAcceptee);
+    } else {
+      await publishProduitWithAI(formData, suggestionAcceptee);
+    }
+    
+    // ✅ Mettre à jour l'état local pour ne plus afficher cette suggestion
+    setAiSuggestions(prev => prev.filter(s => s.id !== suggestion.id));
+    setShowAISuggestions(false);
+    
+  } catch (error: any) {
+    console.error("❌ Erreur acceptation suggestion:", error);
+    setSubmitError(error.message);
+    setLoading(false);
+  }
+};
   const handleAcceptAllSuggestions = async () => {
     if (!pendingDonData || aiSuggestions.length === 0) return;
     

@@ -93,6 +93,31 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
     return endpoint;
   }, []);
 
+  // ✅ FONCTION POUR EXTRAIRE LA DATE DE PUBLICATION CORRECTE
+  const getPublicationDate = (item: any): string | null => {
+    // Pour les produits et dons: publierLe (avec 'r')
+    if (item.publierLe) {
+      return item.publierLe;
+    }
+    // Pour les échanges: publieLe (sans 'r')
+    if (item.publieLe) {
+      return item.publieLe;
+    }
+    // Pour les produits qui ont 'date' au lieu de 'publierLe'
+    if (item.date && !item.publierLe) {
+      return item.date;
+    }
+    // Fallback sur dateCreation
+    if (item.dateCreation) {
+      return item.dateCreation;
+    }
+    // Dernier recours createdAt
+    if (item.createdAt) {
+      return item.createdAt;
+    }
+    return null;
+  };
+
   // ✅ DÉFINIR fetchListings AVANT de l'utiliser
   const fetchListings = useCallback(async () => {
     abortCurrentRequest();
@@ -162,7 +187,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           statut: item.statut,
           numero: item.numero,
           localisation: item.localisation || item.ville || item.lieu_retrait || "",
-          date: item.createdAt || item.publieLe || item.date_debut,
+          publicationDate: getPublicationDate(item),
           seller: item.createurDetails ? {
             name: item.createurDetails.nom || "Donateur",
             avatar: item.createurDetails.avatar || "/images/default-avatar.png",
@@ -178,13 +203,13 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           uuid: item.uuid,
           type: "echange" as const,
           titre: item.nomElementEchange || item.titre || "Échange sans titre",
-          description: item.message || item.description,
+          description: item.message || item.message,
           prix: item.prix,
           image: item.image,
           statut: item.statut,
           numero: item.numero,
           localisation: item.localisation || item.ville || item.lieu_rencontre || "",
-          date: item.createdAt || item.publieLe,
+          publicationDate: getPublicationDate(item),
           seller: item.createurDetails ? {
             name: item.createurDetails.nom || "Initiateur",
             avatar: item.createurDetails.avatar || "/images/default-avatar.png",
@@ -204,7 +229,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           description: item.description,
           prix: item.prix,
           image: item.image,
-          date: item.date || item.createdAt || item.publieLe,
+          publicationDate: getPublicationDate(item),
           disponible: item.disponible,
           statut: item.statut,
           localisation: item.localisation || item.ville || "",
@@ -233,7 +258,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
             description: item.description,
             prix: item.prix,
             image: item.image,
-            date: item.date || item.createdAt || item.publieLe,
+            publicationDate: getPublicationDate(item),
             disponible: item.disponible,
             statut: item.statut,
             numero: item.numero,
@@ -259,7 +284,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           transformedData = dataArray.map((item: any) => ({
             uuid: item.uuid || `don-${Math.random().toString(36).substr(2, 9)}`,
             type: "don" as const,
-            titre: item.nom || item.titre || "Don sans titre",
+            titre: item.titre || item.nom || "Don sans titre",
             description: item.description,
             prix: item.prix,
             image: item.image || "",
@@ -267,7 +292,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
             numero: item.numero,
             localisation:
               item.localisation || item.ville || item.lieu_retrait || "",
-            date: item.createdAt || item.publieLe,
+            publicationDate: getPublicationDate(item),
             seller: item.createurDetails
               ? {
                   name: item.createurDetails.nom || "Donateur",
@@ -289,15 +314,15 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
             uuid:
               item.uuid || `echange-${Math.random().toString(36).substr(2, 9)}`,
             type: "echange" as const,
-            titre: item.nomElementEchange || item.titre || "Échange sans titre",
-            description: item.message || item.description,
+            titre: item.titre || item.nomElementEchange || "Échange sans titre",
+            description: item.description || item.message,
             prix: item.prix,
             image: item.image,
             statut: item.statut,
             numero: item.numero,
             localisation:
               item.localisation || item.ville || item.lieu_rencontre || "",
-            date: item.createdAt || item.publieLe,
+            publicationDate: getPublicationDate(item),
             seller: item.createurDetails
               ? {
                   name: item.createurDetails.nom || "Initiateur",
@@ -324,7 +349,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
             description: item.description,
             prix: item.prix,
             image: item.image,
-            date: item.date || item.createdAt || item.publieLe,
+            publicationDate: getPublicationDate(item),
             disponible: item.disponible,
             statut: item.statut,
             localisation: item.localisation || item.ville || "",
@@ -382,7 +407,7 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
         });
       }
 
-      // Tri des données
+      // Tri des données par date de publication
       const sortedData = [...filteredData].sort((a, b) => {
         switch (sortOption) {
           case "price-asc": {
@@ -400,15 +425,14 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
           }
           case "recent":
           default: {
-            const dateA = a.date ? new Date(a.date).getTime() : 0;
-            const dateB = b.date ? new Date(b.date).getTime() : 0;
+            const dateA = a.publicationDate ? new Date(a.publicationDate).getTime() : 0;
+            const dateB = b.publicationDate ? new Date(b.publicationDate).getTime() : 0;
             return dateB - dateA;
           }
         }
       });
 
       if (isMountedRef.current) {
-        // ✅ TOUTES LES ANNONCES, PAS DE SECTION "À LA UNE"
         setListings(sortedData);
         setRetryCount(0);
 
@@ -464,11 +488,9 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
     const handleSearchFiltersUpdated = (event: CustomEvent) => {
       console.log("📢 Événement search-filters-updated reçu:", event.detail);
       
-      // Les filtres sont déjà mis à jour dans le contexte via HeroSearch
-      // On déclenche juste un rechargement des données
       if (isMountedRef.current) {
-        setRetryCount(0); // Réinitialiser le compteur de tentatives
-        fetchListings(); // Recharger les données
+        setRetryCount(0);
+        fetchListings();
       }
     };
 
@@ -607,7 +629,6 @@ const ListingsGrid: React.FC<ListingsGridProps> = ({
 
   return (
     <div className="listings-grid flex-1">
-      {/* ✅ TOUTES LES ANNONCES - PLUS DE SECTION "À LA UNE" */}
       <div className="all-listings">
         <div className="d-flex align-items-center justify-content-between mb-2">
           <h2 className="fw-bold text-dark" style={{ fontSize: isMobile ? "1.1rem" : "1.25rem" }}>Toutes les annonces</h2>

@@ -2774,7 +2774,7 @@ export default function ProduitDetailPage() {
               </div>
             )}
 
-            <div className="card bg-gradient-orange-red border-0 shadow-lg rounded-4 p-4 mt-4">
+            {/* <div className="card bg-gradient-orange-red border-0 shadow-lg rounded-4 p-4 mt-4">
               <div className="d-flex align-items-center gap-3 mb-3">
                 <div className="bg-warning rounded-circle p-3">
                   <FontAwesomeIcon icon={faShieldAlt} className="text-white" />
@@ -2821,7 +2821,7 @@ export default function ProduitDetailPage() {
               <button className="btn btn-link text-warning text-decoration-none p-0 mt-3 text-start">
                 Lire le guide de sécurité complet →
               </button>
-            </div>
+            </div> */}
           </div>
         </div>
       </main>

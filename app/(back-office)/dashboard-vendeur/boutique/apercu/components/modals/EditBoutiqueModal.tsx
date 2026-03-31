@@ -12,7 +12,6 @@ import {
   faStore,
   faFileAlt,
   faClipboardCheck,
-  faTag,
   faPalette,
   faSyncAlt,
   faUndo,
@@ -77,7 +76,6 @@ const EditBoutiqueModal = ({
   const [isMobile, setIsMobile] = useState(false);
   const [formData, setFormData] = useState({
     nom: "",
-    type_boutique_uuid: "",
     description: "",
     logo: null as File | null,
     banniere: null as File | null,
@@ -85,8 +83,6 @@ const EditBoutiqueModal = ({
     conditions_utilisation: "",
   });
 
-  const [typesBoutique, setTypesBoutique] = useState<TypeBoutique[]>([]);
-  const [loadingTypes, setLoadingTypes] = useState(false);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [bannierePreview, setBannierePreview] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -164,40 +160,6 @@ const EditBoutiqueModal = ({
     }
   };
 
-  const fetchTypesBoutique = async () => {
-    try {
-      setLoadingTypes(true);
-      console.log("📥 Chargement des types de boutique...");
-      const response = await api.get(API_ENDPOINTS.TYPES_BOUTIQUE.LIST);
-
-      // Gestion flexible du format de réponse
-      let types: TypeBoutique[] = [];
-
-      if (Array.isArray(response)) {
-        types = response;
-      } else if (response && Array.isArray(response.data)) {
-        types = response.data;
-      } else if (
-        response &&
-        response.data &&
-        Array.isArray(response.data.data)
-      ) {
-        types = response.data.data;
-      }
-
-      console.log(`📊 ${types.length} type(s) chargé(s)`);
-      setTypesBoutique(types);
-    } catch (error: any) {
-      console.error("❌ Erreur chargement types boutique:", error);
-      setErrors({
-        types: "Erreur lors du chargement des types de boutique",
-      });
-      setTypesBoutique([]);
-    } finally {
-      setLoadingTypes(false);
-    }
-  };
-
   const resetToOriginalImage = (type: "logo" | "banniere") => {
     if (type === "logo") {
       setFormData({ ...formData, logo: null });
@@ -217,7 +179,6 @@ const EditBoutiqueModal = ({
     if (boutique) {
       setFormData({
         nom: boutique.nom,
-        type_boutique_uuid: boutique.type_boutique_uuid,
         description: boutique.description || "",
         logo: null,
         banniere: null,
@@ -248,7 +209,6 @@ const EditBoutiqueModal = ({
 
   useEffect(() => {
     if (show) {
-      fetchTypesBoutique();
       resetForm();
     }
   }, [show, boutique]);
@@ -259,7 +219,6 @@ const EditBoutiqueModal = ({
     // Validation
     const newErrors: Record<string, string> = {};
     if (!formData.nom.trim()) newErrors.nom = "Le nom est requis";
-    if (!formData.type_boutique_uuid) newErrors.type = "Le type est requis";
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -396,7 +355,7 @@ const EditBoutiqueModal = ({
                         </h6>
 
                         <div className="row g-2 g-md-3">
-                          <div className="col-md-6">
+                          <div className="col-md-12">
                             <label className="form-label fw-semibold text-dark" style={{ fontSize: isMobile ? "0.8rem" : "0.875rem" }}>
                               Nom de la boutique{" "}
                               <span className="text-danger">*</span>
@@ -430,69 +389,6 @@ const EditBoutiqueModal = ({
                             {errors.nom && (
                               <div className="invalid-feedback d-block" style={{ fontSize: isMobile ? "0.7rem" : "0.75rem" }}>
                                 {errors.nom}
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="col-md-6">
-                            <label className="form-label fw-semibold text-dark" style={{ fontSize: isMobile ? "0.8rem" : "0.875rem" }}>
-                              Type de boutique{" "}
-                              <span className="text-danger">*</span>
-                            </label>
-                            <div className="input-group">
-                              <span className="input-group-text bg-white border-end-0" style={{ padding: isMobile ? "0.3rem 0.5rem" : "0.375rem 0.75rem" }}>
-                                <FontAwesomeIcon
-                                  icon={faTag}
-                                  className="text-yellow"
-                                  style={{ color: "#fbbf24", fontSize: isMobile ? "0.8rem" : "1rem" }}
-                                />
-                              </span>
-                              <select
-                                className={`form-control border-start-0 ${errors.type ? "is-invalid" : ""}`}
-                                value={formData.type_boutique_uuid}
-                                onChange={(e) => {
-                                  setFormData({
-                                    ...formData,
-                                    type_boutique_uuid: e.target.value,
-                                  });
-                                  if (errors.type)
-                                    setErrors({ ...errors, type: "" });
-                                }}
-                                required
-                                disabled={loading || loadingTypes}
-                                style={{ fontSize: isMobile ? "0.8rem" : "0.875rem", padding: isMobile ? "0.3rem 0.5rem" : "0.375rem 0.75rem" }}
-                              >
-                                <option value="">
-                                  Sélectionner un type...
-                                </option>
-                                {typesBoutique.map((type) => (
-                                  <option key={type.uuid} value={type.uuid}>
-                                    {type.libelle}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                            {loadingTypes && (
-                              <div className="mt-2">
-                                <div className="d-flex align-items-center gap-2">
-                                  <FontAwesomeIcon
-                                    icon={faSpinner}
-                                    spin
-                                    className="text-yellow"
-                                    style={{ color: "#fbbf24", fontSize: isMobile ? "0.7rem" : "0.8rem" }}
-                                  />
-                                  <small
-                                    className="text-yellow"
-                                    style={{ color: "#fbbf24", fontSize: isMobile ? "0.7rem" : "0.75rem" }}
-                                  >
-                                    Chargement des types...
-                                  </small>
-                                </div>
-                              </div>
-                            )}
-                            {errors.type && (
-                              <div className="invalid-feedback d-block" style={{ fontSize: isMobile ? "0.7rem" : "0.75rem" }}>
-                                {errors.type}
                               </div>
                             )}
                           </div>
@@ -579,7 +475,6 @@ const EditBoutiqueModal = ({
                                     className="img-fluid rounded shadow-sm"
                                     style={{ maxHeight: isMobile ? "100px" : "150px" }}
                                     onError={(e) => {
-                                      // Si l'image échoue à charger, afficher un placeholder
                                       (e.target as HTMLImageElement).src =
                                         `https://via.placeholder.com/150/fbbf24/ffffff?text=Logo`;
                                     }}
@@ -706,7 +601,6 @@ const EditBoutiqueModal = ({
                                       objectFit: "cover",
                                     }}
                                     onError={(e) => {
-                                      // Si l'image échoue à charger, afficher un placeholder
                                       (e.target as HTMLImageElement).src =
                                         `https://via.placeholder.com/400x100/fbbf24/ffffff?text=Bannière`;
                                     }}
@@ -978,7 +872,7 @@ const EditBoutiqueModal = ({
                   <button
                     type="submit"
                     className="btn btn-warning btn-sm btn-md d-flex align-items-center gap-2 shadow"
-                    disabled={loading || loadingTypes}
+                    disabled={loading}
                     style={{
                       background:
                         "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",

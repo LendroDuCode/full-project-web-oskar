@@ -829,7 +829,7 @@ export default function DashboardHeaderUtilisateur({
               </button>
 
               {/* Notification */}
-              {showNotification && (
+              {/* {showNotification && (
                 <button
                   onClick={handleNotificationClick}
                   onKeyDown={(e) => handleKeyDown(e, handleNotificationClick)}
@@ -855,7 +855,7 @@ export default function DashboardHeaderUtilisateur({
                     </span>
                   )}
                 </button>
-              )}
+              )} */}
             </div>
 
             {/* Menu utilisateur avec avatar */}

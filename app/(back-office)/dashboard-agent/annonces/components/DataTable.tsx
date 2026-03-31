@@ -380,8 +380,16 @@ export default function DataTable({
 // Dans DataTable.tsx, corrigez la fonction getStatusBadge
 
 const getStatusBadge = (item: ContentItem) => {
-  // ✅ CORRECTION : Vérifier d'abord le blocage
-  if (item.estBloque) {
+  // ✅ CORRECTION: Log pour déboguer
+  console.log("🎯 Statut badge pour:", item.title, {
+    estBloque: item.estBloque,
+    estPublie: item.estPublie,
+    status: item.status,
+    type: item.type
+  });
+  
+  // ✅ PRIORITÉ 1: Vérifier d'abord le blocage (le plus important)
+  if (item.estBloque === true) {
     return {
       label: "Bloqué",
       color: "#ef4444",
@@ -389,8 +397,8 @@ const getStatusBadge = (item: ContentItem) => {
     };
   }
   
-  // Ensuite vérifier la publication
-  if (item.estPublie) {
+  // ✅ PRIORITÉ 2: Vérifier la publication
+  if (item.estPublie === true) {
     return {
       label: "Publié",
       color: "#10b981",
@@ -398,7 +406,7 @@ const getStatusBadge = (item: ContentItem) => {
     };
   }
   
-  // Sinon, c'est en attente
+  // ✅ PRIORITÉ 3: Par défaut, c'est en attente
   return {
     label: "En attente",
     color: "#f59e0b",
@@ -563,7 +571,7 @@ const getStatusBadge = (item: ContentItem) => {
           data = { productUuid: uuid, est_bloque: estBloque };
           break;
         case "don":
-          endpoint = API_ENDPOINTS.DONS.BLOQUE_DON;
+          endpoint = API_ENDPOINTS.DONS.LISTE_BLOQUE_DON;
           data = { donUuid: uuid, est_bloque: estBloque };
           break;
         case "echange":

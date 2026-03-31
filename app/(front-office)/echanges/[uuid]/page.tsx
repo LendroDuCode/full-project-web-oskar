@@ -241,6 +241,7 @@ interface Echange {
   createurType?: "utilisateur" | "vendeur";
   categorie: Categorie | null;
   numero: string;
+  publieLe: string | null;  // ✅ AJOUTER cette propriété
 }
 
 interface EchangeSimilaire {
@@ -421,7 +422,7 @@ const buildImageUrl = (
 // FONCTION DE FORMATAGE DE DATE
 // ============================================
 const formatDate = (dateString: string | null | undefined): string => {
-  if (!dateString) return "Date inconnue";
+  if (!dateString) return "Date non disponible";
 
   try {
     const date = new Date(dateString);
@@ -430,8 +431,8 @@ const formatDate = (dateString: string | null | undefined): string => {
     }
 
     const now = new Date();
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    const diffTime = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
     if (diffDays === 0) {
       const hours = date.getHours().toString().padStart(2, "0");
@@ -441,17 +442,36 @@ const formatDate = (dateString: string | null | undefined): string => {
       return "Hier";
     } else if (diffDays < 7) {
       return `Il y a ${diffDays} jours`;
+    } else if (diffDays < 30) {
+      return `Publié le ${date.toLocaleDateString("fr-FR", {
+        day: "2-digit",
+        month: "short",
+      })}`;
     } else {
-      const day = date.getDate().toString().padStart(2, "0");
-      const month = (date.getMonth() + 1).toString().padStart(2, "0");
-      const year = date.getFullYear();
-      return `${day}/${month}/${year}`;
+      return date.toLocaleDateString("fr-FR", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
     }
   } catch {
     return "Date inconnue";
   }
 };
 
+// ✅ Fonction pour obtenir la date de publication (priorité à publieLe)
+const getPublicationDate = (echange: Echange | null): string | null => {
+  if (!echange) return null;
+  // Priorité à publieLe (date de publication effective)
+  if (echange.publieLe) {
+    return echange.publieLe;
+  }
+  // Fallback sur createdAt
+  if (echange.createdAt) {
+    return echange.createdAt;
+  }
+  return null;
+};
 // ============================================
 // FONCTION DE FORMATAGE DE PRIX - CORRIGÉE
 // ============================================
@@ -874,43 +894,44 @@ export default function EchangeDetailPage() {
   };
 
   const transformEchangeData = (apiEchange: EchangeAPI): Echange => {
-    return {
-      uuid: apiEchange.uuid,
-      nomElementEchange: apiEchange.nomElementEchange,
-      typeEchange: apiEchange.typeEchange,
-      objetPropose: apiEchange.objetPropose,
-      objetDemande: apiEchange.objetDemande,
-      message: apiEchange.message,
-      description: apiEchange.description,
-      prix: apiEchange.prix,
-      image: normalizeImageUrl(apiEchange.image, apiEchange.image_key),
-      image_key: apiEchange.image_key,
-      localisation: apiEchange.localisation,
-      statut: apiEchange.statut,
-      date_debut: apiEchange.date_debut,
-      date_fin: apiEchange.date_fin,
-      lieu_rencontre: apiEchange.lieu_rencontre,
-      disponible: apiEchange.disponible,
-      quantite: apiEchange.quantite || 1,
-      nom_initiateur: apiEchange.nom_initiateur,
-      type_destinataire: apiEchange.type_destinataire,
-      estPublie: apiEchange.estPublie,
-      vendeur_uuid: apiEchange.vendeur_uuid,
-      utilisateur_uuid: apiEchange.utilisateur_uuid,
-      createdAt: apiEchange.createdAt,
-      updatedAt: apiEchange.updatedAt,
-      note_moyenne: apiEchange.note_moyenne || 0,
-      nombre_avis: apiEchange.nombre_avis || 0,
-      is_favoris: apiEchange.is_favoris || false,
-      favorite_id: apiEchange.favorite_id,
-      ...(apiEchange.createur && {
-        createur: transformCreateurInfo(apiEchange.createur),
-      }),
-      createurType: apiEchange.createurType,
-      categorie: apiEchange.categorie,
-      numero: apiEchange.numero,
-    };
+  return {
+    uuid: apiEchange.uuid,
+    nomElementEchange: apiEchange.nomElementEchange,
+    typeEchange: apiEchange.typeEchange,
+    objetPropose: apiEchange.objetPropose,
+    objetDemande: apiEchange.objetDemande,
+    message: apiEchange.message,
+    description: apiEchange.message,
+    prix: apiEchange.prix,
+    image: normalizeImageUrl(apiEchange.image, apiEchange.image_key),
+    image_key: apiEchange.image_key,
+    localisation: apiEchange.localisation,
+    statut: apiEchange.statut,
+    date_debut: apiEchange.date_debut,
+    date_fin: apiEchange.date_fin,
+    lieu_rencontre: apiEchange.lieu_rencontre,
+    disponible: apiEchange.disponible,
+    quantite: apiEchange.quantite || 1,
+    nom_initiateur: apiEchange.nom_initiateur,
+    type_destinataire: apiEchange.type_destinataire,
+    estPublie: apiEchange.estPublie,
+    vendeur_uuid: apiEchange.vendeur_uuid,
+    utilisateur_uuid: apiEchange.utilisateur_uuid,
+    createdAt: apiEchange.createdAt,
+    updatedAt: apiEchange.updatedAt,
+    note_moyenne: apiEchange.note_moyenne || 0,
+    nombre_avis: apiEchange.nombre_avis || 0,
+    is_favoris: apiEchange.is_favoris || false,
+    favorite_id: apiEchange.favorite_id,
+    publieLe: apiEchange.publieLe || null,  // ✅ AJOUTER cette ligne
+    ...(apiEchange.createur && {
+      createur: transformCreateurInfo(apiEchange.createur),
+    }),
+    createurType: apiEchange.createurType,
+    categorie: apiEchange.categorie,
+    numero: apiEchange.numero,
   };
+};
 
   const transformEchangeSimilaireData = (
     apiSimilaire: EchangeSimilaireAPI,
@@ -2502,7 +2523,7 @@ export default function EchangeDetailPage() {
                   </span>
                   <span className="small text-muted">
                     <FontAwesomeIcon icon={faClock} className="me-1" />
-                    Publié {formatDate(echange.createdAt)}
+                    Publié {formatDate(echange.publieLe)}
                   </span>
                 </div>
               </div>
@@ -2671,7 +2692,7 @@ export default function EchangeDetailPage() {
             )}
 
             {/* Conseils de sécurité */}
-            <div className="card bg-gradient-orange-red border-0 shadow-lg rounded-4 p-4 mt-4">
+            {/* <div className="card bg-gradient-orange-red border-0 shadow-lg rounded-4 p-4 mt-4">
               <div className="d-flex align-items-center gap-3 mb-3">
                 <div className="bg-warning rounded-circle p-3">
                   <FontAwesomeIcon icon={faShieldAlt} className="text-white" />
@@ -2718,7 +2739,7 @@ export default function EchangeDetailPage() {
               <button className="btn btn-link text-warning text-decoration-none p-0 mt-3 text-start">
                 Lire le guide de sécurité complet ?
               </button>
-            </div>
+            </div> */}
           </div>
         </div>
       </main>
