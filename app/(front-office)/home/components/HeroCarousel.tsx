@@ -6,6 +6,16 @@ import "bootstrap/dist/css/bootstrap.min.css";
 
 const HeroCarousel = () => {
   const [index, setIndex] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   const handleSelect = (selectedIndex: number) => {
     setIndex(selectedIndex);
@@ -59,9 +69,10 @@ const HeroCarousel = () => {
   }, [slides.length]);
 
   return (
-    <section className="px-4 py-4 bg-white">
-      <div className="container">
-        <div className="rounded-3xl overflow-hidden shadow-lg">
+    <section className="bg-white" style={{ paddingTop: 0, paddingBottom: "0.5rem" }}>
+      {/* Suppression du padding sur les côtés pour que le carousel prenne toute la largeur */}
+      <div className="container-fluid px-0">
+        <div className="overflow-hidden shadow-lg" style={{ borderRadius: "0" }}>
           <Carousel
             activeIndex={index}
             onSelect={handleSelect}
@@ -70,7 +81,6 @@ const HeroCarousel = () => {
             fade={true}
             interval={5000}
             pause="hover"
-            className="rounded-3xl"
             nextIcon={
               <span className="carousel-control-next-icon bg-white/30 backdrop-blur-sm rounded-full p-3 hover:bg-white/50 transition-all" />
             }
@@ -80,11 +90,17 @@ const HeroCarousel = () => {
           >
             {slides.map((slide) => (
               <Carousel.Item key={slide.id}>
-                <div className="position-relative" style={{ height: "28rem" }}>
+                {/* Hauteur conservée à 28rem, mais largeur 100% */}
+                <div className="position-relative" style={{ height: "28rem", width: "100%" }}>
                   <img
-                    className="d-block w-100 h-100 object-cover"
+                    className="d-block w-100 h-100"
                     src={slide.image}
                     alt={slide.alt}
+                    style={{ 
+                      objectFit: "cover", 
+                      objectPosition: "center",
+                      width: "100%"
+                    }}
                   />
 
                   {/* Overlay gradient */}
@@ -228,6 +244,13 @@ const HeroCarousel = () => {
           .carousel-control-prev,
           .carousel-control-next {
             width: 3rem;
+          }
+          
+          .carousel-control-prev-icon,
+          .carousel-control-next-icon {
+            width: 2.5rem;
+            height: 2.5rem;
+            background-size: 1rem;
           }
         }
 

@@ -66,17 +66,18 @@ export interface DonData {
   categorie_uuid: string;
     final_categorie_uuid?: string; // ✅ AJOUTER CETTE LIGNE
   sous_categorie_uuid: string;
-  numero: string; // Numéro de téléphone
   quantite: string;
   nom_donataire: string; // Nom de la personne qui fait le don
   condition: DonCondition | string; // État du don
   disponibilite: Disponibilite | string; // Disponibilité immédiate ou planifiée
   status?: "publie" | "brouillon"; // Statut de publication
+    numero?: string;
+  // ✅ MODIFICATION: utiliser number au lieu de boolean
+  is_whatsapp?: number; // 0 = false, 1 = true
 }
 
 export interface EchangeData {
   nomElementEchange: string; // Nom de l'élément à échanger
-  numero: string; // Numéro de téléphone
   nom_initiateur?: string; // Nom de la personne qui initie l'échange
   typeEchange?: EchangeType; // Type d'échange (produit ou service)
   sous_categorie_uuid: string;
@@ -90,7 +91,10 @@ export interface EchangeData {
     final_categorie_uuid?: string; // ✅ AJOUTER
   type_destinataire: DestinataireType; // Type de destinataire
   condition?: ProductCondition; // État de l'objet
-  status?: "publie" | "brouillon"; // Statut de publication
+  status?: "publie" | "brouillon";
+    numero?: string;
+  // ✅ MODIFICATION: utiliser number au lieu de boolean
+  is_whatsapp?: number; // 0 = false, 1 = true
 }
 
 export interface VenteData {
@@ -101,7 +105,7 @@ export interface VenteData {
   type: string;
   disponible: boolean;
   categorie_uuid: string;
-    final_categorie_uuid?: string; // ✅ AJOUTE
+    final_categorie_uuid?: string;
   statut: string;
   etoile: string;
   image: File | null;
@@ -112,6 +116,9 @@ export interface VenteData {
   condition: string;
   garantie: string;
   saleMode?: string;
+    numero?: string;
+  // ✅ MODIFICATION: utiliser number au lieu de boolean
+  is_whatsapp?: number; // 0 = false, 1 = true
 }
 
 export interface BoutiqueData {

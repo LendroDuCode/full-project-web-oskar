@@ -13,6 +13,7 @@ import {
   faChevronDown,
   faTimes,
   faMoneyBill,
+  faPhone,
 } from "@fortawesome/free-solid-svg-icons";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { api } from "@/lib/api-client";
@@ -35,7 +36,6 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
 
   const setEchangeData = (newData: any) => onChange(newData);
 
-  // ✅ S'assurer que la quantité est toujours à 1
   useEffect(() => {
     if (echangeData.quantite !== "1") {
       setEchangeData({
@@ -45,7 +45,16 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
     }
   }, [echangeData.quantite]);
 
-  // ✅ Fonction pour formater le prix avec séparateur de milliers
+  useEffect(() => {
+    if (echangeData.is_whatsapp === undefined) {
+      setEchangeData({
+        ...echangeData,
+        is_whatsapp: 1,
+        quantite: "1",
+      });
+    }
+  }, [echangeData.is_whatsapp]);
+
   const formatPrix = (value: string): string => {
     const numbers = value.replace(/\D/g, '');
     if (numbers) {
@@ -54,12 +63,10 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
     return '';
   };
 
-  // ✅ Fonction pour extraire la valeur numérique
   const extractNumericValue = (formattedValue: string): string => {
     return formattedValue.replace(/\s/g, '');
   };
 
-  // ✅ Gestionnaire de changement pour le prix
   const handlePrixChange = (e: ChangeEvent<HTMLInputElement>) => {
     const formatted = formatPrix(e.target.value);
     e.target.value = formatted;
@@ -71,7 +78,24 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
     });
   };
 
-  // Charger les catégories
+  const handleNumeroChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    const cleaned = value.replace(/[^0-9+\s]/g, '');
+    setEchangeData({
+      ...echangeData,
+      numero: cleaned,
+      quantite: "1",
+    });
+  };
+
+  const handleWhatsappToggle = () => {
+    setEchangeData({
+      ...echangeData,
+      is_whatsapp: echangeData.is_whatsapp === 1 ? 0 : 1,
+      quantite: "1",
+    });
+  };
+
   useEffect(() => {
     const fetchCategories = async () => {
       try {
@@ -289,8 +313,69 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                 </div>
 
                 <div className="mb-4">
+                  <div className="d-flex align-items-center justify-content-between p-3 bg-light rounded-4 border">
+                    <div className="d-flex align-items-center">
+                      <div className="rounded-circle bg-success bg-opacity-10 p-2 me-3">
+                      </div>
+                      <div>
+                        <label className="fw-bold mb-0 text-dark">
+                          Disponible sur WhatsApp
+                        </label>
+                        <p className="text-muted small mb-0">
+                          Être contacté facilement via WhatsApp
+                        </p>
+                      </div>
+                    </div>
+                    <div className="form-check form-switch">
+                      <input
+                        type="checkbox"
+                        className="form-check-input"
+                        style={{ 
+                          width: "3rem", 
+                          height: "1.5rem",
+                          backgroundColor: echangeData.is_whatsapp === 1 ? "#25D366" : "#ccc",
+                          borderColor: echangeData.is_whatsapp === 1 ? "#25D366" : "#ccc",
+                          cursor: "pointer"
+                        }}
+                        checked={echangeData.is_whatsapp === 1}
+                        onChange={handleWhatsappToggle}
+                      />
+                    </div>
+                  </div>
+                  <small className="text-muted mt-2 d-block">
+                    Activez cette option si vous souhaitez être contacté via WhatsApp
+                  </small>
+                </div>
+
+                {echangeData.is_whatsapp === 1 && (
+                  <div className="mb-4">
+                    <label className="form-label fw-bold fs-5 mb-3 d-flex align-items-center">
+                      <FontAwesomeIcon icon={faPhone} className="me-2 text-primary" />
+                      Numéro de téléphone <span className="text-danger ms-1">*</span>
+                    </label>
+                    <div className="input-group">
+                      <span className="input-group-text bg-light border rounded-start-4 px-4">
+                        <FontAwesomeIcon icon={faPhone} className="text-primary" />
+                      </span>
+                      <input
+                        type="tel"
+                        className="form-control form-control-lg border border-secondary rounded-end-4 py-3 px-4"
+                        style={{ fontSize: "1.1rem" }}
+                        placeholder="Ex: +225 07 XX XX XX XX"
+                        value={echangeData.numero || ""}
+                        onChange={handleNumeroChange}
+                        required={echangeData.is_whatsapp === 1}
+                      />
+                    </div>
+                    <small className="text-muted mt-2 d-block">
+                      Ce numéro permettra aux personnes intéressées de vous contacter via WhatsApp
+                    </small>
+                  </div>
+                )}
+
+                <div className="mb-4">
                   <label className="form-label fw-bold fs-5 mb-3">
-                    Description <span className="text-muted">(optionnel)</span>
+                    Message <span className="text-muted">(optionnel)</span>
                   </label>
                   <textarea
                     className="form-control form-control-lg border border-secondary rounded-4 py-3 px-4"
@@ -566,6 +651,23 @@ const EchangeForm: React.FC<EchangeFormProps> = ({
                       <p className="fw-bold text-dark mb-0 fs-5">
                         {formatPrixDisplay(echangeData.prix)}
                       </p>
+                    </div>
+                  </div>
+                  <div className="col-md-12">
+                    <div className="p-4 bg-light rounded-4 border">
+                      <p className="text-secondary mb-2 small">Contact WhatsApp</p>
+                      <p className="fw-bold text-dark mb-0 fs-5">
+                        {echangeData.is_whatsapp === 1 ? (
+                          <span className="text-success">✅ Disponible</span>
+                        ) : (
+                          <span className="text-muted">❌ Non disponible</span>
+                        )}
+                      </p>
+                      {echangeData.is_whatsapp === 1 && echangeData.numero && (
+                        <p className="text-secondary mb-0 small mt-2">
+                          Numéro: {echangeData.numero}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>

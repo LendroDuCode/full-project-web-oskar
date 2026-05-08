@@ -12,9 +12,13 @@ import {
   faPhone,
   faCheckCircle,
   faSpinner,
+  faKey,
+  faArrowLeft,
 } from "@fortawesome/free-solid-svg-icons";
+import { faGoogle, faFacebook } from "@fortawesome/free-brands-svg-icons";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import BaseRegisterModal from "./BaseRegisterModal";
+import { api } from "@/lib/api-client";
 
 interface UserRegisterModalProps {
   visible: boolean;
@@ -48,6 +52,9 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
   onSwitchToVendeur,
 }) => {
   const [isMobile, setIsMobile] = useState(false);
+  const [step, setStep] = useState<"register" | "otp">("register");
+  const [tempToken, setTempToken] = useState<string>("");
+  const [otp, setOtp] = useState<string>("");
   const [formData, setFormData] = useState<UserFormData>({
     nom: "",
     prenoms: "",
@@ -62,25 +69,25 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [passwordMismatch, setPasswordMismatch] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState(0);
   const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [socialLoading, setSocialLoading] = useState<"google" | "facebook" | null>(null);
+  const [countdown, setCountdown] = useState(0);
+  const [registeredEmail, setRegisteredEmail] = useState<string>("");
 
-  // Détection de l'écran mobile
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
     };
-    
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Calcul de la force du mot de passe
   useEffect(() => {
     const calculatePasswordStrength = (password: string) => {
       let strength = 0;
@@ -94,39 +101,43 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
     setPasswordStrength(calculatePasswordStrength(formData.mot_de_passe));
   }, [formData.mot_de_passe]);
 
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [countdown]);
+
+  useEffect(() => {
+    if (!visible) {
+      resetForm();
+      setStep("register");
+      setTempToken("");
+      setOtp("");
+      setRegisteredEmail("");
+    }
+  }, [visible]);
+
   const validatePhoneNumber = (phone: string): boolean => {
-    // Enlever le préfixe +225 et les espaces
     const numbers = phone.replace(/^\+225\s*/, '').replace(/\s/g, '');
-    // Vérifier qu'il reste exactement 10 chiffres
     return /^\d{10}$/.test(numbers);
   };
 
   const formatPhoneNumber = (value: string): string => {
-    // Garder seulement le préfixe +225 et les chiffres
     let cleaned = value.replace(/[^\d+]/g, '');
-    
-    // Si ça commence par +225, on le garde, sinon on l'ajoute
     if (!cleaned.startsWith('+225')) {
       cleaned = '+225' + cleaned.replace(/^0+/, '');
     }
-    
-    // Extraire les chiffres après +225
     let numbers = cleaned.replace('+225', '').replace(/\s/g, '');
-    
-    // Limiter à 10 chiffres
     numbers = numbers.slice(0, 10);
-    
-    // Formater avec des espaces tous les 2 chiffres
     let formatted = '+225';
     if (numbers.length > 0) {
-      // Format: +225 07 09 18 18 64
       const parts = [];
       for (let i = 0; i < numbers.length; i += 2) {
         parts.push(numbers.substr(i, 2));
       }
       formatted += ' ' + parts.join(' ');
     }
-    
     return formatted;
   };
 
@@ -178,6 +189,73 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
     return true;
   };
 
+  const handleSocialLogin = async (provider: "google" | "facebook") => {
+    setSocialLoading(provider);
+    setError(null);
+
+    try {
+      const width = 500;
+      const height = 600;
+      const left = window.screenX + (window.outerWidth - width) / 2;
+      const top = window.screenY + (window.outerHeight - height) / 2;
+
+      let authUrl = "";
+      if (provider === "google") {
+        const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+        const redirectUri = `${window.location.origin}/auth/google/callback`;
+        const scope = "email profile openid";
+        authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=id_token&scope=${scope}&nonce=${Date.now()}`;
+      } else {
+        const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
+        const redirectUri = `${window.location.origin}/auth/facebook/callback`;
+        authUrl = `https://www.facebook.com/v22.0/dialog/oauth?client_id=${appId}&redirect_uri=${redirectUri}&response_type=token&scope=email,public_profile`;
+      }
+
+      const popup = window.open(authUrl, "oauth-popup", `width=${width},height=${height},left=${left},top=${top}`);
+
+      const handleMessage = async (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return;
+        
+        if (event.data.type === "oauth-success") {
+          popup?.close();
+          window.removeEventListener("message", handleMessage);
+          
+          setTimeout(() => {
+            const token = localStorage.getItem("oskar_token");
+            const userStr = localStorage.getItem("oskar_user");
+            
+            if (token && userStr) {
+              const user = JSON.parse(userStr);
+              onRegisterSuccess({
+                firstName: user.prenoms || "",
+                lastName: user.nom || "",
+                email: user.email,
+                token: token,
+                userData: user,
+              });
+              onHide();
+            }
+          }, 500);
+        }
+      };
+      
+      window.addEventListener("message", handleMessage);
+      
+      const checkPopupClosed = setInterval(() => {
+        if (popup && popup.closed) {
+          clearInterval(checkPopupClosed);
+          window.removeEventListener("message", handleMessage);
+          setSocialLoading(null);
+        }
+      }, 500);
+      
+    } catch (err: any) {
+      console.error(`Erreur ${provider}:`, err);
+      setError(err.message || `Erreur lors de la connexion avec ${provider}`);
+      setSocialLoading(null);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordMismatch(false);
@@ -190,9 +268,7 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
     setError(null);
 
     try {
-      // Nettoyer le numéro de téléphone avant envoi (garder seulement +225 + 10 chiffres)
       const cleanPhone = formData.telephone.replace(/\s/g, '');
-      
       const payload = {
         nom: formData.nom,
         prenoms: formData.prenoms,
@@ -202,9 +278,10 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
         telephone: cleanPhone,
         ville: formData.ville,
         type_utilisateur: "particulier",
+        role_uuid: "b7622f5f-67af-11f0-bc93-246a0e9e769c"
       };
 
-      const response = await fetch(API_ENDPOINTS.AUTH.UTILISATEUR.REGISTER, {
+      const response = await fetch(API_ENDPOINTS.AUTH.UTILISATEUR.INSCRIPTION_VIA_OTP, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -212,8 +289,12 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
 
       const data = await response.json();
 
-      if (response.ok) {
-        handleRegistrationSuccess(data);
+      if (response.ok && data.status === "success") {
+        setTempToken(data.data.temp_token);
+        setRegisteredEmail(formData.email);
+        setStep("otp");
+        setSuccess("Un code OTP a été envoyé à votre adresse email");
+        setCountdown(60);
       } else {
         setError(data.message || "Erreur lors de l'inscription");
       }
@@ -225,41 +306,92 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
     }
   };
 
-  const handleRegistrationSuccess = (data: any) => {
-    const token = data.token || data.accessToken;
-
-    if (token) {
-      localStorage.setItem("token", token);
-      localStorage.setItem("oskar_token", token);
-      document.cookie = `oskar_token=${token}; path=/; max-age=86400`;
+  const handleVerifyOtp = async () => {
+    if (!otp || otp.length !== 6) {
+      setError("Veuillez entrer le code OTP à 6 chiffres reçu par email");
+      return;
     }
 
-    if (data.refreshToken) {
-      localStorage.setItem("refreshToken", data.refreshToken);
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(API_ENDPOINTS.AUTH.UTILISATEUR.VALIDE_OPT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ otp, temp_token: tempToken }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.status === "success") {
+        const { access_token, refresh_token, user } = data.data;
+        
+        // ✅ CORRECTION: saveAuthData accepte 3 arguments (token, user, userType)
+        api.saveAuthData(access_token, user, "utilisateur");
+        
+        // ✅ Sauvegarder le refresh token séparément si disponible
+        if (refresh_token) {
+          localStorage.setItem("oskar_refresh_token", refresh_token);
+          localStorage.setItem("refreshToken", refresh_token);
+        }
+        
+        // ✅ Sauvegarder aussi dans les cookies pour le middleware
+        document.cookie = `user_type=utilisateur; path=/; max-age=86400; SameSite=Lax`;
+        document.cookie = `user_uuid=${user.uuid}; path=/; max-age=86400; SameSite=Lax`;
+        document.cookie = `oskar_token=${access_token}; path=/; max-age=86400; SameSite=Lax`;
+        
+        setSuccess("Inscription réussie ! Redirection...");
+        
+        setTimeout(() => {
+          onRegisterSuccess({
+            firstName: user.prenoms || formData.prenoms,
+            lastName: user.nom || formData.nom,
+            email: user.email || formData.email,
+            token: access_token,
+            userData: user,
+          });
+          onHide();
+        }, 1500);
+      } else {
+        setError(data.message || "Code OTP invalide ou expiré");
+      }
+    } catch (error) {
+      console.error("Erreur vérification OTP:", error);
+      setError("Erreur lors de la vérification du code");
+    } finally {
+      setLoading(false);
     }
+  };
 
-    const userData = data.utilisateur || data;
-    const successData = {
-      firstName: userData.prenoms || formData.prenoms,
-      lastName: userData.nom || formData.nom,
-      email: userData.email || formData.email,
-      token: token,
-      userData: userData,
-    };
+  const handleResendOtp = async () => {
+    if (countdown > 0) return;
+    
+    setLoading(true);
+    setError(null);
 
-    localStorage.setItem("oskar_user", JSON.stringify(userData));
-    localStorage.setItem("oskar_user_type", "utilisateur");
+    try {
+      const response = await fetch(API_ENDPOINTS.AUTH.UTILISATEUR.RENVOYER_OTP, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: registeredEmail }),
+      });
 
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new Event("auth-state-changed"));
-      window.dispatchEvent(new Event("force-header-update"));
+      const data = await response.json();
+
+      if (response.ok && data.status === "success") {
+        setTempToken(data.data.temp_token);
+        setSuccess("Un nouveau code OTP a été envoyé à votre email");
+        setCountdown(60);
+      } else {
+        setError(data.message || "Erreur lors du renvoi du code");
+      }
+    } catch (error) {
+      console.error("Erreur renvoi OTP:", error);
+      setError("Erreur lors du renvoi du code");
+    } finally {
+      setLoading(false);
     }
-
-    resetForm();
-    onHide();
-    setTimeout(() => {
-      onRegisterSuccess(successData);
-    }, 100);
   };
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -287,10 +419,15 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
     setShowPassword(false);
     setShowConfirmPassword(false);
     setPasswordStrength(0);
+    setSuccess(null);
   };
 
   const handleClose = () => {
     resetForm();
+    setStep("register");
+    setTempToken("");
+    setOtp("");
+    setRegisteredEmail("");
     onHide();
   };
 
@@ -308,18 +445,6 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
     return "Excellent";
   };
 
-  // Fonctions de gestion du focus
-  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
-    e.currentTarget.style.borderColor = "#16a34a";
-    e.currentTarget.style.boxShadow = "0 0 0 3px rgba(22, 163, 74, 0.1)";
-  };
-
-  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-    e.currentTarget.style.borderColor = "#d1d5db";
-    e.currentTarget.style.boxShadow = "none";
-  };
-
-  // Styles avec typage CSSProperties - ADAPTÉS AU MOBILE
   const inputStyle: CSSProperties = {
     width: "100%",
     padding: isMobile ? "0.6rem" : "0.75rem",
@@ -330,108 +455,153 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
     fontSize: isMobile ? "0.85rem" : "0.875rem",
   };
 
-  const passwordToggleStyle: CSSProperties = {
-    position: "absolute",
-    right: "0.75rem",
-    top: "50%",
-    transform: "translateY(-50%)",
-    background: "none",
-    border: "none",
-    color: "#6b7280",
-    cursor: "pointer",
-    padding: "0.25rem",
-  };
-
-  const passwordStrengthHeaderStyle: CSSProperties = {
-    display: "flex",
-    justifyContent: "space-between",
-    marginBottom: "0.25rem",
-    fontSize: isMobile ? "0.7rem" : "0.75rem",
-    color: "#6b7280",
-  };
-
-  const passwordStrengthBarsStyle: CSSProperties = {
-    display: "flex",
-    gap: "0.25rem",
-  };
-
-  const passwordStrengthBarStyle: CSSProperties = {
-    flex: 1,
-    height: "4px",
-    borderRadius: "2px",
-    transition: "background-color 0.3s",
-  };
-
-  const errorTextStyle: CSSProperties = {
-    color: "#ef4444",
-    fontSize: isMobile ? "0.7rem" : "0.75rem",
-    marginTop: "0.25rem",
-  };
-
-  const termsContainerStyle: CSSProperties = {
-    display: "flex",
-    alignItems: "flex-start",
-    gap: "0.75rem",
-    padding: isMobile ? "0.75rem" : "1rem",
-    borderRadius: "0.5rem",
-    backgroundColor: "#f9fafb",
-    marginTop: "0.5rem",
-  };
-
-  const checkboxStyle: CSSProperties = {
-    height: isMobile ? "1.1rem" : "1.25rem",
-    width: isMobile ? "1.1rem" : "1.25rem",
-    borderRadius: "0.25rem",
-    border: "2px solid #d1d5db",
-    accentColor: "#16a34a",
-    flexShrink: 0,
-  };
-
-  const termsLabelStyle: CSSProperties = {
-    fontSize: isMobile ? "0.8rem" : "0.875rem",
-    color: "#4b5563",
-    lineHeight: "1.5",
-  };
-
-  const termsLinkStyle: CSSProperties = {
-    color: "#16a34a",
-    fontWeight: 600,
-    textDecoration: "none",
-  };
-
-  const submitButtonStyle: CSSProperties = {
+  const buttonStyle: CSSProperties = {
     width: "100%",
-    backgroundColor: "#16a34a",
-    color: "white",
-    fontWeight: "bold",
-    padding: isMobile ? "0.85rem" : "1rem",
+    padding: isMobile ? "0.7rem" : "0.85rem",
     borderRadius: "0.5rem",
-    fontSize: isMobile ? "0.95rem" : "1rem",
+    fontWeight: 600,
+    fontSize: isMobile ? "0.85rem" : "0.9rem",
     border: "none",
     cursor: "pointer",
-    transition: "all 0.3s",
-    marginTop: "1rem",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: "0.5rem",
+    gap: "0.75rem",
+    transition: "all 0.2s",
   };
 
-  const loginLinkContainerStyle: CSSProperties = {
-    textAlign: "center",
-    paddingTop: "1rem",
-  };
+  // Écran OTP
+  if (step === "otp") {
+    return (
+      <BaseRegisterModal
+        visible={visible}
+        onHide={handleClose}
+        loading={loading}
+        accountType="utilisateur"
+        onAccountTypeChange={(type) => {
+          if (type === "vendeur" && onSwitchToVendeur) {
+            onSwitchToVendeur();
+          }
+        }}
+      >
+        <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
+          <div style={{ width: "60px", height: "60px", backgroundColor: "#16a34a", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem" }}>
+            <FontAwesomeIcon icon={faKey} style={{ fontSize: "1.5rem", color: "white" }} />
+          </div>
+          <h3 style={{ fontSize: isMobile ? "1.2rem" : "1.3rem", fontWeight: "bold", marginBottom: "0.5rem" }}>Vérification OTP</h3>
+          <p style={{ color: "#6b7280", fontSize: isMobile ? "0.85rem" : "0.875rem" }}>
+            Un code à 6 chiffres a été envoyé à <strong>{registeredEmail}</strong>
+          </p>
+        </div>
 
-  const loginLinkStyle: CSSProperties = {
-    color: "#16a34a",
-    fontWeight: 600,
-    background: "none",
-    border: "none",
-    cursor: "pointer",
-    padding: 0,
-    fontSize: isMobile ? "0.85rem" : "0.875rem",
-  };
+        {error && (
+          <div style={{ padding: "0.75rem", borderRadius: "0.5rem", backgroundColor: "#fef2f2", border: "1px solid #fecaca", fontSize: isMobile ? "0.85rem" : "0.875rem", color: "#dc2626", display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
+            <FontAwesomeIcon icon={faXmark} />
+            <span>{error}</span>
+          </div>
+        )}
 
+        {success && (
+          <div style={{ padding: "0.75rem", borderRadius: "0.5rem", backgroundColor: "#f0fdf4", border: "1px solid #bbf7d0", fontSize: isMobile ? "0.85rem" : "0.875rem", color: "#16a34a", display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
+            <FontAwesomeIcon icon={faCheckCircle} />
+            <span>{success}</span>
+          </div>
+        )}
+
+        <div style={{ marginBottom: "1.5rem" }}>
+          <label style={{ display: "block", fontSize: isMobile ? "0.85rem" : "0.875rem", fontWeight: 600, color: "#374151", marginBottom: "0.4rem" }}>Code OTP</label>
+          <input
+            type="text"
+            placeholder="000000"
+            value={otp}
+            onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            maxLength={6}
+            disabled={loading}
+            style={{
+              ...inputStyle,
+              textAlign: "center",
+              fontSize: "1.5rem",
+              letterSpacing: "0.5rem",
+              fontFamily: "monospace"
+            }}
+          />
+        </div>
+
+        <button
+          onClick={handleVerifyOtp}
+          disabled={loading || otp.length !== 6}
+          style={{
+            width: "100%",
+            backgroundColor: "#16a34a",
+            color: "white",
+            fontWeight: "bold",
+            padding: isMobile ? "0.85rem" : "1rem",
+            borderRadius: "0.5rem",
+            fontSize: isMobile ? "0.95rem" : "1rem",
+            border: "none",
+            cursor: loading || otp.length !== 6 ? "not-allowed" : "pointer",
+            marginBottom: "1rem",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "0.5rem",
+            opacity: loading || otp.length !== 6 ? 0.6 : 1
+          }}
+        >
+          {loading ? <><FontAwesomeIcon icon={faSpinner} spin /><span>Vérification...</span></> : <><FontAwesomeIcon icon={faCheckCircle} /><span>Vérifier et continuer</span></>}
+        </button>
+
+        <div style={{ textAlign: "center", marginBottom: "1rem" }}>
+          <button
+            type="button"
+            onClick={handleResendOtp}
+            disabled={countdown > 0 || loading}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#16a34a",
+              fontWeight: 600,
+              cursor: countdown > 0 || loading ? "not-allowed" : "pointer",
+              fontSize: isMobile ? "0.85rem" : "0.875rem",
+              opacity: countdown > 0 || loading ? 0.6 : 1
+            }}
+          >
+            {countdown > 0 ? `Renvoyer le code (${countdown}s)` : "Renvoyer le code"}
+          </button>
+        </div>
+
+        <div style={{ textAlign: "center" }}>
+          <button
+            type="button"
+            onClick={() => {
+              setStep("register");
+              setTempToken("");
+              setOtp("");
+              setError(null);
+              setSuccess(null);
+            }}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#6b7280",
+              fontWeight: 500,
+              cursor: "pointer",
+              fontSize: isMobile ? "0.85rem" : "0.875rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "0.5rem"
+            }}
+          >
+            <FontAwesomeIcon icon={faArrowLeft} />
+            Modifier mes informations
+          </button>
+        </div>
+      </BaseRegisterModal>
+    );
+  }
+
+  // Écran d'inscription
   return (
     <BaseRegisterModal
       visible={visible}
@@ -444,23 +614,9 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
         }
       }}
     >
-      <form
-        onSubmit={handleSubmit}
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: isMobile ? "0.75rem" : "1rem",
-        }}
-      >
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: isMobile ? "0.75rem" : "1rem" }}>
         <div style={{ marginBottom: isMobile ? "1rem" : "1.5rem" }}>
-          <h2
-            style={{
-              fontSize: isMobile ? "1.3rem" : "1.5rem",
-              fontWeight: "bold",
-              color: "#1f2937",
-              marginBottom: "0.5rem",
-            }}
-          >
+          <h2 style={{ fontSize: isMobile ? "1.3rem" : "1.5rem", fontWeight: "bold", color: "#1f2937", marginBottom: "0.5rem" }}>
             Créer un compte utilisateur
           </h2>
           <p style={{ color: "#6b7280", fontSize: isMobile ? "0.85rem" : "0.875rem" }}>
@@ -468,249 +624,109 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
           </p>
         </div>
 
-        {error && (
-          <div
+        {/* Boutons sociaux */}
+        <div style={{ display: "flex", gap: "1rem", marginBottom: "1rem" }}>
+          <button
+            type="button"
+            onClick={() => handleSocialLogin("google")}
+            disabled={!!socialLoading}
             style={{
-              padding: "0.75rem",
-              borderRadius: "0.5rem",
-              backgroundColor: "#fef2f2",
-              border: "1px solid #fecaca",
-              fontSize: isMobile ? "0.85rem" : "0.875rem",
-              color: "#dc2626",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
+              ...buttonStyle,
+              backgroundColor: "#fff",
+              color: "#374151",
+              border: "1px solid #d1d5db",
+              opacity: socialLoading ? 0.7 : 1,
             }}
           >
+            {socialLoading === "google" ? (
+              <FontAwesomeIcon icon={faSpinner} spin />
+            ) : (
+              <FontAwesomeIcon icon={faGoogle} style={{ fontSize: "1rem" }} />
+            )}
+            <span>Google</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleSocialLogin("facebook")}
+            disabled={!!socialLoading}
+            style={{
+              ...buttonStyle,
+              backgroundColor: "#1877f2",
+              color: "white",
+              border: "none",
+              opacity: socialLoading ? 0.7 : 1,
+            }}
+          >
+            {socialLoading === "facebook" ? (
+              <FontAwesomeIcon icon={faSpinner} spin />
+            ) : (
+              <FontAwesomeIcon icon={faFacebook} style={{ fontSize: "1rem" }} />
+            )}
+            <span>Facebook</span>
+          </button>
+        </div>
+
+        <div style={{ textAlign: "center", position: "relative", margin: "0.5rem 0" }}>
+          <span style={{ backgroundColor: "#f9fafb", padding: "0 0.75rem", color: "#9ca3af", fontSize: isMobile ? "0.75rem" : "0.8rem" }}>
+            ou inscrivez-vous avec email
+          </span>
+          <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: "1px", backgroundColor: "#e5e7eb", zIndex: -1 }} />
+        </div>
+
+        {error && (
+          <div style={{ padding: "0.75rem", borderRadius: "0.5rem", backgroundColor: "#fef2f2", border: "1px solid #fecaca", fontSize: isMobile ? "0.85rem" : "0.875rem", color: "#dc2626", display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <FontAwesomeIcon icon={faXmark} />
             <span>{error}</span>
           </div>
         )}
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-            gap: isMobile ? "0.75rem" : "1rem",
-          }}
-        >
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? "0.75rem" : "1rem" }}>
           <div>
-            <label
-              style={{
-                display: "block",
-                fontSize: isMobile ? "0.85rem" : "0.875rem",
-                fontWeight: 600,
-                color: "#374151",
-                marginBottom: "0.4rem",
-              }}
-            >
-              Prénom *
-            </label>
-            <input
-              type="text"
-              placeholder="Jean"
-              value={formData.prenoms}
-              onChange={(e) =>
-                setFormData({ ...formData, prenoms: e.target.value })
-              }
-              disabled={loading}
-              required
-              style={inputStyle}
-              onFocus={handleFocus}
-              onBlur={handleBlur}
-            />
+            <label style={{ display: "block", fontSize: isMobile ? "0.85rem" : "0.875rem", fontWeight: 600, color: "#374151", marginBottom: "0.4rem" }}>Prénom *</label>
+            <input type="text" placeholder="Jean" value={formData.prenoms} onChange={(e) => setFormData({ ...formData, prenoms: e.target.value })} disabled={loading} required style={inputStyle} />
           </div>
-
           <div>
-            <label
-              style={{
-                display: "block",
-                fontSize: isMobile ? "0.85rem" : "0.875rem",
-                fontWeight: 600,
-                color: "#374151",
-                marginBottom: "0.4rem",
-              }}
-            >
-              Nom *
-            </label>
-            <input
-              type="text"
-              placeholder="Kouassi"
-              value={formData.nom}
-              onChange={(e) =>
-                setFormData({ ...formData, nom: e.target.value })
-              }
-              disabled={loading}
-              required
-              style={inputStyle}
-              onFocus={handleFocus}
-              onBlur={handleBlur}
-            />
+            <label style={{ display: "block", fontSize: isMobile ? "0.85rem" : "0.875rem", fontWeight: 600, color: "#374151", marginBottom: "0.4rem" }}>Nom *</label>
+            <input type="text" placeholder="Kouassi" value={formData.nom} onChange={(e) => setFormData({ ...formData, nom: e.target.value })} disabled={loading} required style={inputStyle} />
           </div>
         </div>
 
         <div>
-          <label
-            style={{
-              display: "block",
-              fontSize: isMobile ? "0.85rem" : "0.875rem",
-              fontWeight: 600,
-              color: "#374151",
-              marginBottom: "0.4rem",
-            }}
-          >
-            Email *
-          </label>
-          <input
-            type="email"
-            placeholder="exemple@email.com"
-            value={formData.email}
-            onChange={(e) =>
-              setFormData({ ...formData, email: e.target.value })
-            }
-            disabled={loading}
-            required
-            style={inputStyle}
-            onFocus={handleFocus}
-            onBlur={handleBlur}
-          />
+          <label style={{ display: "block", fontSize: isMobile ? "0.85rem" : "0.875rem", fontWeight: 600, color: "#374151", marginBottom: "0.4rem" }}>Email *</label>
+          <input type="email" placeholder="exemple@email.com" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} disabled={loading} required style={inputStyle} />
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-            gap: isMobile ? "0.75rem" : "1rem",
-          }}
-        >
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? "0.75rem" : "1rem" }}>
           <div>
-            <label
-              style={{
-                display: "block",
-                fontSize: isMobile ? "0.85rem" : "0.875rem",
-                fontWeight: 600,
-                color: "#374151",
-                marginBottom: "0.4rem",
-              }}
-            >
-              Téléphone *
-            </label>
-            <input
-              type="tel"
-              placeholder="+225 07 09 18 18 64"
-              value={formData.telephone}
-              onChange={handlePhoneChange}
-              disabled={loading}
-              required
-              style={{
-                ...inputStyle,
-                borderColor: phoneError ? "#ef4444" : "#d1d5db",
-              }}
-              onFocus={handleFocus}
-              onBlur={handleBlur}
-            />
-            {phoneError && (
-              <p style={errorTextStyle}>{phoneError}</p>
-            )}
-            <small style={{ color: "#6b7280", fontSize: isMobile ? "0.7rem" : "0.75rem", marginTop: "0.25rem", display: "block" }}>
-              Format: +225 07 09 18 18 64 (10 chiffres)
-            </small>
+            <label style={{ display: "block", fontSize: isMobile ? "0.85rem" : "0.875rem", fontWeight: 600, color: "#374151", marginBottom: "0.4rem" }}>Téléphone *</label>
+            <input type="tel" placeholder="+225 07 09 18 18 64" value={formData.telephone} onChange={handlePhoneChange} disabled={loading} required style={{ ...inputStyle, borderColor: phoneError ? "#ef4444" : "#d1d5db" }} />
+            {phoneError && <p style={{ color: "#ef4444", fontSize: isMobile ? "0.7rem" : "0.75rem", marginTop: "0.25rem" }}>{phoneError}</p>}
           </div>
-
           <div>
-            <label
-              style={{
-                display: "block",
-                fontSize: isMobile ? "0.85rem" : "0.875rem",
-                fontWeight: 600,
-                color: "#374151",
-                marginBottom: "0.4rem",
-              }}
-            >
-              Ville *
-            </label>
-            <input
-              type="text"
-              placeholder="Abidjan"
-              value={formData.ville}
-              onChange={(e) =>
-                setFormData({ ...formData, ville: e.target.value })
-              }
-              disabled={loading}
-              required
-              style={inputStyle}
-              onFocus={handleFocus}
-              onBlur={handleBlur}
-            />
+            <label style={{ display: "block", fontSize: isMobile ? "0.85rem" : "0.875rem", fontWeight: 600, color: "#374151", marginBottom: "0.4rem" }}>Ville *</label>
+            <input type="text" placeholder="Abidjan" value={formData.ville} onChange={(e) => setFormData({ ...formData, ville: e.target.value })} disabled={loading} required style={inputStyle} />
           </div>
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-            gap: isMobile ? "0.75rem" : "1rem",
-          }}
-        >
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? "0.75rem" : "1rem" }}>
           <div>
-            <label
-              style={{
-                display: "block",
-                fontSize: isMobile ? "0.85rem" : "0.875rem",
-                fontWeight: 600,
-                color: "#374151",
-                marginBottom: "0.4rem",
-              }}
-            >
-              Mot de passe *
-            </label>
+            <label style={{ display: "block", fontSize: isMobile ? "0.85rem" : "0.875rem", fontWeight: 600, color: "#374151", marginBottom: "0.4rem" }}>Mot de passe *</label>
             <div style={{ position: "relative" }}>
-              <input
-                type={showPassword ? "text" : "password"}
-                placeholder="••••••••"
-                value={formData.mot_de_passe}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    mot_de_passe: e.target.value,
-                  })
-                }
-                disabled={loading}
-                required
-                style={inputStyle}
-                onFocus={handleFocus}
-                onBlur={handleBlur}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                disabled={loading}
-                style={passwordToggleStyle}
-              >
+              <input type={showPassword ? "text" : "password"} placeholder="••••••••" value={formData.mot_de_passe} onChange={(e) => setFormData({ ...formData, mot_de_passe: e.target.value })} disabled={loading} required style={inputStyle} />
+              <button type="button" onClick={() => setShowPassword(!showPassword)} disabled={loading} style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#6b7280", cursor: "pointer" }}>
                 <FontAwesomeIcon icon={showPassword ? faEyeSlash : faEye} />
               </button>
             </div>
-
             {formData.mot_de_passe && (
               <div style={{ marginTop: "0.5rem" }}>
-                <div style={passwordStrengthHeaderStyle}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.25rem", fontSize: isMobile ? "0.7rem" : "0.75rem", color: "#6b7280" }}>
                   <span>Force:</span>
-                  <span style={{ color: getPasswordStrengthColor() }}>
-                    {getPasswordStrengthText()}
-                  </span>
+                  <span style={{ color: getPasswordStrengthColor() }}>{getPasswordStrengthText()}</span>
                 </div>
-                <div style={passwordStrengthBarsStyle}>
+                <div style={{ display: "flex", gap: "0.25rem" }}>
                   {[1, 2, 3, 4, 5].map((index) => (
-                    <div
-                      key={index}
-                      style={{
-                        ...passwordStrengthBarStyle,
-                        backgroundColor:
-                          index <= passwordStrength
-                            ? getPasswordStrengthColor()
-                            : "#e5e7eb",
-                      }}
-                    />
+                    <div key={index} style={{ flex: 1, height: "4px", borderRadius: "2px", backgroundColor: index <= passwordStrength ? getPasswordStrengthColor() : "#e5e7eb" }} />
                   ))}
                 </div>
               </div>
@@ -718,112 +734,31 @@ const UserRegisterModal: React.FC<UserRegisterModalProps> = ({
           </div>
 
           <div>
-            <label
-              style={{
-                display: "block",
-                fontSize: isMobile ? "0.85rem" : "0.875rem",
-                fontWeight: 600,
-                color: "#374151",
-                marginBottom: "0.4rem",
-              }}
-            >
-              Confirmer *
-            </label>
+            <label style={{ display: "block", fontSize: isMobile ? "0.85rem" : "0.875rem", fontWeight: 600, color: "#374151", marginBottom: "0.4rem" }}>Confirmer *</label>
             <div style={{ position: "relative" }}>
-              <input
-                type={showConfirmPassword ? "text" : "password"}
-                placeholder="••••••••"
-                value={confirmPassword}
-                onChange={(e) => {
-                  setConfirmPassword(e.target.value);
-                  if (passwordMismatch) setPasswordMismatch(false);
-                }}
-                disabled={loading}
-                required
-                style={{
-                  ...inputStyle,
-                  borderColor: passwordMismatch ? "#ef4444" : "#d1d5db",
-                }}
-                onFocus={handleFocus}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = passwordMismatch
-                    ? "#ef4444"
-                    : "#d1d5db";
-                  e.currentTarget.style.boxShadow = "none";
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                disabled={loading}
-                style={passwordToggleStyle}
-              >
-                <FontAwesomeIcon
-                  icon={showConfirmPassword ? faEyeSlash : faEye}
-                />
+              <input type={showConfirmPassword ? "text" : "password"} placeholder="••••••••" value={confirmPassword} onChange={(e) => { setConfirmPassword(e.target.value); if (passwordMismatch) setPasswordMismatch(false); }} disabled={loading} required style={{ ...inputStyle, borderColor: passwordMismatch ? "#ef4444" : "#d1d5db" }} />
+              <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} disabled={loading} style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#6b7280", cursor: "pointer" }}>
+                <FontAwesomeIcon icon={showConfirmPassword ? faEyeSlash : faEye} />
               </button>
             </div>
-            {passwordMismatch && (
-              <p style={errorTextStyle}>
-                Les mots de passe ne correspondent pas
-              </p>
-            )}
+            {passwordMismatch && <p style={{ color: "#ef4444", fontSize: isMobile ? "0.7rem" : "0.75rem", marginTop: "0.25rem" }}>Les mots de passe ne correspondent pas</p>}
           </div>
         </div>
 
-        <div style={termsContainerStyle}>
-          <input
-            type="checkbox"
-            id="terms"
-            checked={acceptTerms}
-            onChange={(e) => setAcceptTerms(e.target.checked)}
-            disabled={loading}
-            style={checkboxStyle}
-          />
-          <label htmlFor="terms" style={termsLabelStyle}>
-            J'accepte les{" "}
-            <a href="#" style={termsLinkStyle}>
-              conditions d'utilisation
-            </a>{" "}
-            et la{" "}
-            <a href="#" style={termsLinkStyle}>
-              politique de confidentialité
-            </a>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", padding: isMobile ? "0.75rem" : "1rem", borderRadius: "0.5rem", backgroundColor: "#f9fafb", marginTop: "0.5rem" }}>
+          <input type="checkbox" id="terms" checked={acceptTerms} onChange={(e) => setAcceptTerms(e.target.checked)} disabled={loading} style={{ height: isMobile ? "1.1rem" : "1.25rem", width: isMobile ? "1.1rem" : "1.25rem", borderRadius: "0.25rem", border: "2px solid #d1d5db", accentColor: "#16a34a", flexShrink: 0 }} />
+          <label htmlFor="terms" style={{ fontSize: isMobile ? "0.8rem" : "0.875rem", color: "#4b5563", lineHeight: "1.5" }}>
+            J'accepte les <a href="#" style={{ color: "#16a34a", fontWeight: 600, textDecoration: "none" }}>conditions d'utilisation</a> et la <a href="#" style={{ color: "#16a34a", fontWeight: 600, textDecoration: "none" }}>politique de confidentialité</a>
           </label>
         </div>
 
-        <button
-          type="submit"
-          disabled={loading || !acceptTerms || passwordMismatch}
-          style={submitButtonStyle}
-        >
-          {loading ? (
-            <>
-              <FontAwesomeIcon icon={faSpinner} spin />
-              <span style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}>
-                Création en cours...
-              </span>
-            </>
-          ) : (
-            <>
-              <FontAwesomeIcon icon={faCheckCircle} />
-              <span style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}>
-                Créer mon compte
-              </span>
-            </>
-          )}
+        <button type="submit" disabled={loading || !acceptTerms || passwordMismatch} style={{ width: "100%", backgroundColor: "#16a34a", color: "white", fontWeight: "bold", padding: isMobile ? "0.85rem" : "1rem", borderRadius: "0.5rem", fontSize: isMobile ? "0.95rem" : "1rem", border: "none", cursor: "pointer", marginTop: "1rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", opacity: loading || !acceptTerms || passwordMismatch ? 0.6 : 1 }}>
+          {loading ? <><FontAwesomeIcon icon={faSpinner} spin /><span>Création en cours...</span></> : <><FontAwesomeIcon icon={faCheckCircle} /><span>Créer mon compte</span></>}
         </button>
 
-        <div style={loginLinkContainerStyle}>
+        <div style={{ textAlign: "center", paddingTop: "1rem" }}>
           <p style={{ fontSize: isMobile ? "0.85rem" : "0.875rem" }}>
-            Déjà un compte ?{" "}
-            <button
-              type="button"
-              onClick={onSwitchToLogin}
-              style={loginLinkStyle}
-            >
-              Se connecter
-            </button>
+            Déjà un compte ? <button type="button" onClick={onSwitchToLogin} style={{ color: "#16a34a", fontWeight: 600, background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: isMobile ? "0.85rem" : "0.875rem" }}>Se connecter</button>
           </p>
         </div>
       </form>

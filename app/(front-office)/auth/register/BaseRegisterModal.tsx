@@ -1,3 +1,4 @@
+// components/modals/BaseRegisterModal.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -27,7 +28,6 @@ const BaseRegisterModal: React.FC<BaseRegisterModalProps> = ({
 }) => {
   const [isMobile, setIsMobile] = useState(false);
 
-  // Détection de l'écran mobile
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768);
@@ -39,7 +39,6 @@ const BaseRegisterModal: React.FC<BaseRegisterModalProps> = ({
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Gestion du scroll
   useEffect(() => {
     if (visible) {
       document.body.style.overflow = "hidden";
@@ -51,7 +50,6 @@ const BaseRegisterModal: React.FC<BaseRegisterModalProps> = ({
     };
   }, [visible]);
 
-  // Fermeture avec Echap
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape" && visible && !loading) {
@@ -138,13 +136,10 @@ const BaseRegisterModal: React.FC<BaseRegisterModalProps> = ({
             />
           </button>
 
-          {/* Panneau gauche - TOUJOURS PRÉSENT SUR MOBILE MAIS AVEC HAUTEUR RÉDUITE */}
           <div
             style={{
               flex: isMobile ? "0 0 auto" : "0 0 40%",
-              background: accountType === "vendeur" 
-                ? "linear-gradient(135deg, #e6f7e6 0%, #d4eed4 100%)"
-                : "linear-gradient(135deg, #e6f7e6 0%, #d4eed4 100%)",
+              background: "linear-gradient(135deg, #e6f7e6 0%, #d4eed4 100%)",
               color: "#1e293b",
               padding: isMobile ? "1.5rem 1rem" : "2rem",
               display: "flex",
@@ -225,7 +220,6 @@ const BaseRegisterModal: React.FC<BaseRegisterModalProps> = ({
                 </div>
               </div>
 
-              {/* SÉLECTEUR DE TYPE DE COMPTE - TOUJOURS AFFICHÉ */}
               {onAccountTypeChange && (
                 <div
                   style={{
@@ -321,7 +315,6 @@ const BaseRegisterModal: React.FC<BaseRegisterModalProps> = ({
             </div>
           </div>
 
-          {/* Panneau droit */}
           <div
             style={{
               flex: isMobile ? "1" : "0 0 60%",

@@ -115,3 +115,18 @@ Couleurs Spécifiques par Type d'Annonce :
 Échange : #2196f3
 Don : #9333ea
 Vente : #ea580c
+
+
+
+
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-9X3NV44FG3"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-9X3NV44FG3');
+</script>
+
+https://chat.deepseek.com/a/chat/s/0508e25d-fcd6-446b-823e-6e3b17242966

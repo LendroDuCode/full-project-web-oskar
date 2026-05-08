@@ -1,5 +1,6 @@
 "use client";
-
+// En haut du fichier, avant tout import
+export const dynamic = 'force-dynamic';
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";

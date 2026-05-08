@@ -1,4 +1,3 @@
-// app/(front-office)/auth/LoginModal.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -6,15 +5,11 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faEnvelope,
   faLock,
-  faXmark,
   faEye,
   faEyeSlash,
-  faShieldHalved,
-  faUsers,
-  faBolt,
   faArrowRightToBracket,
-  faUserShield,
   faCheckCircle,
+  faXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import { faGoogle, faFacebook } from "@fortawesome/free-brands-svg-icons";
 import { useRouter } from "next/navigation";
@@ -81,6 +76,8 @@ const LoginModal: React.FC<LoginModalProps> = ({
   const [isMounted, setIsMounted] = useState(false);
   const [loginSuccess, setLoginSuccess] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
+  const [socialLoading, setSocialLoading] = useState<"google" | "facebook" | null>(null);
   const router = useRouter();
 
   // Détecter si c'est un écran mobile
@@ -255,6 +252,171 @@ const LoginModal: React.FC<LoginModalProps> = ({
     setShowPassword(false);
   };
 
+  // ✅ Fonction pour gérer "Mot de passe oublié"
+  const handleForgotPassword = async () => {
+    if (!loginData.email) {
+      setError("Veuillez saisir votre adresse email pour réinitialiser votre mot de passe.");
+      return;
+    }
+
+    setForgotPasswordLoading(true);
+    setError(null);
+
+    try {
+      const emailLower = loginData.email.toLowerCase();
+      let endpoint = "";
+      let requestBody = {};
+
+      // Déterminer le type d'utilisateur et l'endpoint approprié
+      if (emailLower.includes("admin") || emailLower.includes("superadmin")) {
+        endpoint = API_ENDPOINTS.AUTH.ADMIN.FORGOT_PASSWORD;
+        requestBody = { email: loginData.email };
+      } else if (emailLower.includes("@agent.com") || emailLower.includes("agent")) {
+        endpoint = API_ENDPOINTS.AUTH.AGENT.LOGIN;
+        window.location.href = "/auth/agent/forgot-password";
+        return;
+      } else if (emailLower.includes("@sonecafrica.com") || emailLower.includes("vendeur")) {
+        endpoint = API_ENDPOINTS.AUTH.VENDEUR.FORGOT_PASSWORD;
+        requestBody = { email: loginData.email };
+      } else {
+        endpoint = API_ENDPOINTS.AUTH.UTILISATEUR.FORGOT_PASSWORD;
+        requestBody = { email: loginData.email };
+      }
+
+      console.log(`🔍 Demande de réinitialisation pour: ${loginData.email}`);
+      console.log(`📡 Endpoint: ${endpoint}`);
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSuccess(
+          "Un lien de réinitialisation a été envoyé à votre adresse email. Veuillez vérifier votre boîte de réception."
+        );
+        
+        setTimeout(() => {
+          setSuccess(null);
+        }, 5000);
+      } else {
+        setError(
+          data.message || 
+          data.error || 
+          "Impossible d'envoyer le lien de réinitialisation. Veuillez réessayer."
+        );
+      }
+    } catch (err) {
+      console.error("Erreur lors de la demande de réinitialisation:", err);
+      setError(
+        "Erreur de connexion au serveur. Veuillez vérifier votre connexion internet et réessayer."
+      );
+    } finally {
+      setForgotPasswordLoading(false);
+    }
+  };
+
+  // ✅ Connexion Google
+  const handleGoogleLogin = () => {
+    setSocialLoading("google");
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    const redirectUri = `${window.location.origin}/auth/google/callback`;
+    const scope = "email profile openid";
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=token&scope=${scope}&prompt=select_account`;
+    
+    const width = 500;
+    const height = 600;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+    
+    const popup = window.open(authUrl, "google-login", `width=${width},height=${height},left=${left},top=${top}`);
+    
+    const handleMessage = async (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      
+      if (event.data.type === "oauth-success") {
+        popup?.close();
+        window.removeEventListener("message", handleMessage);
+        
+        const { token, user } = event.data;
+        if (token && user) {
+          const userData = {
+            ...user,
+            type: user.type || "utilisateur",
+            token: token,
+          };
+          saveUserData(userData.type, userData, token);
+          onLoginSuccess(userData);
+          onHide();
+        }
+        setSocialLoading(null);
+      }
+    };
+    
+    window.addEventListener("message", handleMessage);
+    
+    const checkPopupClosed = setInterval(() => {
+      if (popup && popup.closed) {
+        clearInterval(checkPopupClosed);
+        window.removeEventListener("message", handleMessage);
+        setSocialLoading(null);
+      }
+    }, 500);
+  };
+
+  // ✅ Connexion Facebook
+  const handleFacebookLogin = () => {
+    setSocialLoading("facebook");
+    const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
+    const redirectUri = `${window.location.origin}/auth/facebook/callback`;
+    const authUrl = `https://www.facebook.com/v22.0/dialog/oauth?client_id=${appId}&redirect_uri=${redirectUri}&response_type=token&scope=email,public_profile`;
+    
+    const width = 500;
+    const height = 600;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+    
+    const popup = window.open(authUrl, "facebook-login", `width=${width},height=${height},left=${left},top=${top}`);
+    
+    const handleMessage = async (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      
+      if (event.data.type === "oauth-success") {
+        popup?.close();
+        window.removeEventListener("message", handleMessage);
+        
+        const { token, user } = event.data;
+        if (token && user) {
+          const userData = {
+            ...user,
+            type: user.type || "utilisateur",
+            token: token,
+          };
+          saveUserData(userData.type, userData, token);
+          onLoginSuccess(userData);
+          onHide();
+        }
+        setSocialLoading(null);
+      }
+    };
+    
+    window.addEventListener("message", handleMessage);
+    
+    const checkPopupClosed = setInterval(() => {
+      if (popup && popup.closed) {
+        clearInterval(checkPopupClosed);
+        window.removeEventListener("message", handleMessage);
+        setSocialLoading(null);
+      }
+    }, 500);
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -401,10 +563,6 @@ const LoginModal: React.FC<LoginModalProps> = ({
         errorMessage = "Votre compte est désactivé. Veuillez contacter l'administrateur.";
       } else if (errorDetails?.status === "network") {
         errorMessage = "Impossible de se connecter au serveur. Vérifiez votre connexion internet.";
-      } else if (errorDetails?.message?.includes("email") || errorDetails?.message?.includes("email")) {
-        errorMessage = "Format d'email invalide. Exemple: nom@domaine.com";
-      } else if (errorDetails?.message?.includes("mot de passe") || errorDetails?.message?.includes("password")) {
-        errorMessage = "Le mot de passe doit contenir au moins 8 caractères.";
       } else {
         errorMessage = "Identifiants incorrects. Veuillez vérifier votre email et mot de passe.";
       }
@@ -419,46 +577,6 @@ const LoginModal: React.FC<LoginModalProps> = ({
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleSocialLogin = (provider: "google" | "facebook") => {
-    console.log(`Connexion avec ${provider}`);
-
-    let endpoint = "";
-    switch (provider) {
-      case "google":
-        endpoint = API_ENDPOINTS.AUTH.UTILISATEUR.GOOGLE_CONNEXION;
-        break;
-      case "facebook":
-        endpoint = API_ENDPOINTS.AUTH.UTILISATEUR.FACEBOOK;
-        break;
-    }
-
-    window.location.href = endpoint;
-  };
-
-  const handleForgotPassword = () => {
-    const emailLower = loginData.email?.toLowerCase() || "";
-    let endpoint = API_ENDPOINTS.AUTH.UTILISATEUR.FORGOT_PASSWORD;
-
-    if (
-      emailLower.includes("admin@sonec") ||
-      emailLower.includes("superadmin")
-    ) {
-      endpoint = API_ENDPOINTS.AUTH.ADMIN.FORGOT_PASSWORD;
-    } else if (
-      emailLower.includes("@agent.com") ||
-      emailLower.includes("agent")
-    ) {
-      endpoint = API_ENDPOINTS.AUTH.AGENT.LOGIN;
-    } else if (
-      emailLower.includes("@sonecafrica.com") ||
-      emailLower.includes("vendeur")
-    ) {
-      endpoint = API_ENDPOINTS.AUTH.VENDEUR.FORGOT_PASSWORD;
-    }
-
-    alert(`Fonctionnalité de réinitialisation sera implémentée prochainement`);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -498,502 +616,302 @@ const LoginModal: React.FC<LoginModalProps> = ({
         onKeyDown={handleKeyDown}
       >
         <div
-          className="modal-dialog modal-dialog-centered modal-lg"
+          className="modal-dialog modal-dialog-centered"
           role="document"
           style={{ 
-            maxWidth: isMobile ? "95%" : "900px",
+            maxWidth: isMobile ? "95%" : "500px",
             margin: isMobile ? "0.5rem" : "1.75rem auto"
           }}
         >
-          <div className="modal-content rounded-3 shadow-lg border-0 overflow-hidden">
-            {/* Close Button - UN SEUL BOUTON */}
-            <button
-              type="button"
-              className="btn-close position-absolute"
-              onClick={onHide}
-              disabled={loading}
-              aria-label="Fermer"
+          <div className="modal-content rounded-4 shadow-lg border-0 overflow-hidden">
+            {/* Header avec fond vert OSKAR */}
+            <div
+              className="text-center py-4 px-3"
               style={{
-                top: isMobile ? "0.75rem" : "1rem",
-                right: isMobile ? "0.75rem" : "1rem",
-                zIndex: 10,
-                backgroundColor: "rgba(255, 255, 255, 0.8)",
-                padding: isMobile ? "0.5rem" : "0.75rem",
-                borderRadius: "50%",
-                width: isMobile ? "32px" : "40px",
-                height: isMobile ? "32px" : "40px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                border: "none",
-                fontSize: isMobile ? "1rem" : "1.25rem",
-                lineHeight: 1,
-                opacity: 0.8,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.opacity = "1";
-                e.currentTarget.style.backgroundColor = "white";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.opacity = "0.8";
-                e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.8)";
+                background: "linear-gradient(135deg, #e6f7e6 0%, #d4eed4 50%, #c8e6c8 100%)",
+                borderBottom: "none",
               }}
             >
-              <FontAwesomeIcon icon={faXmark} />
-            </button>
+              {/* Close Button */}
+              <button
+                type="button"
+                className="btn-close position-absolute top-0 end-0 mt-3 me-3"
+                onClick={onHide}
+                disabled={loading}
+                aria-label="Fermer"
+                style={{
+                  zIndex: 10,
+                  backgroundColor: "rgba(255,255,255,0.5)",
+                  borderRadius: "50%",
+                  width: "32px",
+                  height: "32px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  border: "none",
+                  opacity: 0.8,
+                }}
+              >
+                <FontAwesomeIcon icon={faXmark} style={{ color: "#166534" }} />
+              </button>
 
-            <div className="row g-0">
-              {/* Colonne gauche - Background vert - DISPARAÎT SUR MOBILE */}
-              {!isMobile && (
-                <div
-                  className="col-md-4 d-flex flex-column"
+              {/* Logo */}
+              <div
+                className="rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3 shadow-sm"
+                style={{
+                  width: "70px",
+                  height: "70px",
+                  backgroundColor: "white",
+                  boxShadow: "0 4px 15px rgba(0,0,0,0.1)",
+                }}
+              >
+                <span
                   style={{
-                    backgroundColor: colors.oskar.green,
-                    color: "white",
-                    padding: "2rem",
+                    color: "#16a34a",
+                    fontWeight: "bold",
+                    fontSize: "2rem",
                   }}
                 >
-                  <div className="mb-4">
-                    <div className="d-flex justify-content-center mb-3">
-                      <div
-                        style={{
-                          width: "80px",
-                          height: "80px",
-                          backgroundColor: "white",
-                          borderRadius: "20px",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-                        }}
-                      >
-                        <span
-                          style={{
-                            color: colors.oskar.green,
-                            fontWeight: "bold",
-                            fontSize: "2rem",
-                          }}
-                        >
-                          O
-                        </span>
-                      </div>
-                    </div>
-                    <h5 className="text-center fw-bold mb-3">
-                      Bienvenue sur OSKAR
-                    </h5>
-                    <p className="text-center mb-4" style={{ opacity: 0.9 }}>
-                      Connectez-vous à votre compte pour accéder à tous vos
-                      services
-                    </p>
+                  O
+                </span>
+              </div>
+              <h4 className="fw-bold text-dark mb-2" style={{ color: "#1e293b" }}>
+                Connexion
+              </h4>
+              <p className="text-muted small mb-0" style={{ color: "#334155", opacity: 0.8 }}>
+                Connectez-vous à votre compte OskarStore
+              </p>
+            </div>
+
+            <div className="p-4 p-md-5 bg-white">
+              {/* Messages d'erreur et succès */}
+              {error && (
+                <div
+                  className="alert alert-danger alert-dismissible fade show mb-4"
+                  role="alert"
+                  style={{ borderRadius: "12px", fontSize: "0.875rem" }}
+                >
+                  <div className="d-flex align-items-center">
+                    <i className="fas fa-exclamation-circle me-2"></i>
+                    <span>{error}</span>
                   </div>
-
-                  {/* Avantages */}
-                  <div className="d-flex flex-column gap-3 mt-3">
-                    <div className="d-flex align-items-start gap-2">
-                      <div
-                        style={{
-                          width: "40px",
-                          height: "40px",
-                          backgroundColor: "rgba(255, 255, 255, 0.2)",
-                          borderRadius: "10px",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <FontAwesomeIcon
-                          icon={faShieldHalved}
-                          style={{ fontSize: "16px" }}
-                        />
-                      </div>
-                      <div>
-                        <h6 className="fw-semibold mb-1">Accès sécurisé</h6>
-                        <p style={{ opacity: 0.8, fontSize: "0.875rem" }}>
-                          Votre compte est protégé par des mesures de sécurité
-                          avancées
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="d-flex align-items-start gap-2">
-                      <div
-                        style={{
-                          width: "40px",
-                          height: "40px",
-                          backgroundColor: "rgba(255, 255, 255, 0.2)",
-                          borderRadius: "10px",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <FontAwesomeIcon
-                          icon={faUsers}
-                          style={{ fontSize: "16px" }}
-                        />
-                      </div>
-                      <div>
-                        <h6 className="fw-semibold mb-1">Communauté active</h6>
-                        <p style={{ opacity: 0.8, fontSize: "0.875rem" }}>
-                          Rejoignez des milliers d'utilisateurs actifs
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="d-flex align-items-start gap-2">
-                      <div
-                        style={{
-                          width: "40px",
-                          height: "40px",
-                          backgroundColor: "rgba(255, 255, 255, 0.2)",
-                          borderRadius: "10px",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <FontAwesomeIcon
-                          icon={faBolt}
-                          style={{ fontSize: "16px" }}
-                        />
-                      </div>
-                      <div>
-                        <h6 className="fw-semibold mb-1">Accès rapide</h6>
-                        <p style={{ opacity: 0.8, fontSize: "0.875rem" }}>
-                          Connectez-vous en quelques secondes
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  <button
+                    type="button"
+                    className="btn-close"
+                    onClick={() => setError(null)}
+                  ></button>
                 </div>
               )}
 
-              {/* Colonne droite - Formulaire - PREND TOUTE LA LARGEUR SUR MOBILE */}
-              <div className={isMobile ? "col-12" : "col-md-8"}>
-                <div className="p-4" style={{ padding: isMobile ? "1.5rem 1rem" : "2rem" }}>
-                  <h5 className="modal-title w-100 text-center fs-4 fw-bold text-dark mb-4">
-                    Connexion à OSKAR
-                  </h5>
-
-                  {error && (
-                    <div
-                      className="alert alert-danger alert-dismissible fade show mb-4"
-                      role="alert"
-                      style={{ 
-                        fontSize: isMobile ? "0.9rem" : "1rem",
-                        borderRadius: "12px",
-                        borderLeft: `4px solid ${colors.oskar.green}`,
-                        backgroundColor: "#fff5f5",
-                        borderColor: "#fecaca",
-                        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.05)"
-                      }}
-                    >
-                      <div className="d-flex align-items-start">
-                        <div className="flex-shrink-0 me-3">
-                          <svg 
-                            xmlns="http://www.w3.org/2000/svg" 
-                            width={isMobile ? "20" : "24"} 
-                            height={isMobile ? "20" : "24"} 
-                            viewBox="0 0 24 24" 
-                            fill="none" 
-                            stroke="#dc2626" 
-                            strokeWidth="2" 
-                            strokeLinecap="round" 
-                            strokeLinejoin="round"
-                          >
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="12" y1="8" x2="12" y2="12"></line>
-                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                          </svg>
-                        </div>
-                        <div className="flex-grow-1">
-                          <h6 className="alert-heading mb-1" style={{ fontWeight: "bold", color: "#991b1b" }}>
-                            Échec de connexion
-                          </h6>
-                          <p className="mb-0" style={{ color: "#991b1b" }}>
-                            {error}
-                          </p>
-                          {/* {(error.includes("incorrect") || error.includes("invalide")) && (
-                            <div className="mt-2">
-                              <small className="d-block text-muted">
-                                <i className="bi bi-question-circle me-1"></i>
-                                Besoin d'aide ? 
-                                <button 
-                                  type="button" 
-                                  className="btn btn-link btn-sm p-0 ms-1 text-decoration-none"
-                                  onClick={handleForgotPassword}
-                                  style={{ fontSize: "0.875rem", color: colors.oskar.green }}
-                                >
-                                  Mot de passe oublié ?
-                                </button>
-                              </small>
-                            </div>
-                          )} */}
-                          {(error.includes("n'existe pas") || error.includes("créer")) && (
-                            <div className="mt-2">
-                              <small className="d-block">
-                                <i className="bi bi-person-plus me-1"></i>
-                                Pas encore de compte ? 
-                                <button 
-                                  type="button" 
-                                  className="btn btn-link btn-sm p-0 ms-1 text-decoration-none"
-                                  onClick={onSwitchToRegister}
-                                  style={{ fontSize: "0.875rem", color: colors.oskar.green }}
-                                >
-                                  Créer un compte
-                                </button>
-                              </small>
-                            </div>
-                          )}
-                          {(error.includes("réseau") || error.includes("serveur")) && (
-                            <div className="mt-2">
-                              <small className="d-block text-muted">
-                                <i className="bi bi-wifi-off me-1"></i>
-                                Vérifiez votre connexion internet et réessayez.
-                              </small>
-                            </div>
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          className="btn-close"
-                          onClick={() => setError(null)}
-                          aria-label="Fermer"
-                          style={{ 
-                            fontSize: "0.75rem",
-                            padding: "0.5rem"
-                          }}
-                        ></button>
-                      </div>
-                    </div>
-                  )}
-
-                  {success && (
-                    <div
-                      className="alert alert-success alert-dismissible fade show mb-4"
-                      role="alert"
-                      style={{
-                        backgroundColor: "#d1fae5",
-                        borderColor: "#10b981",
-                        color: "#065f46",
-                        fontSize: isMobile ? "0.9rem" : "1rem",
-                        borderRadius: "12px",
-                        borderLeft: `4px solid ${colors.oskar.green}`,
-                        boxShadow: "0 2px 8px rgba(0, 0, 0, 0.05)"
-                      }}
-                    >
-                      <div className="d-flex align-items-center">
-                        <FontAwesomeIcon
-                          icon={faCheckCircle}
-                          className="me-2"
-                          style={{ color: "#10b981", fontSize: "1.2rem" }}
-                        />
-                        <div>
-                          <strong>Succès !</strong>
-                          <div className="small">{success}</div>
-                          <div
-                            className="progress mt-2"
-                            style={{ height: "3px" }}
-                          >
-                            <div
-                              className="progress-bar bg-success"
-                              role="progressbar"
-                              style={{ width: "100%" }}
-                              aria-valuenow={100}
-                              aria-valuemin={0}
-                              aria-valuemax={100}
-                            ></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {!loginSuccess && (
-                    <form onSubmit={handleLogin}>
-                      {/* Email - CHAMPS RÉDUITS SUR MOBILE */}
-                      <div className="mb-3">
-                        <label className="form-label fw-semibold text-dark" style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}>
-                          Adresse email <span className="text-danger">*</span>
-                        </label>
-                        <div className="input-group">
-                          <span className="input-group-text bg-white border-end-0" style={{ padding: isMobile ? "0.5rem 0.75rem" : "0.75rem 1rem" }}>
-                            <FontAwesomeIcon
-                              icon={faEnvelope}
-                              className="text-secondary"
-                              style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}
-                            />
-                          </span>
-                          <input
-                            type="email"
-                            className="form-control border-start-0"
-                            placeholder="votre@email.com"
-                            value={loginData.email}
-                            onChange={(e) => {
-                              setLoginData({
-                                ...loginData,
-                                email: e.target.value,
-                              });
-                              setError(null);
-                            }}
-                            required
-                            disabled={loading}
-                            autoComplete="email"
-                            style={{ 
-                              padding: isMobile ? "0.5rem 0.75rem" : "0.75rem 1rem",
-                              fontSize: isMobile ? "0.9rem" : "1rem"
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Mot de passe - CHAMPS RÉDUITS SUR MOBILE */}
-                      <div className="mb-3">
-                        <div className="input-group">
-                          <span className="input-group-text bg-white border-end-0" style={{ padding: isMobile ? "0.5rem 0.75rem" : "0.75rem 1rem" }}>
-                            <FontAwesomeIcon
-                              icon={faLock}
-                              className="text-secondary"
-                              style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}
-                            />
-                          </span>
-                          <input
-                            type={showPassword ? "text" : "password"}
-                            className="form-control border-start-0"
-                            placeholder="••••••••"
-                            value={loginData.password}
-                            onChange={(e) => {
-                              setLoginData({
-                                ...loginData,
-                                password: e.target.value,
-                              });
-                              setError(null);
-                            }}
-                            required
-                            disabled={loading}
-                            autoComplete="current-password"
-                            style={{ 
-                              padding: isMobile ? "0.5rem 0.75rem" : "0.75rem 1rem",
-                              fontSize: isMobile ? "0.9rem" : "1rem"
-                            }}
-                          />
-                          <button
-                            type="button"
-                            className="btn btn-outline-secondary border-start-0"
-                            onClick={() => setShowPassword(!showPassword)}
-                            disabled={loading}
-                            style={{ 
-                              padding: isMobile ? "0.5rem 0.75rem" : "0.75rem 1rem",
-                              fontSize: isMobile ? "0.9rem" : "1rem"
-                            }}
-                          >
-                            <FontAwesomeIcon
-                              icon={showPassword ? faEyeSlash : faEye}
-                              style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}
-                            />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Se souvenir de moi - TEXTE RÉDUIT SUR MOBILE */}
-                      <div className="form-check mb-3">
-                        <input
-                          className="form-check-input"
-                          type="checkbox"
-                          id="rememberMe"
-                          checked={loginData.rememberMe}
-                          onChange={(e) =>
-                            setLoginData({
-                              ...loginData,
-                              rememberMe: e.target.checked,
-                            })
-                          }
-                          disabled={loading}
-                          style={{ width: isMobile ? "1rem" : "1.2rem", height: isMobile ? "1rem" : "1.2rem" }}
-                        />
-                        <label
-                          className="form-check-label text-secondary"
-                          htmlFor="rememberMe"
-                          style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}
-                        >
-                          Se souvenir de moi
-                        </label>
-                      </div>
-
-                      {/* Bouton de connexion - PLUS PETIT SUR MOBILE */}
-                      <button
-                        type="submit"
-                        className="btn w-100 mb-3 fw-bold text-white"
-                        style={{
-                          backgroundColor: colors.oskar.green,
-                          border: "none",
-                          borderRadius: "10px",
-                          fontSize: isMobile ? "0.95rem" : "1rem",
-                          padding: isMobile ? "0.75rem" : "1rem",
-                        }}
-                        disabled={
-                          loading || !loginData.email || !loginData.password
-                        }
-                      >
-                        {loading ? (
-                          <>
-                            <LoadingSpinner size="sm" color="white" />
-                            <span className="ms-2">Connexion en cours...</span>
-                          </>
-                        ) : (
-                          <>
-                            <FontAwesomeIcon
-                              icon={faArrowRightToBracket}
-                              className="me-2"
-                              style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}
-                            />
-                            Se connecter
-                          </>
-                        )}
-                      </button>
-
-                      {/* Lien vers inscription - TEXTE RÉDUIT SUR MOBILE */}
-                      <div className="text-center pt-3 border-top">
-                        <span className="text-secondary me-1" style={{ fontSize: isMobile ? "0.9rem" : "1rem" }}>
-                          Vous n'avez pas de compte ?
-                        </span>
-                        <button
-                          type="button"
-                          className="btn btn-link p-0 text-decoration-none fw-semibold"
-                          onClick={onSwitchToRegister}
-                          disabled={loading}
-                          style={{ 
-                            color: colors.oskar.green,
-                            fontSize: isMobile ? "0.9rem" : "1rem"
-                          }}
-                        >
-                          S'inscrire
-                        </button>
-                      </div>
-                    </form>
-                  )}
-
-                  {/* Sécurité - TEXTE RÉDUIT SUR MOBILE */}
-                  {!loginSuccess && (
-                    <div className="mt-4 pt-3 border-top">
-                      <div className="d-flex align-items-center gap-2">
-                        <FontAwesomeIcon
-                          icon={faUserShield}
-                          className="text-success"
-                          size="sm"
-                        />
-                        <small className="text-muted" style={{ fontSize: isMobile ? "0.8rem" : "0.875rem" }}>
-                          Votre connexion est sécurisée avec un chiffrement SSL
-                          256-bit
-                        </small>
-                      </div>
-                    </div>
-                  )}
+              {success && (
+                <div
+                  className="alert alert-success alert-dismissible fade show mb-4"
+                  role="alert"
+                  style={{ borderRadius: "12px", fontSize: "0.875rem" }}
+                >
+                  <div className="d-flex align-items-center">
+                    <FontAwesomeIcon icon={faCheckCircle} className="me-2" />
+                    <span>{success}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-close"
+                    onClick={() => setSuccess(null)}
+                  ></button>
                 </div>
+              )}
+
+              {/* Boutons sociaux */}
+              <div className="d-flex gap-3 mb-4">
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary w-50 d-flex align-items-center justify-content-center gap-2 py-2 rounded-3"
+                  onClick={handleGoogleLogin}
+                  disabled={!!socialLoading}
+                  style={{ fontSize: "0.875rem", fontWeight: 500 }}
+                >
+                  {socialLoading === "google" ? (
+                    <LoadingSpinner size="sm" />
+                  ) : (
+                    <FontAwesomeIcon icon={faGoogle} style={{ color: "#DB4437" }} />
+                  )}
+                  <span>Google</span>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary w-50 d-flex align-items-center justify-content-center gap-2 py-2 rounded-3"
+                  onClick={handleFacebookLogin}
+                  disabled={!!socialLoading}
+                  style={{ fontSize: "0.875rem", fontWeight: 500 }}
+                >
+                  {socialLoading === "facebook" ? (
+                    <LoadingSpinner size="sm" />
+                  ) : (
+                    <FontAwesomeIcon icon={faFacebook} style={{ color: "#1877F2" }} />
+                  )}
+                  <span>Facebook</span>
+                </button>
               </div>
+
+              {/* Séparateur */}
+              <div className="position-relative text-center mb-4">
+                <hr className="text-muted" />
+                <span
+                  className="position-absolute top-50 start-50 translate-middle bg-white px-3 text-muted small"
+                  style={{ transform: "translate(-50%, -50%)" }}
+                >
+                  ou
+                </span>
+              </div>
+
+              {!loginSuccess && (
+                <form onSubmit={handleLogin}>
+                  {/* Email */}
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold text-dark small">
+                      Adresse email
+                    </label>
+                    <div className="input-group">
+                      <span className="input-group-text bg-light border-end-0">
+                        <FontAwesomeIcon icon={faEnvelope} className="text-muted" />
+                      </span>
+                      <input
+                        type="email"
+                        className="form-control bg-light border-start-0"
+                        placeholder="votre@email.com"
+                        value={loginData.email}
+                        onChange={(e) => {
+                          setLoginData({
+                            ...loginData,
+                            email: e.target.value,
+                          });
+                          setError(null);
+                        }}
+                        required
+                        disabled={loading}
+                        autoComplete="email"
+                        style={{ fontSize: "0.875rem" }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Mot de passe */}
+                  <div className="mb-3">
+                    <label className="form-label fw-semibold text-dark small">
+                      Mot de passe
+                    </label>
+                    <div className="input-group">
+                      <span className="input-group-text bg-light border-end-0">
+                        <FontAwesomeIcon icon={faLock} className="text-muted" />
+                      </span>
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        className="form-control bg-light border-start-0"
+                        placeholder="••••••••"
+                        value={loginData.password}
+                        onChange={(e) => {
+                          setLoginData({
+                            ...loginData,
+                            password: e.target.value,
+                          });
+                          setError(null);
+                        }}
+                        required
+                        disabled={loading}
+                        autoComplete="current-password"
+                        style={{ fontSize: "0.875rem" }}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary border-start-0 bg-light"
+                        onClick={() => setShowPassword(!showPassword)}
+                        disabled={loading}
+                      >
+                        <FontAwesomeIcon icon={showPassword ? faEyeSlash : faEye} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Options */}
+                  <div className="d-flex justify-content-between align-items-center mb-4">
+                    <div className="form-check">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        id="rememberMe"
+                        checked={loginData.rememberMe}
+                        onChange={(e) =>
+                          setLoginData({
+                            ...loginData,
+                            rememberMe: e.target.checked,
+                          })
+                        }
+                        disabled={loading}
+                      />
+                      <label className="form-check-label small text-muted" htmlFor="rememberMe">
+                        Se souvenir de moi
+                      </label>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-link p-0 text-decoration-none small"
+                      onClick={handleForgotPassword}
+                      disabled={forgotPasswordLoading || loading}
+                      style={{ color: colors.oskar.green }}
+                    >
+                      {forgotPasswordLoading ? (
+                        <>
+                          <LoadingSpinner size="sm" color={colors.oskar.green} />
+                          <span className="ms-1">Envoi...</span>
+                        </>
+                      ) : (
+                        "Mot de passe oublié ?"
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Bouton de connexion */}
+                  <button
+                    type="submit"
+                    className="btn w-100 mb-3 fw-semibold text-white py-2 rounded-3"
+                    style={{
+                      backgroundColor: colors.oskar.green,
+                      border: "none",
+                      fontSize: "0.9rem",
+                    }}
+                    disabled={loading || !loginData.email || !loginData.password}
+                  >
+                    {loading ? (
+                      <>
+                        <LoadingSpinner size="sm" color="white" />
+                        <span className="ms-2">Connexion en cours...</span>
+                      </>
+                    ) : (
+                      <>
+                        <FontAwesomeIcon icon={faArrowRightToBracket} className="me-2" />
+                        Se connecter
+                      </>
+                    )}
+                  </button>
+
+                  {/* Lien vers inscription */}
+                  <div className="text-center">
+                    <span className="text-muted small me-1">
+                      Vous n'avez pas de compte ?
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-link p-0 text-decoration-none small fw-semibold"
+                      onClick={onSwitchToRegister}
+                      disabled={loading}
+                      style={{ color: colors.oskar.green }}
+                    >
+                      S'inscrire
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           </div>
         </div>
@@ -1012,13 +930,16 @@ const LoginModal: React.FC<LoginModalProps> = ({
           }
         }
         
-        /* S'assurer que le btn-close standard n'affiche pas son propre contenu */
         .btn-close {
           background-image: none !important;
           opacity: 1 !important;
         }
 
-        /* Styles responsifs supplémentaires */
+        .btn-outline-secondary:hover {
+          background-color: #f8f9fa;
+          border-color: #dee2e6;
+        }
+
         @media (max-width: 576px) {
           .modal-content {
             max-height: 95vh;
@@ -1027,11 +948,6 @@ const LoginModal: React.FC<LoginModalProps> = ({
           
           .form-label {
             margin-bottom: 0.25rem;
-          }
-          
-          .input-group-text, .form-control, .btn-outline-secondary {
-            padding-top: 0.4rem !important;
-            padding-bottom: 0.4rem !important;
           }
         }
       `}</style>

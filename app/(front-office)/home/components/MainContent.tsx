@@ -20,6 +20,24 @@ const MainContent = () => {
   // État pour le nombre total d'annonces
   const [totalItems, setTotalItems] = useState<number>(2847);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  
+  // État pour la hauteur du header (pour le sticky)
+  const [headerHeight, setHeaderHeight] = useState(0);
+
+  // Récupérer la hauteur du header au chargement
+  useEffect(() => {
+    const updateHeaderHeight = () => {
+      const header = document.querySelector('header');
+      if (header) {
+        setHeaderHeight(header.offsetHeight);
+      }
+    };
+    
+    updateHeaderHeight();
+    window.addEventListener('resize', updateHeaderHeight);
+    
+    return () => window.removeEventListener('resize', updateHeaderHeight);
+  }, []);
 
   // Fonction pour gérer le changement de filtre type
   const handleFilterChange = (filterId: string) => {
@@ -46,13 +64,22 @@ const MainContent = () => {
   return (
     <main id="main-content" className="container-fluid py-5">
       <div className="row g-4">
-        {/* Sidebar des filtres avancés - visible seulement sur desktop */}
-        <div className="col-auto d-none d-lg-block">
+        {/* Sidebar des filtres avancés - STICKY SUR DESKTOP */}
+        <div 
+          className="col-auto d-none d-lg-block"
+          style={{
+            position: 'sticky',
+            top: `${headerHeight + 20}px`, // Hauteur du header + marge
+            alignSelf: 'flex-start',
+            height: `calc(100vh - ${headerHeight + 40}px)`,
+            overflowY: 'auto',
+          }}
+        >
           <FiltersSidebar filters={filters} onFiltersChange={setFilters} />
         </div>
 
-        {/* Contenu principal */}
-        <div className="col">
+        {/* Contenu principal - SCROLLABLE */}
+        <div className="col" style={{ overflowY: 'visible' }}>
           {/* Barre de filtres rapides et statistiques - visible seulement sur desktop */}
           <div className="d-none d-md-block">
             <FilterStatsBar
@@ -165,6 +192,25 @@ const MainContent = () => {
             margin-left: auto;
             margin-right: auto;
           }
+        }
+
+        /* Style personnalisé pour la scrollbar du sidebar */
+        .col-auto::-webkit-scrollbar {
+          width: 4px;
+        }
+
+        .col-auto::-webkit-scrollbar-track {
+          background: #f1f1f1;
+          border-radius: 10px;
+        }
+
+        .col-auto::-webkit-scrollbar-thumb {
+          background: ${colors.oskar.orange};
+          border-radius: 10px;
+        }
+
+        .col-auto::-webkit-scrollbar-thumb:hover {
+          background: ${colors.oskar.orange}cc;
         }
       `}</style>
     </main>

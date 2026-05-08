@@ -224,112 +224,176 @@ class ApiClient {
   /**
    * Gestion robuste des réponses HTTP avec retry
    */
-  private async handleResponse<T>(response: Response): Promise<T> {
-    const requestUrl = response.url;
-    const status = response.status;
-    const statusText = response.statusText;
+  // Dans api-client.ts - Modifier la méthode handleResponse
 
-    if (!this.isProduction) {
-      console.log("📥 API Response:", {
+private async handleResponse<T>(response: Response): Promise<T> {
+  const requestUrl = response.url;
+  const status = response.status;
+  const statusText = response.statusText;
+
+  if (!this.isProduction) {
+    console.log("📥 API Response:", {
+      url: requestUrl,
+      status,
+      statusText,
+      ok: response.ok,
+    });
+  }
+
+  // Gérer les réponses vides
+  if (status === 204 || response.headers.get("content-length") === "0") {
+    return {} as T;
+  }
+
+  let responseText = "";
+  try {
+    responseText = await response.text();
+  } catch (error) {
+    console.error("❌ Erreur lors de la lecture de la réponse:", error);
+    responseText = "";
+  }
+
+  if (response.ok) {
+    try {
+      if (responseText.trim() === "") {
+        return {} as T;
+      }
+      const data = JSON.parse(responseText);
+      return data as T;
+    } catch (error) {
+      console.warn("⚠️ Réponse JSON invalide mais statut OK:", {
         url: requestUrl,
         status,
-        statusText,
-        ok: response.ok,
+        preview: responseText.substring(0, 200),
       });
-    }
-
-    // Gérer les réponses vides
-    if (status === 204 || response.headers.get("content-length") === "0") {
       return {} as T;
     }
+  }
 
-    // Essayer de récupérer le texte de la réponse
-    let responseText = "";
-    try {
-      responseText = await response.text();
-    } catch (error) {
-      console.error("❌ Erreur lors de la lecture de la réponse:", error);
-      responseText = "";
-    }
+  let errorMessage = `Erreur ${status}: ${statusText}`;
+  let errorData: any = { message: errorMessage };
 
-    // IMPORTANT: Si c'est un succès (200-299), traiter comme un succès
-    if (response.ok) {
-      try {
-        if (responseText.trim() === "") {
-          return {} as T;
-        }
-        const data = JSON.parse(responseText);
-
-        // Vérifier la structure standard de l'API
-        if (data && typeof data === "object") {
-          // Si l'API retourne un format standard {success, message, data}
-          if (data.success !== undefined) {
-            return data as T;
-          }
-          // Si l'API retourne directement les données
-          return data as T;
-        }
-
-        return {} as T;
-      } catch (error) {
-        console.warn("⚠️ Réponse JSON invalide mais statut OK:", {
-          url: requestUrl,
-          status,
-          preview: responseText.substring(0, 200),
-        });
-        return {} as T;
+  try {
+    if (responseText && responseText.trim()) {
+      if (responseText.trim().startsWith("{") || responseText.trim().startsWith("[")) {
+        errorData = JSON.parse(responseText);
+        errorMessage = errorData.message || errorData.error || errorMessage;
+      } else {
+        errorMessage = responseText;
       }
     }
+  } catch (parseError) {
+    console.warn("⚠️ Impossible de parser l'erreur:", parseError);
+  }
 
-    // GESTION DES ERREURS
-    let errorMessage = `Erreur ${status}: ${statusText}`;
-    let errorData: any = { message: errorMessage };
-
-    try {
-      if (responseText && responseText.trim()) {
-        if (
-          responseText.trim().startsWith("{") ||
-          responseText.trim().startsWith("[")
-        ) {
-          errorData = JSON.parse(responseText);
-          errorMessage = errorData.message || errorData.error || errorMessage;
-
-          // Messages spécifiques pour les erreurs communes
-          if (status === 404) {
-            errorMessage = `Ressource non trouvée: ${errorMessage}`;
-          } else if (status === 401) {
-            errorMessage = `Authentification requise: ${errorMessage}`;
-          } else if (status === 403) {
-            errorMessage = `Accès refusé: ${errorMessage}`;
-          } else if (status === 500) {
-            errorMessage = `Erreur serveur: ${errorMessage}`;
-          }
-        } else {
-          errorMessage = responseText;
-        }
-      }
-    } catch (parseError) {
-      console.warn("⚠️ Impossible de parser l'erreur:", parseError);
-    }
-
-    // Créer l'erreur personnalisée
+  // ✅ Pour les erreurs 401 sur les endpoints de profil, ne pas log d'erreur
+  const isProfileEndpoint = requestUrl.includes("/profile") || requestUrl.includes("/me");
+  const isAuthCheck = requestUrl.includes("/login") || requestUrl.includes("/register");
+  
+  if (status === 401 && (isProfileEndpoint || isAuthCheck)) {
+    // Silencieux - pas encore authentifié
     const error = new Error(errorMessage);
-    Object.assign(error, {
-      status,
-      data: errorData,
-      response,
-      url: requestUrl,
-      isApiError: true,
-    });
-
-    // Pour les erreurs 401, on log mais on ne déconnecte pas automatiquement
-    if (status === 401) {
-      console.warn("⚠️ Erreur 401 (Non authentifié) - URL:", requestUrl);
-      console.warn("Message:", errorMessage);
-    }
-
+    Object.assign(error, { status, data: errorData, response, url: requestUrl, isApiError: true });
     throw error;
   }
+
+  if (!this.isProduction) {
+    console.error("❌ API Request failed:", {
+      endpoint: requestUrl,
+      status,
+      message: errorMessage,
+    });
+  }
+
+  const error = new Error(errorMessage);
+  Object.assign(error, {
+    status,
+    data: errorData,
+    response,
+    url: requestUrl,
+    isApiError: true,
+  });
+
+  throw error;
+}
+
+  // Dans api-client.ts - Ajouter cette méthode
+
+async refreshAuthToken(): Promise<boolean> {
+  const refreshToken = localStorage.getItem("oskar_refresh_token");
+  if (!refreshToken) {
+    console.warn("⚠️ Pas de refresh token disponible");
+    return false;
+  }
+
+  try {
+    console.log("🔄 Tentative de refresh token...");
+    
+    // Déterminer l'endpoint selon le type d'utilisateur
+    const userType = this.getUserType();
+    let refreshEndpoint = "";
+    
+    switch(userType) {
+      case "utilisateur":
+        refreshEndpoint = "/auth/utilisateur/refresh-token";
+        break;
+      case "vendeur":
+        refreshEndpoint = "/auth/vendeur/refresh-token";
+        break;
+      case "agent":
+        refreshEndpoint = "/auth/agent/refresh-token";
+        break;
+      case "admin":
+        refreshEndpoint = "/auth/admin/refresh-token";
+        break;
+      default:
+        return false;
+    }
+    
+    const response = await this.post(refreshEndpoint, { refreshToken });
+    
+    if (response.status === "success" && response.data?.token) {
+      const { token, refreshToken: newRefreshToken, user } = response.data;
+      
+      // Mettre à jour les tokens
+      localStorage.setItem("oskar_token", token);
+      localStorage.setItem("temp_token", token);
+      localStorage.setItem("tempToken", token);
+      localStorage.setItem("token", token);
+      
+      if (newRefreshToken) {
+        localStorage.setItem("oskar_refresh_token", newRefreshToken);
+      }
+      
+      if (user) {
+        localStorage.setItem("oskar_user", JSON.stringify(user));
+      }
+      
+      console.log("✅ Token rafraîchi avec succès");
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error("❌ Erreur lors du refresh token:", error);
+    return false;
+  }
+}
+/**
+ * Attend que l'authentification soit prête
+ */
+async waitForAuth(maxRetries = 10, delay = 500): Promise<boolean> {
+  for (let i = 0; i < maxRetries; i++) {
+    const token = this.getAuthToken();
+    if (token) {
+      console.log("✅ Authentification prête après", i + 1, "tentatives");
+      return true;
+    }
+    await new Promise(resolve => setTimeout(resolve, delay));
+  }
+  console.warn("⚠️ Timeout: Authentification non trouvée");
+  return false;
+}
 
   private clearAuthTokens(): void {
     if (typeof window === "undefined") return;

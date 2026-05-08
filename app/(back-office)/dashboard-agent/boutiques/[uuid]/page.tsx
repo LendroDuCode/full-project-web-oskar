@@ -1669,7 +1669,7 @@ const BoutiqueDetail: React.FC = () => {
                           ? "Aucun produit ne correspond à votre recherche."
                           : "Cette boutique n'a pas encore de produits."}
                       </p>
-                      <Button
+                      {/* <Button
                         variant="primary"
                         size="lg"
                         className="px-5 rounded-3"
@@ -1681,7 +1681,7 @@ const BoutiqueDetail: React.FC = () => {
                       >
                         <FaPlusCircle className="me-2" />
                         Ajouter un produit
-                      </Button>
+                      </Button> */}
                     </div>
                   ) : (
                     <>

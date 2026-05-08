@@ -23,7 +23,7 @@ export default function SidebarSuperAdmin({
   const [windowWidth, setWindowWidth] = useState(0);
   const sidebarRef = useRef<HTMLElement>(null);
   const [openMenus, setOpenMenus] = useState({
-    users: true, // Ouvert par défaut pour meilleure UX
+    users: true,
     sellers: false,
     agents: false,
     categories: false,
@@ -40,10 +40,16 @@ export default function SidebarSuperAdmin({
   useEffect(() => {
     const handleResize = () => {
       setWindowWidth(window.innerWidth);
+      
+      // Mettre à jour la variable CSS pour la largeur de la sidebar
+      const sidebarWidth = getSidebarWidth();
+      document.documentElement.style.setProperty('--sidebar-width', sidebarWidth);
 
       // Auto-collapse sur tablette
       if (window.innerWidth < 1200 && window.innerWidth >= 768) {
         setIsCollapsed(true);
+      } else if (window.innerWidth >= 1200) {
+        setIsCollapsed(false);
       }
 
       // Fermer le menu mobile sur passage en desktop
@@ -56,6 +62,12 @@ export default function SidebarSuperAdmin({
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  // Mettre à jour la variable CSS quand isCollapsed change
+  useEffect(() => {
+    const sidebarWidth = getSidebarWidth();
+    document.documentElement.style.setProperty('--sidebar-width', sidebarWidth);
+  }, [isCollapsed, windowWidth]);
 
   // Breakpoints
   const isMobile = windowWidth < 768;
@@ -352,14 +364,14 @@ export default function SidebarSuperAdmin({
     return pathname === href || pathname.startsWith(href + "/");
   };
 
-  // Calculer la largeur de la sidebar
+  // Calculer la largeur de la sidebar - RÉDUCTION LÉGÈRE (-20px maximum)
   const getSidebarWidth = () => {
     if (isMobile) return "100%";
-    if (isCollapsed) return isTablet ? "70px" : "80px";
-    if (isLargeDesktop) return "360px";
-    if (isDesktop) return "320px";
-    if (isTablet) return "280px";
-    return "260px";
+    if (isCollapsed) return isTablet ? "75px" : "80px";
+    if (isLargeDesktop) return "300px";  // 320 → 300 (-20)
+    if (isDesktop) return "270px";       // 280 → 270 (-10)
+    if (isTablet) return "250px";        // 260 → 250 (-10)
+    return "250px";
   };
 
   return (
@@ -403,24 +415,27 @@ export default function SidebarSuperAdmin({
       <aside
         ref={sidebarRef}
         id="sidebar"
-        className={`d-flex flex-column text-white position-${isMobile ? "fixed" : "sticky"} top-0`}
+        className="d-flex flex-column text-white"
         style={{
           width: getSidebarWidth(),
-          minHeight: "100vh",
+          height: "100vh",
+          position: "fixed",
+          top: 0,
+          left: isMobile ? (isMobileOpen ? 0 : "-100%") : 0,
           backgroundColor: "#1f2937",
           zIndex: 1050,
-          left: isMobile ? (isMobileOpen ? 0 : "-100%") : 0,
           transition: "width 0.3s ease, left 0.3s ease",
-          boxShadow:
-            isMobile && isMobileOpen ? "4px 0 20px rgba(0,0,0,0.3)" : "none",
+          boxShadow: isMobile && isMobileOpen ? "4px 0 20px rgba(0,0,0,0.3)" : "none",
+          overflowY: "auto",
+          overflowX: "hidden",
         }}
       >
-        {/* Header */}
+        {/* Header - paddings légèrement réduits */}
         <div
-          className={`p-${isMobile ? "3" : "4"} border-bottom border-secondary`}
+          className={`p-${isMobile ? "3" : "3"} border-bottom border-secondary flex-shrink-0`}
         >
           <div className="d-flex align-items-center justify-content-between">
-            <div className="d-flex align-items-center gap-3 gap-lg-4">
+            <div className="d-flex align-items-center gap-2 gap-lg-3">
               <button
                 onClick={handleLogoClick}
                 className="btn p-0 border-0 bg-transparent"
@@ -443,20 +458,20 @@ export default function SidebarSuperAdmin({
                         ? "40px"
                         : isMobile
                           ? "44px"
-                          : "48px",
+                          : "46px",
                     height:
                       isCollapsed && !isMobile
                         ? "40px"
                         : isMobile
                           ? "44px"
-                          : "48px",
+                          : "46px",
                     backgroundColor: "#16a34a",
                     fontSize:
                       isCollapsed && !isMobile
                         ? "1.1rem"
                         : isMobile
                           ? "1.2rem"
-                          : "1.3rem",
+                          : "1.25rem",
                     fontWeight: "bold",
                     cursor: "pointer",
                     boxShadow: "0 2px 8px rgba(22, 163, 74, 0.3)",
@@ -470,13 +485,13 @@ export default function SidebarSuperAdmin({
                 <div>
                   <h5
                     className="fw-bold mb-0"
-                    style={{ fontSize: isTablet ? "1rem" : "1.2rem" }}
+                    style={{ fontSize: isTablet ? "0.95rem" : "1.1rem" }}
                   >
                     Super Admin
                   </h5>
                   <small
                     className="text-secondary"
-                    style={{ fontSize: isTablet ? "0.7rem" : "0.8rem" }}
+                    style={{ fontSize: isTablet ? "0.7rem" : "0.75rem" }}
                   >
                     Plateforme OSKAR
                   </small>
@@ -484,12 +499,12 @@ export default function SidebarSuperAdmin({
               )}
               {isMobile && !isCollapsed && (
                 <div>
-                  <h5 className="fw-bold mb-0" style={{ fontSize: "1.1rem" }}>
+                  <h5 className="fw-bold mb-0" style={{ fontSize: "1.05rem" }}>
                     Super Admin
                   </h5>
                   <small
                     className="text-secondary"
-                    style={{ fontSize: "0.75rem" }}
+                    style={{ fontSize: "0.7rem" }}
                   >
                     Plateforme OSKAR
                   </small>
@@ -504,9 +519,9 @@ export default function SidebarSuperAdmin({
                   isCollapsed ? "Étendre la sidebar" : "Réduire la sidebar"
                 }
                 style={{
-                  width: "32px",
-                  height: "32px",
-                  borderRadius: "8px",
+                  width: "30px",
+                  height: "30px",
+                  borderRadius: "6px",
                   transition: "all 0.2s ease",
                 }}
                 onMouseEnter={(e) => {
@@ -520,7 +535,7 @@ export default function SidebarSuperAdmin({
               >
                 <i
                   className={`fa-solid fa-chevron-${isCollapsed ? "right" : "left"}`}
-                  style={{ fontSize: isTablet ? "0.8rem" : "0.9rem" }}
+                  style={{ fontSize: isTablet ? "0.75rem" : "0.85rem" }}
                 ></i>
               </button>
             )}
@@ -529,19 +544,20 @@ export default function SidebarSuperAdmin({
 
         {/* Navigation principale */}
         <div
-          className="flex-grow-1 overflow-y-auto"
+          className="flex-grow-1"
           style={{
-            maxHeight: isMobile ? "calc(100vh - 180px)" : "calc(100vh - 220px)",
+            overflowY: "auto",
+            overflowX: "hidden",
           }}
         >
-          <div className={`p-${isMobile ? "3" : "4"}`}>
-            <div className="d-flex flex-column gap-2">
+          <div className={`p-${isMobile ? "3" : "3"}`}>
+            <div className="d-flex flex-column gap-1">
               {/* Navigation de base */}
               {navItems.map((item) => (
                 <Link
                   key={item.id}
                   href={item.href}
-                  className={`text-decoration-none d-flex align-items-center gap-${isCollapsed ? "3" : "4"} px-${isCollapsed ? "2" : "4"} py-${isMobile ? "2" : "3"} rounded ${isNavActive(item.id) ? "bg-success text-white active-nav" : "text-white hover:bg-gray-700"}`}
+                  className={`text-decoration-none d-flex align-items-center gap-${isCollapsed ? "2" : "3"} px-${isCollapsed ? "2" : "3"} py-${isMobile ? "2" : "2.5"} rounded ${isNavActive(item.id) ? "bg-success text-white active-nav" : "text-white hover-bg-gray-700"}`}
                   style={{
                     color: isNavActive(item.id) ? "white" : "#d1d5db",
                     backgroundColor: isNavActive(item.id)
@@ -550,8 +566,8 @@ export default function SidebarSuperAdmin({
                     fontSize: isCollapsed
                       ? "0.8rem"
                       : isMobile
-                        ? "0.9rem"
-                        : "0.95rem",
+                        ? "0.85rem"
+                        : "0.9rem",
                     transition: "all 0.2s ease",
                     justifyContent: isCollapsed ? "center" : "flex-start",
                   }}
@@ -576,9 +592,9 @@ export default function SidebarSuperAdmin({
                   <i
                     className={`fa-solid ${item.icon}`}
                     style={{
-                      width: isCollapsed ? "auto" : "24px",
+                      width: isCollapsed ? "auto" : "22px",
                       textAlign: "center",
-                      fontSize: isCollapsed ? "1.1rem" : "1rem",
+                      fontSize: isCollapsed ? "1rem" : "0.95rem",
                       color: isNavActive(item.id) ? "white" : "inherit",
                     }}
                   ></i>
@@ -591,8 +607,8 @@ export default function SidebarSuperAdmin({
                         <span
                           className={`badge ${item.badge} rounded-pill ${isNavActive(item.id) ? "bg-white text-dark" : ""}`}
                           style={{
-                            fontSize: "0.75rem",
-                            padding: "0.25rem 0.5rem",
+                            fontSize: "0.7rem",
+                            padding: "0.2rem 0.45rem",
                           }}
                         >
                           {item.badge}
@@ -604,8 +620,8 @@ export default function SidebarSuperAdmin({
                     <span
                       className="position-absolute top-0 start-100 translate-middle badge rounded-pill"
                       style={{
-                        fontSize: "0.6rem",
-                        padding: "0.2rem 0.35rem",
+                        fontSize: "0.55rem",
+                        padding: "0.15rem 0.3rem",
                       }}
                     >
                       {typeof item.badge === "number" && item.badge > 9
@@ -619,12 +635,12 @@ export default function SidebarSuperAdmin({
               {/* Séparateur */}
               {!isCollapsed && (
                 <div
-                  className={`my-${isMobile ? "3" : "4"} px-${isMobile ? "3" : "4"}`}
+                  className={`my-${isMobile ? "2" : "3"} px-${isMobile ? "2" : "3"}`}
                 >
                   <div
                     className="text-secondary text-uppercase fw-bold"
                     style={{
-                      fontSize: isMobile ? "0.75rem" : "0.85rem",
+                      fontSize: isMobile ? "0.7rem" : "0.75rem",
                       letterSpacing: "0.5px",
                     }}
                   >
@@ -641,18 +657,18 @@ export default function SidebarSuperAdmin({
                 );
 
                 return (
-                  <div key={item.id} className={!isCollapsed ? "mt-2" : ""}>
+                  <div key={item.id} className={!isCollapsed ? "mt-1" : ""}>
                     {!isCollapsed ? (
                       <>
                         <div
-                          className={`d-flex align-items-center justify-content-between px-${isMobile ? "3" : "4"} py-${isMobile ? "2" : "3"} rounded cursor-pointer ${isMenuActive || hasActiveSubmenu ? "bg-gray-800 text-white" : ""}`}
+                          className={`d-flex align-items-center justify-content-between px-${isMobile ? "2" : "3"} py-${isMobile ? "2" : "2.5"} rounded cursor-pointer ${isMenuActive || hasActiveSubmenu ? "bg-gray-800 text-white" : ""}`}
                           style={{
                             color:
                               isMenuActive || hasActiveSubmenu
                                 ? "white"
                                 : "#d1d5db",
                             cursor: "pointer",
-                            fontSize: isMobile ? "0.9rem" : "0.95rem",
+                            fontSize: isMobile ? "0.85rem" : "0.9rem",
                             transition: "all 0.2s ease",
                             backgroundColor:
                               isMenuActive || hasActiveSubmenu
@@ -679,13 +695,13 @@ export default function SidebarSuperAdmin({
                             }
                           }}
                         >
-                          <div className="d-flex align-items-center gap-3 gap-lg-4">
+                          <div className="d-flex align-items-center gap-2 gap-lg-3">
                             <i
                               className={`fa-solid ${item.icon}`}
                               style={{
-                                width: "24px",
+                                width: "22px",
                                 textAlign: "center",
-                                fontSize: isMobile ? "0.9rem" : "1rem",
+                                fontSize: isMobile ? "0.85rem" : "0.95rem",
                                 color:
                                   isMenuActive || hasActiveSubmenu
                                     ? "white"
@@ -701,7 +717,7 @@ export default function SidebarSuperAdmin({
                           <i
                             className={`fa-solid fa-chevron-${openMenus[item.id as keyof typeof openMenus] ? "up" : "down"}`}
                             style={{
-                              fontSize: isMobile ? "0.75rem" : "0.85rem",
+                              fontSize: isMobile ? "0.7rem" : "0.75rem",
                             }}
                           ></i>
                         </div>
@@ -709,7 +725,7 @@ export default function SidebarSuperAdmin({
                         {(openMenus[item.id as keyof typeof openMenus] ||
                           hasActiveSubmenu) && (
                           <div
-                            className={`mt-2 ms-${isMobile ? "4" : "5"} ps-${isMobile ? "2" : "3"} border-start border-secondary`}
+                            className={`mt-1 ms-${isMobile ? "3" : "4"} ps-${isMobile ? "2" : "2"} border-start border-secondary`}
                           >
                             {item.submenu.map((subItem) => {
                               const isSubItemActive = isSubmenuActive(
@@ -720,12 +736,12 @@ export default function SidebarSuperAdmin({
                                 <Link
                                   key={subItem.id}
                                   href={subItem.href}
-                                  className={`d-flex align-items-center gap-3 gap-lg-4 px-${isMobile ? "3" : "4"} py-${isMobile ? "2" : "2.5"} rounded text-decoration-none ${isSubItemActive ? "bg-gray-800 text-white" : ""}`}
+                                  className={`d-flex align-items-center gap-2 gap-lg-3 px-${isMobile ? "2" : "3"} py-${isMobile ? "2" : "2"} rounded text-decoration-none ${isSubItemActive ? "bg-gray-800 text-white" : ""}`}
                                   style={{
                                     color: isSubItemActive
                                       ? "white"
                                       : "#d1d5db",
-                                    fontSize: isMobile ? "0.85rem" : "0.9rem",
+                                    fontSize: isMobile ? "0.8rem" : "0.85rem",
                                     transition: "all 0.2s ease",
                                     backgroundColor: isSubItemActive
                                       ? "#4b5563"
@@ -756,8 +772,8 @@ export default function SidebarSuperAdmin({
                                   <i
                                     className={`fa-solid ${subItem.icon.split(" ")[0]}`}
                                     style={{
-                                      width: "20px",
-                                      fontSize: isMobile ? "0.8rem" : "0.9rem",
+                                      width: "18px",
+                                      fontSize: isMobile ? "0.75rem" : "0.85rem",
                                       color: subItem.icon.includes("text-")
                                         ? subItem.icon.split(" ")[1]
                                         : isSubItemActive
@@ -775,7 +791,7 @@ export default function SidebarSuperAdmin({
                                       <span className="ms-2">
                                         <i
                                           className="fas fa-circle text-success"
-                                          style={{ fontSize: "0.4rem" }}
+                                          style={{ fontSize: "0.35rem" }}
                                         ></i>
                                       </span>
                                     )}
@@ -789,9 +805,10 @@ export default function SidebarSuperAdmin({
                     ) : (
                       <Link
                         href={item.submenu[0].href}
-                        className={`text-decoration-none d-flex align-items-center justify-content-center gap-3 px-3 py-3 rounded ${isMenuActive ? "bg-success text-white" : ""}`}
+                        className={`text-decoration-none d-flex align-items-center justify-content-center gap-2 px-2 py-2 rounded ${isMenuActive ? "bg-success text-white" : ""}`}
                         style={{
                           color: isMenuActive ? "white" : "#d1d5db",
+                          transition: "all 0.2s ease",
                         }}
                         onClick={() => isMobile && setIsMobileOpen(false)}
                         onMouseEnter={(e) => {
@@ -826,12 +843,12 @@ export default function SidebarSuperAdmin({
               {/* Paramètres */}
               {!isCollapsed && (
                 <div
-                  className={`mt-${isMobile ? "4" : "5"} pt-${isMobile ? "3" : "4"} border-top border-secondary`}
+                  className={`mt-${isMobile ? "3" : "4"} pt-${isMobile ? "2" : "3"} border-top border-secondary`}
                 >
                   <div
-                    className="text-secondary text-uppercase fw-bold px-3 px-lg-4 mb-3"
+                    className="text-secondary text-uppercase fw-bold px-2 px-lg-3 mb-2"
                     style={{
-                      fontSize: isMobile ? "0.75rem" : "0.85rem",
+                      fontSize: isMobile ? "0.7rem" : "0.75rem",
                       letterSpacing: "0.5px",
                     }}
                   >
@@ -844,13 +861,13 @@ export default function SidebarSuperAdmin({
                       <Link
                         key={item.id}
                         href={item.href}
-                        className={`text-decoration-none d-flex align-items-center gap-3 gap-lg-4 px-3 px-lg-4 py-2 py-lg-3 rounded ${isItemActive ? "bg-success text-white" : "text-white hover:bg-gray-700"}`}
+                        className={`text-decoration-none d-flex align-items-center gap-2 gap-lg-3 px-2 px-lg-3 py-2 py-lg-2 rounded ${isItemActive ? "bg-success text-white" : "text-white hover-bg-gray-700"}`}
                         style={{
                           color: isItemActive ? "white" : "#d1d5db",
                           backgroundColor: isItemActive
                             ? "#16a34a"
                             : "transparent",
-                          fontSize: isMobile ? "0.9rem" : "0.95rem",
+                          fontSize: isMobile ? "0.85rem" : "0.9rem",
                           transition: "all 0.2s ease",
                         }}
                         onClick={() => isMobile && setIsMobileOpen(false)}
@@ -873,9 +890,9 @@ export default function SidebarSuperAdmin({
                         <i
                           className={`fa-solid ${item.icon}`}
                           style={{
-                            width: "24px",
+                            width: "22px",
                             textAlign: "center",
-                            fontSize: isMobile ? "0.9rem" : "1rem",
+                            fontSize: isMobile ? "0.85rem" : "0.95rem",
                             color: isItemActive ? "white" : "inherit",
                           }}
                         ></i>
@@ -887,7 +904,7 @@ export default function SidebarSuperAdmin({
                             <span className="ms-2">
                               <i
                                 className="fas fa-circle text-white"
-                                style={{ fontSize: "0.4rem" }}
+                                style={{ fontSize: "0.35rem" }}
                               ></i>
                             </span>
                           )}
@@ -900,24 +917,11 @@ export default function SidebarSuperAdmin({
             </div>
           </div>
         </div>
-
-    
       </aside>
 
       <style jsx>{`
-        .w-320 {
-          width: 320px;
-        }
-        .w-auto {
-          width: 80px;
-        }
         .cursor-pointer {
           cursor: pointer;
-        }
-        .overflow-y-auto {
-          overflow-y: auto;
-          scrollbar-width: thin;
-          scrollbar-color: #4b5563 #1f2937;
         }
         .text-truncate {
           overflow: hidden;
@@ -938,50 +942,33 @@ export default function SidebarSuperAdmin({
           left: 0;
           top: 50%;
           transform: translateY(-50%);
-          width: 4px;
-          height: 70%;
+          width: 3px;
+          height: 60%;
           background-color: #16a34a;
-          border-radius: 0 4px 4px 0;
+          border-radius: 0 3px 3px 0;
         }
 
         /* Scrollbar styling */
-        .overflow-y-auto::-webkit-scrollbar {
-          width: 6px;
+        #sidebar::-webkit-scrollbar {
+          width: 4px;
         }
 
-        .overflow-y-auto::-webkit-scrollbar-track {
+        #sidebar::-webkit-scrollbar-track {
           background: transparent;
         }
 
-        .overflow-y-auto::-webkit-scrollbar-thumb {
+        #sidebar::-webkit-scrollbar-thumb {
           background: #4b5563;
-          border-radius: 10px;
+          border-radius: 4px;
         }
 
-        .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+        #sidebar::-webkit-scrollbar-thumb:hover {
           background: #6b7280;
         }
 
-        /* Responsive breakpoints */
-        @media (max-width: 1600px) and (min-width: 1200px) {
-          .w-320 {
-            width: 300px;
-          }
-        }
-
-        @media (max-width: 1199px) and (min-width: 768px) {
-          .w-320 {
-            width: 280px;
-          }
-          .w-auto {
-            width: 70px;
-          }
-        }
-
-        @media (max-width: 767px) {
-          .position-fixed {
-            position: fixed !important;
-          }
+        /* Hover effects */
+        .hover-bg-gray-700:hover {
+          background-color: #374151 !important;
         }
 
         /* Animations */

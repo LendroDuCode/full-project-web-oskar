@@ -303,6 +303,24 @@ const Header: FC = () => {
           setLoadingProfile(true);
           console.log("🟡 Header - Fetching full profile from API...");
 
+          // ✅ Attendre un peu que le token soit bien sauvegardé
+          await new Promise(resolve => setTimeout(resolve, 500));
+
+          // ✅ Vérifier si un token existe avant d'appeler l'API
+          const token = localStorage.getItem("oskar_token") || localStorage.getItem("temp_token");
+          if (!token) {
+            console.log("🔴 Header - No token found, skipping profile fetch");
+            setLoadingProfile(false);
+            return;
+          }
+
+          // ✅ Vérifier que l'utilisateur est toujours connecté
+          if (!user || !user.type) {
+            console.log("🔴 Header - No user in context, skipping profile fetch");
+            setLoadingProfile(false);
+            return;
+          }
+
           let endpoint = "";
           switch (user.type) {
             case "admin":
@@ -317,87 +335,31 @@ const Header: FC = () => {
             case "utilisateur":
               endpoint = API_ENDPOINTS.AUTH.UTILISATEUR.PROFILE;
               break;
+            default:
+              console.log("🔴 Header - Unknown user type, skipping profile fetch");
+              setLoadingProfile(false);
+              return;
           }
 
           if (endpoint) {
-            const response = await api.get(endpoint);
-            console.log("🟢 Header - Full profile API response:", response);
-
-            let fullProfile: UserProfile;
-
-            switch (user.type) {
-              case "admin":
-                fullProfile = {
-                  uuid: response.data?.uuid || user.uuid || "",
-                  email: response.data?.email || user.email || "",
-                  nom: response.data?.nom || user.nom || "",
-                  avatar: response.data?.avatar || user.avatar || null,
-                  avatar_key:
-                    response.data?.avatar_key || (user as any).avatar_key,
-                  type: "admin",
-                  role: response.data?.role || user.role || "admin",
-                  isSuperAdmin: response.data?.isSuperAdmin || false,
-                  nom_complet:
-                    response.data?.nom_complet || user.nom_complet || "",
-                };
-                break;
-
-              case "agent":
-                fullProfile = {
-                  uuid: response.data?.uuid || user.uuid || "",
-                  email: response.data?.email || user.email || "",
-                  nom: response.data?.nom || user.nom || "",
-                  prenoms: response.data?.prenoms || user.prenoms || "",
-                  avatar: response.data?.avatar || user.avatar || null,
-                  avatar_key:
-                    response.data?.avatar_key || (user as any).avatar_key,
-                  type: "agent",
-                  est_bloque: response.data?.est_bloque || false,
-                };
-                break;
-
-              case "vendeur":
-                fullProfile = {
-                  uuid: response.data?.uuid || user.uuid || "",
-                  email: response.data?.email || user.email || "",
-                  nom: response.data?.nom || user.nom || "",
-                  prenoms: response.data?.prenoms || user.prenoms || "",
-                  avatar: response.data?.avatar || user.avatar || null,
-                  avatar_key:
-                    response.data?.avatar_key || (user as any).avatar_key,
-                  type: "vendeur",
-                  est_bloque: response.data?.est_bloque || false,
-                  civilite: response.data?.civilité || user.civilite,
-                };
-                break;
-
-              case "utilisateur":
-                fullProfile = {
-                  uuid: response.data?.uuid || user.uuid || "",
-                  email: response.data?.email || user.email || "",
-                  nom: response.data?.nom || user.nom || "",
-                  prenoms: response.data?.prenoms || user.prenoms || "",
-                  avatar: response.data?.avatar || user.avatar || null,
-                  avatar_key:
-                    response.data?.avatar_key || (user as any).avatar_key,
-                  type: "utilisateur",
-                  est_bloque: response.data?.est_bloque || false,
-                  civilite: response.data?.civilite || user.civilite,
-                };
-                break;
-
-              default:
-                fullProfile = immediateProfile;
+            try {
+              const response = await api.get(endpoint);
+              console.log("🟢 Header - Full profile API response:", response);
+              
+              if (response && response.data) {
+                setUserProfile(prev => ({ ...prev, ...response.data }));
+              }
+            } catch (apiError: any) {
+              // ✅ Ignorer les erreurs 401 silencieusement (pas encore authentifié)
+              if (apiError?.status === 401) {
+                console.log("🔴 Header - Not authenticated yet (401), skipping profile fetch");
+                return;
+              }
+              console.error("🔴 Header - API error:", apiError?.message);
             }
-
-            console.log("🟢 Header - Setting full profile data:", fullProfile);
-            setUserProfile(fullProfile);
           }
         } catch (error) {
-          console.error(
-            "🔴 Header - Error fetching full profile, keeping context data",
-            error,
-          );
+          console.error("🔴 Header - Error fetching full profile, keeping context data", error);
         } finally {
           setLoadingProfile(false);
         }
@@ -887,138 +849,146 @@ const Header: FC = () => {
             </div>
 
             {/* Navigation Desktop - Visible uniquement sur desktop (d-lg-block) */}
-            <div className="flex-grow-1 mx-3 mx-xl-4 position-relative d-none d-lg-block">
-              <nav
-                className="d-flex align-items-center justify-content-center"
+            {/* Navigation Desktop - Visible uniquement sur desktop (d-lg-block) */}
+<div className="flex-grow-1 mx-3 mx-xl-4 position-relative d-none d-lg-block">
+  <nav
+    className="d-flex align-items-center justify-content-start"
+    style={{
+      flexWrap: "nowrap",  // ← FORCER à ne pas passer à la ligne
+      gap: "var(--gap-nav, 1rem)",
+      overflowX: "auto",   // ← Ajouter scroll si nécessaire
+      overflowY: "hidden",
+      whiteSpace: "nowrap",
+      WebkitOverflowScrolling: "touch",
+      scrollbarWidth: "thin",  // ← Scrollbar fine
+      paddingBottom: "4px",    // ← Espace pour la scrollbar
+    }}
+  >
+    {loadingCategories ? (
+      <div className="d-flex align-items-center gap-3 flex-nowrap">
+        <div className="skeleton-loader" style={{ width: "80px", height: "20px", flexShrink: 0 }}></div>
+        <div className="skeleton-loader" style={{ width: "100px", height: "20px", flexShrink: 0 }}></div>
+        <div className="skeleton-loader" style={{ width: "70px", height: "20px", flexShrink: 0 }}></div>
+        <div className="skeleton-loader" style={{ width: "90px", height: "20px", flexShrink: 0 }}></div>
+      </div>
+    ) : (
+      navLinks.map((link, index) => (
+        <div
+          key={`${link.name}-${index}`}
+          className="position-relative flex-shrink-0"
+          ref={(el) => {
+            if (link.hasChildren && link.name) {
+              categoriesDropdownRef.current[link.name] = el;
+            }
+          }}
+        >
+          <Link
+            href={link.href}
+            className="text-decoration-none position-relative d-flex align-items-center nav-link"
+            style={{
+              transition: "color 0.3s",
+              color: getLinkColor(link),
+              fontWeight: isLinkActive(link) ? "600" : "500",
+              fontSize: "var(--font-size-nav, 0.85rem)",
+              whiteSpace: "nowrap",
+              padding: "var(--padding-nav, 0.6rem 0)",
+            }}
+            onMouseEnter={() => {
+              if (link.hasChildren) {
+                setCategoriesDropdownOpen(link.name);
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (
+                link.hasChildren &&
+                !categoriesDropdownRef.current[
+                  link.name
+                ]?.contains(e.relatedTarget as Node)
+              ) {
+                setCategoriesDropdownOpen(null);
+              }
+            }}
+          >
+            {link.name}
+            {link.hasChildren && (
+              <i
+                className="fa-solid fa-chevron-down ms-1"
+                style={{ fontSize: "var(--font-size-icon-small, 0.65rem)" }}
+              ></i>
+            )}
+            {isLinkActive(link) && !link.hasChildren && (
+              <div
                 style={{
-                  flexWrap: "nowrap",
-                  gap: "var(--gap-nav, 0.35rem)",
+                  position: "absolute",
+                  bottom: "-4px",
+                  left: "0",
+                  width: "100%",
+                  height: "2px",
+                  backgroundColor: colors.oskar.green,
+                  borderRadius: "2px",
                 }}
-              >
-                {loadingCategories ? (
-                  <div className="d-flex align-items-center gap-2 flex-nowrap">
-                    <div className="skeleton-loader" style={{ width: "50px", height: "18px", flexShrink: 0 }}></div>
-                    <div className="skeleton-loader" style={{ width: "70px", height: "18px", flexShrink: 0 }}></div>
-                    <div className="skeleton-loader" style={{ width: "45px", height: "18px", flexShrink: 0 }}></div>
-                  </div>
-                ) : (
-                  navLinks.map((link, index) => (
-                    <div
-                      key={`${link.name}-${index}`}
-                      className="position-relative flex-shrink-0"
-                      ref={(el) => {
-                        if (link.hasChildren && link.name) {
-                          categoriesDropdownRef.current[link.name] = el;
-                        }
-                      }}
-                    >
-                      <Link
-                        href={link.href}
-                        className="text-decoration-none position-relative d-flex align-items-center nav-link"
-                        style={{
-                          transition: "color 0.3s",
-                          color: getLinkColor(link),
-                          fontWeight: isLinkActive(link) ? "600" : "400",
-                          fontSize: "var(--font-size-nav, 0.75rem)",
-                          whiteSpace: "nowrap",
-                          padding: "var(--padding-nav, 0.4rem 0)",
-                        }}
-                        onMouseEnter={() => {
-                          if (link.hasChildren) {
-                            setCategoriesDropdownOpen(link.name);
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (
-                            link.hasChildren &&
-                            !categoriesDropdownRef.current[
-                              link.name
-                            ]?.contains(e.relatedTarget as Node)
-                          ) {
-                            setCategoriesDropdownOpen(null);
-                          }
-                        }}
-                      >
-                        {link.name}
-                        {link.hasChildren && (
-                          <i
-                            className="fa-solid fa-chevron-down ms-1"
-                            style={{ fontSize: "var(--font-size-icon-small, 0.55rem)" }}
-                          ></i>
-                        )}
-                        {isLinkActive(link) && !link.hasChildren && (
-                          <div
-                            style={{
-                              position: "absolute",
-                              bottom: "-4px",
-                              left: "0",
-                              width: "100%",
-                              height: "2px",
-                              backgroundColor: colors.oskar.green,
-                              borderRadius: "2px",
-                            }}
-                          />
-                        )}
-                      </Link>
+              />
+            )}
+          </Link>
 
-                      {link.hasChildren &&
-                        link.children &&
-                        categoriesDropdownOpen === link.name && (
-                          <div
-                            className="dropdown-menu shadow border-0 show position-absolute"
-                            style={{
-                              minWidth: "180px",
-                              marginTop: "0",
-                              top: "100%",
-                              left: "0",
-                              zIndex: 1001,
-                              borderRadius: "6px",
-                              padding: "0.4rem 0",
-                            }}
-                            onMouseEnter={() =>
-                              setCategoriesDropdownOpen(link.name)
-                            }
-                            onMouseLeave={() =>
-                              setCategoriesDropdownOpen(null)
-                            }
-                          >
-                            {link.children.map((child, childIndex) => (
-                              <Link
-                                key={`${child.name}-${childIndex}`}
-                                href={child.href}
-                                className="dropdown-item py-2 px-3"
-                                style={{
-                                  fontSize: "var(--font-size-dropdown, 0.8rem)",
-                                  color: colors.oskar.grey,
-                                  transition: "all 0.2s",
-                                  minHeight: "36px",
-                                }}
-                                onClick={() =>
-                                  setCategoriesDropdownOpen(null)
-                                }
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.color =
-                                    colors.oskar.green;
-                                  e.currentTarget.style.backgroundColor =
-                                    "#f8f9fa";
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.color =
-                                    colors.oskar.grey;
-                                  e.currentTarget.style.backgroundColor =
-                                    "transparent";
-                                }}
-                              >
-                                {child.name}
-                              </Link>
-                            ))}
-                          </div>
-                        )}
-                    </div>
-                  ))
-                )}
-              </nav>
-            </div>
+          {link.hasChildren &&
+            link.children &&
+            categoriesDropdownOpen === link.name && (
+              <div
+                className="dropdown-menu shadow border-0 show position-absolute"
+                style={{
+                  minWidth: "220px",
+                  marginTop: "0.5rem",
+                  top: "100%",
+                  left: "0",
+                  zIndex: 1001,
+                  borderRadius: "8px",
+                  padding: "0.5rem 0",
+                }}
+                onMouseEnter={() =>
+                  setCategoriesDropdownOpen(link.name)
+                }
+                onMouseLeave={() =>
+                  setCategoriesDropdownOpen(null)
+                }
+              >
+                {link.children.map((child, childIndex) => (
+                  <Link
+                    key={`${child.name}-${childIndex}`}
+                    href={child.href}
+                    className="dropdown-item py-2 px-3"
+                    style={{
+                      fontSize: "var(--font-size-dropdown, 0.85rem)",
+                      color: colors.oskar.grey,
+                      transition: "all 0.2s",
+                      minHeight: "42px",
+                    }}
+                    onClick={() =>
+                      setCategoriesDropdownOpen(null)
+                    }
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color =
+                        colors.oskar.green;
+                      e.currentTarget.style.backgroundColor =
+                        "#f8f9fa";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color =
+                        colors.oskar.grey;
+                      e.currentTarget.style.backgroundColor =
+                        "transparent";
+                    }}
+                  >
+                    {child.name}
+                  </Link>
+                ))}
+              </div>
+            )}
+        </div>
+      ))
+    )}
+  </nav>
+</div>
 
             {/* Actions Desktop - Visible uniquement sur desktop (d-none d-lg-flex) */}
             <div className="d-none d-lg-flex align-items-center flex-shrink-0 action-buttons">
@@ -1208,7 +1178,7 @@ const Header: FC = () => {
                       style={{
                         minWidth: "clamp(220px, 18vw, 260px)",
                         maxWidth: "320px",
-                        marginTop: "0.4rem",
+                        marginTop: "0.5rem",
                       }}
                     >
                       <div className="p-3 border-bottom">
@@ -1242,7 +1212,7 @@ const Header: FC = () => {
                           <div className="flex-grow-1 min-w-0">
                             <h6
                               className="fw-bold mb-0 text-truncate"
-                              style={{ fontSize: "0.8rem" }}
+                              style={{ fontSize: "0.85rem" }}
                               title={getUserFullName()}
                             >
                               {getUserFullName()}
@@ -1258,7 +1228,7 @@ const Header: FC = () => {
                             )}
                             <small
                               className="text-muted d-block"
-                              style={{ fontSize: "0.6rem" }}
+                              style={{ fontSize: "0.65rem" }}
                             >
                               {getUserTypeToDisplay() === "admin" &&
                                 "Administrateur"}
@@ -1280,8 +1250,8 @@ const Header: FC = () => {
                           className="dropdown-item d-flex align-items-center py-2 px-3"
                           onClick={() => setDropdownOpen(false)}
                           style={{
-                            fontSize: "0.8rem",
-                            minHeight: "36px",
+                            fontSize: "0.85rem",
+                            minHeight: "40px",
                           }}
                         >
                           <i
@@ -1296,8 +1266,8 @@ const Header: FC = () => {
                           className="dropdown-item d-flex align-items-center py-2 px-3"
                           onClick={() => setDropdownOpen(false)}
                           style={{
-                            fontSize: "0.8rem",
-                            minHeight: "36px",
+                            fontSize: "0.85rem",
+                            minHeight: "40px",
                           }}
                         >
                           <i
@@ -1314,8 +1284,8 @@ const Header: FC = () => {
                             className="dropdown-item d-flex align-items-center py-2 px-3"
                             onClick={() => setDropdownOpen(false)}
                             style={{
-                              fontSize: "0.8rem",
-                              minHeight: "36px",
+                              fontSize: "0.85rem",
+                              minHeight: "40px",
                             }}
                           >
                             <i
@@ -1331,8 +1301,8 @@ const Header: FC = () => {
                           className="dropdown-item d-flex align-items-center py-2 px-3"
                           onClick={() => setDropdownOpen(false)}
                           style={{
-                            fontSize: "0.8rem",
-                            minHeight: "36px",
+                            fontSize: "0.85rem",
+                            minHeight: "40px",
                           }}
                         >
                           <i
@@ -1348,8 +1318,8 @@ const Header: FC = () => {
                           onClick={handleLogout}
                           type="button"
                           style={{
-                            fontSize: "0.8rem",
-                            minHeight: "36px",
+                            fontSize: "0.85rem",
+                            minHeight: "40px",
                           }}
                         >
                           <i
@@ -1398,14 +1368,14 @@ const Header: FC = () => {
                       ? colors.oskar.greenHover
                       : colors.oskar.green,
                   color: "white",
-                  padding: "var(--padding-button, 0.4rem 1rem)",
+                  padding: "var(--padding-button, 0.5rem 1.2rem)",
                   fontWeight: 600,
-                  borderRadius: "6px",
+                  borderRadius: "8px",
                   border: "none",
                   transition: "background-color 0.3s",
-                  fontSize: "var(--font-size-button, 0.75rem)",
+                  fontSize: "var(--font-size-button, 0.8rem)",
                   whiteSpace: "nowrap",
-                  minHeight: "var(--size-button, 34px)",
+                  minHeight: "var(--size-button, 36px)",
                 }}
                 onMouseEnter={() => setHoveredButton("publish")}
                 onMouseLeave={() => setHoveredButton(null)}
@@ -1413,7 +1383,7 @@ const Header: FC = () => {
                 onClick={handlePublishClick}
                 type="button"
               >
-                <i className="fa-solid fa-plus me-2" style={{ fontSize: "var(--font-size-icon-small, 0.7rem)" }}></i>
+                <i className="fa-solid fa-plus me-2" style={{ fontSize: "var(--font-size-icon-small, 0.75rem)" }}></i>
                 <span>Publier</span>
               </button>
             </div>
@@ -1489,7 +1459,7 @@ const Header: FC = () => {
               <Link href={isLoggedIn ? getUserMessagesUrl() : "#"} onClick={() => !isLoggedIn && handleLoginClick()}>
                 <div className="d-flex flex-column align-items-center" style={{ color: colors.oskar.grey }}>
                   <i className="fa-solid fa-envelope" style={{ fontSize: "1.2rem" }}></i>
-                  <small style={{ fontSize: "0.6rem" }}>Messages</small>
+                  <small style={{ fontSize: "0.65rem" }}>Messages</small>
                 </div>
               </Link>
 
@@ -1497,7 +1467,7 @@ const Header: FC = () => {
               <Link href="/contact" onClick={() => setMobileMenuOpen(false)}>
                 <div className="d-flex flex-column align-items-center" style={{ color: colors.oskar.grey }}>
                   <i className="fa-solid fa-phone" style={{ fontSize: "1.2rem" }}></i>
-                  <small style={{ fontSize: "0.6rem" }}>Contact</small>
+                  <small style={{ fontSize: "0.65rem" }}>Contact</small>
                 </div>
               </Link>
 
@@ -1505,7 +1475,7 @@ const Header: FC = () => {
               <Link href="/liste-favoris" onClick={() => setMobileMenuOpen(false)}>
                 <div className="d-flex flex-column align-items-center" style={{ color: colors.oskar.grey }}>
                   <i className="fa-solid fa-heart" style={{ fontSize: "1.2rem" }}></i>
-                  <small style={{ fontSize: "0.6rem" }}>Favoris</small>
+                  <small style={{ fontSize: "0.65rem" }}>Favoris</small>
                 </div>
               </Link>
 
@@ -1516,8 +1486,8 @@ const Header: FC = () => {
                     <div
                       className="rounded-circle overflow-hidden d-flex align-items-center justify-content-center"
                       style={{
-                        width: "24px",
-                        height: "24px",
+                        width: "28px",
+                        height: "28px",
                         border: `2px solid ${colors.oskar.green}`,
                         backgroundColor: hasValidAvatar() ? 'transparent' : colors.oskar.green,
                       }}
@@ -1539,7 +1509,7 @@ const Header: FC = () => {
                         </span>
                       )}
                     </div>
-                    <small style={{ fontSize: "0.6rem" }}>Profil</small>
+                    <small style={{ fontSize: "0.65rem" }}>Profil</small>
                   </div>
                 </Link>
               ) : (
@@ -1553,7 +1523,7 @@ const Header: FC = () => {
                   type="button"
                 >
                   <i className="fa-solid fa-user" style={{ fontSize: "1.2rem" }}></i>
-                  <small style={{ fontSize: "0.6rem" }}>Connexion</small>
+                  <small style={{ fontSize: "0.65rem" }}>Connexion</small>
                 </button>
               )}
             </div>
@@ -1580,8 +1550,8 @@ const Header: FC = () => {
                         borderLeft: isLinkActive(link)
                           ? `4px solid ${colors.oskar.green}`
                           : "4px solid transparent",
-                        fontSize: "0.85rem",
-                        minHeight: "40px",
+                        fontSize: "0.9rem",
+                        minHeight: "44px",
                       }}
                     >
                       <span className={isLinkActive(link) ? "fw-semibold" : ""}>
@@ -1590,7 +1560,7 @@ const Header: FC = () => {
                       {link.hasChildren && (
                         <i
                           className="fa-solid fa-chevron-down text-muted"
-                          style={{ fontSize: "0.65rem" }}
+                          style={{ fontSize: "0.7rem" }}
                         ></i>
                       )}
                     </Link>
@@ -1605,13 +1575,13 @@ const Header: FC = () => {
                             onClick={() => setMobileMenuOpen(false)}
                             style={{
                               color: colors.oskar.grey,
-                              fontSize: "0.8rem",
-                              minHeight: "36px",
+                              fontSize: "0.85rem",
+                              minHeight: "40px",
                             }}
                           >
                             <i
                               className="fa-solid fa-angle-right me-2"
-                              style={{ fontSize: "0.6rem" }}
+                              style={{ fontSize: "0.65rem" }}
                             ></i>
                             {child.name}
                           </Link>
@@ -1637,7 +1607,7 @@ const Header: FC = () => {
                     style={{
                       color: colors.oskar.grey,
                       fontSize: "0.85rem",
-                      minHeight: "40px",
+                      minHeight: "44px",
                     }}
                   >
                     <i
@@ -1654,7 +1624,7 @@ const Header: FC = () => {
                     style={{
                       color: colors.oskar.grey,
                       fontSize: "0.85rem",
-                      minHeight: "40px",
+                      minHeight: "44px",
                     }}
                   >
                     <i
@@ -1673,7 +1643,7 @@ const Header: FC = () => {
                       style={{
                         color: colors.oskar.grey,
                         fontSize: "0.85rem",
-                        minHeight: "40px",
+                        minHeight: "44px",
                       }}
                     >
                       <i
@@ -1691,7 +1661,7 @@ const Header: FC = () => {
                     style={{
                       color: colors.oskar.grey,
                       fontSize: "0.85rem",
-                      minHeight: "40px",
+                      minHeight: "44px",
                     }}
                   >
                     <i
@@ -1710,7 +1680,7 @@ const Header: FC = () => {
                     type="button"
                     style={{
                       fontSize: "0.85rem",
-                      minHeight: "40px",
+                      minHeight: "44px",
                     }}
                   >
                     <i
@@ -1730,11 +1700,11 @@ const Header: FC = () => {
                 style={{
                   backgroundColor: colors.oskar.green,
                   color: "white",
-                  borderRadius: "6px",
+                  borderRadius: "8px",
                   border: "none",
                   fontWeight: 600,
-                  padding: "0.6rem",
-                  fontSize: "0.8rem",
+                  padding: "0.75rem",
+                  fontSize: "0.85rem",
                 }}
                 onClick={() => {
                   handlePublishClick();
@@ -1742,7 +1712,7 @@ const Header: FC = () => {
                 }}
                 type="button"
               >
-                <i className="fa-solid fa-plus me-2" style={{ fontSize: "0.7rem" }}></i>
+                <i className="fa-solid fa-plus me-2" style={{ fontSize: "0.75rem" }}></i>
                 Publier une annonce
               </button>
             </div>
@@ -1769,7 +1739,7 @@ const Header: FC = () => {
           overflow-y: auto;
         }
         .dropdown-item {
-          min-height: 36px;
+          min-height: 40px;
           display: flex;
           align-items: center;
         }
@@ -1803,162 +1773,164 @@ const Header: FC = () => {
 
         /* Variables CSS pour la réduction progressive */
         :root {
-          --font-size-nav: 0.75rem;
+          --font-size-nav: 0.8rem;
           --font-size-icon: 1rem;
-          --font-size-icon-small: 0.7rem;
-          --font-size-button: 0.75rem;
+          --font-size-icon-small: 0.75rem;
+          --font-size-button: 0.8rem;
           --font-size-logo: 1.5rem;
           --font-size-logo-letter: 1rem;
-          --font-size-dropdown: 0.8rem;
-          --font-size-badge: 0.55rem;
+          --font-size-dropdown: 0.85rem;
+          --font-size-badge: 0.6rem;
 
-          --size-icon: 36px;
-          --size-avatar: 36px;
-          --size-logo: 40px;
-          --size-button: 34px;
-          --size-badge: 14px;
+          --size-icon: 38px;
+          --size-avatar: 38px;
+          --size-logo: 42px;
+          --size-button: 36px;
+          --size-badge: 16px;
 
-          --padding-button: 0.4rem 1rem;
-          --padding-nav: 0.4rem 0;
-          --gap-nav: 0.35rem;
+          --padding-button: 0.5rem 1.2rem;
+          --padding-nav: 0.5rem 0;
+          --gap-nav: 0.75rem;
         }
 
         /* Réduction progressive sur les écrans moyens */
         @media (max-width: 1400px) {
           :root {
-            --font-size-nav: 0.7rem;
+            --font-size-nav: 0.75rem;
             --font-size-icon: 0.95rem;
             --font-size-logo: 1.4rem;
-            --size-icon: 34px;
-            --size-avatar: 34px;
-            --gap-nav: 0.3rem;
+            --size-icon: 36px;
+            --size-avatar: 36px;
+            --gap-nav: 0.65rem;
           }
         }
 
         @media (max-width: 1200px) {
           :root {
-            --font-size-nav: 0.65rem;
+            --font-size-nav: 0.7rem;
             --font-size-icon: 0.9rem;
             --font-size-logo: 1.3rem;
             --font-size-logo-letter: 0.95rem;
-            --size-icon: 32px;
-            --size-avatar: 32px;
-            --size-logo: 38px;
-            --gap-nav: 0.25rem;
+            --size-icon: 34px;
+            --size-avatar: 34px;
+            --size-logo: 40px;
+            --gap-nav: 0.55rem;
           }
         }
 
         @media (max-width: 992px) {
           :root {
-            --font-size-nav: 0.6rem;
+            --font-size-nav: 0.65rem;
             --font-size-icon: 0.85rem;
             --font-size-button: 0.7rem;
             --font-size-logo: 1.2rem;
             --font-size-logo-letter: 0.9rem;
-            --size-icon: 30px;
-            --size-avatar: 30px;
-            --size-logo: 36px;
-            --size-button: 30px;
-            --padding-button: 0.35rem 0.8rem;
-            --gap-nav: 0.2rem;
+            --size-icon: 32px;
+            --size-avatar: 32px;
+            --size-logo: 38px;
+            --size-button: 32px;
+            --padding-button: 0.4rem 1rem;
+            --gap-nav: 0.45rem;
           }
         }
 
         @media (max-width: 768px) {
           :root {
-            --font-size-nav: 0.55rem;
+            --font-size-nav: 0.6rem;
             --font-size-icon: 0.8rem;
-            --font-size-icon-small: 0.6rem;
+            --font-size-icon-small: 0.65rem;
             --font-size-button: 0.65rem;
             --font-size-logo: 1.1rem;
             --font-size-logo-letter: 0.85rem;
-            --size-icon: 28px;
-            --size-avatar: 28px;
-            --size-logo: 34px;
-            --size-button: 28px;
-            --padding-button: 0.3rem 0.7rem;
-            --gap-nav: 0.15rem;
+            --size-icon: 30px;
+            --size-avatar: 30px;
+            --size-logo: 36px;
+            --size-button: 30px;
+            --padding-button: 0.35rem 0.9rem;
+            --gap-nav: 0.4rem;
           }
         }
 
         @media (max-width: 640px) {
           :root {
-            --font-size-nav: 0.5rem;
+            --font-size-nav: 0.55rem;
             --font-size-icon: 0.75rem;
             --font-size-button: 0.6rem;
             --font-size-logo: 1rem;
             --font-size-logo-letter: 0.8rem;
-            --size-icon: 26px;
-            --size-avatar: 26px;
-            --size-logo: 32px;
-            --size-button: 26px;
-            --padding-button: 0.25rem 0.6rem;
-            --gap-nav: 0.1rem;
+            --size-icon: 28px;
+            --size-avatar: 28px;
+            --size-logo: 34px;
+            --size-button: 28px;
+            --padding-button: 0.3rem 0.8rem;
+            --gap-nav: 0.35rem;
           }
         }
 
         @media (max-width: 576px) {
           :root {
-            --font-size-nav: 0.45rem;
+            --font-size-nav: 0.5rem;
             --font-size-icon: 0.7rem;
-            --font-size-icon-small: 0.55rem;
+            --font-size-icon-small: 0.6rem;
             --font-size-button: 0.55rem;
             --font-size-logo: 0.9rem;
             --font-size-logo-letter: 0.75rem;
-            --font-size-badge: 0.5rem;
-            --size-icon: 24px;
-            --size-avatar: 24px;
-            --size-logo: 30px;
-            --size-button: 24px;
-            --size-badge: 12px;
-            --padding-button: 0.2rem 0.5rem;
-            --gap-nav: 0.08rem;
+            --font-size-badge: 0.55rem;
+            --size-icon: 26px;
+            --size-avatar: 26px;
+            --size-logo: 32px;
+            --size-button: 26px;
+            --size-badge: 14px;
+            --padding-button: 0.25rem 0.7rem;
+            --gap-nav: 0.3rem;
           }
         }
 
         @media (max-width: 480px) {
           :root {
-            --font-size-nav: 0.4rem;
+            --font-size-nav: 0.45rem;
             --font-size-icon: 0.65rem;
             --font-size-button: 0.5rem;
             --font-size-logo: 0.8rem;
             --font-size-logo-letter: 0.7rem;
-            --size-icon: 22px;
-            --size-avatar: 22px;
-            --size-logo: 28px;
-            --size-button: 22px;
-            --padding-button: 0.15rem 0.4rem;
-            --gap-nav: 0.05rem;
+            --size-icon: 24px;
+            --size-avatar: 24px;
+            --size-logo: 30px;
+            --size-button: 24px;
+            --padding-button: 0.2rem 0.6rem;
+            --gap-nav: 0.25rem;
           }
         }
 
         @media (max-width: 400px) {
           :root {
-            --font-size-nav: 0.35rem;
+            --font-size-nav: 0.4rem;
             --font-size-icon: 0.6rem;
             --font-size-button: 0.45rem;
             --font-size-logo: 0.7rem;
             --font-size-logo-letter: 0.65rem;
-            --size-icon: 20px;
-            --size-avatar: 20px;
-            --size-logo: 26px;
-            --size-button: 20px;
-            --padding-button: 0.1rem 0.3rem;
+            --size-icon: 22px;
+            --size-avatar: 22px;
+            --size-logo: 28px;
+            --size-button: 22px;
+            --padding-button: 0.15rem 0.5rem;
+            --gap-nav: 0.2rem;
           }
         }
 
         @media (max-width: 360px) {
           :root {
-            --font-size-nav: 0.3rem;
+            --font-size-nav: 0.35rem;
             --font-size-icon: 0.55rem;
             --font-size-button: 0.4rem;
             --font-size-logo: 0.6rem;
             --font-size-logo-letter: 0.6rem;
-            --size-icon: 18px;
-            --size-avatar: 18px;
-            --size-logo: 24px;
-            --size-button: 18px;
-            --padding-button: 0.05rem 0.2rem;
+            --size-icon: 20px;
+            --size-avatar: 20px;
+            --size-logo: 26px;
+            --size-button: 20px;
+            --padding-button: 0.1rem 0.4rem;
+            --gap-nav: 0.15rem;
           }
         }
 
@@ -2030,7 +2002,7 @@ const Header: FC = () => {
           .btn,
           .dropdown-item,
           .nav-link {
-            min-height: 40px;
+            min-height: 44px;
             display: flex;
             align-items: center;
           }

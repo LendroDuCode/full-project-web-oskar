@@ -13,6 +13,7 @@ import {
   faCheckCircle,
   faChevronDown,
   faTimes,
+  faPhone,
 } from "@fortawesome/free-solid-svg-icons";
 import { API_ENDPOINTS } from "@/config/api-endpoints";
 import { api } from "@/lib/api-client";
@@ -45,13 +46,23 @@ const DonForm: React.FC<DonFormProps> = ({
     }
   }, [donData.quantite]);
 
+  // Initialiser is_whatsapp à 1 (true) par défaut
+  useEffect(() => {
+    if (donData.is_whatsapp === undefined) {
+      setDonData({
+        ...donData,
+        is_whatsapp: 1,
+        quantite: "1",
+      });
+    }
+  }, [donData.is_whatsapp]);
+
   // Utiliser les catégories des props si disponibles, sinon les charger
   useEffect(() => {
     if (propCategories && propCategories.length > 0) {
       console.log("📦 Utilisation des catégories depuis les props:", propCategories.length);
       setLocalCategories(propCategories);
 
-      // Si une catégorie est déjà sélectionnée, charger ses sous-catégories
       if (donData.categorie_uuid) {
         const selectedCat = propCategories.find(c => c.uuid === donData.categorie_uuid);
         if (selectedCat?.enfants && selectedCat.enfants.length > 0) {
@@ -59,7 +70,6 @@ const DonForm: React.FC<DonFormProps> = ({
         }
       }
     } else {
-      // Charger les catégories seulement si pas fournies en props
       const fetchCategories = async () => {
         try {
           setLoading(true);
@@ -68,17 +78,14 @@ const DonForm: React.FC<DonFormProps> = ({
           console.log("📦 Réponse catégories brute:", response);
 
           if (Array.isArray(response)) {
-            // Filtrer les catégories actives
             const activeCategories = response.filter(
               (cat: Category) => !cat.is_deleted && cat.deleted_at === null
             );
 
-            // Identifier les catégories principales
             const mainCategories = activeCategories.filter(
               (cat: Category) => !cat.path || cat.path === null || cat.path === ""
             );
 
-            // Éliminer les doublons
             const uniqueCategoriesMap = new Map<string, Category>();
             mainCategories.forEach((category: Category) => {
               const existing = uniqueCategoriesMap.get(category.libelle);
@@ -95,7 +102,6 @@ const DonForm: React.FC<DonFormProps> = ({
 
             const uniqueMainCategories = Array.from(uniqueCategoriesMap.values());
 
-            // Traiter les enfants
             const processedCategories: Category[] = uniqueMainCategories.map((category: Category) => {
               const enfants = category.enfants || [];
               const activeEnfants = enfants.filter(
@@ -108,14 +114,12 @@ const DonForm: React.FC<DonFormProps> = ({
               };
             });
 
-            // Trier par libellé
             const sortedCategories = processedCategories.sort(
               (a: Category, b: Category) => a.libelle.localeCompare(b.libelle)
             );
 
             setLocalCategories(sortedCategories);
 
-            // Si une catégorie est déjà sélectionnée, charger ses sous-catégories
             if (donData.categorie_uuid) {
               const selectedCat = sortedCategories.find(c => c.uuid === donData.categorie_uuid);
               if (selectedCat?.enfants && selectedCat.enfants.length > 0) {
@@ -135,7 +139,6 @@ const DonForm: React.FC<DonFormProps> = ({
     }
   }, [propCategories, donData.categorie_uuid]);
 
-  // Gérer le changement de catégorie principale
   const handleCategorieChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const categorieUuid = e.target.value;
     const selectedCategory = localCategories.find(c => c.uuid === categorieUuid);
@@ -144,10 +147,9 @@ const DonForm: React.FC<DonFormProps> = ({
       ...donData,
       categorie_uuid: categorieUuid,
       sous_categorie_uuid: "",
-      quantite: "1", // S'assurer que la quantité reste à 1
+      quantite: "1",
     });
 
-    // Charger les sous-catégories
     if (selectedCategory?.enfants && selectedCategory.enfants.length > 0) {
       setSousCategories(selectedCategory.enfants);
     } else {
@@ -155,20 +157,36 @@ const DonForm: React.FC<DonFormProps> = ({
     }
   };
 
-  // Gérer le changement de sous-catégorie
   const handleSousCategorieChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const sousCategorieUuid = e.target.value;
     setDonData({
       ...donData,
       sous_categorie_uuid: sousCategorieUuid,
-      quantite: "1", // S'assurer que la quantité reste à 1
+      quantite: "1",
+    });
+  };
+
+  const handleNumeroChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    const cleaned = value.replace(/[^0-9+\s]/g, '');
+    setDonData({
+      ...donData,
+      numero: cleaned,
+      quantite: "1",
+    });
+  };
+
+  const handleWhatsappToggle = () => {
+    setDonData({
+      ...donData,
+      is_whatsapp: donData.is_whatsapp === 1 ? 0 : 1,
+      quantite: "1",
     });
   };
 
   if (step === 2) {
     return (
       <div className="container-fluid p-4">
-        {/* En-tête - Couleur violette avec texte noir */}
         <div className="row mb-5">
           <div className="col-12">
             <div className="d-flex align-items-center p-4 rounded-4 border" style={{ backgroundColor: "rgba(111, 66, 193, 0.1)", borderColor: "#6f42c1" }}>
@@ -200,7 +218,6 @@ const DonForm: React.FC<DonFormProps> = ({
         )}
 
         <div className="row g-4">
-          {/* Colonne principale - Formulaire */}
           <div className="col-lg-8">
             <div className="card border shadow-lg rounded-4 mb-4 hover-shadow transition-all">
               <div className="card-header bg-white border-bottom py-4 px-4 rounded-top-4">
@@ -211,7 +228,6 @@ const DonForm: React.FC<DonFormProps> = ({
               </div>
 
               <div className="card-body p-4">
-                {/* Titre du don - Obligatoire */}
                 <div className="mb-4">
                   <label className="form-label fw-bold fs-5 mb-3 d-flex align-items-center" style={{ color: "#000000" }}>
                     <FontAwesomeIcon icon={faTag} className="me-2" style={{ color: "#6f42c1" }} />
@@ -228,7 +244,6 @@ const DonForm: React.FC<DonFormProps> = ({
                   />
                 </div>
 
-                {/* Description - Optionnelle */}
                 <div className="mb-4">
                   <label className="form-label fw-bold fs-5 mb-3" style={{ color: "#000000" }}>
                     Description <span className="text-muted">(optionnelle)</span>
@@ -243,7 +258,6 @@ const DonForm: React.FC<DonFormProps> = ({
                   />
                 </div>
 
-                {/* Lieu de retrait - Obligatoire */}
                 <div className="row g-4 mb-4">
                   <div className="col-md-12">
                     <label className="form-label fw-bold fs-5 mb-3 d-flex align-items-center" style={{ color: "#000000" }}>
@@ -262,15 +276,72 @@ const DonForm: React.FC<DonFormProps> = ({
                   </div>
                 </div>
 
-                {/* Champ Quantité - SUPPRIMÉ (valeur par défaut à 1) */}
+                <div className="mb-4">
+                  <div className="d-flex align-items-center justify-content-between p-3 bg-light rounded-4 border">
+                    <div className="d-flex align-items-center">
+                      <div className="rounded-circle bg-success bg-opacity-10 p-2 me-3">
+                      </div>
+                      <div>
+                        <label className="fw-bold mb-0" style={{ color: "#000000" }}>
+                          Disponible sur WhatsApp
+                        </label>
+                        <p className="text-muted small mb-0">
+                          Être contacté facilement via WhatsApp
+                        </p>
+                      </div>
+                    </div>
+                    <div className="form-check form-switch">
+                      <input
+                        type="checkbox"
+                        className="form-check-input"
+                        style={{ 
+                          width: "3rem", 
+                          height: "1.5rem",
+                          backgroundColor: donData.is_whatsapp === 1 ? "#25D366" : "#ccc",
+                          borderColor: donData.is_whatsapp === 1 ? "#25D366" : "#ccc",
+                          cursor: "pointer"
+                        }}
+                        checked={donData.is_whatsapp === 1}
+                        onChange={handleWhatsappToggle}
+                      />
+                    </div>
+                  </div>
+                  <small className="text-muted mt-2 d-block">
+                    Activez cette option si vous souhaitez être contacté via WhatsApp
+                  </small>
+                </div>
+
+                {donData.is_whatsapp === 1 && (
+                  <div className="mb-4">
+                    <label className="form-label fw-bold fs-5 mb-3 d-flex align-items-center">
+                      <FontAwesomeIcon icon={faPhone} className="me-2" style={{ color: "#6f42c1" }} />
+                      Numéro de téléphone <span className="text-danger ms-1">*</span>
+                    </label>
+                    <div className="input-group">
+                      <span className="input-group-text bg-light border rounded-start-4 px-4">
+                        <FontAwesomeIcon icon={faPhone} style={{ color: "#6f42c1" }} />
+                      </span>
+                      <input
+                        type="tel"
+                        className="form-control form-control-lg border border-secondary rounded-end-4 py-3 px-4"
+                        style={{ fontSize: "1.1rem" }}
+                        placeholder="Ex: +225 07 XX XX XX XX"
+                        value={donData.numero || ""}
+                        onChange={handleNumeroChange}
+                        required={donData.is_whatsapp === 1}
+                      />
+                    </div>
+                    <small className="text-muted mt-2 d-block">
+                      Ce numéro permettra aux personnes intéressées de vous contacter via WhatsApp
+                    </small>
+                  </div>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Colonne latérale - Photo et Catégorie */}
           <div className="col-lg-4">
             <div className="sticky-top" style={{ top: "20px" }}>
-              {/* Photo - Obligatoire */}
               <div className="card border shadow-lg rounded-4 mb-4 hover-shadow transition-all">
                 <div className="card-header bg-white border-bottom py-4 px-4 rounded-top-4">
                   <h4 className="fw-bold mb-0 d-flex align-items-center" style={{ color: "#000000" }}>
@@ -350,7 +421,6 @@ const DonForm: React.FC<DonFormProps> = ({
                 </div>
               </div>
 
-              {/* Catégorie - Obligatoire */}
               <div className="card border shadow-lg rounded-4 mb-4 hover-shadow transition-all">
                 <div className="card-header bg-white border-bottom py-4 px-4 rounded-top-4">
                   <h4 className="fw-bold mb-0 d-flex align-items-center" style={{ color: "#000000" }}>
@@ -512,18 +582,27 @@ const DonForm: React.FC<DonFormProps> = ({
                   </div>
                   <div className="col-md-6">
                     <div className="p-4 bg-light rounded-4 border">
-                      <p className="text-secondary mb-2 small">Quantité</p>
+                      <p className="text-secondary mb-2 small">Lieu de retrait</p>
                       <p className="fw-bold mb-0 fs-5" style={{ color: "#000000" }}>
-                        {donData.quantite || 1}
+                        {donData.lieu_retrait || "Non renseigné"}
                       </p>
                     </div>
                   </div>
                   <div className="col-md-6">
                     <div className="p-4 bg-light rounded-4 border">
-                      <p className="text-secondary mb-2 small">Lieu de retrait</p>
+                      <p className="text-secondary mb-2 small">Contact WhatsApp</p>
                       <p className="fw-bold mb-0 fs-5" style={{ color: "#000000" }}>
-                        {donData.lieu_retrait || "Non renseigné"}
+                        {donData.is_whatsapp === 1 ? (
+                          <span className="text-success">✅ Disponible</span>
+                        ) : (
+                          <span className="text-muted">❌ Non disponible</span>
+                        )}
                       </p>
+                      {donData.is_whatsapp === 1 && donData.numero && (
+                        <p className="text-secondary mb-0 small mt-2">
+                          Numéro: {donData.numero}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>

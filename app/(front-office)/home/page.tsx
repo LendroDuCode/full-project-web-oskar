@@ -17,7 +17,8 @@ import HeroCarousel from "./components/HeroCarousel";
 const Home: React.FC = () => {
   return (
     <SearchProvider>
-      <div className="bg-oskar-light-grey min-h-screen">
+      {/* Suppression du padding et margin en haut pour rapprocher les éléments */}
+      <div className="bg-oskar-light-grey min-h-screen" style={{ paddingTop: 0, marginTop: 0 }}>
         <HeroSearch />
         <HeroCarousel />
         <Breadcrumb />

@@ -11,9 +11,6 @@ import { useAuth } from "@/app/(front-office)/auth/AuthContext";
 import { buildImageUrl } from "@/app/shared/utils/image-utils";
 import PublishAdModal from "@/app/(front-office)/publication-annonce/page";
 
-// ❌ SUPPRIMEZ CETTE LIGNE - Le composant SecureImage est déjà défini dans ce fichier
-// import SecureImage from "@/app/shared/components/ui/SecureImage";
-
 // Import des icônes FontAwesome
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faWhatsapp, faFacebookF, faTiktok, faLinkedinIn } from "@fortawesome/free-brands-svg-icons";
@@ -27,6 +24,8 @@ import {
   faHeadset,
   faUsers,
   faCommentDots,
+  faChevronLeft,
+  faChevronRight,
   faShareAlt,
   faCertificate,
   faStar,
@@ -165,6 +164,7 @@ interface DonAPI {
   est_public: number;
   agentUuid: string | null;
   adminUuid: string | null;
+  is_whatsapp?: number;
 }
 
 interface DonSimilaireAPI {
@@ -236,6 +236,7 @@ interface Don {
   createurType?: "utilisateur" | "vendeur";
   categorie: Categorie | null;
   numero: string;
+  is_whatsapp?: number;
 }
 
 interface DonSimilaire {
@@ -536,7 +537,7 @@ const ContactModal = ({
       style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex: 9999 }}
       onClick={onHide}
     >
-      <div className="modal-dialog modal-dialog-centered" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-dialog modal-dialog-centered modal-sm" onClick={(e) => e.stopPropagation()}>
         <div className="modal-content border-0 shadow-lg rounded-4">
           <div className="modal-header border-0 pb-0">
             <h5 className="modal-title fw-bold">
@@ -551,7 +552,7 @@ const ContactModal = ({
             ></button>
           </div>
 
-          <div className="modal-body">
+          <div className="modal-body p-3 p-sm-4">
             <div className="text-center mb-4">
               <div className="mb-3">
                 {createur.avatar ? (
@@ -561,29 +562,29 @@ const ContactModal = ({
                     fallbackSrc={getDefaultAvatarUrl()}
                     className="rounded-circle mx-auto border border-3 border-success"
                     style={{
-                      width: "100px",
-                      height: "100px",
+                      width: "70px",
+                      height: "70px",
                       objectFit: "cover",
                     }}
                   />
                 ) : (
                   <div
                     className="bg-light rounded-circle mx-auto d-flex align-items-center justify-content-center border border-3 border-success"
-                    style={{ width: "100px", height: "100px" }}
+                    style={{ width: "70px", height: "70px" }}
                   >
                     <FontAwesomeIcon icon={faUserCircle} className="fa-3x text-muted" />
                   </div>
                 )}
               </div>
-              <h5 className="fw-bold mb-1">
+              <h6 className="fw-bold mb-1">
                 {createur.prenoms} {createur.nom}
-              </h5>
+              </h6>
               <p className="text-muted small mb-3">
                 <FontAwesomeIcon icon={faTag} className="me-1" />
-                Donateur vérifié
+                Donateur
               </p>
               <div className="bg-light rounded-4 p-3 mb-4">
-                <p className="fw-semibold mb-2">À propos du don :</p>
+                <p className="fw-semibold mb-2 small">À propos du don :</p>
                 <p className="text-muted small mb-0">
                   <FontAwesomeIcon icon={faGift} className="me-1 text-success" />
                   {donNom}
@@ -593,15 +594,15 @@ const ContactModal = ({
 
             {createur.telephone && (
               <div className="mb-3 p-3 bg-light rounded-4">
-                <div className="d-flex justify-content-between align-items-center">
+                <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
                   <div>
                     <small className="text-muted d-block">Téléphone</small>
-                    <span className="fw-semibold">{createur.telephone}</span>
+                    <span className="fw-semibold small">{createur.telephone}</span>
                   </div>
                   <button
                     onClick={handleCopyPhone}
                     className="btn btn-outline-success btn-sm rounded-circle p-2"
-                    style={{ width: "40px", height: "40px" }}
+                    style={{ width: "36px", height: "36px" }}
                     title="Copier le numéro"
                   >
                     <FontAwesomeIcon icon={copied ? faCheck : faCopy} />
@@ -610,12 +611,12 @@ const ContactModal = ({
               </div>
             )}
 
-            <div className="row g-3 mt-3">
+            <div className="row g-2 mt-3">
               {createur.telephone && isMobile && (
-                <div className="col-6">
+                <div className="col-12">
                   <button
                     onClick={handleCall}
-                    className="btn btn-outline-success w-100 py-3 d-flex align-items-center justify-content-center gap-2"
+                    className="btn btn-outline-success w-100 py-2 d-flex align-items-center justify-content-center gap-2"
                   >
                     <FontAwesomeIcon icon={faPhone} />
                     <span className="fw-semibold">Appeler</span>
@@ -628,7 +629,7 @@ const ContactModal = ({
           <div className="modal-footer border-0 pt-0">
             <button
               type="button"
-              className="btn btn-light w-100 py-3"
+              className="btn btn-light w-100 py-2"
               onClick={onHide}
             >
               Fermer
@@ -787,8 +788,8 @@ const transformDonData = (apiDon: DonAPI): Don => {
     nombre_avis: apiDon.nombre_avis || 0,
     is_favoris: apiDon.is_favoris || false,
     favorite_id: apiDon.favorite_id,
-    // ✅ AJOUTER publieLe dans l'objet transformé
     publieLe: apiDon.publieLe || null,
+    is_whatsapp: apiDon.is_whatsapp || 0,
     ...(apiDon.createur && { createur: transformCreateurInfo(apiDon.createur) }),
     createurType: apiDon.createurType,
     categorie: apiDon.categorie,
@@ -899,11 +900,22 @@ export default function DonDetailPage() {
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [showPublishModal, setShowPublishModal] = useState(false);
   const [selectedThumbnail, setSelectedThumbnail] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
 
   // Refs pour éviter les chargements multiples
   const initialLoadDone = useRef(false);
   const commentsLoadDone = useRef(false);
   const recentsLoadDone = useRef(false);
+
+  // Détection mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+      const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
+      setIsMobile(mobileRegex.test(userAgent));
+    };
+    checkMobile();
+  }, []);
 
   // Timer pour le toast
   useEffect(() => {
@@ -919,7 +931,7 @@ export default function DonDetailPage() {
   const faqs = [
     {
       question: "Comment contacter le donateur ?",
-      answer: "Vous pouvez contacter le donateur en utilisant les boutons WhatsApp, Facebook ou Envoyer un message sur cette page. Assurez-vous de vous présenter et de poser toutes vos questions sur le don avant d'organiser une rencontre.",
+      answer: "Vous pouvez contacter le donateur en utilisant les boutons WhatsApp ou Envoyer un message sur cette page. Assurez-vous de vous présenter et de poser toutes vos questions sur le don avant d'organiser une rencontre.",
     },
     {
       question: "Comment se passe un retrait de don ?",
@@ -951,7 +963,6 @@ export default function DonDetailPage() {
     action();
   };
 
-  // ✅ FONCTION DE CONTACT AVEC IMAGE DU DON
   const handleContactDonateur = () => {
     requireAuth(() => {
       if (!createur) {
@@ -979,7 +990,6 @@ export default function DonDetailPage() {
           dashboardPath = "/dashboard-utilisateur";
       }
 
-      // ✅ AJOUTER L'IMAGE DU DON DANS LES PARAMÈTRES
       const params = new URLSearchParams({
         destinataireUuid: createur.uuid,
         destinataireEmail: createur.email || "",
@@ -994,14 +1004,9 @@ export default function DonDetailPage() {
     });
   };
 
-  // ✅ FONCTION "JE SUIS INTÉRESSÉ(E)" AVEC IMAGE DU DON
   const handleInterest = () => {
     requireAuth(() => {
       if (!createur || !don) return;
-
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-        navigator.userAgent
-      );
 
       if (isMobile) {
         if (createur.telephone) {
@@ -1027,7 +1032,6 @@ export default function DonDetailPage() {
             dashboardPath = "/dashboard-utilisateur";
         }
 
-        // ✅ AJOUTER L'IMAGE DU DON DANS LES PARAMÈTRES
         const params = new URLSearchParams({
           destinataireUuid: createur.uuid,
           destinataireEmail: createur.email || "",
@@ -1045,7 +1049,11 @@ export default function DonDetailPage() {
 
   const handleContactWhatsApp = () => {
     requireAuth(() => {
-      if (!createur) return;
+      if (!createur) {
+        showToast("error", "Informations du donateur non disponibles");
+        return;
+      }
+      
       let phoneNumber = createur.telephone || createur.whatsapp_url || "";
       phoneNumber = phoneNumber.replace(/\D/g, "");
       if (phoneNumber && !phoneNumber.startsWith("+")) {
@@ -1096,7 +1104,6 @@ export default function DonDetailPage() {
   const handleShare = (platform: string) => {
     if (!don) return;
     const shareUrl = encodeURIComponent(window.location.href);
-    const shareTitle = encodeURIComponent(don.nom);
     const shareDescription = encodeURIComponent(`Découvrez ce don sur OSKAR : ${don.nom} - ${don.prix === null ? "Gratuit" : formatPrice(don.prix)}`);
     
     let url = "";
@@ -1313,10 +1320,6 @@ export default function DonDetailPage() {
       console.error("Erreur détail don:", err);
       if (err.response?.status === 404 || err.message.includes("non trouvé")) {
         setError("Ce don n'existe pas ou a été supprimé.");
-      } else if (err.response?.status === 401) {
-        setError("Vous devez être connecté pour voir ce don.");
-      } else if (err.response?.status === 403) {
-        setError("Vous n'avez pas l'autorisation de voir ce don.");
       } else {
         setError("Impossible de charger les détails du don. Veuillez réessayer.");
       }
@@ -1369,7 +1372,7 @@ export default function DonDetailPage() {
           <div className="row justify-content-center">
             <div className="col-12">
               <div className="placeholder-glow">
-                <div className="placeholder col-12 rounded bg-secondary" style={{ height: "600px" }}></div>
+                <div className="placeholder col-12 rounded bg-secondary" style={{ height: "400px" }}></div>
                 <div className="row mt-4">
                   {[...Array(5)].map((_, i) => (
                     <div key={i} className="col-2">
@@ -1388,7 +1391,7 @@ export default function DonDetailPage() {
   if (error || !don) {
     return (
       <div className="bg-light min-vh-100 d-flex align-items-center">
-        <div className="container">
+        <div className="container py-5">
           <div className="row justify-content-center">
             <div className="col-md-8 col-lg-6 text-center">
               <div className="card border-0 shadow-lg rounded-4">
@@ -1422,17 +1425,18 @@ export default function DonDetailPage() {
       {/* Toast notifications */}
       {toast?.show && (
         <div
-          className="position-fixed top-0 end-0 m-4 p-3 text-white rounded-3 shadow-lg"
+          className="position-fixed top-0 end-0 m-3 p-3 text-white rounded-3 shadow-lg"
           style={{
             zIndex: 9999,
             backgroundColor: toast.type === "success" ? "#10b981" : toast.type === "error" ? "#ef4444" : "#3b82f6",
-            minWidth: "300px",
+            minWidth: "250px",
+            maxWidth: "90%",
             animation: "slideIn 0.3s ease",
           }}
         >
-          <div className="d-flex align-items-center">
-            <i className={`fas fa-${toast.type === "success" ? "check-circle" : toast.type === "error" ? "exclamation-circle" : "info-circle"} me-3 fs-4`}></i>
-            <span className="flex-grow-1">{toast.message}</span>
+          <div className="d-flex align-items-center gap-2">
+            <i className={`fas fa-${toast.type === "success" ? "check-circle" : toast.type === "error" ? "exclamation-circle" : "info-circle"} me-2 fs-5`}></i>
+            <span className="flex-grow-1 small">{toast.message}</span>
             <button className="btn-close btn-close-white" onClick={() => setToast(null)}></button>
           </div>
         </div>
@@ -1458,11 +1462,11 @@ export default function DonDetailPage() {
         }}
       />
 
-      {/* Breadcrumb */}
+      {/* Breadcrumb - Responsive */}
       <section className="bg-white border-bottom py-3">
         <div className="container">
           <nav aria-label="breadcrumb">
-            <ol className="breadcrumb mb-0">
+            <ol className="breadcrumb mb-0 flex-wrap">
               <li className="breadcrumb-item">
                 <Link href="/" className="text-decoration-none text-muted">
                   <FontAwesomeIcon icon={faHome} className="me-1" />
@@ -1475,13 +1479,6 @@ export default function DonDetailPage() {
                   Dons
                 </Link>
               </li>
-              {don.categorie && (
-                <li className="breadcrumb-item">
-                  <Link href={`/categories/${don.categorie.slug}`} className="text-decoration-none text-muted">
-                    {don.categorie.libelle}
-                  </Link>
-                </li>
-              )}
               <li className="breadcrumb-item active text-truncate" style={{ maxWidth: "200px" }}>
                 {don.nom}
               </li>
@@ -1490,14 +1487,13 @@ export default function DonDetailPage() {
         </div>
       </section>
 
-      {/* Main Content */}
       <main className="container py-5">
         <div className="row g-4">
-          {/* Colonne gauche - Galerie et description */}
-          <div className="col-lg-8">
-            {/* Galerie principale */}
+          {/* Colonne gauche */}
+          <div className="col-12 col-lg-8">
+            {/* Galerie - avec classes responsives Bootstrap */}
             <div className="card border-0 shadow-lg rounded-4 overflow-hidden mb-4">
-              <div className="position-relative" style={{ height: "600px" }}>
+              <div className="position-relative galerie-container">
                 <SecureImage
                   src={imagePrincipale}
                   alt={don.nom}
@@ -1506,28 +1502,27 @@ export default function DonDetailPage() {
                 />
                 <button
                   onClick={handleAddToFavorites}
-                  className="position-absolute top-0 end-0 m-3 btn btn-light rounded-circle p-3 shadow-lg hover-bg-warning hover-text-white transition-all"
-                  style={{ width: "50px", height: "50px" }}
+                  className="position-absolute top-0 end-0 m-3 btn btn-light rounded-circle p-3 shadow-lg"
+                  style={{ width: "45px", height: "45px" }}
                 >
                   <FontAwesomeIcon icon={favori ? FaHeartSolid : FaHeartRegular} className={favori ? "text-danger" : ""} />
                 </button>
-                <div className="position-absolute top-0 start-0 m-3 bg-purple text-white px-4 py-2 rounded-pill fw-semibold d-flex align-items-center gap-2">
+                <div className="position-absolute top-0 start-0 m-3 bg-purple text-white px-3 py-2 rounded-pill fw-semibold d-flex align-items-center gap-2">
                   <FontAwesomeIcon icon={faGift} />
-                  <span>don</span>
+                  <span className="d-none d-sm-inline">don</span>
                 </div>
 
-                {/* Bouton Partager */}
                 <div className="position-absolute top-0 start-50 translate-middle-x mt-3">
-                  <div className="btn-group" style={{ boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}>
+                  <div className="btn-group" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
                     <button
                       className="btn btn-light rounded-pill px-4 py-2 d-flex align-items-center gap-2"
                       onClick={() => setShowShareMenu(!showShareMenu)}
                     >
                       <FontAwesomeIcon icon={faShareAlt} className="text-primary" />
-                      Partager
+                      <span className="d-none d-sm-inline">Partager</span>
                     </button>
                     {showShareMenu && (
-                      <div className="position-absolute top-100 start-50 translate-middle-x mt-2 bg-white rounded-3 shadow-lg p-2" style={{ minWidth: "200px", zIndex: 10 }}>
+                      <div className="position-absolute top-100 start-50 translate-middle-x mt-2 bg-white rounded-3 shadow-lg p-2" style={{ minWidth: "180px", zIndex: 10 }}>
                         <button className="btn btn-link w-100 text-start text-decoration-none p-2 hover-bg-light rounded-2" onClick={() => handleShare("facebook")}>
                           <FontAwesomeIcon icon={faFacebookF} className="text-primary me-2" />
                           Facebook
@@ -1555,7 +1550,7 @@ export default function DonDetailPage() {
                 </div>
 
                 {don.prix === null && (
-                  <div className="position-absolute top-0 start-0 m-3 px-4 py-2 rounded-pill fw-semibold d-flex align-items-center gap-2 text-white" style={{ marginLeft: "100px", backgroundColor: "#8b5cf6" }}>
+                  <div className="position-absolute top-0 start-0 m-3 px-3 py-2 rounded-pill fw-semibold d-flex align-items-center gap-2 text-white bg-purple" style={{ marginLeft: "70px" }}>
                     <FontAwesomeIcon icon={faHandHoldingHeart} />
                     <span>gratuit</span>
                   </div>
@@ -1568,9 +1563,10 @@ export default function DonDetailPage() {
                         setSelectedThumbnail(newIndex);
                         setImagePrincipale(images[newIndex]);
                       }}
-                      className="position-absolute start-0 top-50 translate-middle-y ms-3 btn btn-light bg-opacity-90 rounded-circle p-3 shadow-lg hover-bg-warning hover-text-white transition-all"
+                      className="position-absolute start-0 top-50 translate-middle-y ms-2 btn btn-light bg-opacity-90 rounded-circle shadow-lg"
+                      style={{ width: "35px", height: "35px", padding: 0 }}
                     >
-                      <i className="fa-solid fa-chevron-left"></i>
+                      <FontAwesomeIcon icon={faChevronLeft} />
                     </button>
                     <button
                       onClick={() => {
@@ -1578,9 +1574,10 @@ export default function DonDetailPage() {
                         setSelectedThumbnail(newIndex);
                         setImagePrincipale(images[newIndex]);
                       }}
-                      className="position-absolute end-0 top-50 translate-middle-y me-3 btn btn-light bg-opacity-90 rounded-circle p-3 shadow-lg hover-bg-warning hover-text-white transition-all"
+                      className="position-absolute end-0 top-50 translate-middle-y me-2 btn btn-light bg-opacity-90 rounded-circle shadow-lg"
+                      style={{ width: "35px", height: "35px", padding: 0 }}
                     >
-                      <i className="fa-solid fa-chevron-right"></i>
+                      <FontAwesomeIcon icon={faChevronRight} />
                     </button>
                   </>
                 )}
@@ -1588,59 +1585,49 @@ export default function DonDetailPage() {
             </div>
 
             {/* Description */}
-            <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
+            <div className="card border-0 shadow-lg rounded-4 p-4 p-lg-5 mt-4">
               <h2 className="h2 fw-bold mb-4">Description</h2>
               <div className="text-muted" style={{ lineHeight: 1.8 }}>
                 {don.description ? <p>{don.description}</p> : <p className="text-muted">Aucune description disponible pour ce don.</p>}
               </div>
             </div>
 
-            {/* Détails du don */}
-            <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
+            {/* Détails */}
+            <div className="card border-0 shadow-lg rounded-4 p-4 p-lg-5 mt-4">
               <h2 className="h2 fw-bold mb-4">Détails du don</h2>
               <div className="row">
-                <div className="col-md-6">
-                  <div className="border-bottom py-3 d-flex justify-content-between">
+                <div className="col-12 col-md-6">
+                  <div className="border-bottom py-3 d-flex justify-content-between flex-wrap gap-2">
                     <span className="text-muted">Type de don</span>
                     <span className="fw-semibold">{don.type_don}</span>
                   </div>
-                  <div className="border-bottom py-3 d-flex justify-content-between">
+                  <div className="border-bottom py-3 d-flex justify-content-between flex-wrap gap-2">
                     <span className="text-muted">Quantité</span>
                     <span className="fw-semibold">{don.quantite} unité(s)</span>
                   </div>
-                  {don.categorie && (
-                    <div className="border-bottom py-3 d-flex justify-content-between">
-                      <span className="text-muted">Catégorie</span>
-                      <span className="fw-semibold">{don.categorie.libelle}</span>
-                    </div>
-                  )}
-                  <div className="border-bottom py-3 d-flex justify-content-between">
+                  <div className="border-bottom py-3 d-flex justify-content-between flex-wrap gap-2">
                     <span className="text-muted">Note moyenne</span>
                     <span className="fw-semibold">{safeToFixed(don.note_moyenne)}/5</span>
                   </div>
-                  <div className="border-bottom py-3 d-flex justify-content-between">
+                  <div className="border-bottom py-3 d-flex justify-content-between flex-wrap gap-2">
                     <span className="text-muted">Localisation</span>
                     <span className="fw-semibold">{don.localisation}</span>
                   </div>
                 </div>
-                <div className="col-md-6">
-                  <div className="border-bottom py-3 d-flex justify-content-between">
+                <div className="col-12 col-md-6">
+                  <div className="border-bottom py-3 d-flex justify-content-between flex-wrap gap-2">
                     <span className="text-muted">Date de début</span>
                     <span className="fw-semibold">{formatDate(don.date_debut)}</span>
                   </div>
-                  <div className="border-bottom py-3 d-flex justify-content-between">
+                  <div className="border-bottom py-3 d-flex justify-content-between flex-wrap gap-2">
                     <span className="text-muted">Date de fin</span>
                     <span className="fw-semibold">{formatDate(don.date_fin)}</span>
                   </div>
-                  <div className="border-bottom py-3 d-flex justify-content-between">
+                  <div className="border-bottom py-3 d-flex justify-content-between flex-wrap gap-2">
                     <span className="text-muted">Lieu de retrait</span>
                     <span className="fw-semibold">{don.lieu_retrait}</span>
                   </div>
-                  <div className="border-bottom py-3 d-flex justify-content-between">
-                    <span className="text-muted">Numéro</span>
-                    <span className="fw-semibold text-purple">{don.numero}</span>
-                  </div>
-                  <div className="py-3 d-flex justify-content-between">
+                  <div className="border-bottom py-3 d-flex justify-content-between flex-wrap gap-2">
                     <span className="text-muted">Statut</span>
                     <span className={`fw-semibold text-${condition.color}`}>{condition.text}</span>
                   </div>
@@ -1648,8 +1635,8 @@ export default function DonDetailPage() {
               </div>
             </div>
 
-            {/* Avis et évaluations */}
-            <div className="card border-0 shadow-lg rounded-4 p-5 mt-8">
+            {/* Avis */}
+            <div className="card border-0 shadow-lg rounded-4 p-4 p-lg-5 mt-4">
               <h2 className="h2 fw-bold mb-4">Évaluations et Avis</h2>
 
               {loadingComments ? (
@@ -1657,29 +1644,28 @@ export default function DonDetailPage() {
                   <div className="spinner-border text-primary" role="status">
                     <span className="visually-hidden">Chargement...</span>
                   </div>
-                  <p className="text-muted mt-2">Chargement des avis...</p>
                 </div>
               ) : (
                 <>
                   <div className="bg-light rounded-4 p-4 mb-4">
                     <div className="row align-items-center">
-                      <div className="col-md-4 text-center">
-                        <div className="display-1 fw-bold text-primary mb-2">{safeToFixed(noteStats.moyenne)}</div>
+                      <div className="col-12 col-md-4 text-center mb-3 mb-md-0">
+                        <div className="display-4 fw-bold text-primary mb-2">{safeToFixed(noteStats.moyenne)}</div>
                         <div className="mb-2 text-warning">{renderStars(noteStats.moyenne)}</div>
-                        <p className="text-muted mb-0">Basé sur {noteStats.total} avis</p>
+                        <p className="text-muted mb-0 small">Basé sur {noteStats.total} avis</p>
                       </div>
-                      <div className="col-md-8">
+                      <div className="col-12 col-md-8">
                         {[5, 4, 3, 2, 1].map((rating) => {
                           const count = noteStats[rating as keyof typeof noteStats] as number;
                           const maxCount = Math.max(noteStats[5] || 0, noteStats[4] || 0, noteStats[3] || 0, noteStats[2] || 0, noteStats[1] || 0);
                           const percentage = maxCount > 0 ? Math.round((count / maxCount) * 100) : 0;
                           return (
-                            <div key={rating} className="d-flex align-items-center gap-3 mb-2">
-                              <span className="text-muted" style={{ width: "70px" }}>{rating} étoiles</span>
-                              <div className="progress flex-grow-1" style={{ height: "8px" }}>
+                            <div key={rating} className="d-flex align-items-center gap-2 gap-md-3 mb-2">
+                              <span className="text-muted small" style={{ width: "60px" }}>{rating} étoiles</span>
+                              <div className="progress flex-grow-1" style={{ height: "6px" }}>
                                 <div className="progress-bar bg-warning" style={{ width: `${percentage}%` }}></div>
                               </div>
-                              <span className="text-muted" style={{ width: "40px" }}>{count}</span>
+                              <span className="text-muted small" style={{ width: "35px" }}>{count}</span>
                             </div>
                           );
                         })}
@@ -1689,32 +1675,32 @@ export default function DonDetailPage() {
 
                   {showAddReview ? (
                     <div className="card border mb-4">
-                      <div className="card-body">
+                      <div className="card-body p-3 p-md-4">
                         <h5 className="card-title mb-3">Donner votre avis</h5>
                         <div className="mb-3">
-                          <label className="form-label">Note</label>
-                          <div className="d-flex mb-3">
+                          <label className="form-label small">Note</label>
+                          <div className="d-flex gap-2 mb-3">
                             {[1, 2, 3, 4, 5].map((star) => (
-                              <button key={star} type="button" className="btn btn-link p-0 me-2" onClick={() => setNewReview({ ...newReview, note: star })}>
+                              <button key={star} type="button" className="btn btn-link p-0" onClick={() => setNewReview({ ...newReview, note: star })}>
                                 <FontAwesomeIcon icon={faStar} className={`fa-2x ${star <= newReview.note ? "text-warning" : "text-muted"}`} />
                               </button>
                             ))}
                           </div>
                         </div>
                         <div className="mb-3">
-                          <label className="form-label">Commentaire</label>
+                          <label className="form-label small">Commentaire</label>
                           <textarea
-                            className="form-control"
+                            className="form-control small"
                             rows={4}
                             value={newReview.commentaire}
                             onChange={(e) => setNewReview({ ...newReview, commentaire: e.target.value })}
                             placeholder="Partagez votre expérience avec ce don..."
                           ></textarea>
                         </div>
-                        <div className="d-flex justify-content-between">
-                          <button className="btn btn-outline-secondary" onClick={() => setShowAddReview(false)} disabled={submittingReview}>Annuler</button>
-                          <button className="btn btn-primary" onClick={handleSubmitReview} disabled={submittingReview || !newReview.commentaire.trim()}>
-                            {submittingReview ? <><FontAwesomeIcon icon={faSpinner} spin /><span className="ms-2">Envoi en cours...</span></> : "Publier l'avis"}
+                        <div className="d-flex justify-content-between gap-2">
+                          <button className="btn btn-outline-secondary btn-sm" onClick={() => setShowAddReview(false)} disabled={submittingReview}>Annuler</button>
+                          <button className="btn btn-primary btn-sm" onClick={handleSubmitReview} disabled={submittingReview || !newReview.commentaire.trim()}>
+                            {submittingReview ? <><FontAwesomeIcon icon={faSpinner} spin /><span className="ms-2">Envoi...</span></> : "Publier l'avis"}
                           </button>
                         </div>
                       </div>
@@ -1729,10 +1715,10 @@ export default function DonDetailPage() {
                   )}
 
                   {commentaires.length > 0 ? (
-                    <div className="space-y-6">
+                    <div className="space-y-4">
                       {visibleComments.map((comment) => (
                         <div key={comment.uuid} className="border-bottom pb-4 mb-4">
-                          <div className="d-flex gap-4">
+                          <div className="d-flex gap-3 gap-md-4">
                             <div className="flex-shrink-0">
                               {comment.utilisateur_photo ? (
                                 <SecureImage
@@ -1740,31 +1726,31 @@ export default function DonDetailPage() {
                                   alt={comment.utilisateur_nom}
                                   fallbackSrc={getDefaultAvatarUrl()}
                                   className="rounded-circle"
-                                  style={{ width: "56px", height: "56px", objectFit: "cover", border: "2px solid #f0f0f0" }}
+                                  style={{ width: "40px", height: "40px", objectFit: "cover" }}
                                 />
                               ) : (
-                                <div className="bg-light rounded-circle d-flex align-items-center justify-content-center" style={{ width: "56px", height: "56px", border: "2px solid #f0f0f0" }}>
-                                  <FontAwesomeIcon icon={faUserCircle} className="text-muted fs-2" />
+                                <div className="bg-light rounded-circle d-flex align-items-center justify-content-center" style={{ width: "40px", height: "40px" }}>
+                                  <FontAwesomeIcon icon={faUserCircle} className="text-muted fa-2x" />
                                 </div>
                               )}
                             </div>
                             <div className="flex-grow-1">
-                              <div className="d-flex justify-content-between align-items-start mb-2">
+                              <div className="d-flex justify-content-between align-items-start mb-2 flex-wrap gap-2">
                                 <div>
-                                  <h6 className="fw-bold mb-1">{comment.utilisateur_nom}</h6>
+                                  <h6 className="fw-bold mb-1 small">{comment.utilisateur_nom}</h6>
                                   <div className="mb-2">{renderRatingStars(comment.note)}</div>
                                 </div>
                                 <small className="text-muted"><FontAwesomeIcon icon={faClock} className="me-1" />{formatDate(comment.date)}</small>
                               </div>
-                              <p className="text-muted mb-3 bg-light p-3 rounded-3">{comment.commentaire}</p>
-                              <div className="d-flex gap-3">
-                                <button className="btn btn-link text-muted p-0 text-decoration-none hover-text-primary" onClick={() => handleLikeComment(comment.uuid)} style={{ fontSize: "0.9rem" }}>
+                              <p className="text-muted mb-3 bg-light p-3 rounded-3 small">{comment.commentaire}</p>
+                              <div className="d-flex gap-3 flex-wrap">
+                                <button className="btn btn-link text-muted p-0 text-decoration-none" onClick={() => handleLikeComment(comment.uuid)} style={{ fontSize: "0.8rem" }}>
                                   <FontAwesomeIcon icon={faThumbsUp} className="me-1" /> Utile ({comment.likes})
                                 </button>
-                                <button className="btn btn-link text-muted p-0 text-decoration-none hover-text-danger" onClick={() => handleReportComment(comment.uuid)} style={{ fontSize: "0.9rem" }}>
+                                <button className="btn btn-link text-muted p-0 text-decoration-none" onClick={() => handleReportComment(comment.uuid)} style={{ fontSize: "0.8rem" }}>
                                   <FontAwesomeIcon icon={faFlag} className="me-1" /> Signaler
                                 </button>
-                                <button className="btn btn-link text-muted p-0 text-decoration-none hover-text-warning" onClick={() => { if (!isLoggedIn) openLoginModal(); }} style={{ fontSize: "0.9rem" }}>
+                                <button className="btn btn-link text-muted p-0 text-decoration-none" onClick={() => { if (!isLoggedIn) openLoginModal(); }} style={{ fontSize: "0.8rem" }}>
                                   <FontAwesomeIcon icon={faReply} className="me-1" /> Répondre
                                 </button>
                               </div>
@@ -1777,7 +1763,7 @@ export default function DonDetailPage() {
                     <div className="text-center py-5">
                       <FontAwesomeIcon icon={faCommentSlash} className="fa-3x text-muted mb-3" />
                       <h5 className="text-muted mb-2">Aucun avis pour le moment</h5>
-                      <p className="text-muted mb-4">Soyez le premier à donner votre avis sur ce don.</p>
+                      <p className="text-muted small">Soyez le premier à donner votre avis sur ce don.</p>
                     </div>
                   )}
 
@@ -1791,37 +1777,32 @@ export default function DonDetailPage() {
               )}
             </div>
 
-            {/* Dons Similaires */}
+            {/* Dons similaires */}
             {donsAShow.length > 0 && (
-              <div id="similar-items-section" className="card border-0 shadow-lg rounded-4 p-5 mt-8">
-                <h2 className="h2 fw-bold text-dark mb-4">Dons Similaires que Vous Pourriez Aimer</h2>
+              <div className="card border-0 shadow-lg rounded-4 p-4 p-lg-5 mt-4">
+                <h2 className="h2 fw-bold mb-4">Dons similaires</h2>
                 <div className="row g-4">
                   {donsAShow.map((item) => (
-                    <div key={item.uuid} className="col-md-6">
+                    <div key={item.uuid} className="col-12 col-md-6">
                       <Link href={`/dons/${item.uuid}`} className="text-decoration-none">
                         <div className="card border-0 shadow h-100 hover-shadow-xl transition-all cursor-pointer">
                           <div className="row g-0">
                             <div className="col-4">
-                              <div className="position-relative h-100" style={{ minHeight: "120px" }}>
+                              <div className="position-relative h-100" style={{ minHeight: "100px" }}>
                                 <SecureImage src={item.image} alt={item.nom} fallbackSrc={getDefaultDonImage()} className="w-100 h-100 object-cover rounded-start" />
-                                <div className="position-absolute top-0 start-0 m-1 bg-purple text-white px-2 py-1 rounded-pill small">
+                                <div className="position-absolute top-0 start-0 m-2 bg-purple text-white px-2 py-1 rounded-pill small">
                                   <FontAwesomeIcon icon={faGift} className="me-1" />
-                                  <span>don</span>
+                                  <span className="d-none d-sm-inline">don</span>
                                 </div>
-                                {item.is_favoris && (
-                                  <div className="position-absolute top-0 end-0 m-1">
-                                    <FontAwesomeIcon icon={FaHeartSolid} className="text-danger" />
-                                  </div>
-                                )}
                               </div>
                             </div>
                             <div className="col-8">
                               <div className="card-body p-3">
-                                <h6 className="fw-bold text-dark mb-2 text-truncate">{item.nom}</h6>
-                                <p className="fw-bold text-success mb-2">{item.prix === null ? "Gratuit" : formatPrice(item.prix)}</p>
-                                <div className="d-flex align-items-center text-muted small mb-2">
+                                <h6 className="fw-bold text-dark mb-2 text-truncate small">{item.nom}</h6>
+                                <p className="fw-bold text-success mb-2 small">{item.prix === null ? "Gratuit" : formatPrice(item.prix)}</p>
+                                <div className="d-flex align-items-center text-muted small">
                                   <div className="me-2 text-warning">{renderStars(item.note_moyenne)}</div>
-                                  <span>({item.note_moyenne.toFixed(1)})</span>
+                                  <span>({safeToFixed(item.note_moyenne)})</span>
                                 </div>
                               </div>
                             </div>
@@ -1836,32 +1817,35 @@ export default function DonDetailPage() {
           </div>
 
           {/* Colonne droite - Sidebar */}
-          <div className="col-lg-4">
+          <div className="col-12 col-lg-4">
             {/* Carte prix et actions */}
             <div className="card border-0 shadow-lg rounded-4 p-4 sticky-top" style={{ top: "100px" }}>
               <div className="mb-4">
-                <div className="d-flex align-items-baseline gap-2 mb-2">
+                <div className="d-flex align-items-baseline gap-2 mb-2 flex-wrap">
                   <span className="display-6 fw-bold text-success">
                     {don.prix === null ? "Gratuit" : formatPrice(don.prix).replace("FCFA", "")}
                   </span>
-                  {don.prix !== null && don.prix > 0 && <span className="text-muted">FCFA</span>}
+                  {don.prix !== null && don.prix > 0 && <span className="text-muted small">FCFA</span>}
                 </div>
-                <div className="d-flex align-items-center gap-2">
-                  <span className="badge bg-success bg-opacity-10 text-success px-3 py-2 rounded-pill">Don {don.type_don}</span>
+                <div className="d-flex align-items-center gap-2 flex-wrap">
+                  <span className="badge bg-success bg-opacity-10 text-success px-3 py-2 rounded-pill small">Don {don.type_don}</span>
                   <span className="small text-muted"><FontAwesomeIcon icon={faClock} className="me-1" />Publié {formatDate(don.publieLe)}</span>
                 </div>
               </div>
 
               <div className="d-grid gap-3 mb-4">
-                <button onClick={handleInterest} className="btn btn-success btn-lg fw-bold text-white py-4">
+                <button onClick={handleInterest} className="btn btn-success btn-lg fw-bold text-white py-3">
                   <FontAwesomeIcon icon={faHandHoldingHeart} className="me-2" />
                   {don.disponible ? "Je suis intéressé(e)" : "Contacter"}
                 </button>
-                <button onClick={handleContactWhatsApp} className="btn btn-success btn-lg fw-bold py-4" style={{ backgroundColor: "#25D366", borderColor: "#25D366" }} disabled={!createur?.telephone && !createur?.whatsapp_url}>
-                  <FontAwesomeIcon icon={faWhatsapp} className="me-2" />
-                  WhatsApp
-                </button>
-                <button onClick={handleContactDonateur} className="btn btn-outline-success btn-lg fw-bold py-4">
+                {/* WhatsApp : ne s'affiche que si is_whatsapp === 1 */}
+                {don.is_whatsapp === 1 && (
+                  <button onClick={handleContactWhatsApp} className="btn btn-success btn-lg fw-bold py-3" style={{ backgroundColor: "#25D366", borderColor: "#25D366" }} disabled={!createur?.telephone && !createur?.whatsapp_url}>
+                    <FontAwesomeIcon icon={faWhatsapp} className="me-2" />
+                    WhatsApp
+                  </button>
+                )}
+                <button onClick={handleContactDonateur} className="btn btn-outline-success btn-lg fw-bold py-3">
                   <FontAwesomeIcon icon={faEnvelope} className="me-2" />
                   Envoyer un message
                 </button>
@@ -1876,12 +1860,8 @@ export default function DonDetailPage() {
 
               <div className="small">
                 <div className="d-flex justify-content-between mb-2">
-                  <span className="text-muted">ID du don</span>
-                  <span className="fw-semibold">#OSK-{don.uuid.substring(0, 5).toUpperCase()}</span>
-                </div>
-                <div className="d-flex justify-content-between mb-2">
                   <span className="text-muted">Catégorie</span>
-                  <span className="fw-semibold">{don.categorie?.libelle || "Non catégorisé"}</span>
+                  <span className="fw-semibold text-end">{don.categorie?.libelle || "Non catégorisé"}</span>
                 </div>
                 <div className="d-flex justify-content-between">
                   <span className="text-muted">Disponibilité</span>
@@ -1890,7 +1870,7 @@ export default function DonDetailPage() {
               </div>
 
               <div className="border-top mt-4 pt-4">
-                <button onClick={() => { if (!isLoggedIn) openLoginModal(); else if (window.confirm("Signaler ce don comme inapproprié ?")) showToast("info", "Fonctionnalité de signalement bientôt disponible"); }} className="btn btn-link text-danger w-100 py-2 text-decoration-none">
+                <button onClick={() => { if (!isLoggedIn) openLoginModal(); else showToast("info", "Fonctionnalité de signalement bientôt disponible"); }} className="btn btn-link text-danger w-100 py-2 text-decoration-none small">
                   <FontAwesomeIcon icon={faFlag} className="me-2" />
                   Signaler ce don
                 </button>
@@ -1900,7 +1880,7 @@ export default function DonDetailPage() {
             {/* Retrait */}
             <div className="card border-0 shadow-lg rounded-4 p-4 mt-4 border-success">
               <h5 className="fw-bold mb-4"><FontAwesomeIcon icon={faShippingFast} className="me-2 text-success" />Retrait</h5>
-              <ul className="list-unstyled mb-0">
+              <ul className="list-unstyled mb-0 small">
                 <li className="mb-2"><FontAwesomeIcon icon={faCheckCircle} className="text-success me-2" />Retrait sur place</li>
                 <li className="mb-2"><FontAwesomeIcon icon={faCheckCircle} className="text-success me-2" />Horaires à convenir</li>
                 <li className="mb-2"><FontAwesomeIcon icon={faCheckCircle} className="text-success me-2" />Vérification de l'article</li>
@@ -1909,7 +1889,32 @@ export default function DonDetailPage() {
               <div className="mt-3"><small className="text-muted"><FontAwesomeIcon icon={faMapMarkerAlt} className="me-1" />{don.lieu_retrait}</small></div>
             </div>
 
-        
+            {/* Donateur */}
+            <div className="card border-0 shadow-lg rounded-4 p-4 mt-4">
+              <h5 className="fw-bold mb-4"><FontAwesomeIcon icon={faUser} className="me-2 text-success" />Donateur</h5>
+              <div className="d-flex align-items-center gap-3">
+                {createur?.avatar ? (
+                  <SecureImage
+                    src={createur.avatar}
+                    alt={`${createur.prenoms} ${createur.nom}`}
+                    fallbackSrc={getDefaultAvatarUrl()}
+                    className="rounded-circle"
+                    style={{ width: "45px", height: "45px", objectFit: "cover" }}
+                  />
+                ) : (
+                  <div className="bg-light rounded-circle d-flex align-items-center justify-content-center" style={{ width: "45px", height: "45px" }}>
+                    <FontAwesomeIcon icon={faUserCircle} className="text-muted fa-2x" />
+                  </div>
+                )}
+                <div className="flex-grow-1">
+                  <h6 className="fw-bold mb-1 small">{createur?.prenoms} {createur?.nom}</h6>
+                  <button onClick={() => setShowContactModal(true)} className="btn btn-link text-success p-0 text-decoration-none small">
+                    <FontAwesomeIcon icon={faMessage} className="me-1" />
+                    Contacter
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </main>
@@ -1918,34 +1923,28 @@ export default function DonDetailPage() {
       {donsRecents.length > 0 && (
         <section className="bg-white py-5 mt-4">
           <div className="container">
-            <div className="d-flex justify-content-between align-items-center mb-4">
+            <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
               <h2 className="h3 fw-bold">Dons Récents</h2>
-              <Link href="/dons" className="text-warning text-decoration-none fw-semibold">Voir Tout</Link>
+              <Link href="/dons" className="text-warning text-decoration-none fw-semibold small">Voir Tout →</Link>
             </div>
             <div className="row g-4">
               {donsRecents.slice(0, 4).map((item) => (
-                <div key={item.uuid} className="col-md-3">
+                <div key={item.uuid} className="col-6 col-md-3">
                   <Link href={`/dons/${item.uuid}`} className="text-decoration-none">
                     <div className="card border-0 shadow h-100 hover-border-warning transition-all cursor-pointer">
-                      <div className="position-relative" style={{ height: "200px" }}>
+                      <div className="position-relative recents-image-container">
                         <SecureImage src={item.image} alt={item.nom} fallbackSrc={getDefaultDonImage()} className="w-100 h-100 object-cover" />
-                        <div className="position-absolute top-0 start-0 m-2 bg-purple text-white px-2 py-1 rounded-pill small"><FontAwesomeIcon icon={faGift} className="me-1" /><span>don</span></div>
-                        {item.is_favoris && <div className="position-absolute top-0 end-0 m-2"><FontAwesomeIcon icon={FaHeartSolid} className="text-danger" /></div>}
+                        <div className="position-absolute top-0 start-0 m-2 bg-purple text-white px-2 py-1 rounded-pill small">
+                          <FontAwesomeIcon icon={faGift} className="me-1" />
+                          <span className="d-none d-sm-inline">don</span>
+                        </div>
                       </div>
-                      <div className="card-body d-flex flex-column">
-                        <h6 className="fw-bold text-dark mb-2 text-truncate">{item.nom}</h6>
-                        <p className="fw-bold text-success mb-2">{item.prix === null ? "Gratuit" : formatPrice(item.prix)}</p>
-                        <div className="d-flex align-items-center text-muted small mb-2"><div className="me-2 text-warning">{renderStars(item.note_moyenne)}</div><span>({item.note_moyenne.toFixed(1)})</span></div>
-                        <div className="mt-auto d-flex justify-content-between align-items-center">
-                          <div className="d-flex align-items-center">
-                            {item.createur?.avatar ? (
-                              <SecureImage src={item.createur.avatar} alt={item.createur?.prenoms || "Donateur"} fallbackSrc={getDefaultAvatarUrl()} className="rounded-circle me-2" style={{ width: "30px", height: "30px", objectFit: "cover" }} />
-                            ) : (
-                              <div className="bg-light rounded-circle d-flex align-items-center justify-content-center me-2" style={{ width: "30px", height: "30px" }}><FontAwesomeIcon icon={faUserCircle} className="text-muted" /></div>
-                            )}
-                            <span className="small text-dark text-truncate" style={{ maxWidth: "80px" }}>{item.createur?.prenoms || "Donateur"}</span>
-                          </div>
-                          <span className="btn btn-success text-white btn-sm px-3">Voir</span>
+                      <div className="card-body p-2 p-md-3">
+                        <h6 className="fw-bold text-dark mb-2 text-truncate small">{item.nom}</h6>
+                        <p className="fw-bold text-success mb-2 small">{item.prix === null ? "Gratuit" : formatPrice(item.prix)}</p>
+                        <div className="d-flex align-items-center text-muted small">
+                          <div className="me-2 text-warning">{renderStars(item.note_moyenne)}</div>
+                          <span>({safeToFixed(item.note_moyenne)})</span>
                         </div>
                       </div>
                     </div>
@@ -1957,48 +1956,22 @@ export default function DonDetailPage() {
         </section>
       )}
 
-      {/* Badges de confiance */}
-      <section className="bg-light py-5">
-        <div className="container">
-          <div className="row g-4">
-            <div className="col-md-3 text-center">
-              <div className="bg-warning rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3" style={{ width: "64px", height: "64px" }}><FontAwesomeIcon icon={faShieldAlt} className="text-white fa-2x" /></div>
-              <h6 className="fw-bold mb-2">Dons Sécurisés</h6>
-              <p className="small text-muted">Informations des deux parties protégées</p>
-            </div>
-            <div className="col-md-3 text-center">
-              <div className="bg-success rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3" style={{ width: "64px", height: "64px" }}><FontAwesomeIcon icon={faUserCheck} className="text-white fa-2x" /></div>
-              <h6 className="fw-bold mb-2">Donateurs Vérifiés</h6>
-              <p className="small text-muted">Vérification d'identité pour la confiance</p>
-            </div>
-            <div className="col-md-3 text-center">
-              <div className="bg-info rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3" style={{ width: "64px", height: "64px" }}><FontAwesomeIcon icon={faHeadset} className="text-white fa-2x" /></div>
-              <h6 className="fw-bold mb-2">Support 24/7</h6>
-              <p className="small text-muted">Toujours là pour vous aider</p>
-            </div>
-            <div className="col-md-3 text-center">
-              <div className="bg-purple rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3" style={{ width: "64px", height: "64px", backgroundColor: "#9c27b0" }}><FontAwesomeIcon icon={faUsers} className="text-white fa-2x" /></div>
-              <h6 className="fw-bold mb-2">Communauté Solidaire</h6>
-              <p className="small text-muted">Entraide entre voisins</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* FAQ */}
       <section className="bg-white py-5">
-        <div className="container" style={{ maxWidth: "800px" }}>
-          <h2 className="text-center fw-bold mb-4">Questions Fréquemment Posées</h2>
+        <div className="container px-3 px-md-4" style={{ maxWidth: "800px" }}>
+          <h2 className="text-center fw-bold mb-4 h3">Questions Fréquemment Posées</h2>
           <div className="accordion" id="faqAccordion">
             {faqs.map((faq, index) => (
-              <div key={index} className="accordion-item border-2 rounded-4 mb-3">
+              <div key={index} className="accordion-item border rounded-4 mb-3">
                 <h2 className="accordion-header">
-                  <button className={`accordion-button ${expandedFaq === index ? "" : "collapsed"} bg-white`} type="button" onClick={() => setExpandedFaq(expandedFaq === index ? null : index)}>
-                    <span className="fw-semibold">{faq.question}</span>
+                  <button className={`accordion-button ${expandedFaq === index ? "" : "collapsed"} bg-white rounded-4 py-2`} type="button" onClick={() => setExpandedFaq(expandedFaq === index ? null : index)}>
+                    <span className="fw-semibold small">{faq.question}</span>
                   </button>
                 </h2>
                 <div className={`accordion-collapse collapse ${expandedFaq === index ? "show" : ""}`}>
-                  <div className="accordion-body bg-light"><p className="text-muted mb-0">{faq.answer}</p></div>
+                  <div className="accordion-body bg-light rounded-bottom-4">
+                    <p className="text-muted mb-0 small">{faq.answer}</p>
+                  </div>
                 </div>
               </div>
             ))}
@@ -2008,7 +1981,7 @@ export default function DonDetailPage() {
 
       {/* CTA */}
       <section className="bg-success text-white py-5">
-        <div className="container text-center">
+        <div className="container text-center px-3">
           <h2 className="display-5 fw-bold mb-3">Vous avez quelque chose à donner ?</h2>
           <p className="lead mb-4">Rejoignez des milliers de donateurs et partagez avec votre communauté</p>
           <button onClick={handleOpenPublishModal} className="btn btn-light btn-lg px-5 py-4 fw-bold text-success" style={{ border: "none", cursor: "pointer" }}>
@@ -2023,16 +1996,52 @@ export default function DonDetailPage() {
         .hover-border-warning:hover { border-color: #f57c00 !important; }
         .hover-text-white:hover { color: white !important; }
         .hover-shadow-xl:hover { box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important; }
-        .bg-gradient-orange-red { background: linear-gradient(135deg, #fff5e6 0%, #fff0f0 100%); }
         .bg-purple { background-color: #9c27b0 !important; }
-        .text-purple { color: #9c27b0 !important; }
-        .transition-all { transition: all 0.3s ease; }
         .cursor-pointer { cursor: pointer; }
         .sticky-top { position: sticky; top: 100px; }
         .accordion-button:not(.collapsed) { background-color: white; color: inherit; }
         .accordion-button:focus { box-shadow: none; border-color: #dee2e6; }
-        .mt-8 { margin-top: 2rem; }
         .object-cover { object-fit: cover; }
+        
+        /* Galerie responsive avec classes CSS */
+        .galerie-container {
+          height: 300px;
+        }
+        
+        /* Images des dons récents */
+        .recents-image-container {
+          position: relative;
+          height: 160px;
+        }
+        
+        @media (min-width: 576px) {
+          .galerie-container {
+            height: 400px;
+          }
+        }
+        
+        @media (min-width: 768px) {
+          .galerie-container {
+            height: 500px;
+          }
+          .recents-image-container {
+            height: 180px;
+          }
+        }
+        
+        @media (min-width: 992px) {
+          .galerie-container {
+            height: 600px;
+          }
+        }
+        
+        @media (max-width: 768px) {
+          .sticky-top {
+            position: relative;
+            top: 0;
+          }
+        }
+        
         @keyframes slideIn {
           from { transform: translateX(100%); opacity: 0; }
           to { transform: translateX(0); opacity: 1; }

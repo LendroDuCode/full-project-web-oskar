@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -1709,7 +1710,7 @@ export default function BoutiqueApercu() {
                         ? "Aucun produit ne correspond à vos critères."
                         : "Cette boutique n'a pas encore de produits."}
                     </p>
-                    {boutique.produits.length === 0 && (
+                    {/* {boutique.produits.length === 0 && (
                       <button
                         onClick={() => handleCreateProduct()}
                         className="btn btn-primary mt-3"
@@ -1717,7 +1718,7 @@ export default function BoutiqueApercu() {
                         <FontAwesomeIcon icon={faPlus} className="me-2" />
                         Ajouter votre premier produit
                       </button>
-                    )}
+                    )} */}
                   </div>
                 ) : (
                   <div className="table-responsive">

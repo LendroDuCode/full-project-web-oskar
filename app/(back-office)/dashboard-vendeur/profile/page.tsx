@@ -1,5 +1,6 @@
 // app/(back-office)/dashboard-vendeur/profile/page.tsx
 "use client";
+export const dynamic = 'force-dynamic';
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";

@@ -487,7 +487,11 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
       className={`bg-white ${!compactMode ? "border-bottom" : ""}`}
       style={{
         borderColor: colors.oskar.lightGrey,
-        padding: compactMode ? "1.5rem 0" : "clamp(2rem, 5vw, 3.5rem) 0",
+        // Réduction drastique du padding pour coller au carousel
+        padding: compactMode 
+          ? "0" 
+          : "clamp(0.25rem, 1vw, 0.5rem) 0 0 0",
+        marginBottom: 0,
       }}
     >
       <div className="container-fluid px-3 px-sm-4 px-lg-5">
@@ -497,39 +501,12 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
             maxWidth: compactMode ? "100%" : "clamp(100%, 90vw, 900px)",
           }}
         >
-          {/* ===== MODIFICATION PRINCIPALE ===== */}
-          {/* Titre - Caché sur mobile */}
-          {!compactMode && (
-            <h1
-              className="text-center mb-4 fw-bold d-none d-md-block"
-              style={{
-                color: colors.oskar.black,
-                fontSize: "clamp(1.75rem, 5vw, 2.75rem)",
-                lineHeight: 1.2,
-                marginBottom: "2rem",
-              }}
-            >
-              Découvrez les pépites près de chez vous
-              <span
-                className="d-block mt-2"
-                style={{
-                  fontSize: "clamp(1rem, 3vw, 1.25rem)",
-                  color: colors.oskar.grey,
-                  fontWeight: "normal",
-                  opacity: 0.8,
-                }}
-              >
-                Des milliers d'annonces gratuites à découvrir
-              </span>
-            </h1>
-          )}
-
           {/* Barre de recherche - TOUJOURS visible */}
           <div
             className="position-relative"
             style={{
               maxWidth: compactMode ? "100%" : "100%",
-              marginBottom: isMobile ? "0" : "2rem",
+              marginBottom: 0, // Suppression de la marge du bas
             }}
           >
             <div className="position-relative">
@@ -706,15 +683,11 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
           {/* ===== ÉLÉMENTS CACHÉS SUR MOBILE ===== */}
           {/* FILTRES RAPIDES - UNIQUEMENT SUR TABLETTE/DESKTOP */}
           {!compactMode && !isMobile && (
-            <div className="d-none d-md-block mb-4">
+            <div className="d-none d-md-block mt-2">
               <div
                 className="d-flex gap-2 overflow-auto pb-2"
                 style={{ scrollbarWidth: "none" }}
               >
-            
-
-              
-
                 {/* Bouton Effacer */}
                 {hasActiveFilters && (
                   <button
@@ -743,128 +716,9 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
             </div>
           )}
 
-          {/* SOUS-CATÉGORIES POPULAIRES - UNIQUEMENT SUR TABLETTE/DESKTOP */}
-          {showPopularSearches &&
-            !loadingSubs &&
-            categoriesWithSubs.length > 0 && (
-              <div className="d-none d-md-block mt-4 mt-md-5">
-                <h3
-                  className="text-center mb-4"
-                  style={{
-                    color: colors.oskar.grey,
-                    fontSize: "1rem",
-                    fontWeight: 600,
-                    letterSpacing: "0.5px",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  <i
-                    className="fa-solid fa-tags me-2"
-                    style={{ color: colors.oskar.green }}
-                  ></i>
-                  Sous-catégories populaires
-                </h3>
-
-                {/* Conteneur avec Flexbox pour alignement horizontal */}
-                <div className="d-flex flex-wrap justify-content-center gap-2 gap-md-3">
-                  {categoriesWithSubs.map((item) => (
-                    <div
-                      key={item.category.uuid}
-                      className="d-flex flex-wrap justify-content-center gap-2"
-                    >
-                      {/* SOUS-CATÉGORIES SANS LE BADGE DE CATÉGORIE PRINCIPALE */}
-                      {item.subCategories.map((sub) => (
-                        <button
-                          key={sub.uuid}
-                          onClick={() =>
-                            handleSubCategoryClick(sub, item.category.libelle)
-                          }
-                          className="btn rounded-pill d-flex align-items-center justify-content-center"
-                          style={{
-                            backgroundColor:
-                              selectedSousCategorie === sub.uuid
-                                ? getCategoryColor(item.category.type)
-                                : "white",
-                            color:
-                              selectedSousCategorie === sub.uuid
-                                ? "white"
-                                : colors.oskar.grey,
-                            fontSize: "0.8125rem",
-                            padding: "0.5rem 1.25rem",
-                            transition:
-                              "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                            border:
-                              selectedSousCategorie === sub.uuid
-                                ? "none"
-                                : `1px solid ${colors.oskar.lightGrey}`,
-                            whiteSpace: "nowrap",
-                            boxShadow:
-                              selectedSousCategorie === sub.uuid
-                                ? `0 4px 12px ${getCategoryColor(item.category.type)}40`
-                                : "0 2px 4px rgba(0,0,0,0.02)",
-                            fontWeight:
-                              selectedSousCategorie === sub.uuid
-                                ? "600"
-                                : "400",
-                          }}
-                          onMouseEnter={(e) => {
-                            if (selectedSousCategorie !== sub.uuid) {
-                              e.currentTarget.style.backgroundColor =
-                                getCategoryColor(item.category.type) + "10";
-                              e.currentTarget.style.color = getCategoryColor(
-                                item.category.type,
-                              );
-                              e.currentTarget.style.borderColor =
-                                getCategoryColor(item.category.type);
-                              e.currentTarget.style.transform =
-                                "translateY(-2px)";
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            if (selectedSousCategorie !== sub.uuid) {
-                              e.currentTarget.style.backgroundColor = "white";
-                              e.currentTarget.style.color = colors.oskar.grey;
-                              e.currentTarget.style.borderColor =
-                                colors.oskar.lightGrey;
-                              e.currentTarget.style.transform =
-                                "translateY(0)";
-                            }
-                          }}
-                          aria-label={`Rechercher ${sub.libelle}`}
-                          type="button"
-                        >
-                          <i
-                            className="fa-solid fa-tag me-1"
-                            style={{ fontSize: "0.7rem" }}
-                          ></i>
-                          {sub.libelle}
-                        </button>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-          {/* Message si chargement - UNIQUEMENT SUR TABLETTE/DESKTOP */}
-          {loadingSubs && showPopularSearches && (
-            <div className="d-none d-md-flex justify-content-center align-items-center gap-2 mt-4">
-              <div
-                className="spinner-border spinner-border-sm"
-                style={{ color: colors.oskar.green }}
-                role="status"
-              >
-                <span className="visually-hidden">Chargement...</span>
-              </div>
-              <span className="text-muted small">
-                Chargement des sous-catégories...
-              </span>
-            </div>
-          )}
-
           {/* RÉSUMÉ DES FILTRES ACTIFS - UNIQUEMENT SUR TABLETTE/DESKTOP */}
           {hasActiveFilters && (
-            <div className="d-none d-md-block mt-4 text-center">
+            <div className="d-none d-md-block mt-2 text-center">
               <div
                 className="d-inline-flex align-items-center gap-2 px-3 py-2 rounded-pill"
                 style={{
@@ -1073,7 +927,7 @@ const HeroSearch: React.FC<HeroSearchProps> = ({
 
           /* Ajuster l'espacement */
           #hero-search section {
-            padding: 1rem 0 !important;
+            padding: 0 !important;
           }
         }
 

@@ -34,9 +34,6 @@ import {
   VenteFormProps,
 } from "../components/constantes/types";
 
-// ============================================
-// FONCTION POUR DÉCODER LE TOKEN JWT
-// ============================================
 const decodeToken = (token: string): any => {
   try {
     const parts = token.split('.');
@@ -57,9 +54,6 @@ const decodeToken = (token: string): any => {
   }
 };
 
-// ============================================
-// COMPOSANT D'IMAGE SÉCURISÉ AVEC buildImageUrl
-// ============================================
 const SafeImage = ({
   src,
   alt,
@@ -114,7 +108,6 @@ const VenteForm: React.FC<VenteFormProps> = ({
   step,
   user,
   validationErrors = {},
-  // Props optionnelles avec valeurs par défaut
   boutiques: externalBoutiques = [],
   selectedBoutique: externalSelectedBoutique = null,
   onBoutiqueChange: externalOnBoutiqueChange,
@@ -132,7 +125,6 @@ const VenteForm: React.FC<VenteFormProps> = ({
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [isVendeur, setIsVendeur] = useState(false);
 
-  // ✅ S'assurer que la quantité est toujours à 1
   useEffect(() => {
     if (venteData.quantite !== "1") {
       onChange({
@@ -142,7 +134,16 @@ const VenteForm: React.FC<VenteFormProps> = ({
     }
   }, [venteData.quantite]);
 
-  // Fonction pour formater le prix avec séparateur de milliers
+  useEffect(() => {
+    if (venteData.is_whatsapp === undefined) {
+      onChange({
+        ...venteData,
+        is_whatsapp: 1,
+        quantite: "1",
+      });
+    }
+  }, [venteData.is_whatsapp]);
+
   const formatPrix = (value: string): string => {
     const numbers = value.replace(/\D/g, '');
     if (numbers) {
@@ -162,7 +163,20 @@ const VenteForm: React.FC<VenteFormProps> = ({
     onChange({ ...venteData, prix: numericValue, quantite: "1" });
   };
 
-  // Récupérer le type d'utilisateur
+  const handleNumeroChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    const cleaned = value.replace(/[^0-9+\s]/g, '');
+    onChange({ ...venteData, numero: cleaned, quantite: "1" });
+  };
+
+  const handleWhatsappToggle = () => {
+    onChange({
+      ...venteData,
+      is_whatsapp: venteData.is_whatsapp === 1 ? 0 : 1,
+      quantite: "1",
+    });
+  };
+
   useEffect(() => {
     const getUserTypeFromApiClient = () => {
       try {
@@ -214,7 +228,6 @@ const VenteForm: React.FC<VenteFormProps> = ({
     return isVendeur;
   }, [isVendeur]);
 
-  // Charger les boutiques
   useEffect(() => {
     const fetchAllBoutiques = async () => {
       console.log("🏪 Chargement des boutiques - isUserVendeur:", isUserVendeur());
@@ -294,7 +307,6 @@ const VenteForm: React.FC<VenteFormProps> = ({
     fetchAllBoutiques();
   }, [externalBoutiques, isUserVendeur, venteData.boutiqueUuid]);
 
-  // Charger les catégories
   useEffect(() => {
     const fetchCategories = async () => {
       try {
@@ -440,21 +452,14 @@ const VenteForm: React.FC<VenteFormProps> = ({
 
   const renderVenteStep2 = () => {
     const vendeur = isUserVendeur();
-    console.log("🎨 Rendu étape 2 - estVendeur:", vendeur);
-    console.log("🎨 Boutiques disponibles:", boutiques.length);
-    console.log("🎨 Boutique sélectionnée:", venteData.boutiqueUuid);
 
     return (
       <div className="container-fluid p-4">
-        {/* En-tête */}
         <div className="row mb-5">
           <div className="col-12">
             <div className="d-flex align-items-center bg-success bg-opacity-10 p-4 rounded-4 border border-success border-opacity-25">
               <div className="rounded-circle bg-success p-3 me-4 shadow-sm">
-                <FontAwesomeIcon
-                  icon={faShoppingCart}
-                  className="text-white fs-3"
-                />
+                <FontAwesomeIcon icon={faShoppingCart} className="text-white fs-3" />
               </div>
               <div>
                 <h2 className="fw-bold text-dark mb-2 display-6">Détails de la vente</h2>
@@ -481,15 +486,11 @@ const VenteForm: React.FC<VenteFormProps> = ({
         )}
 
         <div className="row g-4">
-          {/* Colonne principale - Formulaire */}
           <div className="col-lg-8">
             <div className="card border shadow-lg rounded-4 mb-4 hover-shadow transition-all">
               <div className="card-header bg-white border-bottom py-4 px-4 rounded-top-4">
                 <h4 className="fw-bold mb-0 text-dark d-flex align-items-center">
-                  <FontAwesomeIcon
-                    icon={faInfoCircle}
-                    className="text-success me-3 fs-3"
-                  />
+                  <FontAwesomeIcon icon={faInfoCircle} className="text-success me-3 fs-3" />
                   Information du produit
                 </h4>
               </div>
@@ -498,10 +499,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
                 {vendeur && (
                   <div className="mb-5">
                     <label className="form-label fw-bold fs-5 mb-3 d-flex align-items-center">
-                      <FontAwesomeIcon
-                        icon={faStore}
-                        className="me-2 text-success"
-                      />
+                      <FontAwesomeIcon icon={faStore} className="me-2 text-success" />
                       Boutique <span className="text-danger ms-1">*</span>
                       <span className="badge bg-success bg-opacity-10 text-success ms-3 px-3 py-2 fs-6 rounded-pill">
                         Requis pour les vendeurs
@@ -654,7 +652,66 @@ const VenteForm: React.FC<VenteFormProps> = ({
                   </div>
                 </div>
 
-                {/* Champ Quantité - SUPPRIMÉ (valeur par défaut à 1) */}
+                <div className="mb-4">
+                  <div className="d-flex align-items-center justify-content-between p-3 bg-light rounded-4 border">
+                    <div className="d-flex align-items-center">
+                      <div className="rounded-circle bg-success bg-opacity-10 p-2 me-3">
+                      </div>
+                      <div>
+                        <label className="fw-bold mb-0 text-dark">
+                          Disponible sur WhatsApp
+                        </label>
+                        <p className="text-muted small mb-0">
+                          Être contacté facilement via WhatsApp
+                        </p>
+                      </div>
+                    </div>
+                    <div className="form-check form-switch">
+                      <input
+                        type="checkbox"
+                        className="form-check-input"
+                        style={{ 
+                          width: "3rem", 
+                          height: "1.5rem",
+                          backgroundColor: venteData.is_whatsapp === 1 ? "#25D366" : "#ccc",
+                          borderColor: venteData.is_whatsapp === 1 ? "#25D366" : "#ccc",
+                          cursor: "pointer"
+                        }}
+                        checked={venteData.is_whatsapp === 1}
+                        onChange={handleWhatsappToggle}
+                      />
+                    </div>
+                  </div>
+                  <small className="text-muted mt-2 d-block">
+                    Activez cette option si vous souhaitez être contacté via WhatsApp
+                  </small>
+                </div>
+
+                {venteData.is_whatsapp === 1 && (
+                  <div className="mb-4">
+                    <label className="form-label fw-bold fs-5 mb-3 d-flex align-items-center">
+                      <FontAwesomeIcon icon={faPhone} className="me-2 text-success" />
+                      Numéro de téléphone <span className="text-danger ms-1">*</span>
+                    </label>
+                    <div className="input-group">
+                      <span className="input-group-text bg-light border rounded-start-4 px-4">
+                        <FontAwesomeIcon icon={faPhone} className="text-success" />
+                      </span>
+                      <input
+                        type="tel"
+                        className="form-control form-control-lg border border-secondary rounded-end-4 py-3 px-4"
+                        style={{ fontSize: "1.1rem" }}
+                        placeholder="Ex: +225 07 XX XX XX XX"
+                        value={venteData.numero || ""}
+                        onChange={handleNumeroChange}
+                        required={venteData.is_whatsapp === 1}
+                      />
+                    </div>
+                    <small className="text-muted mt-2 d-block">
+                      Ce numéro permettra aux acheteurs de vous contacter via WhatsApp
+                    </small>
+                  </div>
+                )}
 
                 <div className="mb-4" style={{ minHeight: "200px" }}>
                   <label className="form-label fw-bold fs-5 mb-3">
@@ -684,10 +741,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
               <div className="card border shadow-lg rounded-4 mb-4 hover-shadow transition-all">
                 <div className="card-header bg-white border-bottom py-4 px-4 rounded-top-4">
                   <h4 className="fw-bold mb-0 text-dark d-flex align-items-center">
-                    <FontAwesomeIcon
-                      icon={faCamera}
-                      className="text-success me-3 fs-3"
-                    />
+                    <FontAwesomeIcon icon={faCamera} className="text-success me-3 fs-3" />
                     Photo <span className="text-danger ms-1">*</span>
                   </h4>
                 </div>
@@ -730,10 +784,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
                         borderColor: "#28a745"
                       }}
                     >
-                      <FontAwesomeIcon
-                        icon={faImage}
-                        className="text-success fs-1 mb-3"
-                      />
+                      <FontAwesomeIcon icon={faImage} className="text-success fs-1 mb-3" />
                       <p className="text-secondary fs-6 mb-0">
                         Cliquez pour ajouter une photo
                       </p>
@@ -760,10 +811,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
               <div className="card border shadow-lg rounded-4 mb-4 hover-shadow transition-all">
                 <div className="card-header bg-white border-bottom py-4 px-4 rounded-top-4">
                   <h4 className="fw-bold mb-0 text-dark d-flex align-items-center">
-                    <FontAwesomeIcon
-                      icon={faList}
-                      className="text-success me-3 fs-3"
-                    />
+                    <FontAwesomeIcon icon={faList} className="text-success me-3 fs-3" />
                     Catégorie <span className="text-danger ms-1">*</span>
                   </h4>
                 </div>
@@ -871,10 +919,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
               <div className="card border shadow-lg rounded-4 hover-shadow transition-all">
                 <div className="card-header bg-white border-bottom py-4 px-4 rounded-top-4">
                   <h4 className="fw-bold mb-0 text-dark d-flex align-items-center">
-                    <FontAwesomeIcon
-                      icon={faTag}
-                      className="text-success me-3 fs-3"
-                    />
+                    <FontAwesomeIcon icon={faTag} className="text-success me-3 fs-3" />
                     État
                   </h4>
                 </div>
@@ -929,14 +974,9 @@ const VenteForm: React.FC<VenteFormProps> = ({
   };
 
   const renderVenteStep3 = () => {
-    const selectedBoutique = boutiques.find(
-      (b) => b.uuid === venteData.boutiqueUuid,
-    );
-
+    const selectedBoutique = boutiques.find((b) => b.uuid === venteData.boutiqueUuid);
     const selectedCategorie = categories.find(c => c.uuid === venteData.categorie_uuid);
-    const selectedSousCategorie = sousCategories.find(
-      sc => sc.uuid === venteData.sous_categorie_uuid
-    );
+    const selectedSousCategorie = sousCategories.find(sc => sc.uuid === venteData.sous_categorie_uuid);
 
     const formatPrixDisplay = (prix: string): string => {
       if (!prix) return "Prix non défini";
@@ -954,10 +994,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
           <div className="col-12">
             <div className="text-center">
               <div className="rounded-circle bg-success bg-opacity-10 p-4 d-inline-flex align-items-center justify-content-center mb-4">
-                <FontAwesomeIcon
-                  icon={faCheckCircle}
-                  className="text-success fs-1"
-                />
+                <FontAwesomeIcon icon={faCheckCircle} className="text-success fs-1" />
               </div>
               <h2 className="fw-bold text-dark mb-3 display-5">Récapitulatif de la vente</h2>
               <p className="text-secondary fs-5">
@@ -985,10 +1022,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
                 {selectedBoutique && (
                   <div className="mb-5 p-4 bg-success bg-opacity-10 rounded-4 border border-success">
                     <h5 className="fw-bold text-dark mb-3 d-flex align-items-center">
-                      <FontAwesomeIcon
-                        icon={faStore}
-                        className="me-2 text-success"
-                      />
+                      <FontAwesomeIcon icon={faStore} className="me-2 text-success" />
                       Vente via boutique
                     </h5>
                     <div className="d-flex align-items-center">
@@ -997,20 +1031,13 @@ const VenteForm: React.FC<VenteFormProps> = ({
                           src={selectedBoutique.logo}
                           alt={selectedBoutique.nom}
                           className="rounded-circle me-4 border border-success"
-                          style={{
-                            width: "80px",
-                            height: "80px",
-                            objectFit: "cover",
-                          }}
+                          style={{ width: "80px", height: "80px", objectFit: "cover" }}
                           fallbackIcon={faStore}
                           fallbackSize="32px"
                         />
                       ) : (
                         <div className="bg-white rounded-circle p-3 me-4 border border-success">
-                          <FontAwesomeIcon
-                            icon={faBuilding}
-                            className="text-success fs-1"
-                          />
+                          <FontAwesomeIcon icon={faBuilding} className="text-success fs-1" />
                         </div>
                       )}
                       <div>
@@ -1033,13 +1060,9 @@ const VenteForm: React.FC<VenteFormProps> = ({
 
                 <div className="row mb-5">
                   <div className="col-md-8">
-                    <h3 className="fw-bold text-dark mb-3 display-6">
-                      {venteData.libelle || "Non renseigné"}
-                    </h3>
+                    <h3 className="fw-bold text-dark mb-3 display-6">{venteData.libelle || "Non renseigné"}</h3>
                     <div className="d-flex align-items-center flex-wrap gap-4">
-                      <div className="display-5 fw-bold text-success">
-                        {formatPrixDisplay(venteData.prix)}
-                      </div>
+                      <div className="display-5 fw-bold text-success">{formatPrixDisplay(venteData.prix)}</div>
                       <div className="badge bg-light text-dark border border-secondary p-3 rounded-pill">
                         <FontAwesomeIcon icon={faBox} className="me-2" />
                         Quantité: {venteData.quantite || 1}
@@ -1052,13 +1075,9 @@ const VenteForm: React.FC<VenteFormProps> = ({
                   <div className="col-md-6">
                     <div className="p-4 bg-light rounded-4 border">
                       <p className="text-secondary mb-2 small">Catégorie</p>
-                      <p className="fw-bold text-dark mb-1 fs-5">
-                        {selectedCategorie?.libelle || "Non renseigné"}
-                      </p>
+                      <p className="fw-bold text-dark mb-1 fs-5">{selectedCategorie?.libelle || "Non renseigné"}</p>
                       {selectedSousCategorie && (
-                        <p className="text-secondary mb-0 small">
-                          Sous-catégorie: {selectedSousCategorie.libelle}
-                        </p>
+                        <p className="text-secondary mb-0 small">Sous-catégorie: {selectedSousCategorie.libelle}</p>
                       )}
                     </div>
                   </div>
@@ -1067,9 +1086,24 @@ const VenteForm: React.FC<VenteFormProps> = ({
                     <div className="p-4 bg-light rounded-4 border">
                       <p className="text-secondary mb-2 small">État</p>
                       <p className="fw-bold text-dark mb-0 fs-5">
-                        {conditions.find((c) => c.value === venteData.condition)
-                          ?.label || "Non renseigné"}
+                        {conditions.find((c) => c.value === venteData.condition)?.label || "Non renseigné"}
                       </p>
+                    </div>
+                  </div>
+
+                  <div className="col-md-12">
+                    <div className="p-4 bg-light rounded-4 border">
+                      <p className="text-secondary mb-2 small">Contact WhatsApp</p>
+                      <p className="fw-bold text-dark mb-0 fs-5">
+                        {venteData.is_whatsapp === 1 ? (
+                          <span className="text-success">✅ Disponible</span>
+                        ) : (
+                          <span className="text-muted">❌ Non disponible</span>
+                        )}
+                      </p>
+                      {venteData.is_whatsapp === 1 && venteData.numero && (
+                        <p className="text-secondary mb-0 small mt-2">Numéro: {venteData.numero}</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1078,9 +1112,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
                   <div className="mt-5">
                     <p className="text-secondary mb-3 fw-bold">Description</p>
                     <div className="bg-light rounded-4 p-4 border">
-                      <p className="mb-0 fs-5" style={{ lineHeight: 1.8 }}>
-                        {venteData.description}
-                      </p>
+                      <p className="mb-0 fs-5" style={{ lineHeight: 1.8 }}>{venteData.description}</p>
                     </div>
                   </div>
                 )}
@@ -1103,9 +1135,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
                       alt="Preview"
                       className="img-fluid rounded-4 border shadow-sm"
                       style={{ maxHeight: "300px", objectFit: "cover", width: "100%" }}
-                      onError={(e) => {
-                        e.currentTarget.src = "/images/default-product.png";
-                      }}
+                      onError={(e) => { e.currentTarget.src = "/images/default-product.png"; }}
                     />
                     <p className="text-success mt-3 small">
                       <FontAwesomeIcon icon={faCheckCircle} className="me-1" />
@@ -1114,10 +1144,7 @@ const VenteForm: React.FC<VenteFormProps> = ({
                   </div>
                 ) : (
                   <div className="text-center border border-dashed border-secondary rounded-4 p-5">
-                    <FontAwesomeIcon
-                      icon={faImage}
-                      className="text-secondary fs-1 mb-3"
-                    />
+                    <FontAwesomeIcon icon={faImage} className="text-secondary fs-1 mb-3" />
                     <p className="text-secondary mb-0">Aucune photo</p>
                   </div>
                 )}
