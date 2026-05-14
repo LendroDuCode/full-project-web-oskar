@@ -13,17 +13,25 @@ export default function FacebookCallbackPage() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
+        console.log("🔄 Facebook Callback - Début du traitement");
+        
+        // Récupérer le token depuis l'URL fragment (#)
         const hash = window.location.hash.substring(1);
         const params = new URLSearchParams(hash);
         const accessToken = params.get("access_token");
 
-        console.log("🔑 Token Facebook reçu:", accessToken?.substring(0, 50) + "...");
+        console.log("🔑 access_token Facebook reçu:", accessToken?.substring(0, 50) + "...");
+        console.log("📦 Tous les paramètres:", Object.fromEntries(params.entries()));
 
         if (!accessToken) {
           setStatus("error");
-          setErrorMessage("Token non trouvé dans l'URL");
+          setErrorMessage("access_token non trouvé dans l'URL");
           setTimeout(() => {
             if (window.opener) {
+              window.opener.postMessage({ 
+                type: "oauth-error", 
+                error: "access_token non trouvé" 
+              }, window.location.origin);
               window.close();
             } else {
               router.push("/");
@@ -32,65 +40,119 @@ export default function FacebookCallbackPage() {
           return;
         }
 
-        const response = await fetch(API_ENDPOINTS.AUTH.UTILISATEUR.FACEBOOK, {
+        console.log("📡 Appel API Facebook connexion...");
+        
+        // ✅ Vérifier que l'endpoint est correct
+        const endpoint = API_ENDPOINTS.AUTH.UTILISATEUR.FACEBOOK;
+        console.log("📡 Endpoint:", endpoint);
+        
+        const response = await fetch(endpoint, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "Accept": "application/json",
           },
           body: JSON.stringify({ token: accessToken }),
         });
 
-        const data = await response.json();
-        console.log("📦 Réponse API:", data);
+        console.log("📡 Status HTTP:", response.status);
+        console.log("📡 Headers:", Object.fromEntries(response.headers.entries()));
 
-        if (response.ok && data.status === "success" && data.data) {
-          const userData = data.data;
+        // ✅ Vérifier si la réponse est OK avant de parser le JSON
+        if (!response.ok) {
+          const text = await response.text();
+          console.error("❌ Réponse non OK:", text);
+          throw new Error(`HTTP ${response.status}: ${text.substring(0, 100)}`);
+        }
+
+        // ✅ Vérifier que la réponse n'est pas vide
+        const textResponse = await response.text();
+        console.log("📦 Réponse brute:", textResponse.substring(0, 200));
+        
+        if (!textResponse || textResponse.trim() === "") {
+          throw new Error("Réponse vide du serveur");
+        }
+
+        // ✅ Parser le JSON
+        let data;
+        try {
+          data = JSON.parse(textResponse);
+        } catch (parseError) {
+          console.error("❌ Erreur parsing JSON:", parseError);
+          throw new Error("La réponse du serveur n'est pas un JSON valide");
+        }
+        
+        console.log("📦 Réponse API parsée:", data);
+
+        if (data.status === "success" && data.data) {
+          // ✅ Facebook retourne "token" (pas "tempToken")
+          const { token, refreshToken, user, isNewUser } = data.data;
           
-          localStorage.setItem("oskar_token", userData.token);
-          localStorage.setItem("oskar_user", JSON.stringify(userData.user));
-          localStorage.setItem("oskar_user_type", "utilisateur");
+          console.log("✅ Authentification réussie:", {
+            userEmail: user.email,
+            userType: user.type,
+            tokenLength: token?.length,
+          });
           
-          if (userData.refreshToken) {
-            localStorage.setItem("oskar_refresh_token", userData.refreshToken);
-          }
+          // Sauvegarder les données
+          localStorage.setItem("oskar_token", token);
+          localStorage.setItem("oskar_user", JSON.stringify(user));
+          localStorage.setItem("oskar_user_type", user.type);
+          if (refreshToken) localStorage.setItem("oskar_refresh_token", refreshToken);
           
-          setStatus("success");
+          // Anciens formats pour compatibilité
+          localStorage.setItem("token", token);
+          localStorage.setItem("temp_token", token);
+          localStorage.setItem("tempToken", token);
           
+          // Déclencher les événements
           if (typeof window !== "undefined") {
             window.dispatchEvent(new CustomEvent("auth-state-changed", {
-              detail: { isLoggedIn: true, user: userData.user }
+              detail: { isLoggedIn: true, user: user }
             }));
             window.dispatchEvent(new Event("force-header-update"));
           }
           
-          if (window.opener) {
-            window.opener.postMessage({ type: "oauth-success", token: userData.token }, window.location.origin);
-            setTimeout(() => window.close(), 1500);
-          } else {
-            setTimeout(() => {
-              if (userData.user.type === "utilisateur") {
+          setStatus("success");
+          
+          setTimeout(() => {
+            if (window.opener) {
+              window.opener.postMessage({ 
+                type: "oauth-success", 
+                token: token,
+                user: user,
+                refreshToken: refreshToken
+              }, window.location.origin);
+              setTimeout(() => window.close(), 1500);
+            } else {
+              if (isNewUser) {
+                router.push("/bienvenue");
+              } else if (user.type === "utilisateur") {
                 router.push("/dashboard-utilisateur");
-              } else if (userData.user.type === "vendeur") {
+              } else if (user.type === "vendeur") {
                 router.push("/dashboard-vendeur");
               } else {
                 router.push("/");
               }
-            }, 1500);
-          }
+            }
+          }, 1500);
         } else {
-          throw new Error(data.message || "Erreur lors de l'authentification");
+          throw new Error(data.message || data.error || "Erreur lors de l'authentification");
         }
       } catch (error: any) {
         console.error("❌ Erreur callback Facebook:", error);
         setStatus("error");
         setErrorMessage(error.message || "Erreur lors de l'authentification");
-        setTimeout(() => {
-          if (window.opener) {
-            window.close();
-          } else {
-            router.push("/");
-          }
-        }, 3000);
+        
+        if (window.opener) {
+          window.opener.postMessage({ 
+            type: "oauth-error", 
+            error: error.message 
+          }, window.location.origin);
+          setTimeout(() => window.close(), 3000);
+        } else {
+          setTimeout(() => router.push("/"), 3000);
+        }
       }
     };
 
@@ -112,26 +174,26 @@ export default function FacebookCallbackPage() {
         {status === "success" && (
           <>
             <div className="mb-3">
-              <svg width="60" height="60" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <svg width="60" height="60" viewBox="0 0 24 24" fill="none">
                 <circle cx="12" cy="12" r="10" fill="#1877f2" />
                 <path d="M8 12L11 15L16 9" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </div>
             <h5 className="text-success">Connexion réussie !</h5>
-            <p className="text-muted">Fermeture de la fenêtre...</p>
+            <p className="text-muted">Redirection en cours...</p>
           </>
         )}
         {status === "error" && (
           <>
             <div className="mb-3">
-              <svg width="60" height="60" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <svg width="60" height="60" viewBox="0 0 24 24" fill="none">
                 <circle cx="12" cy="12" r="10" fill="#dc2626" />
                 <path d="M15 9L9 15M9 9L15 15" stroke="white" strokeWidth="2" strokeLinecap="round"/>
               </svg>
             </div>
             <h5 className="text-danger">Erreur de connexion</h5>
             <p className="text-muted">{errorMessage}</p>
-            <p className="text-muted small">Fermeture...</p>
+            <p className="text-muted small mt-2">Fermeture de la fenêtre...</p>
           </>
         )}
       </div>

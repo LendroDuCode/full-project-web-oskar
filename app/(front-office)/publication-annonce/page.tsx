@@ -114,6 +114,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     titre: "",
     condition: "bon",
     disponibilite: "immediate",
+    is_whatsapp: 1,
   });
 
   const [echangeData, setEchangeData] = useState<EchangeData>({
@@ -130,6 +131,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     image: null,
     quantite: "1",
     type_destinataire: "autre",
+    is_whatsapp: 1,
   });
 
   const [venteData, setVenteData] = useState<VenteData>({
@@ -150,6 +152,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     condition: "neuf",
     garantie: "non",
     saleMode: "particulier",
+    is_whatsapp: 1,
   });
 
   const [boutiques, setBoutiques] = useState<Boutique[]>([]);
@@ -807,10 +810,10 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         }
       );
       
-      const donData = moderationResponse.data;
-      console.log("🤖 [IA] Réponse IA reçue:", donData);
+      const donDataResponse = moderationResponse.data;
+      console.log("🤖 [IA] Réponse IA reçue:", donDataResponse);
       
-      if (!donData) {
+      if (!donDataResponse) {
         console.error("❌ [IA] Réponse API invalide");
         showNotification(
           "❌ Erreur de communication avec le serveur. Veuillez réessayer.",
@@ -825,12 +828,12 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         return;
       }
       
-      const suggestions = donData._suggestions || [];
-      const estBloque = donData?.statut === 'bloque' || donData?.est_bloque === true;
-      const estPublie = donData?.statut === 'publie' || donData?.estPublie === true;
+      const suggestions = donDataResponse._suggestions || [];
+      const estBloque = donDataResponse?.statut === 'bloque' || donDataResponse?.est_bloque === true;
+      const estPublie = donDataResponse?.statut === 'publie' || donDataResponse?.estPublie === true;
       
       console.log("🔍 [IA] Analyse:", { 
-        statut: donData?.statut, 
+        statut: donDataResponse?.statut, 
         estBloque, 
         estPublie, 
         suggestionsCount: suggestions.length,
@@ -842,7 +845,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         console.log("💡 [IA] Suggestions reçues:", suggestions.length);
         setAiSuggestions(suggestions);
         setPendingDonData({
-          ...donData,
+          ...donDataResponse,
           uuid: donUuid,
           image: imageFile || savedImageFile,
         });
@@ -852,8 +855,8 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       }
       
       if (estBloque && !hasAcceptedSuggestions) {
-        const categories = donData.ai_moderation_categories || [];
-        let message = donData.moderation_message || `❌ Votre don a été rejeté : ${categories.join(', ')}`;
+        const categories = donDataResponse.ai_moderation_categories || [];
+        let message = donDataResponse.moderation_message || `❌ Votre don a été rejeté : ${categories.join(', ')}`;
         message = message.replace(/\s*\(sans analyse d'image\)\s*/g, '');
         
         if (!message.startsWith('❌') && !message.startsWith('✅')) {
@@ -873,8 +876,8 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       }
       
       if (estPublie || hasAcceptedSuggestions) {
-        let successMessage = donData.moderation_message?.includes('✅') 
-          ? donData.moderation_message
+        let successMessage = donDataResponse.moderation_message?.includes('✅') 
+          ? donDataResponse.moderation_message
           : hasAcceptedSuggestions
             ? "✅ Félicitations ! Vos modifications ont été acceptées et votre annonce a été publiée avec succès !"
             : "✅ Félicitations ! Votre don a été automatiquement approuvé et publié par notre IA !";
@@ -893,7 +896,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         return;
       }
       
-      console.error("❌ [IA] Statut inattendu:", donData?.statut);
+      console.error("❌ [IA] Statut inattendu:", donDataResponse?.statut);
       showNotification("❌ Une erreur est survenue lors de la publication.", 'error', false);
       
       setTimeout(() => {
@@ -986,10 +989,10 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         }
       );
       
-      const echangeData = moderationResponse.data;
+      const echangeDataResponse = moderationResponse.data;
       console.log("🤖 [IA] Réponse IA reçue");
       
-      if (!echangeData) {
+      if (!echangeDataResponse) {
         console.error("❌ [IA] Réponse API invalide");
         showNotification(
           "❌ Erreur de communication avec le serveur. Veuillez réessayer.",
@@ -1004,17 +1007,17 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         return;
       }
       
-      const suggestions = echangeData._suggestions || [];
-      const estBloque = echangeData?.statut === 'bloque' || echangeData?.statut === 'Bloquée' || echangeData?.estBloque === true;
-      const estPublie = echangeData?.statut === 'publie' || echangeData?.statut === 'Publiée' || echangeData?.estPublie === true;
+      const suggestions = echangeDataResponse._suggestions || [];
+      const estBloque = echangeDataResponse?.statut === 'bloque' || echangeDataResponse?.statut === 'Bloquée' || echangeDataResponse?.estBloque === true;
+      const estPublie = echangeDataResponse?.statut === 'publie' || echangeDataResponse?.statut === 'Publiée' || echangeDataResponse?.estPublie === true;
       
-      console.log("🔍 [IA] Analyse:", { statut: echangeData?.statut, estBloque, estPublie, suggestionsCount: suggestions.length });
+      console.log("🔍 [IA] Analyse:", { statut: echangeDataResponse?.statut, estBloque, estPublie, suggestionsCount: suggestions.length });
       
       if (suggestions.length > 0 && !hasAcceptedSuggestions) {
         console.log("💡 [IA] Suggestions reçues:", suggestions.length);
         setAiSuggestions(suggestions);
         setPendingDonData({
-          ...echangeData,
+          ...echangeDataResponse,
           uuid: echangeUuid,
           image: imageFile || savedImageFile,
         });
@@ -1024,8 +1027,8 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       }
       
       if (estBloque && !hasAcceptedSuggestions) {
-        const categories = echangeData.ai_moderation_categories || [];
-        let message = echangeData.moderation_message || `❌ Votre échange a été rejeté : ${categories.join(', ')}`;
+        const categories = echangeDataResponse.ai_moderation_categories || [];
+        let message = echangeDataResponse.moderation_message || `❌ Votre échange a été rejeté : ${categories.join(', ')}`;
         message = message.replace(/\s*\(sans analyse d'image\)\s*/g, '');
         
         if (!message.startsWith('❌') && !message.startsWith('✅')) {
@@ -1045,8 +1048,8 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       }
       
       if (estPublie || hasAcceptedSuggestions) {
-        let successMessage = echangeData.moderation_message?.includes('✅') 
-          ? echangeData.moderation_message
+        let successMessage = echangeDataResponse.moderation_message?.includes('✅') 
+          ? echangeDataResponse.moderation_message
           : hasAcceptedSuggestions
             ? "✅ Félicitations ! Vos modifications ont été acceptées et votre annonce a été publiée avec succès !"
             : "✅ Félicitations ! Votre échange a été automatiquement approuvé et publié par notre IA !";
@@ -1065,7 +1068,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         return;
       }
       
-      console.error("❌ [IA] Statut inattendu:", echangeData?.statut);
+      console.error("❌ [IA] Statut inattendu:", echangeDataResponse?.statut);
       showNotification("❌ Une erreur est survenue lors de la publication.", 'error', false);
       
       setTimeout(() => {
@@ -1192,10 +1195,10 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         }
       );
       
-      const produitData = moderationResponse.data;
+      const produitDataResponse = moderationResponse.data;
       console.log("🤖 [IA] Réponse IA reçue");
       
-      if (!produitData) {
+      if (!produitDataResponse) {
         console.error("❌ [IA] Réponse API invalide");
         showNotification(
           "❌ Erreur de communication avec le serveur. Veuillez réessayer.",
@@ -1210,17 +1213,17 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         return;
       }
       
-      const suggestions = produitData._suggestions || [];
-      const estBloque = produitData?.statut === 'bloque' || produitData?.statut === 'Bloqué' || produitData?.estBloque === true;
-      const estPublie = produitData?.statut === 'publie' || produitData?.statut === 'Publié' || produitData?.estPublie === true;
+      const suggestions = produitDataResponse._suggestions || [];
+      const estBloque = produitDataResponse?.statut === 'bloque' || produitDataResponse?.statut === 'Bloqué' || produitDataResponse?.estBloque === true;
+      const estPublie = produitDataResponse?.statut === 'publie' || produitDataResponse?.statut === 'Publié' || produitDataResponse?.estPublie === true;
       
-      console.log("🔍 [IA] Analyse:", { statut: produitData?.statut, estBloque, estPublie, suggestionsCount: suggestions.length });
+      console.log("🔍 [IA] Analyse:", { statut: produitDataResponse?.statut, estBloque, estPublie, suggestionsCount: suggestions.length });
       
       if (suggestions.length > 0 && !hasAcceptedSuggestions) {
         console.log("💡 [IA] Suggestions reçues:", suggestions.length);
         setAiSuggestions(suggestions);
         setPendingDonData({
-          ...produitData,
+          ...produitDataResponse,
           uuid: produitUuid,
           image: imageFile || savedImageFile,
         });
@@ -1230,8 +1233,8 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       }
       
       if (estBloque && !hasAcceptedSuggestions) {
-        const categories = produitData.ai_moderation_categories || [];
-        let message = produitData.moderation_message || `❌ Votre produit a été rejeté : ${categories.join(', ')}`;
+        const categories = produitDataResponse.ai_moderation_categories || [];
+        let message = produitDataResponse.moderation_message || `❌ Votre produit a été rejeté : ${categories.join(', ')}`;
         message = message.replace(/\s*\(sans analyse d'image\)\s*/g, '');
         
         if (!message.startsWith('❌') && !message.startsWith('✅')) {
@@ -1251,8 +1254,8 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       }
       
       if (estPublie || hasAcceptedSuggestions) {
-        let successMessage = produitData.moderation_message?.includes('✅') 
-          ? produitData.moderation_message
+        let successMessage = produitDataResponse.moderation_message?.includes('✅') 
+          ? produitDataResponse.moderation_message
           : hasAcceptedSuggestions
             ? "✅ Félicitations ! Vos modifications ont été acceptées et votre annonce a été publiée avec succès !"
             : "✅ Félicitations ! Votre produit a été automatiquement approuvé et publié par notre IA !";
@@ -1271,7 +1274,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
         return;
       }
       
-      console.error("❌ [IA] Statut inattendu:", produitData?.statut);
+      console.error("❌ [IA] Statut inattendu:", produitDataResponse?.statut);
       showNotification("❌ Une erreur est survenue lors de la publication.", 'error', false);
       
       setTimeout(() => {
@@ -1422,84 +1425,86 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
   // 10. LES FONCTIONS DE GESTION DES SUGGESTIONS
   // ============================================
   const handleAcceptSuggestion = async (suggestion: Suggestion) => {
-  if (!pendingDonData) return;
-  
-  try {
-    setLoading(true);
+    if (!pendingDonData) return;
     
-    console.log("🔍 Acceptation suggestion:", suggestion);
-    console.log("🔍 pendingDonData avant:", pendingDonData);
-    
-    const updatedData = { ...pendingDonData };
-    let texteModifie = "";
-    
-    if (suggestion.champ === "titre") {
-      updatedData.titre = suggestion.suggestedText;
-      texteModifie = suggestion.suggestedText;
-    } else if (suggestion.champ === "description") {
-      updatedData.description = suggestion.suggestedText;
-      texteModifie = suggestion.suggestedText;
-    }
-    
-    const formData = new FormData();
-    
-    formData.append("nom", updatedData.titre?.trim() || "");
-    formData.append("lieu_retrait", updatedData.lieu_retrait?.trim() || "");
-    formData.append("categorie_uuid", updatedData.categorie_uuid || "");
-    formData.append("description", updatedData.description?.trim() || "");
-    formData.append("quantite", updatedData.quantite || "1");
-    
-    if (adType === "sale") {
-      formData.append("libelle", updatedData.titre?.trim() || "");
+    try {
+      setLoading(true);
       
-      if (isVendeur && venteData.boutiqueUuid) {
-        formData.append("boutiqueUuid", venteData.boutiqueUuid);
-        if (venteData.boutiqueNom) {
-          formData.append("boutiqueNom", venteData.boutiqueNom);
-        }
+      console.log("🔍 Acceptation suggestion:", suggestion);
+      console.log("🔍 pendingDonData avant:", pendingDonData);
+      
+      const updatedData = { ...pendingDonData };
+      let texteModifie = "";
+      
+      if (suggestion.champ === "titre") {
+        updatedData.titre = suggestion.suggestedText;
+        texteModifie = suggestion.suggestedText;
+      } else if (suggestion.champ === "description") {
+        updatedData.description = suggestion.suggestedText;
+        texteModifie = suggestion.suggestedText;
       }
       
-      formData.append("prix", venteData.prix || "0");
-      formData.append("lieu", venteData.lieu || updatedData.lieu_retrait || "");
-      formData.append("condition", venteData.condition || "neuf");
-      formData.append("type", venteData.type || "");
-      formData.append("disponible", String(venteData.disponible ?? true));
-      formData.append("statut", venteData.statut || "publie");
-      formData.append("etoile", venteData.etoile || "5");
-      formData.append("garantie", venteData.garantie || "non");
+      const formData = new FormData();
+      
+      formData.append("nom", updatedData.titre?.trim() || "");
+      formData.append("lieu_retrait", updatedData.lieu_retrait?.trim() || "");
+      formData.append("categorie_uuid", updatedData.categorie_uuid || "");
+      formData.append("description", updatedData.description?.trim() || "");
+      formData.append("quantite", updatedData.quantite || "1");
+      formData.append("is_whatsapp", String(donData.is_whatsapp ?? 1));
+      
+      if (adType === "sale") {
+        formData.append("libelle", updatedData.titre?.trim() || "");
+        
+        if (isVendeur && venteData.boutiqueUuid) {
+          formData.append("boutiqueUuid", venteData.boutiqueUuid);
+          if (venteData.boutiqueNom) {
+            formData.append("boutiqueNom", venteData.boutiqueNom);
+          }
+        }
+        
+        formData.append("prix", venteData.prix || "0");
+        formData.append("lieu", venteData.lieu || updatedData.lieu_retrait || "");
+        formData.append("condition", venteData.condition || "neuf");
+        formData.append("type", venteData.type || "");
+        formData.append("disponible", String(venteData.disponible ?? true));
+        formData.append("statut", venteData.statut || "publie");
+        formData.append("etoile", venteData.etoile || "5");
+        formData.append("garantie", venteData.garantie || "non");
+      }
+      
+      const imageToSend = updatedData.image || savedImageFile;
+      if (imageToSend) {
+        formData.append("image", imageToSend);
+      }
+      
+      const suggestionAcceptee = {
+        suggestionId: suggestion.id,
+        champ: suggestion.champ,
+        texteModifie: texteModifie,
+      };
+      
+      console.log("📝 Suggestion acceptée à envoyer:", suggestionAcceptee);
+      
+      if (adType === "don") {
+        await publishDonWithAI(formData, suggestionAcceptee);
+      } else if (adType === "exchange") {
+        await publishEchangeWithAI(formData, suggestionAcceptee);
+      } else {
+        await publishProduitWithAI(formData, suggestionAcceptee);
+      }
+      
+      // ✅ Mettre à jour l'état local pour ne plus afficher cette suggestion
+      setAiSuggestions(prev => prev.filter(s => s.id !== suggestion.id));
+      setShowAISuggestions(false);
+      
+    } catch (error: any) {
+      console.error("❌ Erreur acceptation suggestion:", error);
+      setSubmitError(error.message);
+      setLoading(false);
     }
-    
-    const imageToSend = updatedData.image || savedImageFile;
-    if (imageToSend) {
-      formData.append("image", imageToSend);
-    }
-    
-    const suggestionAcceptee = {
-      suggestionId: suggestion.id,
-      champ: suggestion.champ,
-      texteModifie: texteModifie,
-    };
-    
-    console.log("📝 Suggestion acceptée à envoyer:", suggestionAcceptee);
-    
-    if (adType === "don") {
-      await publishDonWithAI(formData, suggestionAcceptee);
-    } else if (adType === "exchange") {
-      await publishEchangeWithAI(formData, suggestionAcceptee);
-    } else {
-      await publishProduitWithAI(formData, suggestionAcceptee);
-    }
-    
-    // ✅ Mettre à jour l'état local pour ne plus afficher cette suggestion
-    setAiSuggestions(prev => prev.filter(s => s.id !== suggestion.id));
-    setShowAISuggestions(false);
-    
-  } catch (error: any) {
-    console.error("❌ Erreur acceptation suggestion:", error);
-    setSubmitError(error.message);
-    setLoading(false);
-  }
-};
+  };
+  
   const handleAcceptAllSuggestions = async () => {
     if (!pendingDonData || aiSuggestions.length === 0) return;
     
@@ -1551,6 +1556,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       formData.append("categorie_uuid", updatedData.categorie_uuid || "");
       formData.append("description", updatedData.description?.trim() || "");
       formData.append("quantite", updatedData.quantite || "1");
+      formData.append("is_whatsapp", String(donData.is_whatsapp ?? 1));
       
       if (adType === "sale") {
         formData.append("libelle", updatedData.titre?.trim() || "");
@@ -1606,6 +1612,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       formData.append("categorie_uuid", pendingDonData.categorie_uuid || "");
       formData.append("description", pendingDonData.description?.trim() || "");
       formData.append("quantite", pendingDonData.quantite || "1");
+      formData.append("is_whatsapp", String(donData.is_whatsapp ?? 1));
       
       if (adType === "sale") {
         formData.append("libelle", pendingDonData.titre?.trim() || "");
@@ -1688,6 +1695,8 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     formData.append("nom_donataire", donData.nom_donataire?.trim() || "");
     formData.append("quantite", donData.quantite?.toString() || "1");
     formData.append("description", donData.description?.trim() || "");
+    // ✅ AJOUT DE is_whatsapp
+    formData.append("is_whatsapp", String(donData.is_whatsapp ?? 1));
 
     if (donData.condition) {
       formData.append("condition", donData.condition);
@@ -1701,7 +1710,7 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
       formData.append("image", donData.image);
     }
 
-    console.log("📤 [submitDon] Envoi du don");
+    console.log("📤 [submitDon] Envoi du don avec is_whatsapp:", donData.is_whatsapp);
     console.log("🔘 [submitDon] Chemin choisi:", aiModerationEnabled ? "IA" : "Manuel (modération manuelle)");
 
     if (aiModerationEnabled) {
@@ -1758,10 +1767,14 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     formData.append("type_destinataire", "autre");
     formData.append("typeEchange", "produit");
     formData.append("numero", echangeData.numero?.trim() || "+2250000000000");
+    // ✅ AJOUT DE is_whatsapp
+    formData.append("is_whatsapp", String(echangeData.is_whatsapp ?? 1));
 
     if (echangeData.sous_categorie_uuid) {
       formData.append("sous_categorie_uuid", echangeData.sous_categorie_uuid);
     }
+
+    console.log("📤 [submitEchange] Envoi de l'échange avec is_whatsapp:", echangeData.is_whatsapp);
 
     if (aiModerationEnabled) {
       await publishEchangeWithAI(formData);
@@ -1857,10 +1870,14 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     formData.append("lieu", venteData.lieu.trim());
     formData.append("condition", venteData.condition);
     formData.append("garantie", venteData.garantie);
+    // ✅ AJOUT DE is_whatsapp
+    formData.append("is_whatsapp", String(venteData.is_whatsapp ?? 1));
 
     if (venteData.image) {
       formData.append("image", venteData.image);
     }
+
+    console.log("📤 [submitVente] Envoi du produit avec is_whatsapp:", venteData.is_whatsapp);
 
     if (aiModerationEnabled) {
       await publishProduitWithAI(formData);
@@ -1907,56 +1924,56 @@ const PublishAdModal: React.FC<PublishAdModalProps> = ({
     setAdType(null);
     setSaleMode("particulier");
     setDonData({
-       description: "",
-    type_don: "",
-    localisation: "",
-    lieu_retrait: "",
-    image: null,
-    categorie_uuid: "",
-    sous_categorie_uuid: "",
-    numero: "",
-    quantite: "1",
-    nom_donataire: "",
-    titre: "",
-    condition: "bon",
-    disponibilite: "immediate",
-    is_whatsapp: 1, // ✅ 1 = true par défaut
+      description: "",
+      type_don: "",
+      localisation: "",
+      lieu_retrait: "",
+      image: null,
+      categorie_uuid: "",
+      sous_categorie_uuid: "",
+      numero: "",
+      quantite: "1",
+      nom_donataire: "",
+      titre: "",
+      condition: "bon",
+      disponibilite: "immediate",
+      is_whatsapp: 1,
     });
     setEchangeData({
-     nomElementEchange: "",
-    numero: "",
-    nom_initiateur: "vendeur",
-    typeEchange: "produit",
-    sous_categorie_uuid: "",
-    objetPropose: "",
-    objetDemande: "",
-    message: "",
-    prix: "",
-    categorie_uuid: "",
-    image: null,
-    quantite: "1",
-    type_destinataire: "autre",
-    is_whatsapp: 1, // ✅ 1 = true par défaut
+      nomElementEchange: "",
+      numero: "",
+      nom_initiateur: "vendeur",
+      typeEchange: "produit",
+      sous_categorie_uuid: "",
+      objetPropose: "",
+      objetDemande: "",
+      message: "",
+      prix: "",
+      categorie_uuid: "",
+      image: null,
+      quantite: "1",
+      type_destinataire: "autre",
+      is_whatsapp: 1,
     });
     setVenteData({
       boutiqueUuid: "",
-    sous_categorie_uuid: "",
-    boutiqueNom: "",
-    libelle: "",
-    type: "",
-    disponible: true,
-    categorie_uuid: "",
-    statut: "publie",
-    etoile: "5",
-    image: null,
-    prix: "",
-    quantite: "1",
-    description: "",
-    lieu: "",
-    condition: "neuf",
-    garantie: "non",
-    saleMode: "particulier",
-    is_whatsapp: 1, // ✅ 1 = true par défaut
+      sous_categorie_uuid: "",
+      boutiqueNom: "",
+      libelle: "",
+      type: "",
+      disponible: true,
+      categorie_uuid: "",
+      statut: "publie",
+      etoile: "5",
+      image: null,
+      prix: "",
+      quantite: "1",
+      description: "",
+      lieu: "",
+      condition: "neuf",
+      garantie: "non",
+      saleMode: "particulier",
+      is_whatsapp: 1,
     });
     setImagePreview(null);
     setStep(1);
